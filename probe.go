@@ -1,0 +1,4 @@
+package probe
+
+func New() {
+}
