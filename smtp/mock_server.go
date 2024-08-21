@@ -2,9 +2,7 @@ package smtp
 
 import (
 	"bufio"
-	"crypto/rand"
 	"crypto/tls"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -169,12 +167,11 @@ func (s *MockServerSession) handleCommand(cmd string) {
 }
 
 func (s *MockServerSession) setOptimisticID() error {
-	b := make([]byte, 16)
-	_, err := rand.Read(b)
+	uid, err := OptimisticUID()
 	if err != nil {
 		return err
 	}
-	s.id = hex.EncodeToString(b)
+	s.id = uid
 	return nil
 }
 
