@@ -4,9 +4,9 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"sync"
 	"time"
 
-	"github.com/carlescere/scheduler"
 	"github.com/linyows/probe/smtp"
 )
 
@@ -74,53 +74,71 @@ func hundle() {
 		b.Deliver()
 
 	case "start":
-		// case 1: Send 3 emails every 10 seconds
-		c1, _ := scheduler.Every(10).Seconds().Run(func() {
-			b := smtp.Bulk{
-				Addr:       "localhost:5871",
-				From:       "alice@msa1.local",
-				To:         "bob@mx1.local",
-				MyHostname: "msa1-local",
-				Subject:    "Experiment: Case 1",
-				Session:    3,
-				Message:    3,
-				Length:     200,
-			}
-			b.Deliver()
-		})
-		// case 2: Send 30 emails every 30 seconds
-		c2, _ := scheduler.Every(30).Seconds().Run(func() {
-			b := smtp.Bulk{
-				Addr:       "localhost:5872",
-				From:       "carol@msa2.local",
-				To:         "bob@mx2.local",
-				MyHostname: "msa2-local",
-				Subject:    "Experiment: Case 2",
-				Session:    3,
-				Message:    30,
-				Length:     800,
-			}
-			b.Deliver()
-		})
-		// case 3: Send 1 email every 10 seconds
-		c3, _ := scheduler.Every(10).Seconds().Run(func() {
-			b := smtp.Bulk{
-				Addr:       "localhost:5873",
-				From:       "mallory@msa3.local",
-				To:         "bob@mx3.local",
-				MyHostname: "msa3-local",
-				Subject:    "Experiment: Case 3",
-				Session:    1,
-				Message:    1,
-				Length:     800,
-			}
-			b.Deliver()
-		})
+		case1 := smtp.Bulk{
+			Addr:       "localhost:5871",
+			From:       "alice@msa1.local",
+			To:         "bob@mx1.local",
+			MyHostname: "msa1-local",
+			Subject:    "Experiment: Case 1",
+			Session:    30,
+			Message:    1000,
+			Length:     800,
+		}
+		case2 := smtp.Bulk{
+			Addr:       "localhost:5872",
+			From:       "carol@msa2.local",
+			To:         "bob@mx2.local",
+			MyHostname: "msa2-local",
+			Subject:    "Experiment: Case 2",
+			Session:    30,
+			Message:    10000,
+			Length:     800,
+		}
+		case3 := smtp.Bulk{
+			Addr:       "localhost:5873",
+			From:       "mallory@msa3.local",
+			To:         "bob@mx3.local",
+			MyHostname: "msa3-local",
+			Subject:    "Experiment: Case 3",
+			Session:    30,
+			Message:    1000,
+			Length:     800,
+		}
 
-		time.Sleep(10 * time.Minute)
-		c1.Quit <- true
-		c2.Quit <- true
-		c3.Quit <- true
+		sixTh := 6
+		tenSec := 10
+		tenMin := 10
+		repeat := sixTh * tenMin
+
+		fmt.Fprintf(os.Stdout, "Case1: total %d (%d messages, %d times every %d seconds)\n",
+			case1.Message*repeat, case1.Message, repeat, tenSec)
+		fmt.Fprintf(os.Stdout, "Case2: total %d (%d messages, %d times every %d seconds)\n",
+			case2.Message*repeat, case2.Message, repeat, tenSec)
+		fmt.Fprintf(os.Stdout, "Case3: total %d (%d messages, %d times every %d seconds)\n",
+			case3.Message*repeat, case3.Message, repeat, tenSec)
+
+		var wg sync.WaitGroup
+
+		for i := 0; i < repeat; i++ {
+			go func() {
+				defer wg.Done()
+				wg.Add(1)
+				case1.Deliver()
+			}()
+			go func() {
+				defer wg.Done()
+				wg.Add(1)
+				case2.Deliver()
+			}()
+			go func() {
+				defer wg.Done()
+				wg.Add(1)
+				case3.Deliver()
+			}()
+			time.Sleep(time.Duration(tenSec) * time.Second)
+		}
+
+		wg.Wait()
 
 	default:
 		usage()
