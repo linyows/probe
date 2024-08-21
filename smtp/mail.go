@@ -1,6 +1,7 @@
 package smtp
 
 import (
+	"bytes"
 	"crypto/tls"
 	"errors"
 	"net/smtp"
@@ -16,7 +17,7 @@ type Mail struct {
 	MessageCount     int
 }
 
-func Send(m *Mail) error {
+func (m *Mail) Send() error {
 	if err := validateLine(m.MailFrom); err != nil {
 		return err
 	}
