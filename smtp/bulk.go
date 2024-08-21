@@ -49,7 +49,7 @@ func (b *Bulk) Send(wg *sync.WaitGroup) error {
 		MessageCount:     n,
 	}
 
-	return Send(m)
+	return m.Send()
 }
 
 func (b *Bulk) calcMessageNumEachSession() int {

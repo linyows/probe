@@ -67,7 +67,8 @@ func (m *Mail) Send() error {
 		if err != nil {
 			return err
 		}
-		_, err = w.Write(m.Data)
+
+		_, err = w.Write(m.appendIDtoSubject(m.Data))
 		if err != nil {
 			return err
 		}
@@ -78,4 +79,18 @@ func (m *Mail) Send() error {
 	}
 
 	return c.Quit()
+}
+
+func (m *Mail) appendIDtoSubject(data []byte) []byte {
+	id := HashID()
+	lines := bytes.Split(data, []byte("\n"))
+
+	for i, line := range lines {
+		if bytes.HasPrefix(line, []byte("Subject:")) {
+			lines[i] = append(line, []byte(" - "+id)...)
+			break
+		}
+	}
+
+	return bytes.Join(lines, []byte("\n"))
 }
