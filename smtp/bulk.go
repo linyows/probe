@@ -56,6 +56,10 @@ func (b *Bulk) calcMessageNumEachSession() int {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
+	if b.Message == b.Session {
+		return 1
+	}
+
 	// Round up messages per session
 	n := (b.Message + b.Session - 1) / b.Session
 
