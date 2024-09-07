@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strconv"
 	"sync"
 	"time"
 
@@ -49,9 +50,11 @@ func usage() {
 Usage: probe [options] <command>
 
 Commands:
-	start
+  start
   server
   bulk
+	balance
+	over
 `
 	fmt.Fprint(flag.CommandLine.Output(), header)
 }
@@ -73,6 +76,148 @@ func hundle() {
 	case "bulk":
 		b.Deliver()
 
+	case "balance":
+		case1 := smtp.Bulk{
+			Addr:       "localhost:5871",
+			From:       "alice@msa1.local",
+			To:         "bob@mx1.local",
+			MyHostname: "msa1-local",
+			Subject:    "Experiment: Case 1",
+			Session:    5,
+			Message:    10000,
+			Length:     800,
+		}
+		case2 := smtp.Bulk{
+			Addr:       "localhost:5872",
+			From:       "carol@msa2.local",
+			To:         "bob@mx1.local",
+			MyHostname: "msa2-local",
+			Subject:    "Experiment: Case 2",
+			Session:    5,
+			Message:    10000,
+			Length:     800,
+		}
+		case3 := smtp.Bulk{
+			Addr:       "localhost:5873",
+			From:       "mallory@msa3.local",
+			To:         "bob@mx1.local",
+			MyHostname: "msa3-local",
+			Subject:    "Experiment: Case 3",
+			Session:    5,
+			Message:    10000,
+			Length:     800,
+		}
+
+		var wg sync.WaitGroup
+		go func() {
+			defer wg.Done()
+			wg.Add(1)
+			case1.Deliver()
+			fmt.Fprintf(os.Stdout, "Case1: %d sent to %s\n", case1.Message, case1.To)
+		}()
+		go func() {
+			defer wg.Done()
+			wg.Add(1)
+			case2.Deliver()
+			fmt.Fprintf(os.Stdout, "Case2: %d sent to %s\n", case2.Message, case2.To)
+		}()
+		go func() {
+			defer wg.Done()
+			wg.Add(1)
+			case3.Deliver()
+			fmt.Fprintf(os.Stdout, "Case3: %d sent to %s\n", case3.Message, case3.To)
+		}()
+
+		time.Sleep(3 * time.Second)
+		wg.Wait()
+
+	case "over":
+		newCase1 := func() smtp.Bulk {
+			return smtp.Bulk{
+				Addr:       "localhost:5871",
+				From:       "alice@msa1.local",
+				To:         "bob@mx1.local",
+				MyHostname: "msa1-local",
+				Subject:    "Experiment: Case 1",
+				// https://www.postfix.org/postconf.5.html#smtpd_client_connection_count_limit
+				Session: 5,
+				Message: 100,
+				Length:  1000,
+			}
+		}
+		newCase2 := func() smtp.Bulk {
+			return smtp.Bulk{
+				Addr:       "localhost:5872",
+				From:       "carol@msa2.local",
+				To:         "bob@mx2.local",
+				MyHostname: "msa2-local",
+				Subject:    "Experiment: Case 2",
+				Session:    5,
+				Message:    100,
+				Length:     1000,
+			}
+		}
+		newCase3 := func() smtp.Bulk {
+			return smtp.Bulk{
+				Addr:       "localhost:5873",
+				From:       "mallory@msa3.local",
+				To:         "bob@mx3.local",
+				MyHostname: "msa3-local",
+				Subject:    "Experiment: Case 3",
+				Session:    5,
+				Message:    100,
+				Length:     1000,
+			}
+		}
+		addZero := func(n int) int {
+			start := 100
+			str := strconv.Itoa(start)
+			for i := 0; i < n; i++ {
+				str += "0"
+			}
+			re, _ := strconv.Atoi(str)
+			return re
+		}
+
+		repeat := 4
+		var wg sync.WaitGroup
+
+		for i := 0; i < repeat; i++ {
+			go func(i int) {
+				defer wg.Done()
+				wg.Add(1)
+				case1 := newCase1()
+				n := i + 1
+				case1.Message = addZero(n)
+				fmt.Fprintf(os.Stdout, "Case1-%d: %d sending start...\n", n, case1.Message)
+				case1.Deliver()
+				fmt.Fprintf(os.Stdout, "Case1-%d: %d sent\n", n, case1.Message)
+			}(i)
+			go func(i int) {
+				defer wg.Done()
+				wg.Add(1)
+				case2 := newCase2()
+				n := i + 1
+				case2.Message = addZero(n)
+				fmt.Fprintf(os.Stdout, "Case2-%d: %d sending start...\n", n, case2.Message)
+				case2.Deliver()
+				fmt.Fprintf(os.Stdout, "Case2-%d: %d sent\n", n, case2.Message)
+			}(i)
+			go func(i int) {
+				defer wg.Done()
+				wg.Add(1)
+				case3 := newCase3()
+				n := i + 1
+				case3.Message = addZero(i + 1)
+				fmt.Fprintf(os.Stdout, "Case3-%d: %d sending start...\n", n, case3.Message)
+				case3.Deliver()
+				fmt.Fprintf(os.Stdout, "Case3-%d: %d sent\n", n, case3.Message)
+			}(i)
+			time.Sleep(10 * time.Second)
+		}
+
+		wg.Wait()
+
 	case "start":
 		case1 := smtp.Bulk{
 			Addr:       "localhost:5871",
@@ -80,8 +225,8 @@ func hundle() {
 			To:         "bob@mx1.local",
 			MyHostname: "msa1-local",
 			Subject:    "Experiment: Case 1",
-			Session:    30,
-			Message:    1000,
+			Session:    10,
+			Message:    10,
 			Length:     800,
 		}
 		case2 := smtp.Bulk{
@@ -90,8 +235,8 @@ func hundle() {
 			To:         "bob@mx2.local",
 			MyHostname: "msa2-local",
 			Subject:    "Experiment: Case 2",
-			Session:    30,
-			Message:    10000,
+			Session:    1000,
+			Message:    1000,
 			Length:     800,
 		}
 		case3 := smtp.Bulk{
@@ -100,8 +245,8 @@ func hundle() {
 			To:         "bob@mx3.local",
 			MyHostname: "msa3-local",
 			Subject:    "Experiment: Case 3",
-			Session:    30,
-			Message:    1000,
+			Session:    10,
+			Message:    10,
 			Length:     800,
 		}
 
