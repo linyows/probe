@@ -1,0 +1,32 @@
+Return-Path: <alice@msa1.local>
+X-Original-To: bob@mx1.local
+Delivered-To: bob@mx1.local
+Received: from mta1.local (3-2-168-192.mta1.local [192.168.2.3])
+        by mx1.local (Postfix) with UTF8SMTPS id 4BE42825DA3
+        for <bob@mx1.local>; Sun, 25 Aug 2024 07:55:51 +0000 (UTC)
+Received: from msa1.local (2-2-168-192.msa1.local [192.168.2.2])
+        (using TLSv1.3 with cipher TLS_AES_256_GCM_SHA384 (256/256 bits)
+         key-exchange X25519 server-signature RSA-PSS (2048 bits))
+        (No client certificate requested)
+        by mta1.local (Postfix) with UTF8SMTPS id 3EEAA1B00585
+        for <bob@mx1.local>; Sun, 25 Aug 2024 16:55:51 +0900 (JST)
+Received: from mua1.local (unknown [192.168.2.1])
+        by msa1.local (Postfix) with UTF8SMTP id 32140825DB5
+        for <bob@mx1.local>; Sun, 25 Aug 2024 07:55:51 +0000 (UTC)
+From: alice@mua1.local
+To: bob@mx1.local
+Date: Sun, 25 Aug 2024 16:55:51 +0900
+Subject: Test 1 - 194ddea13de7b5355b0d7a7a68a003a9afeba715
+
+This is a test mail.
+
+********************************************************************************
+********************************************************************************
+********************************************************************************
+********************************************************************************
+********************************************************************************
+********************************************************************************
+********************************************************************************
+********************************************************************************
+********************************************************************************
+********************************************************************************
