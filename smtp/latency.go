@@ -3,11 +3,9 @@ package smtp
 import (
 	"bufio"
 	"encoding/csv"
-	"flag"
 	"fmt"
 	"io"
 	"io/fs"
-	"log"
 	"os"
 	"path/filepath"
 	"sort"
@@ -40,16 +38,19 @@ const (
 	defaultTimeformat = "2006-01-02 15:04:05"
 )
 
-func LatencyCMD() {
-	maildir := flag.String("maildir", "", "Path to the Maildir directory")
-	csv := flag.Bool("csv", false, "Output csv")
-	flag.Parse()
+func GetLatencies(p string, w io.Writer) error {
+	l := Latencies{MailDir: p}
+	var err error
 
-	if *maildir == "" {
-		log.Fatal("Maildir path is required")
+	if err = l.Make(); err != nil {
+		return err
 	}
 
-	getLatency(*maildir, *csv)
+	if err = l.writeCSVWithHeader(w); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (l *Latencies) FindEarliestSentTime() (time.Time, error) {
