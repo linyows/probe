@@ -12,9 +12,11 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/pkg/errors"
 )
 
-func getLatency() {
+func LatencyCMD() {
 	maildir := flag.String("maildir", "", "Path to the Maildir directory")
 	csv := flag.Bool("csv", false, "Output csv")
 	flag.Parse()
@@ -26,20 +28,20 @@ func getLatency() {
 	var records [][]string
 	latencies := []time.Duration{}
 
-	earliestTime, err := findEarliestSendTime(*maildir)
+	earliestTime, err := findEarliestSendTime(maildir)
 	if err != nil {
-		log.Fatal("Error finding earliest send time:", err)
+		return nil, errors.Wrap(err, "Error finding earliest send time")
 	}
 
 	jst, err := time.LoadLocation("Asia/Tokyo")
 	if err != nil {
-		log.Fatal("Error load location:", err)
+		return nil, errors.Wrap(err, "Error load location")
 	}
 	datetimeF := "2006-01-02 15:04:05"
 
-	if err = filepath.WalkDir(*maildir, func(path string, d fs.DirEntry, err error) error {
+	if err = filepath.WalkDir(maildir, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
-			return err
+			return errors.Wrap(err, "")
 		}
 		if d.IsDir() {
 			return nil
@@ -47,8 +49,7 @@ func getLatency() {
 
 		returnPath, sendTime, subReceivedTime, receivedTime, latency, subLatency, err := getMailLatency(path)
 		if err != nil {
-			log.Println("Error processing file:", path, err)
-			return nil
+			return errors.Wrap(err, fmt.Sprintf("Error processing file: %s", path))
 		}
 
 		relativeTime := sendTime.Sub(earliestTime).Seconds()
@@ -70,20 +71,31 @@ func getLatency() {
 
 		return nil
 	}); err != nil {
-		log.Fatal(err)
+		return nil, err
 	}
 
-	if *csv {
+	if csv {
 		sort.Slice(records, func(i, j int) bool {
 			num1, _ := strconv.Atoi(records[i][0])
 			num2, _ := strconv.Atoi(records[j][0])
 			return num1 < num2
 		})
-		outputCSV(records)
+		return buildCSV(records), nil
 	} else {
 		//createHistogramByBucket(latencies, 10)
 		createHistogramByDuration(latencies, 10*time.Second)
 	}
+
+	return nil, nil
+}
+
+func buildCSV(records [][]string) []string {
+	data := []string{fmt.Sprintf("Time (s), Received Time(s), Latency (s), Sub Latency (s), Sent at, First Received at, Received at, File, Return-Path")}
+	for _, r := range records {
+		data = append(data, fmt.Sprintf("%s, %s, %s, %s, %s, %s, %s, %s, %s", r[0], r[1], r[2], r[3], r[4], r[5], r[6], r[7], r[8]))
+	}
+
+	return data
 }
 
 func findEarliestSendTime(maildir string) (time.Time, error) {
@@ -276,11 +288,4 @@ func maxBucket(buckets map[int]int) int {
 		}
 	}
 	return max
-}
-
-func outputCSV(records [][]string) {
-	fmt.Println("Time (s), Received Time(s), Latency (s), Sub Latency (s), Sent at, First Received at, Received at, File, Return-Path")
-	for _, r := range records {
-		fmt.Printf("%s, %s, %s, %s, %s, %s, %s, %s, %s\n", r[0], r[1], r[2], r[3], r[4], r[5], r[6], r[7], r[8])
-	}
 }
