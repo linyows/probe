@@ -188,7 +188,7 @@ func getMailLatency(filePath string) (string, time.Time, time.Time, time.Time, t
 		if strings.HasPrefix(line, "Received:") {
 			receivedLines = append(receivedLines, strings.TrimSpace(line))
 			//} else if len(receivedLines) > 0 && receivedHeader.IsZero() && strings.HasPrefix(line, "\t") {
-		} else if len(receivedLines) > 0 && strings.HasPrefix(line, "\t") {
+		} else if len(receivedLines) > 0 && (strings.HasPrefix(line, "\t") || strings.HasPrefix(line, " ")) {
 			receivedLines = append(receivedLines, strings.TrimSpace(line))
 			if strings.Contains(line, ";") {
 				rH, err := parseReceivedHeader(strings.Join(receivedLines, " "))
