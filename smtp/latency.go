@@ -236,11 +236,10 @@ func (l *Latencies) Make() error {
 		if err != nil {
 			return err
 		}
-		if d.IsDir() {
-			return nil
-		}
-		if err = l.ParseMail(path); err != nil {
-			return err
+		if !d.IsDir() && IsMailText(path) {
+			if err = l.ParseMail(path); err != nil {
+				return err
+			}
 		}
 		return nil
 	}
@@ -254,6 +253,30 @@ func (l *Latencies) Make() error {
 	})
 
 	return nil
+}
+
+func ReadFirstBytes(p string, bytes int) ([]byte, error) {
+	f, err := os.Open(p)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+
+	buf := make([]byte, bytes)
+	n, err := io.ReadFull(f, buf)
+	if err != nil && err != io.EOF && err != io.ErrUnexpectedEOF {
+		return nil, err
+	}
+	return buf[:n], nil
+}
+
+func IsMailText(p string) bool {
+	b, err := ReadFirstBytes(p, 20)
+	if err != nil {
+		return false
+	}
+	t := string(b)
+	return HasFlexedPrefix(t, "Return-Path:") || HasFlexedPrefix(t, "Delivered-To:")
 }
 
 // HasPrefix with Case-Insensitive
