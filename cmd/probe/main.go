@@ -18,6 +18,7 @@ var (
 	builtBy = ""
 	m       = smtp.MockServer{}
 	b       = smtp.Bulk{}
+	maildir string
 	verFlag bool
 )
 
@@ -34,6 +35,8 @@ func init() {
 	flag.IntVar(&b.Session, "session", 1, "")
 	flag.IntVar(&b.Message, "message", 1, "")
 	flag.IntVar(&b.Length, "length", 400, "")
+	// latency command options
+	flag.StringVar(&maildir, "maildir", "", "maildir path")
 	// global options
 	flag.BoolVar(&verFlag, "version", false, "")
 
@@ -55,6 +58,7 @@ Commands:
   bulk
 	balance
 	over
+	latency
 `
 	fmt.Fprint(flag.CommandLine.Output(), header)
 }
@@ -75,6 +79,11 @@ func hundle() {
 		}
 	case "bulk":
 		b.Deliver()
+
+	case "latency":
+		if err := smtp.GetLatencies(maildir, os.Stdout); err != nil {
+			m.Log.Printf("Raised fatal error: %#v\n", err)
+		}
 
 	case "balance":
 		case1 := smtp.Bulk{
