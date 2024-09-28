@@ -3,8 +3,8 @@ module github.com/linyows/probe
 go 1.23.0
 
 require (
+	github.com/go-playground/validator/v10 v10.4.1
 	github.com/goccy/go-yaml v1.12.0
-	gopkg.in/go-playground/validator.v9 v9.31.0
 	gopkg.in/yaml.v2 v2.2.2
 )
 

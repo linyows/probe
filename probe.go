@@ -6,8 +6,8 @@ import (
 	"io/ioutil"
 	"os"
 
+	"github.com/go-playground/validator/v10"
 	"github.com/goccy/go-yaml"
-	"gopkg.in/go-playground/validator.v9"
 )
 
 type Probe struct {
@@ -24,14 +24,14 @@ type Step struct {
 }
 
 type Repeat struct {
-	Count    int `yaml:"count",validate:"required"`
-	Interval int `yaml:"interval"`
+	Count    int `yaml:"count",validate:"required,gte=0,lt=100"`
+	Interval int `yaml:"interval,validate:"gte=0,lt=600"`
 }
 
 type Job struct {
-	Name   string `yaml:"name",validate:"required"`
-	Steps  []Step `yaml:"steps",validate:"required"`
-	Repeat Repeat `yaml:"repeat"`
+	Name   string  `yaml:"name",validate:"required"`
+	Steps  []Step  `yaml:"steps",validate:"required"`
+	Repeat *Repeat `yaml:"repeat"`
 }
 
 type Workflow struct {
