@@ -1,4 +1,4 @@
-package smtp
+package mail
 
 import (
 	"crypto/sha1"
