@@ -1,7 +1,7 @@
 default: build
 
 build:
-	env CGO_ENABLED=0 go build -ldflags="-s -w" -o probe ./cmd/probe/main.go
+	env CGO_ENABLED=0 go build -ldflags="-s -w" -o probe ./cmd/probe/...
 
 test:
 	go test ./...
