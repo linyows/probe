@@ -11,17 +11,14 @@ import (
 	"google.golang.org/grpc"
 )
 
-var BuiltinCmd = "builtin-actions"
+var (
+	BuiltinCmd = "builtin-actions"
+	Handshake  = plugin.HandshakeConfig{ProtocolVersion: 1, MagicCookieKey: "probe", MagicCookieValue: "actions"}
+	PluginMap  = map[string]plugin.Plugin{"actions": &ActionsPlugin{}}
+)
 
-var Handshake = plugin.HandshakeConfig{
-	ProtocolVersion:  1,
-	MagicCookieKey:   "PROBE",
-	MagicCookieValue: "actions",
-}
-
-var PluginMap = map[string]plugin.Plugin{
-	"actions": &ActionsPlugin{},
-}
+type ActionsArgs []string
+type ActionsParams map[string]string
 
 type Actions interface {
 	Run(args []string, with map[string]string) (map[string]string, error)
@@ -46,10 +43,16 @@ type ActionsClient struct {
 }
 
 func (m *ActionsClient) Run(args []string, with map[string]string) (map[string]string, error) {
+	res := map[string]string{}
 	runRes, err := m.client.Run(context.Background(), &pb.RunRequest{
 		Args: args,
 		With: with,
 	})
+
+	if err != nil {
+		return res, err
+	}
+
 	return runRes.Result, err
 }
 
@@ -66,7 +69,7 @@ func RunActions(name string, args []string, with map[string]string) (any, error)
 	log := hclog.New(&hclog.LoggerOptions{
 		Name:   "actions",
 		Output: os.Stdout,
-		Level:  hclog.Info,
+		Level:  hclog.Warn,
 	})
 
 	cl := plugin.NewClient(&plugin.ClientConfig{
