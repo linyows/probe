@@ -6,6 +6,7 @@ import (
 	"github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/go-plugin"
 	"github.com/linyows/probe"
+	"github.com/linyows/probe/mail"
 )
 
 type Action struct {
@@ -13,8 +14,19 @@ type Action struct {
 }
 
 func (a *Action) Run(args []string, with map[string]string) (map[string]string, error) {
-	a.log.Info("Hello!")
-	return with, nil
+	var b mail.Bulk
+	var result = map[string]string{}
+	if err := probe.AssignStruct(with, &b); err != nil {
+		return result, err
+	}
+
+	m, err := mail.NewBulk(with)
+	if err != nil {
+		return result, err
+	}
+	m.Deliver()
+
+	return result, nil
 }
 
 func Serve() {
