@@ -1,13 +1,16 @@
-package probe
+package main
 
 import (
 	"flag"
 	"fmt"
-	"os"
 	"strings"
+
+	"github.com/linyows/probe"
+	"github.com/linyows/probe/actions/bulkmail"
+	"github.com/linyows/probe/actions/hello"
 )
 
-type CLI struct {
+type Cmd struct {
 	WorkflowPath string
 	Init         bool
 	Lint         bool
@@ -17,11 +20,27 @@ type CLI struct {
 	rev          string
 }
 
-func NewCLI(v, r string) *CLI {
-	c := CLI{
+func runBuiltinActions(name string) {
+	switch name {
+	case "hello":
+		hello.Serve()
+	case "bulkmail":
+		bulkmail.Serve()
+	default:
+		fmt.Printf("builtin-actions not found: %s", name)
+	}
+}
+
+func newCmd(args []string) *Cmd {
+	if len(args) >= 3 && args[1] == probe.BuiltinCmd {
+		runBuiltinActions(args[2])
+		return nil
+	}
+
+	c := Cmd{
 		validFlags: []string{"help", "init", "lint", "workflow"},
-		ver:        v,
-		rev:        r,
+		ver:        version,
+		rev:        commit,
 	}
 
 	flag.StringVar(&c.WorkflowPath, "workflow", "", "Specify yaml-path of workflow")
@@ -29,11 +48,11 @@ func NewCLI(v, r string) *CLI {
 	flag.BoolVar(&c.Init, "init", false, "Export a workflow template as yaml file")
 	flag.BoolVar(&c.Lint, "lint", false, "Check the syntax in workflow")
 
-	for _, arg := range os.Args[1:] {
+	for _, arg := range args[1:] {
 		if strings.HasPrefix(arg, "-") && !c.isValid(arg) {
 			fmt.Printf("Unknown flag: %s\n", arg)
 			fmt.Println("try --help to know more")
-			os.Exit(0)
+			return nil
 		}
 	}
 
@@ -41,7 +60,7 @@ func NewCLI(v, r string) *CLI {
 	return &c
 }
 
-func (c *CLI) isValid(flag string) bool {
+func (c *Cmd) isValid(flag string) bool {
 	if idx := strings.Index(flag, "="); idx != -1 {
 		flag = flag[:idx]
 	}
@@ -55,7 +74,7 @@ func (c *CLI) isValid(flag string) bool {
 	return false
 }
 
-func (c *CLI) Usage() {
+func (c *Cmd) usage() {
 	h := `
 Probe - scenario testing tool (ver: %s [%s])
 
@@ -65,23 +84,23 @@ Usage: probe [options] <command>
 	fmt.Fprint(flag.CommandLine.Output(), fmt.Sprintf(h, c.ver, c.rev))
 }
 
-func (c *CLI) Start() {
+func (c *Cmd) start() {
 	switch {
 	case c.Help:
-		c.Usage()
+		c.usage()
 	case c.Lint:
 	case c.Init:
 	default:
-		name := "hello"
+		name := "bulkmail"
 		args := []string{"w", "date"}
 		with := map[string]string{
-			"a": "aaa",
-			"b": "bbb",
-			"c": "ccc",
+			"from":    "alice@example.com",
+			"to":      "bob@example.net",
+			"subject": "This is a test mail",
 		}
-		_, err := RunActions(name, args, with)
+		_, err := probe.RunActions(name, args, with)
 		if err != nil {
-			fmt.Printf("error: %s\n", err)
+			fmt.Printf("%s\n", err)
 		}
 	}
 }
