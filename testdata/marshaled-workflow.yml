@@ -11,7 +11,7 @@ jobs:
       message: "10"
       my-hostname: msa1-local
       session: "10"
-      subject: 'Experiment: Case 1'
+      subject: "Experiment: Case 1"
       to: bob@mx1.local
   repeat:
     count: 60
@@ -27,7 +27,7 @@ jobs:
       message: "1000"
       my-hostname: msa2-local
       session: "1000"
-      subject: 'Experiment: Case 2'
+      subject: "Experiment: Case 2"
       to: bob@mx2.local
   repeat:
     count: 60
@@ -43,7 +43,7 @@ jobs:
       message: "10"
       my-hostname: msa3-local
       session: "10"
-      subject: 'Experiment: Case 3'
+      subject: "Experiment: Case 3"
       to: bob@mx3.local
   repeat:
     count: 60
