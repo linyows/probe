@@ -29,8 +29,6 @@ func runBuiltinActions(name string) {
 		hello.Serve()
 	case "bulkmail":
 		bulkmail.Serve()
-	default:
-		fmt.Printf("builtin-actions not found: %s", name)
 	}
 }
 
