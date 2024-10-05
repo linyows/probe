@@ -7,6 +7,7 @@ require (
 	github.com/goccy/go-yaml v1.12.0
 	github.com/hashicorp/go-hclog v0.14.1
 	github.com/hashicorp/go-plugin v1.6.1
+	github.com/jarcoal/httpmock v1.3.1
 	google.golang.org/grpc v1.67.0
 	google.golang.org/protobuf v1.34.2
 	gopkg.in/yaml.v2 v2.2.2
