@@ -8,6 +8,7 @@ import (
 	"github.com/linyows/probe"
 	"github.com/linyows/probe/actions/bulkmail"
 	"github.com/linyows/probe/actions/hello"
+	http "github.com/linyows/probe/actions/http"
 )
 
 type Cmd struct {
@@ -22,6 +23,8 @@ type Cmd struct {
 
 func runBuiltinActions(name string) {
 	switch name {
+	case "http":
+		http.Serve()
 	case "hello":
 		hello.Serve()
 	case "bulkmail":
@@ -91,16 +94,29 @@ func (c *Cmd) start() {
 	case c.Lint:
 	case c.Init:
 	default:
-		name := "bulkmail"
+		name := "http"
 		args := []string{"w", "date"}
 		with := map[string]string{
-			"from":    "alice@example.com",
-			"to":      "bob@example.net",
-			"subject": "This is a test mail",
+			"host":   "localhost:8080",
+			"path":   "/foo/bar",
+			"method": "POST",
 		}
 		_, err := probe.RunActions(name, args, with)
 		if err != nil {
 			fmt.Printf("%s\n", err)
 		}
+		/*
+			name := "bulkmail"
+			args := []string{"w", "date"}
+			with := map[string]string{
+				"from":    "alice@example.com",
+				"to":      "bob@example.net",
+				"subject": "This is a test mail",
+			}
+			_, err := probe.RunActions(name, args, with)
+			if err != nil {
+				fmt.Printf("%s\n", err)
+			}
+		*/
 	}
 }
