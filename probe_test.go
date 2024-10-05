@@ -1,7 +1,6 @@
 package probe
 
 import (
-	"io/ioutil"
 	"os"
 	"testing"
 
@@ -18,7 +17,7 @@ func TestLoad(t *testing.T) {
 	if err != nil {
 		t.Errorf("probe load error %s", err)
 	}
-	expects, err := ioutil.ReadFile("./testdata/marshaled-workflow.yml")
+	expects, err := os.ReadFile("./testdata/marshaled-workflow.yml")
 	if err != nil {
 		t.Errorf("file read error %s", err)
 	}
