@@ -1,4 +1,4 @@
-package bulkmail
+package smtp
 
 import (
 	"os"

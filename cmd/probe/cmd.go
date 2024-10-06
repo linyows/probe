@@ -104,7 +104,7 @@ func (c *Cmd) start() {
 			fmt.Printf("%s\n", err)
 		}
 		/*
-			name := "bulkmail"
+			name := "smtp"
 			args := []string{"w", "date"}
 			with := map[string]string{
 				"from":    "alice@example.com",
