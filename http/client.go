@@ -8,14 +8,20 @@ import (
 	"github.com/linyows/probe"
 )
 
+type TransportOptions struct {
+	Timeout      int `map:"timeout"`
+	MaxIdleConns int `map:"max_idle_conns"`
+}
+
 type Req struct {
-	Host   string   `map:"host" validate:"required"`
-	Path   string   `map:"path" validate:"required"`
-	Ver    string   `map:"ver"`
-	Method string   `map:"method" validate:"required"`
-	Accept string   `map:"accept"`
-	UA     string   `map:"ua"`
-	Form   []string `map:"form"`
+	Host    string            `map:"host" validate:"required"`
+	Path    string            `map:"path" validate:"required"`
+	Ver     string            `map:"ver"`
+	Method  string            `map:"method" validate:"required"`
+	Accept  string            `map:"accept"`
+	UA      string            `map:"ua"`
+	Data    []string          `map:"data"`
+	Headers map[string]string `map:"headers"`
 }
 
 func NewReq(p map[string]string) (*Req, error) {
