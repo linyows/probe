@@ -5,6 +5,7 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
+	"strings"
 
 	"github.com/go-playground/validator/v10"
 	"github.com/goccy/go-yaml"
@@ -17,34 +18,22 @@ type Probe struct {
 	workflow Workflow
 }
 
-type Step struct {
-	Name string            `yaml:"name"`
-	Use  string            `validate:"required"`
-	With map[string]string `yaml:"with"`
-}
-
-type Repeat struct {
-	Count    int `yaml:"count",validate:"required,gte=0,lt=100"`
-	Interval int `yaml:"interval,validate:"gte=0,lt=600"`
-}
-
-type Job struct {
-	Name   string  `yaml:"name",validate:"required"`
-	Steps  []Step  `yaml:"steps",validate:"required"`
-	Repeat *Repeat `yaml:"repeat"`
-}
-
-type Workflow struct {
-	Name string `yaml:"name",validate:"required"`
-	Jobs []Job  `yaml:"jobs",validate:"required"`
-}
-
-func New() *Probe {
+func New(path string) *Probe {
 	return &Probe{
-		FilePath: "./probe.yaml",
+		FilePath: path,
 		Log:      os.Stdout,
 		Verbose:  true,
 	}
+}
+
+func (p *Probe) Do() error {
+	if err := p.Load(); err != nil {
+		return err
+	}
+
+	p.workflow.Start()
+
+	return nil
 }
 
 func (p *Probe) Load() error {
@@ -52,10 +41,59 @@ func (p *Probe) Load() error {
 	if err != nil {
 		return err
 	}
+
 	v := validator.New()
 	dec := yaml.NewDecoder(bytes.NewReader(y), yaml.Validator(v))
 	if err = dec.Decode(&p.workflow); err != nil {
 		return err
 	}
+
+	p.setDefaults()
+
 	return nil
+}
+
+func (p *Probe) setDefaults() {
+	for _, job := range p.workflow.Jobs {
+		if job.Defaults == nil {
+			continue
+		}
+
+		dataMap, ok := job.Defaults.(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		for key, values := range dataMap {
+			defaults, defok := values.(map[string]interface{})
+			if !defok {
+				continue
+			}
+
+			for _, s := range job.Steps {
+				if s.Uses != key {
+					continue
+				}
+				for defk, defv := range defaults {
+					_, exists := s.With[defk]
+					if !exists {
+						s.With[defk] = defv
+					}
+				}
+			}
+		}
+	}
+}
+
+func getEnvMap() map[string]string {
+	envmap := make(map[string]string)
+
+	for _, env := range os.Environ() {
+		parts := strings.SplitN(env, "=", 2)
+		if len(parts) == 2 {
+			envmap[parts[0]] = parts[1]
+		}
+	}
+
+	return envmap
 }
