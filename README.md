@@ -84,6 +84,15 @@ Installation via various package managers is not yet supported, but will be soon
 go install github.com/linyows/probe/cmd/probe@latest
 ```
 
+Usage
+--
+
+Run the workflow by passing the path to the yaml file where the workflow is defined to the workflow option.
+
+```sh
+probe --workflow ./worflow.yml
+```
+
 Author
 --
 
