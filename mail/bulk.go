@@ -1,21 +1,31 @@
-package smtp
+package mail
 
 import (
 	"fmt"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/linyows/probe"
 )
 
+func NewBulk(p probe.ActionsParams) (*Bulk, error) {
+	var b Bulk
+	if err := probe.AssignStruct(p, &b); err != nil {
+		return nil, err
+	}
+	return &b, nil
+}
+
 type Bulk struct {
-	Addr       string
-	From       string
-	To         string
-	Subject    string
-	MyHostname string
-	Session    int
-	Message    int
-	Length     int
+	Addr       string `map:"addr" validate:"required"`
+	From       string `map:"from" validate:"required"`
+	To         string `map:"to" validate:"required"`
+	Subject    string `map:"subject"`
+	MyHostname string `map:"myhostname"`
+	Session    int    `map:"session"`
+	Message    int    `map:"message"`
+	Length     int    `map:"length"`
 
 	mu    sync.Mutex
 	count int

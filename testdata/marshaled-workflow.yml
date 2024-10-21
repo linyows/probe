@@ -1,0 +1,53 @@
+name: Send queue congestion experiment
+jobs:
+- name: Normal sender
+  steps:
+  - name: ""
+    uses: bulkmail
+    with:
+      addr: localhost:5871
+      from: alice@msa1.local
+      length: 800
+      message: 10
+      my-hostname: msa1-local
+      session: 10
+      subject: "Experiment: Case 1"
+      to: bob@mx1.local
+  repeat:
+    count: 60
+    interval: 10
+  defaults: null
+- name: Bulk mails sender
+  steps:
+  - name: ""
+    uses: bulkmail
+    with:
+      addr: localhost:5872
+      from: carol@msa2.local
+      length: 800
+      message: 1000
+      my-hostname: msa2-local
+      session: 1000
+      subject: "Experiment: Case 2"
+      to: bob@mx2.local
+  repeat:
+    count: 60
+    interval: 10
+  defaults: null
+- name: Throttled mail sender
+  steps:
+  - name: ""
+    uses: bulkmail
+    with:
+      addr: localhost:5873
+      from: mallory@msa3.local
+      length: 800
+      message: 10
+      my-hostname: msa3-local
+      session: 10
+      subject: "Experiment: Case 3"
+      to: bob@mx3.local
+  repeat:
+    count: 60
+    interval: 10
+  defaults: null
