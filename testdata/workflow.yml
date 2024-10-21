@@ -5,7 +5,7 @@ jobs:
     count: 60
     interval: 10
   steps:
-  - use: bulkmail
+  - uses: bulkmail
     with:
       addr: localhost:5871
       from: alice@msa1.local
@@ -20,7 +20,7 @@ jobs:
     count: 60
     interval: 10
   steps:
-  - use: bulkmail
+  - uses: bulkmail
     with:
       addr: localhost:5872
       from: carol@msa2.local
@@ -35,7 +35,7 @@ jobs:
     count: 60
     interval: 10
   steps:
-  - use: bulkmail
+  - uses: bulkmail
     with:
       addr: localhost:5873
       from: mallory@msa3.local
