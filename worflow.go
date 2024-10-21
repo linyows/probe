@@ -74,8 +74,15 @@ type Job struct {
 
 func (j *Job) Start(ctx JobContext) {
 	j.ctx = &ctx
+	if j.Name == "" {
+		j.Name = "Unknown"
+	}
+	fmt.Printf("=== Job: %s\n", j.Name)
 
 	for i, st := range j.Steps {
+		if st.Name == "" {
+			st.Name = "Unknown"
+		}
 		expW := EvaluateExprs(st.With, ctx)
 		ret, err := RunActions(st.Uses, []string{}, expW)
 		if err != nil {
@@ -92,16 +99,16 @@ func (j *Job) Start(ctx JobContext) {
 			}
 		}
 		if okreq && okres {
-			ShowVerbose(i, req, res)
+			ShowVerbose(i, st.Name, req, res)
 		} else {
-			fmt.Printf("---------- Step %d ----------\n%#v\n", i, ret)
+			fmt.Printf("--- Step %d: %s\n%#v\n", i, st.Name, ret)
 		}
 		ctx.Logs = append(ctx.Logs, ret)
 	}
 }
 
-func ShowVerbose(i int, req, res map[string]any) {
-	fmt.Printf("---------- Step %d ----------\nRequest:\n", i)
+func ShowVerbose(i int, name string, req, res map[string]any) {
+	fmt.Printf("--- Step %d: %s\nRequest:\n", i, name)
 	for k, v := range req {
 		nested, ok := v.(map[string]any)
 		if ok {
