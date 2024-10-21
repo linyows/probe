@@ -6,9 +6,9 @@ import (
 	"strings"
 
 	"github.com/linyows/probe"
-	"github.com/linyows/probe/actions/bulkmail"
 	"github.com/linyows/probe/actions/hello"
 	http "github.com/linyows/probe/actions/http"
+	"github.com/linyows/probe/actions/smtp"
 )
 
 type Cmd struct {
@@ -27,8 +27,8 @@ func runBuiltinActions(name string) {
 		http.Serve()
 	case "hello":
 		hello.Serve()
-	case "bulkmail":
-		bulkmail.Serve()
+	case "smtp":
+		smtp.Serve()
 	}
 }
 
@@ -92,29 +92,9 @@ func (c *Cmd) start() {
 	case c.Lint:
 	case c.Init:
 	default:
-		name := "http"
-		args := []string{"w", "date"}
-		with := map[string]string{
-			"host":   "localhost:8080",
-			"path":   "/foo/bar",
-			"method": "POST",
+		p := probe.New(c.WorkflowPath)
+		if err := p.Do(); err != nil {
+			fmt.Printf("%#v\n", err)
 		}
-		_, err := probe.RunActions(name, args, with)
-		if err != nil {
-			fmt.Printf("%s\n", err)
-		}
-		/*
-			name := "smtp"
-			args := []string{"w", "date"}
-			with := map[string]string{
-				"from":    "alice@example.com",
-				"to":      "bob@example.net",
-				"subject": "This is a test mail",
-			}
-			_, err := probe.RunActions(name, args, with)
-			if err != nil {
-				fmt.Printf("%s\n", err)
-			}
-		*/
 	}
 }
