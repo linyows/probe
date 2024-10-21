@@ -1,6 +1,6 @@
-<br><br><br><br><br><br><br><br><p align="center">
+<br><br><br><br><br><p align="center">
   <img alt="PROBE" src="https://github.com/linyows/probe/blob/main/misc/probe.svg" width="200">
-</p><br><br><br><br><br><br><br><br>
+</p><br><br><br><br><br>
 
 Probe is a YAML-based workflow automation tool. It uses plugin-based actions to execute workflows, making it highly flexible and extensible.
 
