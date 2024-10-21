@@ -65,7 +65,7 @@ func (m *ActionsServer) Run(ctx context.Context, req *pb.RunRequest) (*pb.RunRes
 	return &pb.RunResponse{Result: v}, err
 }
 
-func RunActions(name string, args []string, with map[string]string) (any, error) {
+func RunActions(name string, args []string, with map[string]any) (map[string]any, error) {
 	log := hclog.New(&hclog.LoggerOptions{
 		Name:   "actions",
 		Output: os.Stdout,
@@ -92,10 +92,13 @@ func RunActions(name string, args []string, with map[string]string) (any, error)
 	}
 
 	actions := raw.(Actions)
-	result, err := actions.Run(args, with)
+
+	flatW := FlattenInterface(with)
+	result, err := actions.Run(args, flatW)
 	if err != nil {
 		return nil, err
 	}
+	unflatR := UnflattenInterface(result)
 
-	return result, nil
+	return unflatR, nil
 }
