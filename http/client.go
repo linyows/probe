@@ -25,8 +25,10 @@ type Req struct {
 }
 
 type Res struct {
+	Status string            `map:"status"`
+	Code   int               `map:"code"`
 	Header map[string]string `map:"header"`
-	Body    []byte            `map:"body"`
+	Body   []byte            `map:"body"`
 }
 
 type Result struct {
@@ -91,7 +93,12 @@ func (r *Req) Do() (*Result, error) {
 
 	return &Result{
 		Req: *r,
-		Res: Res{Header: header, Body: body},
+		Res: Res{
+			Status: res.Status,
+			Code:   res.StatusCode,
+			Header: header,
+			Body:   body,
+		},
 	}, nil
 }
 
