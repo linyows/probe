@@ -132,7 +132,7 @@ func (j *Job) Start(ctx JobContext) {
 					}
 					fmt.Printf("Test: %s\n", boolResultStr)
 				} else {
-					fmt.Printf("Test: %s\n%s = %s\n", st.Test, output)
+					fmt.Printf("Test: `%s` = %s\n", st.Test, output)
 				}
 			}
 		}
