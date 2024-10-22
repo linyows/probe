@@ -21,12 +21,14 @@ jobs:
     uses: http
     with:
       get: /api/v1/me
+    test: res.status == 200 && res.body.uname == foobar
   - name: Update user
     uses: http
     with:
-      put: /api/v1/users/{steps[0].res.bodyjson.uid}
+      put: /api/v1/users/{steps[0].res.body.uid}
       body:
         profile: "I'm a software engineer living in Fukuoka."
+    test: res.status == 201
 ```
 
 Example of sending repeated emails:
@@ -39,7 +41,7 @@ jobs:
     count: 60
     interval: 10
   steps:
-  - use: bulkmail
+  - use: smtp
     with:
       addr: localhost:5871
       from: alice@msa1.local
@@ -54,7 +56,7 @@ jobs:
     count: 60
     interval: 10
   steps:
-  - use: bulkmail
+  - use: smtp
     with:
       addr: localhost:5873
       from: mallory@msa3.local
@@ -92,6 +94,23 @@ Run the workflow by passing the path to the yaml file where the workflow is defi
 ```sh
 probe --workflow ./worflow.yml
 ```
+
+To-Do
+--
+
+Here are some additional features I'm considering:
+
+- [ ]  Support rich output
+- [ ]  Support multipart/form-data in http actions
+- [ ]  Support some actions:
+    - [ ]  grpc actions
+    - [ ]  graphql actions
+    - [ ]  ssh actions
+    - [ ]  amqp actions
+    - [ ]  imap actions
+    - [ ]  udp actions
+- [ ]  Support post-actions
+- [ ]  Support pre-job and post-job
 
 Author
 --

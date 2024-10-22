@@ -45,10 +45,14 @@ func evaluateExpr(ex string, env any) (string, error) {
 
 	expression := ex[start+1 : end]
 
-	output, err := expr.Eval(expression, env)
+	output, err := EvalExpr(expression, env)
 	if err != nil {
 		return "", err
 	}
 
 	return fmt.Sprintf("%s%v%s", ex[:start], output, ex[end+1:]), nil
+}
+
+func EvalExpr(ex string, env any) (any, error) {
+	return expr.Eval(ex, env)
 }

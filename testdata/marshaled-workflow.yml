@@ -13,6 +13,7 @@ jobs:
       session: 10
       subject: "Experiment: Case 1"
       to: bob@mx1.local
+    test: ""
   repeat:
     count: 60
     interval: 10
@@ -30,6 +31,7 @@ jobs:
       session: 1000
       subject: "Experiment: Case 2"
       to: bob@mx2.local
+    test: ""
   repeat:
     count: 60
     interval: 10
@@ -47,6 +49,7 @@ jobs:
       session: 10
       subject: "Experiment: Case 3"
       to: bob@mx3.local
+    test: ""
   repeat:
     count: 60
     interval: 10

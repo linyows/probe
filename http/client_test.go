@@ -14,7 +14,7 @@ func TestNewReq(t *testing.T) {
 		URL:    "",
 		Method: "GET",
 		Proto:  "HTTP/1.1",
-		Headers: map[string]string{
+		Header: map[string]string{
 			"Accept":     "*/*",
 			"User-Agent": "probe-http/1.0.0",
 		},

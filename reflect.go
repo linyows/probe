@@ -296,3 +296,13 @@ func isJSON(st string) bool {
 
 	return (fChar == '{' && lChar == '}') || (fChar == '[' && lChar == ']')
 }
+
+func TitleCase(st string, char string) string {
+	parts := strings.Split(st, char)
+	for i, part := range parts {
+		if len(part) > 0 {
+			parts[i] = strings.ToUpper(part[:1]) + part[1:]
+		}
+	}
+	return strings.Join(parts, char)
+}
