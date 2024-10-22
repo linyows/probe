@@ -37,6 +37,7 @@ Example of sending repeated emails:
 name: Send queue congestion experiment
 jobs:
 - name: Normal sender
+  id: normal-sender
   repeat:
     count: 60
     interval: 10
@@ -47,25 +48,30 @@ jobs:
       from: alice@msa1.local
       to: bob@mx1.local
       my-hostname: msa1-local
-      subject: Experiment: Case 1
-      session: 10
-      message: 10
-      length: 800
-- name: Throttled mail sender
+      subject: Experiment A
+- name: Throttled sender
+  id: throtteled-sender
   repeat:
     count: 60
     interval: 10
   steps:
   - use: smtp
     with:
-      addr: localhost:5873
-      from: mallory@msa3.local
-      to: bob@mx3.local
-      my-hostname: msa3-local
-      subject: Experiment: Case 3
-      session: 10
-      message: 10
-      length: 800
+      addr: localhost:5872
+      from: carol@msa2.local
+      to: bob@mx2.local
+      my-hostname: msa2-local
+      subject: Experiment B
+- name: Export latency as CSV
+  needs:
+  - normal-sender
+  - throtteled-sender
+  waitif: sh(postqueue -p 2> /dev/null | grep -c '^[A-F0-9]') != "0"
+  steps:
+  - use: mail-latency
+    with:
+      spath: /home/vmail
+      dpath: ./mail-latency.csv
 ```
 
 Features
@@ -100,17 +106,18 @@ To-Do
 
 Here are some additional features I'm considering:
 
-- [ ]  Support rich output
-- [ ]  Support multipart/form-data in http actions
-- [ ]  Support some actions:
-    - [ ]  grpc actions
-    - [ ]  graphql actions
-    - [ ]  ssh actions
-    - [ ]  amqp actions
-    - [ ]  imap actions
-    - [ ]  udp actions
-- [ ]  Support post-actions
-- [ ]  Support pre-job and post-job
+- [ ] Support waitif and needs params in job
+- [ ] Support rich output
+- [ ] Support multipart/form-data in http actions
+- [ ] Support some actions:
+    - [ ] grpc actions
+    - [ ] graphql actions
+    - [ ] ssh actions
+    - [ ] amqp actions
+    - [ ] imap actions
+    - [ ] udp actions
+- [ ] Support post-actions
+- [ ] Support pre-job and post-job
 
 Author
 --
