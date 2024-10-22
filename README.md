@@ -21,12 +21,14 @@ jobs:
     uses: http
     with:
       get: /api/v1/me
+    test: res.status == 200 && res.body.uname == foobar
   - name: Update user
     uses: http
     with:
       put: /api/v1/users/{steps[0].res.body.uid}
       body:
         profile: "I'm a software engineer living in Fukuoka."
+    test: res.status == 201
 ```
 
 Example of sending repeated emails:
