@@ -65,10 +65,12 @@ type Repeat struct {
 }
 
 type Step struct {
-	Name   string         `yaml:"name"`
-	Uses   string         `yaml:"uses" validate:"required"`
-	With   map[string]any `yaml:"with"`
-	errors error
+	Name string         `yaml:"name"`
+	Uses string         `yaml:"uses" validate:"required"`
+	With map[string]any `yaml:"with"`
+	Test string         `yaml:"test"`
+	log  map[string]any
+	err  error
 }
 
 type Job struct {
@@ -112,7 +114,37 @@ func (j *Job) Start(ctx JobContext) {
 		} else {
 			fmt.Printf("--- Step %d: %s\n%#v\n", i, st.Name, ret)
 		}
-		ctx.Logs = append(ctx.Logs, ret)
+
+		// set log and logs
+		st.log = ret
+		ctx.Logs = append(ctx.Logs, st.log)
+
+		if st.Test != "" {
+			output, err := EvalExpr(st.Test, NewTestContext(ctx, req, res))
+			if err != nil {
+				fmt.Printf("Test\nerror: %#v\n", err)
+			} else {
+				boolOutput, boolOk := output.(bool)
+				if boolOk {
+					boolResultStr := "Failure"
+					if boolOutput {
+						boolResultStr = "Success"
+					}
+					fmt.Printf("Test: %s\n", boolResultStr)
+				} else {
+					fmt.Printf("Test: %s\n%s = %s\n", st.Test, output)
+				}
+			}
+		}
+	}
+}
+
+func NewTestContext(j JobContext, req, res map[string]any) TestContext {
+	return TestContext{
+		Envs: j.Envs,
+		Logs: j.Logs,
+		Req:  req,
+		Res:  res,
 	}
 }
 
