@@ -16,16 +16,16 @@ type TransportOptions struct {
 }
 
 type Req struct {
-	URL     string            `map:"url" validate"required"`
-	Method  string            `map:"method" validate:"required"`
-	Proto   string            `map:"ver"`
-	Headers map[string]string `map:"headers"`
-	Body    []byte            `map:"body"`
-	cb      *Callback
+	URL    string            `map:"url" validate"required"`
+	Method string            `map:"method" validate:"required"`
+	Proto  string            `map:"ver"`
+	Header map[string]string `map:"header"`
+	Body   []byte            `map:"body"`
+	cb     *Callback
 }
 
 type Res struct {
-	Headers map[string]string `map:"headers"`
+	Header map[string]string `map:"header"`
 	Body    []byte            `map:"body"`
 }
 
@@ -38,7 +38,7 @@ func NewReq() *Req {
 	return &Req{
 		Method: "GET",
 		Proto:  "HTTP/1.1",
-		Headers: map[string]string{
+		Header: map[string]string{
 			"Accept":     "*/*",
 			"User-Agent": "probe-http/1.0.0",
 		},
@@ -55,8 +55,8 @@ func (r *Req) Do() (*Result, error) {
 		return nil, err
 	}
 
-	for k, v := range r.Headers {
-		req.Header.Set(k, v)
+	for k, v := range r.Header {
+		req.Header.Set(probe.TitleCase(k, "-"), v)
 	}
 
 	// callback
@@ -81,17 +81,17 @@ func (r *Req) Do() (*Result, error) {
 		return nil, err
 	}
 
-	headers := make(map[string]string)
+	header := make(map[string]string)
 	for k, v := range res.Header {
 		// examples:
 		//   Set-Cookie: sessionid=abc123; Path=/; HttpOnly
 		//   Accept: text/html, application/xhtml+xml, application/xml;q=0.9
-		headers[k] = strings.Join(v, ", ")
+		header[k] = strings.Join(v, ", ")
 	}
 
 	return &Result{
 		Req: *r,
-		Res: Res{Headers: headers, Body: body},
+		Res: Res{Header: header, Body: body},
 	}, nil
 }
 
