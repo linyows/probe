@@ -52,6 +52,13 @@ type JobContext struct {
 	Logs []map[string]any  `expr:"steps"`
 }
 
+type TestContext struct {
+	Envs map[string]string `expr:"env"`
+	Logs []map[string]any  `expr:"steps"`
+	Res  map[string]any    `expr:"res"`
+	Req  map[string]any    `expr:"req"`
+}
+
 type Repeat struct {
 	Count    int `yaml:"count",validate:"required,gte=0,lt=100"`
 	Interval int `yaml:"interval,validate:"gte=0,lt=600"`
