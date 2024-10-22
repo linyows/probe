@@ -93,16 +93,18 @@ func (j *Job) Start(ctx JobContext) {
 		expW := EvaluateExprs(st.With, ctx)
 		ret, err := RunActions(st.Uses, []string{}, expW)
 		if err != nil {
-			st.errors = err
+			st.err = err
 			continue
 		}
+
+		// parse json and sets
 		req, okreq := ret["req"].(map[string]any)
 		res, okres := ret["res"].(map[string]any)
 		if okres {
-			// parse json and sets
 			body, okbody := res["body"].(string)
 			if okbody && isJSON(body) {
-				res["bodyjson"] = mustMarshalJSON(body)
+				res["rawbody"] = body
+				res["body"] = mustMarshalJSON(body)
 			}
 		}
 		if okreq && okres {
