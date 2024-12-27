@@ -1,6 +1,7 @@
 package http
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	hp "net/http"
@@ -77,9 +78,17 @@ func updateMap(data map[string]string) error {
 	if err = replaceMethodAndURL(data); err != nil {
 		return err
 	}
-	if err = convertBodyToTextWithContentType(data); err != nil {
-		return err
+	v, exists := data["headers__content-type"]
+	if exists && v == "application/json" {
+		if err = convertBodyToJson(data); err != nil {
+			return err
+		}
+	} else {
+		if err = convertBodyToTextWithContentType(data); err != nil {
+			return err
+		}
 	}
+
 	return nil
 }
 
@@ -115,7 +124,34 @@ func replaceMethodAndURL(data map[string]string) error {
 	return nil
 }
 
-// decode it with net/url and convert it to a string when the body is a map
+func convertBodyToJson(data map[string]string) error {
+	values := map[string]any{}
+
+	for key, value := range data {
+		if strings.HasPrefix(key, "body__") {
+			newKey := strings.TrimPrefix(key, "body__")
+			// If it is a numeric string, set the type to number
+			num, err := strconv.Atoi(value)
+			if err == nil {
+				values[newKey] = num
+			} else {
+				values[newKey] = value
+			}
+			delete(data, key)
+		}
+	}
+
+	if len(values) > 0 {
+		j, err := json.Marshal(values)
+		if err != nil {
+			return err
+		}
+		data["body"] = string(j)
+	}
+
+	return nil
+}
+
 func convertBodyToTextWithContentType(data map[string]string) error {
 	values := url.Values{}
 

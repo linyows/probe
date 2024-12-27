@@ -3,8 +3,10 @@ package http
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"io/ioutil"
 	hp "net/http"
+	"strconv"
 	"strings"
 
 	"github.com/linyows/probe"
@@ -19,7 +21,7 @@ type Req struct {
 	URL    string            `map:"url" validate"required"`
 	Method string            `map:"method" validate:"required"`
 	Proto  string            `map:"ver"`
-	Header map[string]string `map:"header"`
+	Header map[string]string `map:"headers"`
 	Body   []byte            `map:"body"`
 	cb     *Callback
 }
@@ -27,7 +29,7 @@ type Req struct {
 type Res struct {
 	Status string            `map:"status"`
 	Code   int               `map:"code"`
-	Header map[string]string `map:"header"`
+	Header map[string]string `map:"headers"`
 	Body   []byte            `map:"body"`
 }
 
@@ -109,8 +111,37 @@ type Callback struct {
 	after  func(res *hp.Response)
 }
 
+func HeaderToStringValue(data map[string]any) map[string]any {
+	v, exists := data["headers"]
+	if !exists {
+		return data
+	}
+
+	newHeaders := make(map[string]any)
+	if headers, ok := v.(map[string]any); ok {
+		for key, value := range headers {
+			switch v := value.(type) {
+			case string:
+				newHeaders[key] = v
+			case int:
+				newHeaders[key] = strconv.Itoa(v)
+			case float64:
+				newHeaders[key] = strconv.FormatFloat(v, 'f', -1, 64)
+			default:
+				newHeaders[key] = fmt.Sprintf("%v", v)
+			}
+		}
+	}
+
+	if len(newHeaders) > 0 {
+		data["headers"] = newHeaders
+	}
+
+	return data
+}
+
 func Request(data map[string]string, opts ...Option) (map[string]string, error) {
-	m := probe.UnflattenInterface(data)
+	m := HeaderToStringValue(probe.UnflattenInterface(data))
 	r := NewReq()
 
 	cb := &Callback{}
