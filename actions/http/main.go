@@ -125,12 +125,18 @@ func replaceMethodAndURL(data map[string]string) error {
 }
 
 func convertBodyToJson(data map[string]string) error {
-	values := map[string]string{}
+	values := map[string]any{}
 
 	for key, value := range data {
 		if strings.HasPrefix(key, "body__") {
 			newKey := strings.TrimPrefix(key, "body__")
-			values[newKey] = value
+			// If it is a numeric string, set the type to number
+			num, err := strconv.Atoi(value)
+			if err == nil {
+				values[newKey] = num
+			} else {
+				values[newKey] = value
+			}
 			delete(data, key)
 		}
 	}
