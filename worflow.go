@@ -11,8 +11,8 @@ type Workflow struct {
 	Jobs []Job  `yaml:"jobs",validate:"required"`
 }
 
-func (w *Workflow) Start() {
-	ctx := w.createContext()
+func (w *Workflow) Start(c Config) {
+	ctx := w.createContext(c)
 	var wg sync.WaitGroup
 
 	for _, job := range w.Jobs {
@@ -40,16 +40,18 @@ func (w *Workflow) Start() {
 	wg.Wait()
 }
 
-func (w *Workflow) createContext() JobContext {
+func (w *Workflow) createContext(c Config) JobContext {
 	return JobContext{
-		Envs: getEnvMap(),
-		Logs: []map[string]any{},
+		Envs:   getEnvMap(),
+		Logs:   []map[string]any{},
+		Config: c,
 	}
 }
 
 type JobContext struct {
 	Envs map[string]string `expr:"env"`
 	Logs []map[string]any  `expr:"steps"`
+	Config
 }
 
 type TestContext struct {
@@ -92,6 +94,7 @@ func (j *Job) Start(ctx JobContext) {
 		if st.Name == "" {
 			st.Name = "Unknown"
 		}
+
 		expW := EvaluateExprs(st.With, ctx)
 		ret, err := RunActions(st.Uses, []string{}, expW)
 		if err != nil {
