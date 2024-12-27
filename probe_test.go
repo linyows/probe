@@ -10,8 +10,10 @@ import (
 func TestLoad(t *testing.T) {
 	p := &Probe{
 		FilePath: "./testdata/workflow.yml",
-		Log:      os.Stdout,
-		Verbose:  true,
+		config: Config{
+			Log:     os.Stdout,
+			Verbose: true,
+		},
 	}
 	err := p.Load()
 	if err != nil {

@@ -16,6 +16,7 @@ type Cmd struct {
 	Init         bool
 	Lint         bool
 	Help         bool
+	Verbose      bool
 	validFlags   []string
 	ver          string
 	rev          string
@@ -39,7 +40,7 @@ func newCmd(args []string) *Cmd {
 	}
 
 	c := Cmd{
-		validFlags: []string{"help", "init", "lint", "workflow"},
+		validFlags: []string{"help", "init", "lint", "workflow", "verbose"},
 		ver:        version,
 		rev:        commit,
 	}
@@ -48,6 +49,7 @@ func newCmd(args []string) *Cmd {
 	flag.BoolVar(&c.Help, "help", false, "Show command usage")
 	flag.BoolVar(&c.Init, "init", false, "Export a workflow template as yaml file")
 	flag.BoolVar(&c.Lint, "lint", false, "Check the syntax in workflow")
+	flag.BoolVar(&c.Verbose, "verbose", false, "Show verbose log")
 
 	for _, arg := range args[1:] {
 		if strings.HasPrefix(arg, "-") && !c.isValid(arg) {
@@ -92,7 +94,7 @@ func (c *Cmd) start() {
 	case c.Lint:
 	case c.Init:
 	default:
-		p := probe.New(c.WorkflowPath)
+		p := probe.New(c.WorkflowPath, c.Verbose)
 		if err := p.Do(); err != nil {
 			fmt.Printf("%#v\n", err)
 		}

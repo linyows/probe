@@ -65,11 +65,16 @@ func (m *ActionsServer) Run(ctx context.Context, req *pb.RunRequest) (*pb.RunRes
 	return &pb.RunResponse{Result: v}, err
 }
 
-func RunActions(name string, args []string, with map[string]any) (map[string]any, error) {
+func RunActions(name string, args []string, with map[string]any, verbose bool) (map[string]any, error) {
+	loglevel := hclog.Warn
+	if verbose {
+		loglevel = hclog.Debug
+	}
+
 	log := hclog.New(&hclog.LoggerOptions{
 		Name:   "actions",
 		Output: os.Stdout,
-		Level:  hclog.Warn,
+		Level:  loglevel,
 	})
 
 	cl := plugin.NewClient(&plugin.ClientConfig{

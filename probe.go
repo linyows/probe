@@ -13,16 +13,22 @@ import (
 
 type Probe struct {
 	FilePath string
-	Log      io.Writer
-	Verbose  bool
 	workflow Workflow
+	config   Config
 }
 
-func New(path string) *Probe {
+type Config struct {
+	Log     io.Writer
+	Verbose bool
+}
+
+func New(path string, v bool) *Probe {
 	return &Probe{
 		FilePath: path,
-		Log:      os.Stdout,
-		Verbose:  true,
+		config: Config{
+			Log:     os.Stdout,
+			Verbose: v,
+		},
 	}
 }
 
@@ -31,7 +37,7 @@ func (p *Probe) Do() error {
 		return err
 	}
 
-	p.workflow.Start()
+	p.workflow.Start(p.config)
 
 	return nil
 }
