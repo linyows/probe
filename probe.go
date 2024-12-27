@@ -48,24 +48,24 @@ func (p *Probe) Load() error {
 		return err
 	}
 
-	p.setDefaults()
+	p.setDefaultsToSteps()
 
 	return nil
 }
 
-func (p *Probe) setDefaults() {
+func (p *Probe) setDefaultsToSteps() {
 	for _, job := range p.workflow.Jobs {
 		if job.Defaults == nil {
 			continue
 		}
 
-		dataMap, ok := job.Defaults.(map[string]interface{})
+		dataMap, ok := job.Defaults.(map[string]any)
 		if !ok {
 			continue
 		}
 
 		for key, values := range dataMap {
-			defaults, defok := values.(map[string]interface{})
+			defaults, defok := values.(map[string]any)
 			if !defok {
 				continue
 			}
@@ -74,12 +74,25 @@ func (p *Probe) setDefaults() {
 				if s.Uses != key {
 					continue
 				}
-				for defk, defv := range defaults {
-					_, exists := s.With[defk]
-					if !exists {
-						s.With[defk] = defv
-					}
-				}
+				p.setDefaults(s.With, defaults)
+			}
+		}
+	}
+}
+
+func (p *Probe) setDefaults(data, defaults map[string]any) {
+	for key, defaultValue := range defaults {
+		// If key does not exist in data
+		if _, exists := data[key]; !exists {
+			data[key] = defaultValue
+			continue
+		}
+
+		// If you have a nested map with a key of data
+		if nestedDefault, ok := defaultValue.(map[string]any); ok {
+			if nestedData, ok := data[key].(map[string]any); ok {
+				// Recursively set default values
+				p.setDefaults(nestedData, nestedDefault)
 			}
 		}
 	}
