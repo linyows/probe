@@ -1,0 +1,19 @@
+name: Lint by Reviewdog
+on:
+  pull_request:
+  push:
+    tags:
+      - v*
+    branches:
+      - main
+jobs:
+  golangci:
+    name: GolongCI Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v4
+        with:
+          go-version-file: go.mod
+      - name: golangci-lint
+        uses: reviewdog/action-golangci-lint@v2
