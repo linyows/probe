@@ -1,0 +1,55 @@
+name: REST API Example
+jobs:
+- name: Request to httpbin.org
+  defaults:
+    http:
+      url: https://httpbin.org
+      headers:
+        authorization: Bearer {env.TOKEN}
+        content-type: application/json
+        accept: application/json
+  steps:
+  - name: Post
+    uses: http
+    with:
+      post: /post
+      body:
+        message: hello
+    echo: steps[0].res.body.origin
+    test: |
+      res.code == 200 &&
+      res.body.json.message == "hello"
+  - name: Get
+    uses: http
+    with:
+      get: /get
+    test: |
+      res.code == 200 &&
+      res.body.url == "https://httpbin.org/get"
+  - name: Update
+    uses: http
+    with:
+      put: /put
+      body:
+        ip: "{steps[0].res.body.origin}"
+    test: |
+      res.code == 200 &&
+      res.body.json.ip == steps[0].res.body.origin
+  - name: Patch
+    uses: http
+    with:
+      patch: /patch
+      body:
+        message: yo
+  - name: Delete
+    uses: http
+    with:
+      delete: /delete
+    test: |
+      res.code == 200
+  - name: Fail
+    uses: http
+    with:
+      delete: /delete
+    test: |
+      res.code == 201
