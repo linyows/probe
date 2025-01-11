@@ -2,6 +2,18 @@
   <img alt="PROBE" src="https://github.com/linyows/probe/blob/main/misc/probe.svg" width="200">
 </p><br><br><br><br><br>
 
+<p align="center">
+  <a href="https://github.com/linyows/probe/actions/workflows/build.yml">
+    <img alt="GitHub Workflow Status" src="https://img.shields.io/github/actions/workflow/status/linyows/probe/build.yml?branch=main&style=for-the-badge&labelColor=000000">
+  </a>
+  <a href="https://github.com/linyows/probe/releases">
+    <img src="http://img.shields.io/github/release/linyows/probe.svg?style=for-the-badge&labelColor=000000" alt="GitHub Release">
+  </a>
+  <a href="http://godoc.org/github.com/linyows/probe">
+    <img src="http://img.shields.io/badge/go-documentation-blue.svg?style=for-the-badge&labelColor=000000" alt="Go Documentation">
+  </a>
+</p>
+
 Probe is a YAML-based workflow automation tool. It uses plugin-based actions to execute workflows, making it highly flexible and extensible.
 
 Example using REST API:
