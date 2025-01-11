@@ -73,6 +73,7 @@ type Step struct {
 	Uses string         `yaml:"uses" validate:"required"`
 	With map[string]any `yaml:"with"`
 	Test string         `yaml:"test"`
+	Echo string         `yaml:"echo"`
 	log  map[string]any
 	err  error
 }
@@ -147,6 +148,17 @@ func (j *Job) Start(ctx JobContext) {
 					fmt.Printf("Test: `%s` = %s\n", st.Test, exprOut)
 				}
 			}
+
+			// Echo
+			if st.Echo != "" {
+				exprOut, err := EvalExpr(st.Echo, NewTestContext(ctx, req, res))
+				if err != nil {
+					fmt.Printf("%s: %#v (input: %s)\n", color.RedString("Echo Error"), err, st.Echo)
+				} else {
+					fmt.Printf("Echo: %s\n", exprOut)
+				}
+			}
+
 			fmt.Println("- - -")
 			continue
 
@@ -187,6 +199,17 @@ func (j *Job) Start(ctx JobContext) {
 		}
 
 		fmt.Print(output)
+
+		// Echo
+		if st.Echo != "" {
+			exprOut, err := EvalExpr(st.Echo, NewTestContext(ctx, req, res))
+			if err != nil {
+				fmt.Printf("Echo\nerror: %#v\n", err)
+			} else {
+				// 7 spaces
+				fmt.Printf("       %s\n", exprOut)
+			}
+		}
 	}
 }
 
