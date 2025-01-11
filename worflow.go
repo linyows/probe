@@ -92,12 +92,14 @@ func (j *Job) Start(ctx JobContext) {
 	}
 	fmt.Printf("Job: %s\n", j.Name)
 
+	expr := NewExpr()
+
 	for i, st := range j.Steps {
 		if st.Name == "" {
 			st.Name = "Unknown"
 		}
 
-		expW := EvaluateExprs(st.With, ctx)
+		expW := expr.EvalTemplate(st.With, ctx)
 		ret, err := RunActions(st.Uses, []string{}, expW, j.ctx.Config.Verbose)
 		if err != nil {
 			st.err = err
@@ -126,9 +128,13 @@ func (j *Job) Start(ctx JobContext) {
 			if st.Test == "" {
 				continue
 			}
-			exprOut, err := EvalExpr(st.Test, NewTestContext(ctx, req, res))
+
+			input := st.Test
+			env := NewTestContext(ctx, req, res)
+
+			exprOut, err := EvalExpr(input, env)
 			if err != nil {
-				fmt.Printf("%s: %#v\n", color.RedString("Test Error"), err)
+				fmt.Printf("%s: %#v (input: %s)\n", color.RedString("Test Error"), err, input)
 			} else {
 				boolOutput, boolOk := exprOut.(bool)
 				if boolOk {
@@ -136,7 +142,7 @@ func (j *Job) Start(ctx JobContext) {
 					if boolOutput {
 						boolResultStr = color.GreenString("Success")
 					}
-					fmt.Printf("Test: %s\n", boolResultStr)
+					fmt.Printf("Test: %s (input: %s, env: %#v)\n", boolResultStr, input, env)
 				} else {
 					fmt.Printf("Test: `%s` = %s\n", st.Test, exprOut)
 				}
@@ -148,35 +154,36 @@ func (j *Job) Start(ctx JobContext) {
 			fmt.Print("sorry, request or response is nil")
 		}
 
-		// 1. Step name
+		// Output format here:
+		//   1. ✔︎ Step name
 		num := color.HiBlackString(fmt.Sprintf("%2d.", i))
 		output = fmt.Sprintf("%s %%s %s", num, st.Name)
 
-		if st.Test == "" {
-			fmt.Printf(output+"\n", "-")
-			continue
-		}
-
-		exprOut, err := EvalExpr(st.Test, NewTestContext(ctx, req, res))
-		if err != nil {
-			output = fmt.Sprintf(output+"\n", "-")
-			output += fmt.Sprintf("Test\nerror: %#v\n", err)
-		} else {
-			boolOutput, boolOk := exprOut.(bool)
-			if boolOk {
-				boolResultStr := color.RedString("✖️")
-				if boolOutput {
-					boolResultStr = color.GreenString("✔︎ ")
-				}
-				output = fmt.Sprintf(output+"\n", boolResultStr)
-				if !boolOutput {
-					output += fmt.Sprintf("       request: %#v\n", req)
-					output += fmt.Sprintf("       response: %#v\n", res)
-				}
-			} else {
+		if st.Test != "" {
+			exprOut, err := EvalExpr(st.Test, NewTestContext(ctx, req, res))
+			if err != nil {
 				output = fmt.Sprintf(output+"\n", "-")
-				output += fmt.Sprintf("Test: `%s` = %s\n", st.Test, exprOut)
+				output += fmt.Sprintf("Test\nerror: %#v\n", err)
+			} else {
+				boolOutput, boolOk := exprOut.(bool)
+				if boolOk {
+					boolResultStr := color.RedString("✘ ")
+					if boolOutput {
+						boolResultStr = color.GreenString("✔︎ ")
+					}
+					output = fmt.Sprintf(output+"\n", boolResultStr)
+					if !boolOutput {
+						// 7 spaces
+						output += fmt.Sprintf("       request: %#v\n", req)
+						output += fmt.Sprintf("       response: %#v\n", res)
+					}
+				} else {
+					output = fmt.Sprintf(output+"\n", "-")
+					output += fmt.Sprintf("Test: `%s` = %s\n", st.Test, exprOut)
+				}
 			}
+		} else {
+			output = fmt.Sprintf(output+"\n", color.BlueString("▲ "))
 		}
 
 		fmt.Print(output)
