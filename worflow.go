@@ -89,15 +89,15 @@ type Job struct {
 func (j *Job) Start(ctx JobContext) {
 	j.ctx = &ctx
 	if j.Name == "" {
-		j.Name = "Unknown"
+		j.Name = "Unknown Job"
 	}
-	fmt.Printf("Job: %s\n", j.Name)
+	fmt.Printf("%s\n", j.Name)
 
 	expr := NewExpr()
 
 	for i, st := range j.Steps {
 		if st.Name == "" {
-			st.Name = "Unknown"
+			st.Name = "Unknown Step"
 		}
 
 		expW := expr.EvalTemplate(st.With, ctx)
