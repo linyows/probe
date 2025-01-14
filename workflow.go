@@ -64,6 +64,10 @@ type JobContext struct {
 	Failed bool
 }
 
+func (j *JobContext) SetFailed() {
+	j.Failed = true
+}
+
 type TestContext struct {
 	Envs map[string]string `expr:"env"`
 	Logs []map[string]any  `expr:"steps"`
