@@ -1,0 +1,13 @@
+name: Fail Example
+jobs:
+- name: Run fail example
+  defaults:
+    http:
+      url: https://httpbin.org
+  steps:
+  - name: Fail
+    uses: http
+    with:
+      delete: /delete
+    test: |
+      res.code == 201

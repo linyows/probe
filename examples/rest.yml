@@ -47,9 +47,3 @@ jobs:
       delete: /delete
     test: |
       res.code == 200
-  - name: Fail
-    uses: http
-    with:
-      delete: /delete
-    test: |
-      res.code == 201
