@@ -42,6 +42,10 @@ func (p *Probe) Do() error {
 	return nil
 }
 
+func (p *Probe) ExitStatus() int {
+	return p.workflow.ExitStatus
+}
+
 func (p *Probe) Load() error {
 	y, err := ioutil.ReadFile(p.FilePath)
 	if err != nil {
