@@ -30,7 +30,7 @@ func (w *Workflow) Start(c Config) {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
-				job.Start(ctx)
+				w.SetExitStatus(job.Start(ctx))
 			}()
 			continue
 		}
@@ -40,7 +40,7 @@ func (w *Workflow) Start(c Config) {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
-				job.Start(ctx)
+				w.SetExitStatus(job.Start(ctx))
 			}()
 			time.Sleep(time.Duration(job.Repeat.Interval) * time.Second)
 		}
