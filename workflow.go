@@ -11,12 +11,12 @@ import (
 type Workflow struct {
 	Name       string `yaml:"name",validate:"required"`
 	Jobs       []Job  `yaml:"jobs",validate:"required"`
-	ExitStatus int
+	exitStatus int
 }
 
 func (w *Workflow) SetExitStatus(isErr bool) {
 	if isErr {
-		w.ExitStatus = 1
+		w.exitStatus = 1
 	}
 }
 

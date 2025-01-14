@@ -43,7 +43,7 @@ func (p *Probe) Do() error {
 }
 
 func (p *Probe) ExitStatus() int {
-	return p.workflow.ExitStatus
+	return p.workflow.exitStatus
 }
 
 func (p *Probe) Load() error {
