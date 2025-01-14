@@ -61,6 +61,7 @@ type JobContext struct {
 	Envs map[string]string `expr:"env"`
 	Logs []map[string]any  `expr:"steps"`
 	Config
+	Failed bool
 }
 
 type TestContext struct {
