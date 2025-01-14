@@ -9,8 +9,9 @@ import (
 )
 
 type Workflow struct {
-	Name string `yaml:"name",validate:"required"`
-	Jobs []Job  `yaml:"jobs",validate:"required"`
+	Name       string `yaml:"name",validate:"required"`
+	Jobs       []Job  `yaml:"jobs",validate:"required"`
+	ExitStatus int
 }
 
 func (w *Workflow) Start(c Config) {
