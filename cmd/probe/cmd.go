@@ -87,7 +87,7 @@ Usage: probe [options] <command>
 	fmt.Fprint(flag.CommandLine.Output(), fmt.Sprintf(h, c.ver, c.rev))
 }
 
-func (c *Cmd) start() {
+func (c *Cmd) start() int {
 	switch {
 	case c.Help:
 		c.usage()
@@ -97,6 +97,10 @@ func (c *Cmd) start() {
 		p := probe.New(c.WorkflowPath, c.Verbose)
 		if err := p.Do(); err != nil {
 			fmt.Printf("%#v\n", err)
+		} else {
+			return p.ExitStatus()
 		}
 	}
+
+	return 1
 }

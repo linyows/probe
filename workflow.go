@@ -9,8 +9,15 @@ import (
 )
 
 type Workflow struct {
-	Name string `yaml:"name",validate:"required"`
-	Jobs []Job  `yaml:"jobs",validate:"required"`
+	Name       string `yaml:"name",validate:"required"`
+	Jobs       []Job  `yaml:"jobs",validate:"required"`
+	exitStatus int
+}
+
+func (w *Workflow) SetExitStatus(isErr bool) {
+	if isErr {
+		w.exitStatus = 1
+	}
 }
 
 func (w *Workflow) Start(c Config) {
@@ -23,7 +30,7 @@ func (w *Workflow) Start(c Config) {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
-				job.Start(ctx)
+				w.SetExitStatus(job.Start(ctx))
 			}()
 			continue
 		}
@@ -33,7 +40,7 @@ func (w *Workflow) Start(c Config) {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
-				job.Start(ctx)
+				w.SetExitStatus(job.Start(ctx))
 			}()
 			time.Sleep(time.Duration(job.Repeat.Interval) * time.Second)
 		}
@@ -54,6 +61,11 @@ type JobContext struct {
 	Envs map[string]string `expr:"env"`
 	Logs []map[string]any  `expr:"steps"`
 	Config
+	Failed bool
+}
+
+func (j *JobContext) SetFailed() {
+	j.Failed = true
 }
 
 type TestContext struct {
@@ -86,7 +98,7 @@ type Job struct {
 	ctx      *JobContext
 }
 
-func (j *Job) Start(ctx JobContext) {
+func (j *Job) Start(ctx JobContext) bool {
 	j.ctx = &ctx
 	if j.Name == "" {
 		j.Name = "Unknown Job"
@@ -136,16 +148,19 @@ func (j *Job) Start(ctx JobContext) {
 			exprOut, err := EvalExpr(input, env)
 			if err != nil {
 				fmt.Printf("%s: %#v (input: %s)\n", color.RedString("Test Error"), err, input)
+				j.ctx.SetFailed()
 			} else {
 				boolOutput, boolOk := exprOut.(bool)
 				if boolOk {
-					boolResultStr := color.RedString("Failure")
-					if boolOutput {
-						boolResultStr = color.GreenString("Success")
+					boolResultStr := color.GreenString("Success")
+					if !boolOutput {
+						boolResultStr = color.RedString("Failure")
+						j.ctx.SetFailed()
 					}
 					fmt.Printf("Test: %s (input: %s, env: %#v)\n", boolResultStr, input, env)
 				} else {
 					fmt.Printf("Test: `%s` = %s\n", st.Test, exprOut)
+					j.ctx.SetFailed()
 				}
 			}
 
@@ -176,12 +191,14 @@ func (j *Job) Start(ctx JobContext) {
 			if err != nil {
 				output = fmt.Sprintf(output+"\n", "-")
 				output += fmt.Sprintf("Test\nerror: %#v\n", err)
+				j.ctx.SetFailed()
 			} else {
 				boolOutput, boolOk := exprOut.(bool)
 				if boolOk {
-					boolResultStr := color.RedString("✘ ")
-					if boolOutput {
-						boolResultStr = color.GreenString("✔︎ ")
+					boolResultStr := color.GreenString("✔︎ ")
+					if !boolOutput {
+						boolResultStr = color.RedString("✘ ")
+						j.ctx.SetFailed()
 					}
 					output = fmt.Sprintf(output+"\n", boolResultStr)
 					if !boolOutput {
@@ -192,6 +209,7 @@ func (j *Job) Start(ctx JobContext) {
 				} else {
 					output = fmt.Sprintf(output+"\n", "-")
 					output += fmt.Sprintf("Test: `%s` = %s\n", st.Test, exprOut)
+					j.ctx.SetFailed()
 				}
 			}
 		} else {
@@ -211,6 +229,8 @@ func (j *Job) Start(ctx JobContext) {
 			}
 		}
 	}
+
+	return j.ctx.Failed
 }
 
 func NewTestContext(j JobContext, req, res map[string]any) TestContext {
