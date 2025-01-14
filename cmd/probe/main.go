@@ -10,6 +10,6 @@ var (
 func main() {
 	c := newCmd(os.Args)
 	if c != nil {
-		c.start()
+		os.Exit(c.start())
 	}
 }
