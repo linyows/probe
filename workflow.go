@@ -14,6 +14,12 @@ type Workflow struct {
 	ExitStatus int
 }
 
+func (w *Workflow) SetExitStatus(isErr bool) {
+	if isErr {
+		w.ExitStatus = 1
+	}
+}
+
 func (w *Workflow) Start(c Config) {
 	ctx := w.createContext(c)
 	var wg sync.WaitGroup
