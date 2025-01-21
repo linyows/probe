@@ -146,12 +146,16 @@ type Job struct {
 
 func (j *Job) Start(ctx JobContext) bool {
 	j.ctx = &ctx
+	expr := NewExpr()
+
 	if j.Name == "" {
 		j.Name = "Unknown Job"
 	}
-	fmt.Printf("%s\n", j.Name)
-
-	expr := NewExpr()
+	name, err := expr.Eval(j.Name, ctx)
+	if err != nil {
+		return false
+	}
+	fmt.Printf("%s\n", name)
 
 	for i, st := range j.Steps {
 		if st.Name == "" {
