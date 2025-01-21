@@ -1,4 +1,6 @@
 name: Send queue congestion experiment
+vars:
+  host: http://localhost
 jobs:
 - name: Normal sender
   repeat:
