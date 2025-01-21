@@ -306,3 +306,11 @@ func TitleCase(st string, char string) string {
 	}
 	return strings.Join(parts, char)
 }
+
+func StrmapToAnymap(strmap map[string]string) map[string]any {
+	anymap := make(map[string]any)
+	for k, v := range strmap {
+		anymap[k] = v
+	}
+	return anymap
+}
