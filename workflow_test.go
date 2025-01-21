@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-func TestOsEnv(t *testing.T) {
+func TestEnv(t *testing.T) {
 	os.Setenv("HOST", "http://localhost")
 	os.Setenv("TOKEN", "secrets")
 	defer func() {
