@@ -57,3 +57,5 @@ jobs:
     count: 60
     interval: 10
   defaults: null
+vars:
+  host: http://localhost

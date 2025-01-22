@@ -65,6 +65,14 @@ func (e *Expr) EvalTemplateStr(s string, env any) (string, error) {
 	return fmt.Sprintf("%s%v%s", s[:start], output, s[end+1:]), nil
 }
 
+func (e *Expr) Eval(s string, env any) (string, error) {
+	if strings.Contains(s, e.start) && strings.Contains(s, e.end) {
+		return e.EvalTemplateStr(s, env)
+	}
+	output, err := EvalExpr(s, env)
+	return fmt.Sprintf("%v", output), err
+}
+
 func EvalExpr(input string, env any) (any, error) {
 	return ex.Eval(input, env)
 }

@@ -1,11 +1,14 @@
 name: REST API Example
+vars:
+  token: "{TOKEN ?? 'secret'}"
+  url: "{URL ?? 'https://httpbin.org'}"
 jobs:
-- name: Request to httpbin.org
+- name: "Request to {vars.url}"
   defaults:
     http:
-      url: https://httpbin.org
+      url: "{vars.url}"
       headers:
-        authorization: Bearer {env.TOKEN}
+        authorization: "Bearer {vars.token}"
         content-type: application/json
         accept: application/json
   steps:

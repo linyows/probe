@@ -3,6 +3,7 @@ package probe
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 	"reflect"
 	"strconv"
 	"strings"
@@ -305,4 +306,23 @@ func TitleCase(st string, char string) string {
 		}
 	}
 	return strings.Join(parts, char)
+}
+
+func StrmapToAnymap(strmap map[string]string) map[string]any {
+	anymap := make(map[string]any)
+	for k, v := range strmap {
+		anymap[k] = v
+	}
+	return anymap
+}
+
+func EnvMap() map[string]string {
+	env := make(map[string]string)
+	for _, v := range os.Environ() {
+		parts := strings.SplitN(v, "=", 2)
+		if len(parts) == 2 {
+			env[parts[0]] = parts[1]
+		}
+	}
+	return env
 }

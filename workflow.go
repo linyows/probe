@@ -2,6 +2,7 @@ package probe
 
 import (
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -9,9 +10,11 @@ import (
 )
 
 type Workflow struct {
-	Name       string `yaml:"name",validate:"required"`
-	Jobs       []Job  `yaml:"jobs",validate:"required"`
+	Name       string            `yaml:"name",validate:"required"`
+	Jobs       []Job             `yaml:"jobs",validate:"required"`
+	Vars       map[string]string `yaml:"vars"`
 	exitStatus int
+	env        map[string]string
 }
 
 func (w *Workflow) SetExitStatus(isErr bool) {
@@ -20,8 +23,13 @@ func (w *Workflow) SetExitStatus(isErr bool) {
 	}
 }
 
-func (w *Workflow) Start(c Config) {
-	ctx := w.createContext(c)
+func (w *Workflow) Start(c Config) error {
+	vars, err := w.evalVars()
+	if err != nil {
+		return err
+	}
+
+	ctx := w.newContext(c, vars)
 	var wg sync.WaitGroup
 
 	for _, job := range w.Jobs {
@@ -47,18 +55,56 @@ func (w *Workflow) Start(c Config) {
 	}
 
 	wg.Wait()
+
+	return nil
 }
 
-func (w *Workflow) createContext(c Config) JobContext {
+func (w *Workflow) Env() map[string]string {
+	if len(w.env) == 0 {
+		w.env = EnvMap()
+	}
+	return w.env
+}
+
+func (w *Workflow) evalVars() (map[string]string, error) {
+	env := StrmapToAnymap(w.Env())
+	vars := make(map[string]string)
+
+	expr := NewExpr()
+	for k, v := range w.Vars {
+		var output string
+		output, err := expr.Eval(v, env)
+		if err != nil {
+			return vars, err
+		}
+		vars[k] = output
+	}
+
+	nilenv := []string{}
+	for k, v := range vars {
+		if strings.Contains(v, "<nil>") {
+			name := strings.Trim(w.Vars[k], expr.start+expr.end)
+			nilenv = append(nilenv, name)
+		}
+	}
+
+	if len(nilenv) > 0 {
+		return nil, fmt.Errorf("environment(%s) is nil", strings.Join(nilenv, ","))
+	}
+
+	return vars, nil
+}
+
+func (w *Workflow) newContext(c Config, vars map[string]string) JobContext {
 	return JobContext{
-		Envs:   getEnvMap(),
+		Vars:   vars,
 		Logs:   []map[string]any{},
 		Config: c,
 	}
 }
 
 type JobContext struct {
-	Envs map[string]string `expr:"env"`
+	Vars map[string]string `expr:"vars"`
 	Logs []map[string]any  `expr:"steps"`
 	Config
 	Failed bool
@@ -69,7 +115,7 @@ func (j *JobContext) SetFailed() {
 }
 
 type TestContext struct {
-	Envs map[string]string `expr:"env"`
+	Vars map[string]string `expr:"vars"`
 	Logs []map[string]any  `expr:"steps"`
 	Res  map[string]any    `expr:"res"`
 	Req  map[string]any    `expr:"req"`
@@ -100,12 +146,16 @@ type Job struct {
 
 func (j *Job) Start(ctx JobContext) bool {
 	j.ctx = &ctx
+	expr := NewExpr()
+
 	if j.Name == "" {
 		j.Name = "Unknown Job"
 	}
-	fmt.Printf("%s\n", j.Name)
-
-	expr := NewExpr()
+	name, err := expr.Eval(j.Name, ctx)
+	if err != nil {
+		return false
+	}
+	fmt.Printf("%s\n", name)
 
 	for i, st := range j.Steps {
 		if st.Name == "" {
@@ -235,7 +285,7 @@ func (j *Job) Start(ctx JobContext) bool {
 
 func NewTestContext(j JobContext, req, res map[string]any) TestContext {
 	return TestContext{
-		Envs: j.Envs,
+		Vars: j.Vars,
 		Logs: j.Logs,
 		Req:  req,
 		Res:  res,

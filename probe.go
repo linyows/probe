@@ -5,7 +5,6 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
-	"strings"
 
 	"github.com/go-playground/validator/v10"
 	"github.com/goccy/go-yaml"
@@ -37,9 +36,7 @@ func (p *Probe) Do() error {
 		return err
 	}
 
-	p.workflow.Start(p.config)
-
-	return nil
+	return p.workflow.Start(p.config)
 }
 
 func (p *Probe) ExitStatus() int {
@@ -106,17 +103,4 @@ func (p *Probe) setDefaults(data, defaults map[string]any) {
 			}
 		}
 	}
-}
-
-func getEnvMap() map[string]string {
-	envmap := make(map[string]string)
-
-	for _, env := range os.Environ() {
-		parts := strings.SplitN(env, "=", 2)
-		if len(parts) == 2 {
-			envmap[parts[0]] = parts[1]
-		}
-	}
-
-	return envmap
 }
