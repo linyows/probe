@@ -2,7 +2,6 @@ package probe
 
 import (
 	"fmt"
-	"strings"
 	"sync"
 	"time"
 
@@ -10,9 +9,9 @@ import (
 )
 
 type Workflow struct {
-	Name       string            `yaml:"name",validate:"required"`
-	Jobs       []Job             `yaml:"jobs",validate:"required"`
-	Vars       map[string]string `yaml:"vars"`
+	Name       string         `yaml:"name",validate:"required"`
+	Jobs       []Job          `yaml:"jobs",validate:"required"`
+	Vars       map[string]any `yaml:"vars"`
 	exitStatus int
 	env        map[string]string
 }
@@ -66,36 +65,27 @@ func (w *Workflow) Env() map[string]string {
 	return w.env
 }
 
-func (w *Workflow) evalVars() (map[string]string, error) {
+func (w *Workflow) evalVars() (map[string]any, error) {
 	env := StrmapToAnymap(w.Env())
-	vars := make(map[string]string)
+	vars := make(map[string]any)
 
-	expr := NewExpr()
+	expr := &Expr{}
 	for k, v := range w.Vars {
-		var output string
-		output, err := expr.Eval(v, env)
-		if err != nil {
-			return vars, err
+		if mapV, ok := v.(map[string]any); ok {
+			vars[k] = expr.EvalTemplateMap(mapV, env)
+		} else if strV, ok2 := v.(string); ok2 {
+			output, err := expr.EvalTemplate(strV, env)
+			if err != nil {
+				return vars, err
+			}
+			vars[k] = output
 		}
-		vars[k] = output
-	}
-
-	nilenv := []string{}
-	for k, v := range vars {
-		if strings.Contains(v, "<nil>") {
-			name := strings.Trim(w.Vars[k], expr.start+expr.end)
-			nilenv = append(nilenv, name)
-		}
-	}
-
-	if len(nilenv) > 0 {
-		return nil, fmt.Errorf("environment(%s) is nil", strings.Join(nilenv, ","))
 	}
 
 	return vars, nil
 }
 
-func (w *Workflow) newContext(c Config, vars map[string]string) JobContext {
+func (w *Workflow) newContext(c Config, vars map[string]any) JobContext {
 	return JobContext{
 		Vars:   vars,
 		Logs:   []map[string]any{},
@@ -104,8 +94,8 @@ func (w *Workflow) newContext(c Config, vars map[string]string) JobContext {
 }
 
 type JobContext struct {
-	Vars map[string]string `expr:"vars"`
-	Logs []map[string]any  `expr:"steps"`
+	Vars map[string]any   `expr:"vars"`
+	Logs []map[string]any `expr:"steps"`
 	Config
 	Failed bool
 }
@@ -115,10 +105,10 @@ func (j *JobContext) SetFailed() {
 }
 
 type TestContext struct {
-	Vars map[string]string `expr:"vars"`
-	Logs []map[string]any  `expr:"steps"`
-	Res  map[string]any    `expr:"res"`
-	Req  map[string]any    `expr:"req"`
+	Vars map[string]any   `expr:"vars"`
+	Logs []map[string]any `expr:"steps"`
+	Res  map[string]any   `expr:"res"`
+	Req  map[string]any   `expr:"req"`
 }
 
 type Repeat struct {
@@ -132,8 +122,10 @@ type Step struct {
 	With map[string]any `yaml:"with"`
 	Test string         `yaml:"test"`
 	Echo string         `yaml:"echo"`
+	Vars map[string]any `yaml:"vars"`
 	log  map[string]any
 	err  error
+	ctx  TestContext
 }
 
 type Job struct {
@@ -146,23 +138,24 @@ type Job struct {
 
 func (j *Job) Start(ctx JobContext) bool {
 	j.ctx = &ctx
-	expr := NewExpr()
+	expr := &Expr{}
 
 	if j.Name == "" {
 		j.Name = "Unknown Job"
 	}
-	name, err := expr.Eval(j.Name, ctx)
+	name, err := expr.EvalTemplate(j.Name, ctx)
 	if err != nil {
-		return false
+		fmt.Printf("Expr error(job name): %#v\n", err)
+	} else {
+		fmt.Printf("%s\n", name)
 	}
-	fmt.Printf("%s\n", name)
 
 	for i, st := range j.Steps {
 		if st.Name == "" {
 			st.Name = "Unknown Step"
 		}
 
-		expW := expr.EvalTemplate(st.With, ctx)
+		expW := expr.EvalTemplateMap(st.With, ctx)
 		ret, err := RunActions(st.Uses, []string{}, expW, j.ctx.Config.Verbose)
 		if err != nil {
 			st.err = err
@@ -185,6 +178,7 @@ func (j *Job) Start(ctx JobContext) bool {
 		ctx.Logs = append(ctx.Logs, st.log)
 
 		output := ""
+		st.ctx = st.SetCtx(ctx, req, res)
 
 		if j.ctx.Config.Verbose && okreq && okres {
 			showVerbose(i, st.Name, req, res)
@@ -193,11 +187,10 @@ func (j *Job) Start(ctx JobContext) bool {
 			}
 
 			input := st.Test
-			env := NewTestContext(ctx, req, res)
 
-			exprOut, err := EvalExpr(input, env)
+			exprOut, err := expr.Eval(input, st.ctx)
 			if err != nil {
-				fmt.Printf("%s: %#v (input: %s)\n", color.RedString("Test Error"), err, input)
+				fmt.Printf("%s: %s\nInput: %s\n", color.RedString("Test Error"), err, input)
 				j.ctx.SetFailed()
 			} else {
 				boolOutput, boolOk := exprOut.(bool)
@@ -207,7 +200,7 @@ func (j *Job) Start(ctx JobContext) bool {
 						boolResultStr = color.RedString("Failure")
 						j.ctx.SetFailed()
 					}
-					fmt.Printf("Test: %s (input: %s, env: %#v)\n", boolResultStr, input, env)
+					fmt.Printf("Test: %s (input: %s, env: %#v)\n", boolResultStr, input, st.ctx)
 				} else {
 					fmt.Printf("Test: `%s` = %s\n", st.Test, exprOut)
 					j.ctx.SetFailed()
@@ -216,7 +209,7 @@ func (j *Job) Start(ctx JobContext) bool {
 
 			// Echo
 			if st.Echo != "" {
-				exprOut, err := EvalExpr(st.Echo, NewTestContext(ctx, req, res))
+				exprOut, err := expr.Eval(st.Echo, st.ctx)
 				if err != nil {
 					fmt.Printf("%s: %#v (input: %s)\n", color.RedString("Echo Error"), err, st.Echo)
 				} else {
@@ -237,7 +230,7 @@ func (j *Job) Start(ctx JobContext) bool {
 		output = fmt.Sprintf("%s %%s %s", num, st.Name)
 
 		if st.Test != "" {
-			exprOut, err := EvalExpr(st.Test, NewTestContext(ctx, req, res))
+			exprOut, err := expr.Eval(st.Test, st.ctx)
 			if err != nil {
 				output = fmt.Sprintf(output+"\n", "-")
 				output += fmt.Sprintf("Test\nerror: %#v\n", err)
@@ -270,7 +263,7 @@ func (j *Job) Start(ctx JobContext) bool {
 
 		// Echo
 		if st.Echo != "" {
-			exprOut, err := EvalExpr(st.Echo, NewTestContext(ctx, req, res))
+			exprOut, err := expr.Eval(st.Echo, st.ctx)
 			if err != nil {
 				fmt.Printf("Echo\nerror: %#v\n", err)
 			} else {
@@ -283,9 +276,9 @@ func (j *Job) Start(ctx JobContext) bool {
 	return j.ctx.Failed
 }
 
-func NewTestContext(j JobContext, req, res map[string]any) TestContext {
+func (s Step) SetCtx(j JobContext, req, res map[string]any) TestContext {
 	return TestContext{
-		Vars: j.Vars,
+		Vars: MergeMaps(j.Vars, s.Vars),
 		Logs: j.Logs,
 		Req:  req,
 		Res:  res,

@@ -33,6 +33,35 @@ func MergeStringMaps(base map[string]string, over map[string]any) map[string]str
 	return res
 }
 
+// MergeMaps merges two maps of type map[string]any.
+// If keys conflict, the values from over override those in base.
+// Nested maps are merged recursively.
+func MergeMaps(base, over map[string]any) map[string]any {
+	merged := make(map[string]any)
+
+	// Copy all entries from base into the result
+	for key, value := range base {
+		merged[key] = value
+	}
+
+	// Merge entries from over, overriding base's values if keys conflict
+	for key, value := range over {
+		if existing, ok := merged[key]; ok {
+			// If both values are maps, merge them recursively
+			if map1Nested, ok1 := existing.(map[string]any); ok1 {
+				if map2Nested, ok2 := value.(map[string]any); ok2 {
+					merged[key] = MergeMaps(map1Nested, map2Nested)
+					continue
+				}
+			}
+		}
+		// Otherwise, overwrite the value from over
+		merged[key] = value
+	}
+
+	return merged
+}
+
 // converting from a map[string]any to a struct
 func MapToStructByTags(params map[string]any, dest any) error {
 
@@ -325,4 +354,29 @@ func EnvMap() map[string]string {
 		}
 	}
 	return env
+}
+
+// AnyToString attempts to convert any type to a string.
+func AnyToString(value any) (string, bool) {
+	switch v := value.(type) {
+	case string:
+		return v, true
+	case bool:
+		return strconv.FormatBool(v), true
+	case int, int8, int16, int32, int64:
+		return strconv.FormatInt(reflect.ValueOf(v).Int(), 10), true
+	case uint, uint8, uint16, uint32, uint64:
+		return strconv.FormatUint(reflect.ValueOf(v).Uint(), 10), true
+	case float32, float64:
+		return strconv.FormatFloat(reflect.ValueOf(v).Float(), 'f', -1, 64), true
+	case []byte:
+		return string(v), true
+	case fmt.Stringer:
+		return v.String(), true
+	default:
+		if reflect.ValueOf(value).IsZero() {
+			return "nil", true
+		}
+		return "", false
+	}
 }

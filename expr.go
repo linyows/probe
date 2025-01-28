@@ -2,35 +2,96 @@ package probe
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 
 	ex "github.com/expr-lang/expr"
 )
 
-const (
-	defaultExprStart = "{"
-	defaultExprEnd   = "}"
+var (
+	// Regular expression to find `{ ... }` patterns
+	templateRegexp = regexp.MustCompile(`\{([^{}]+)\}`)
+	templateStart  = "{"
+	templateEnd    = "}"
 )
 
-type Expr struct {
-	start string
-	end   string
-}
+type Expr struct{}
 
-func NewExpr() *Expr {
-	return &Expr{
-		start: defaultExprStart,
-		end:   defaultExprEnd,
+func (e *Expr) Options(env any) []ex.Option {
+	return []ex.Option{
+		ex.Env(env),
+		ex.AllowUndefinedVariables(),
+		ex.Function(
+			"match_json",
+			func(params ...any) (any, error) {
+				src := params[0].(map[string]any)
+				target := params[1].(map[string]any)
+				return MatchJSON(src, target), nil
+			},
+		),
+		ex.Function(
+			"diff_json",
+			func(params ...any) (any, error) {
+				src := params[0].(map[string]any)
+				target := params[1].(map[string]any)
+				return DiffJSON(src, target), nil
+			},
+		),
 	}
 }
 
-func (e *Expr) EvalTemplate(exprs map[string]any, env any) map[string]any {
+func (e *Expr) EvalOrEvalTemplate(input string, env any) (string, error) {
+	if strings.Contains(input, templateStart) && strings.Contains(input, templateEnd) {
+		return e.EvalTemplate(input, env)
+	}
+	output, err := e.Eval(input, env)
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%v", output), nil
+}
+
+func (e *Expr) Eval(input string, env any) (any, error) {
+	program, err := ex.Compile(input, e.Options(env)...)
+	if err != nil {
+		return false, err
+	}
+	return ex.Run(program, env)
+}
+
+func (e *Expr) EvalTemplate(input string, env any) (string, error) {
+	re := templateRegexp
+
+	// Replace matches with evaluated results
+	result := re.ReplaceAllFunc([]byte(input), func(match []byte) []byte {
+		// Extract the expression inside `{ ... }`
+		expression := strings.TrimSpace(string(match[1 : len(match)-1]))
+
+		// Evaluate the expression using expr
+		program, err := ex.Compile(expression, e.Options(env)...)
+		if err != nil {
+			return []byte(fmt.Sprintf("[Error: %s]", err.Error()))
+		}
+
+		output, err := ex.Run(program, env)
+		if err != nil {
+			return []byte(fmt.Sprintf("[Error: %s]", err.Error()))
+		}
+
+		// Convert the output to string
+		return []byte(fmt.Sprintf("%v", output))
+	})
+
+	return string(result), nil
+}
+
+func (e *Expr) EvalTemplateMap(input map[string]any, env any) map[string]any {
 	results := make(map[string]any)
 
-	for key, val := range exprs {
+	for key, val := range input {
 		switch v := val.(type) {
 		case string:
-			output, err := e.EvalTemplateStr(v, env)
+			output, err := e.EvalTemplate(v, env)
 			if err != nil {
 				results[key] = v
 				continue
@@ -38,7 +99,7 @@ func (e *Expr) EvalTemplate(exprs map[string]any, env any) map[string]any {
 			results[key] = output
 
 		case map[string]any:
-			results[key] = e.EvalTemplate(v, env)
+			results[key] = e.EvalTemplateMap(v, env)
 
 		default:
 			results[key] = v
@@ -46,33 +107,4 @@ func (e *Expr) EvalTemplate(exprs map[string]any, env any) map[string]any {
 	}
 
 	return results
-}
-
-func (e *Expr) EvalTemplateStr(s string, env any) (string, error) {
-	start := strings.Index(s, e.start)
-	end := strings.Index(s, e.end)
-	if start == -1 || end == -1 || start > end {
-		return s, nil
-	}
-
-	input := s[start+1 : end]
-
-	output, err := EvalExpr(input, env)
-	if err != nil {
-		return "", err
-	}
-
-	return fmt.Sprintf("%s%v%s", s[:start], output, s[end+1:]), nil
-}
-
-func (e *Expr) Eval(s string, env any) (string, error) {
-	if strings.Contains(s, e.start) && strings.Contains(s, e.end) {
-		return e.EvalTemplateStr(s, env)
-	}
-	output, err := EvalExpr(s, env)
-	return fmt.Sprintf("%v", output), err
-}
-
-func EvalExpr(input string, env any) (any, error) {
-	return ex.Eval(input, env)
 }

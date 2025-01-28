@@ -32,14 +32,14 @@ func TestEvalVars(t *testing.T) {
 	tests := []struct {
 		name     string
 		wf       *Workflow
-		expected map[string]string
+		expected map[string]any
 		err      error
 	}{
 		{
 			name: "use expr",
 			wf: &Workflow{
 				Name: "Test",
-				Vars: map[string]string{
+				Vars: map[string]any{
 					"host":  "{HOST ?? 'http://localhost:3000'}",
 					"token": "{TOKEN}",
 				},
@@ -47,7 +47,7 @@ func TestEvalVars(t *testing.T) {
 					"TOKEN": "secrets",
 				},
 			},
-			expected: map[string]string{
+			expected: map[string]any{
 				"host":  "http://localhost:3000",
 				"token": "secrets",
 			},
@@ -57,7 +57,7 @@ func TestEvalVars(t *testing.T) {
 			name: "not exists environment",
 			wf: &Workflow{
 				Name: "Test",
-				Vars: map[string]string{
+				Vars: map[string]any{
 					"host":  "{HOST}",
 					"token": "{TOKEN}",
 				},
@@ -65,8 +65,11 @@ func TestEvalVars(t *testing.T) {
 					"TOKEN": "secrets",
 				},
 			},
-			expected: nil,
-			err:      fmt.Errorf("environment(HOST) is nil"),
+			expected: map[string]any{
+				"host":  "<nil>",
+				"token": "secrets",
+			},
+			err: fmt.Errorf("environment(HOST) is nil"),
 		},
 	}
 
@@ -77,7 +80,7 @@ func TestEvalVars(t *testing.T) {
 				t.Errorf("expected error %+v, got %+v", tt.err, err)
 			}
 			if !reflect.DeepEqual(tt.expected, actual) {
-				t.Errorf("expected %+v, got %+v", tt.expected, actual)
+				t.Errorf("expected %#v, got %#v", tt.expected, actual)
 			}
 		})
 	}
