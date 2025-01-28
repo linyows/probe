@@ -17,6 +17,28 @@ var (
 
 type Expr struct{}
 
+func (e *Expr) Options(env any) []ex.Option {
+	return []ex.Option{
+		ex.Env(env),
+		ex.AllowUndefinedVariables(),
+		ex.Function(
+			"match_json",
+			func(params ...any) (any, error) {
+				src := params[0].(map[string]any)
+				target := params[1].(map[string]any)
+				return MatchJSON(src, target), nil
+			},
+		),
+		ex.Function(
+			"diff_json",
+			func(params ...any) (any, error) {
+				src := params[0].(map[string]any)
+				target := params[1].(map[string]any)
+				return DiffJSON(src, target), nil
+			},
+		),
+	}
+}
 
 func (e *Expr) EvalOrEvalTemplate(input string, env any) (string, error) {
 	if strings.Contains(input, templateStart) && strings.Contains(input, templateEnd) {
