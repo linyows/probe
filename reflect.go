@@ -355,3 +355,28 @@ func EnvMap() map[string]string {
 	}
 	return env
 }
+
+// AnyToString attempts to convert any type to a string.
+func AnyToString(value any) (string, bool) {
+	switch v := value.(type) {
+	case string:
+		return v, true
+	case bool:
+		return strconv.FormatBool(v), true
+	case int, int8, int16, int32, int64:
+		return strconv.FormatInt(reflect.ValueOf(v).Int(), 10), true
+	case uint, uint8, uint16, uint32, uint64:
+		return strconv.FormatUint(reflect.ValueOf(v).Uint(), 10), true
+	case float32, float64:
+		return strconv.FormatFloat(reflect.ValueOf(v).Float(), 'f', -1, 64), true
+	case []byte:
+		return string(v), true
+	case fmt.Stringer:
+		return v.String(), true
+	default:
+		if reflect.ValueOf(value).IsZero() {
+			return "nil", true
+		}
+		return "", false
+	}
+}
