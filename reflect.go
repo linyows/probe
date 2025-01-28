@@ -234,6 +234,11 @@ func FlattenInterface(i any) map[string]string {
 func flattenIf(input any, prefix string) map[string]string {
 	res := make(map[string]string)
 
+	if input == nil {
+		res[prefix] = ""
+		return res
+	}
+
 	switch reflect.TypeOf(input).Kind() {
 	case reflect.Map:
 		// Traverse a map to get keys and values
