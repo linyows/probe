@@ -2,7 +2,6 @@ package probe
 
 import (
 	"fmt"
-	"strings"
 	"sync"
 	"time"
 
@@ -10,9 +9,9 @@ import (
 )
 
 type Workflow struct {
-	Name       string            `yaml:"name",validate:"required"`
-	Jobs       []Job             `yaml:"jobs",validate:"required"`
-	Vars       map[string]string `yaml:"vars"`
+	Name       string         `yaml:"name",validate:"required"`
+	Jobs       []Job          `yaml:"jobs",validate:"required"`
+	Vars       map[string]any `yaml:"vars"`
 	exitStatus int
 	env        map[string]string
 }
@@ -66,36 +65,27 @@ func (w *Workflow) Env() map[string]string {
 	return w.env
 }
 
-func (w *Workflow) evalVars() (map[string]string, error) {
+func (w *Workflow) evalVars() (map[string]any, error) {
 	env := StrmapToAnymap(w.Env())
-	vars := make(map[string]string)
+	vars := make(map[string]any)
 
 	expr := NewExpr()
 	for k, v := range w.Vars {
-		var output string
-		output, err := expr.Eval(v, env)
-		if err != nil {
-			return vars, err
+		if mapV, ok := v.(map[string]any); ok {
+			vars[k] = expr.EvalTemplateMap(mapV, env)
+		} else if strV, ok2 := v.(string); ok2 {
+			output, err := expr.EvalTemplate(strV, env)
+			if err != nil {
+				return vars, err
+			}
+			vars[k] = output
 		}
-		vars[k] = output
-	}
-
-	nilenv := []string{}
-	for k, v := range vars {
-		if strings.Contains(v, "<nil>") {
-			name := strings.Trim(w.Vars[k], expr.start+expr.end)
-			nilenv = append(nilenv, name)
-		}
-	}
-
-	if len(nilenv) > 0 {
-		return nil, fmt.Errorf("environment(%s) is nil", strings.Join(nilenv, ","))
 	}
 
 	return vars, nil
 }
 
-func (w *Workflow) newContext(c Config, vars map[string]string) JobContext {
+func (w *Workflow) newContext(c Config, vars map[string]any) JobContext {
 	return JobContext{
 		Vars:   vars,
 		Logs:   []map[string]any{},
@@ -104,8 +94,8 @@ func (w *Workflow) newContext(c Config, vars map[string]string) JobContext {
 }
 
 type JobContext struct {
-	Vars map[string]string `expr:"vars"`
-	Logs []map[string]any  `expr:"steps"`
+	Vars map[string]any   `expr:"vars"`
+	Logs []map[string]any `expr:"steps"`
 	Config
 	Failed bool
 }
@@ -115,10 +105,10 @@ func (j *JobContext) SetFailed() {
 }
 
 type TestContext struct {
-	Vars map[string]string `expr:"vars"`
-	Logs []map[string]any  `expr:"steps"`
-	Res  map[string]any    `expr:"res"`
-	Req  map[string]any    `expr:"req"`
+	Vars map[string]any   `expr:"vars"`
+	Logs []map[string]any `expr:"steps"`
+	Res  map[string]any   `expr:"res"`
+	Req  map[string]any   `expr:"req"`
 }
 
 type Repeat struct {
