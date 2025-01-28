@@ -5,18 +5,7 @@ import (
 	"testing"
 )
 
-func TestNewExpr(t *testing.T) {
-	expected := &Expr{
-		start: "{",
-		end:   "}",
-	}
-	actual := NewExpr()
-	if !reflect.DeepEqual(expected, actual) {
-		t.Errorf("Structs are not equal: expected %+v, got %+v", expected, actual)
-	}
-}
-
-func TestEvalTemplate(t *testing.T) {
+func TestEvalTemplateMap(t *testing.T) {
 	exprs := map[string]any{
 		"url":           "{env.URL}",
 		"authorization": "Bearer {env.TOKEN}",
@@ -31,13 +20,14 @@ func TestEvalTemplate(t *testing.T) {
 		"url":           "https://example.com",
 		"authorization": "Bearer secrets",
 	}
-	actual := NewExpr().EvalTemplate(exprs, env)
+	expr := &Expr{}
+	actual := expr.EvalTemplateMap(exprs, env)
 	if !reflect.DeepEqual(expected, actual) {
 		t.Errorf("map are not equal: expected %+v, got %+v", expected, actual)
 	}
 }
 
-func TestEvalTemplateStr(t *testing.T) {
+func TestEvalTemplate(t *testing.T) {
 	tests := []struct {
 		name     string
 		str      string
@@ -53,6 +43,15 @@ func TestEvalTemplateStr(t *testing.T) {
 				},
 			},
 			expected: "https://example.com",
+		},
+		{
+			name: "expr twice",
+			str:  "Hi, { name }. My name is { service }.",
+			env: map[string]any{
+				"name":    "Bob",
+				"service": "Alice",
+			},
+			expected: "Hi, Bob. My name is Alice.",
 		},
 		{
 			name: "use nil coalescing operator",
@@ -76,10 +75,10 @@ func TestEvalTemplateStr(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			expr := NewExpr()
-			actual, err := expr.EvalTemplateStr(tt.str, tt.env)
+			expr := &Expr{}
+			actual, err := expr.EvalTemplate(tt.str, tt.env)
 			if err != nil {
-				t.Errorf("EvalTemplateStr error %s", err)
+				t.Errorf("EvalTemplate error %s", err)
 			}
 			if tt.expected != actual {
 				t.Errorf("expected %+v, got %+v", tt.expected, actual)
