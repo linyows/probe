@@ -1,0 +1,39 @@
+name: Buitin function Example
+jobs:
+- name: Run match json example
+  defaults:
+    http:
+      url: https://httpbin.org
+      headers:
+        content-type: application/json
+        accept: application/json
+  steps:
+  - name: Match Regexp
+    uses: http
+    with:
+      post: /post
+      body:
+        id: 12345
+        name: probe
+    test: |
+      res.code == 200 &&
+      match_json(res.body.json, vars.expected)
+    echo: diff_json(res.body.json, vars.expected)
+    vars:
+      expected:
+        id: /^\d{5}$/
+        name: /^\w+$/
+  - name: Mismatch Regexp
+    uses: http
+    with:
+      post: /post
+      body:
+        id: ABC
+        name:
+    test: |
+      res.code == 200
+    echo: diff_json(res.body.json, vars.expected)
+    vars:
+      expected:
+        id: /^\d{5}$/
+        name: /^\w+$/
