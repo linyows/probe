@@ -81,45 +81,99 @@ func TestMapToStructByTags_Required(t *testing.T) {
 }
 
 func TestFlattenInterface(t *testing.T) {
-	expects := map[string]string{
-		"map_str_str__foo": "f-o-o",
-		"map_str_str__bar": "b-a-r",
-		"string":           "s-t-r-i-n-g",
-	}
-
-	data := map[string]any{
-		"map_str_str": map[string]any{
-			"foo": "f-o-o",
-			"bar": "b-a-r",
+	tests := []struct {
+		name    string
+		expects map[string]string
+		data    map[string]any
+	}{
+		{
+			name: "two consecutive underscores are used to express nesting",
+			expects: map[string]string{
+				"map_str_str__foo": "f-o-o",
+				"map_str_str__bar": "b-a-r",
+				"string":           "s-t-r-i-n-g",
+			},
+			data: map[string]any{
+				"map_str_str": map[string]any{
+					"foo": "f-o-o",
+					"bar": "b-a-r",
+				},
+				"string": "s-t-r-i-n-g",
+			},
 		},
-		"string": "s-t-r-i-n-g",
+		{
+			name: "it is an empty string when the value is nil",
+			expects: map[string]string{
+				"map_str_str__foo": "f-o-o",
+				"map_str_str__bar": "",
+				"string":           "s-t-r-i-n-g",
+			},
+			data: map[string]any{
+				"map_str_str": map[string]any{
+					"foo": "f-o-o",
+					"bar": nil,
+				},
+				"string": "s-t-r-i-n-g",
+			},
+		},
 	}
 
-	got := FlattenInterface(data)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := FlattenInterface(tt.data)
 
-	if !reflect.DeepEqual(got, expects) {
-		t.Errorf("\nExpected:\n%#v\nGot:\n%#v", expects, got)
+			if !reflect.DeepEqual(got, tt.expects) {
+				t.Errorf("\nExpected:\n%#v\nGot:\n%#v", tt.expects, got)
+			}
+		})
 	}
 }
 
 func TestUnflattenInterface(t *testing.T) {
-	expects := map[string]any{
-		"map_str_str": map[string]any{
-			"foo": "f-o-o",
-			"bar": "b-a-r",
+	tests := []struct {
+		name    string
+		expects map[string]any
+		data    map[string]string
+	}{
+		{
+			name: "nest maps if there are two consecutive underscore keys",
+			expects: map[string]any{
+				"map_str_str": map[string]any{
+					"foo": "f-o-o",
+					"bar": "b-a-r",
+				},
+				"string": "s-t-r-i-n-g",
+			},
+			data: map[string]string{
+				"map_str_str__foo": "f-o-o",
+				"map_str_str__bar": "b-a-r",
+				"string":           "s-t-r-i-n-g",
+			},
 		},
-		"string": "s-t-r-i-n-g",
+		{
+			name: "nesting it is the same when the field is an empty string",
+			expects: map[string]any{
+				"map_str_str": map[string]any{
+					"foo": "f-o-o",
+					"bar": "",
+				},
+				"string": "s-t-r-i-n-g",
+			},
+			data: map[string]string{
+				"map_str_str__foo": "f-o-o",
+				"map_str_str__bar": "",
+				"string":           "s-t-r-i-n-g",
+			},
+		},
 	}
 
-	data := map[string]string{
-		"map_str_str__foo": "f-o-o",
-		"map_str_str__bar": "b-a-r",
-		"string":           "s-t-r-i-n-g",
-	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := UnflattenInterface(tt.data)
 
-	got := UnflattenInterface(data)
-
-	if !reflect.DeepEqual(got, expects) {
-		t.Errorf("\nExpected:\n%#v\nGot:\n%#v", expects, got)
+			if !reflect.DeepEqual(got, tt.expects) {
+				t.Errorf("\nExpected:\n%#v\nGot:\n%#v", tt.expects, got)
+			}
+		})
 	}
 }
