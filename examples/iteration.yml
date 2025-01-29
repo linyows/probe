@@ -1,0 +1,30 @@
+name: Iteration Step Example
+jobs:
+- name: Run iteration example
+  defaults:
+    http:
+      url: https://httpbin.org
+      headers:
+        content-type: application/json
+        accept: application/json
+  steps:
+  - name: "3 times iterations: {vars.name}"
+    uses: http
+    with:
+      post: /post
+      body:
+        id: "{vars.id}"
+        name: "{vars.name}"
+        role: "{vars.role}"
+    test: |
+      res.code == 200 &&
+      res.body.json.name == vars.name
+    echo: vars
+    vars:
+      id: 1234
+      name: default
+      role: admin
+    iter:
+    - {id: 2000, name: foo, role: user}
+    - {id: 3000, name: bar, role: editor}
+    - {id: 4000, name: baz, role: guest}
