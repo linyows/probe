@@ -94,8 +94,8 @@ func (w *Workflow) newJobContext(c Config, vars map[string]any) JobContext {
 }
 
 type JobContext struct {
-	Vars map[string]any
-	Logs []map[string]any
+	Vars map[string]any   `expr:"vars"`
+	Logs []map[string]any `expr:"steps"`
 	Config
 	Failed bool
 }
