@@ -109,6 +109,7 @@ type StepContext struct {
 	Logs []map[string]any `expr:"steps"`
 	Res  map[string]any   `expr:"res"`
 	Req  map[string]any   `expr:"req"`
+	RT   string           `expr:"rt"`
 }
 
 type Repeat struct {
@@ -194,6 +195,7 @@ func (st *Step) Do(jCtx *JobContext) {
 	// parse json and sets
 	req, okreq := ret["req"].(map[string]any)
 	res, okres := ret["res"].(map[string]any)
+	rt, okrt := ret["rt"].(string)
 	if okres {
 		body, okbody := res["body"].(string)
 		if okbody && isJSON(body) {
@@ -204,7 +206,7 @@ func (st *Step) Do(jCtx *JobContext) {
 
 	// set log and logs
 	jCtx.Logs = append(jCtx.Logs, ret)
-	st.updateCtx(jCtx.Logs, req, res)
+	st.updateCtx(jCtx.Logs, req, res, rt)
 
 	if jCtx.Config.Verbose {
 		if !okreq || !okres {
@@ -228,7 +230,11 @@ func (st *Step) Do(jCtx *JobContext) {
 	// Output format here:
 	//   1. ✔︎ Step name
 	num := color.HiBlackString(fmt.Sprintf("%2d.", st.idx))
-	output := fmt.Sprintf("%s %%s %s", num, name)
+	ps := ""
+	if jCtx.Config.RT && okrt && st.ctx.RT != "" {
+		ps = color.HiBlackString(fmt.Sprintf(" (%s)", st.ctx.RT))
+	}
+	output := fmt.Sprintf("%s %%s %s%s", num, name, ps)
 	if st.Test != "" {
 		str, ok := st.DoTest()
 		if ok {
@@ -320,10 +326,11 @@ func (st *Step) SetCtx(j JobContext, override map[string]any) {
 	}
 }
 
-func (st *Step) updateCtx(logs []map[string]any, req, res map[string]any) {
+func (st *Step) updateCtx(logs []map[string]any, req, res map[string]any, rt string) {
 	st.ctx.Logs = logs
 	st.ctx.Req = req
 	st.ctx.Res = res
+	st.ctx.RT = rt
 }
 
 func (st *Step) ShowRequestResponse(name string) {
@@ -353,4 +360,6 @@ func (st *Step) ShowRequestResponse(name string) {
 			fmt.Printf("  %s: %#v\n", k, v)
 		}
 	}
+
+	fmt.Printf("RT: %s\n", color.BlueString(st.ctx.RT))
 }

@@ -8,6 +8,7 @@ import (
 	hp "net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/linyows/probe"
 )
@@ -34,8 +35,9 @@ type Res struct {
 }
 
 type Result struct {
-	Req Req `map:"req"`
-	Res Res `map:"res"`
+	Req Req           `map:"req"`
+	Res Res           `map:"res"`
+	RT  time.Duration `map:"rt"`
 }
 
 func NewReq() *Req {
@@ -68,10 +70,14 @@ func (r *Req) Do() (*Result, error) {
 		r.cb.before(req)
 	}
 
+	result := &Result{Req: *r}
+
 	cl := &hp.Client{}
+	start := time.Now()
 	res, err := cl.Do(req)
+	result.RT = time.Since(start)
 	if err != nil {
-		return nil, err
+		return result, err
 	}
 	defer res.Body.Close()
 
@@ -80,10 +86,16 @@ func (r *Req) Do() (*Result, error) {
 		r.cb.after(res)
 	}
 
+	result.Res = Res{
+		Status: res.Status,
+		Code:   res.StatusCode,
+	}
+
 	body, err := ioutil.ReadAll(res.Body)
 	if err != nil {
-		return nil, err
+		return result, err
 	}
+	result.Res.Body = body
 
 	header := make(map[string]string)
 	for k, v := range res.Header {
@@ -92,16 +104,9 @@ func (r *Req) Do() (*Result, error) {
 		//   Accept: text/html, application/xhtml+xml, application/xml;q=0.9
 		header[k] = strings.Join(v, ", ")
 	}
+	result.Res.Header = header
 
-	return &Result{
-		Req: *r,
-		Res: Res{
-			Status: res.Status,
-			Code:   res.StatusCode,
-			Header: header,
-			Body:   body,
-		},
-	}, nil
+	return result, nil
 }
 
 type Option func(*Callback)
