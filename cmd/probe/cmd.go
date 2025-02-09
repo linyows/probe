@@ -41,15 +41,15 @@ func newCmd(args []string) *Cmd {
 	}
 
 	c := Cmd{
-		validFlags: []string{"help", "init", "lint", "workflow", "rt", "verbose"},
+		validFlags: []string{"help", "workflow", "rt", "verbose"},
 		ver:        version,
 		rev:        commit,
 	}
 
 	flag.StringVar(&c.WorkflowPath, "workflow", "", "Specify yaml-path of workflow")
 	flag.BoolVar(&c.Help, "help", false, "Show command usage")
-	flag.BoolVar(&c.Init, "init", false, "Export a workflow template as yaml file")
-	flag.BoolVar(&c.Lint, "lint", false, "Check the syntax in workflow")
+	//flag.BoolVar(&c.Init, "init", false, "Export a workflow template as yaml file")
+	//flag.BoolVar(&c.Lint, "lint", false, "Check the syntax in workflow")
 	flag.BoolVar(&c.RT, "rt", false, "Show response time")
 	flag.BoolVar(&c.Verbose, "verbose", false, "Show verbose log")
 
@@ -81,20 +81,33 @@ func (c *Cmd) isValid(flag string) bool {
 
 func (c *Cmd) usage() {
 	h := `
-Probe - scenario testing tool (ver: %s [%s])
+___ ___  __ ___ ___
+|  ||  ||  ||  || _|
+|  ||  /| |||  /|  |
+| | |  \| |||  \| _|
+/_/ |_\_|__||__||__|
 
-Usage: probe [options] <command>
+Probe - A YAML-based workflow automation tool.
+https://github.com/linyows/probe (ver: %s, rev: %s)
+
+Usage: probe [options]
+
+Options:
 `
 	h = strings.TrimPrefix(h, "\n")
 	fmt.Fprint(flag.CommandLine.Output(), fmt.Sprintf(h, c.ver, c.rev))
+	flag.PrintDefaults()
 }
 
 func (c *Cmd) start() int {
 	switch {
 	case c.Help:
 		c.usage()
-	case c.Lint:
-	case c.Init:
+	//case c.Lint:
+	//case c.Init:
+	case c.WorkflowPath == "":
+		fmt.Println("Error: workflow is required")
+		return 1
 	default:
 		p := probe.New(c.WorkflowPath, c.Verbose)
 		if c.RT {
