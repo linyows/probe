@@ -83,6 +83,9 @@ func RunActions(name string, args []string, with map[string]any, verbose bool) (
 		Cmd:              exec.Command(os.Args[0], BuiltinCmd, name),
 		AllowedProtocols: []plugin.Protocol{plugin.ProtocolNetRPC, plugin.ProtocolGRPC},
 		Logger:           log,
+		UnixSocketConfig: &plugin.UnixSocketConfig{
+			TempDir: os.TempDir(),
+		},
 	})
 	defer cl.Kill()
 
