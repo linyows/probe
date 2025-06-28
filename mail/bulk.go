@@ -2,6 +2,7 @@ package mail
 
 import (
 	"fmt"
+	"log"
 	"strings"
 	"sync"
 	"time"
@@ -33,18 +34,39 @@ type Bulk struct {
 
 func (b *Bulk) Deliver() {
 	var wg sync.WaitGroup
+	errCh := make(chan error, b.Session)
 
 	for i := 0; i < b.Session; i++ {
 		wg.Add(1)
-		go b.Send(&wg)
+		go func() {
+			defer wg.Done()
+			if err := b.Send(); err != nil {
+				errCh <- err
+			} else {
+				errCh <- nil
+			}
+		}()
 	}
 
 	wg.Wait()
+	close(errCh)
+
+	success := 0
+	fail := 0
+	for err := range errCh {
+		if err != nil {
+			//log.Printf("Send failed: %v", err)
+			fail++
+		} else {
+			success++
+		}
+	}
+	if fail > 0 {
+		log.Printf("Delivery complete. Success: %d, Failed: %d", success, fail)
+	}
 }
 
-func (b *Bulk) Send(wg *sync.WaitGroup) error {
-	defer wg.Done()
-
+func (b *Bulk) Send() error {
 	n := b.calcMessageNumEachSession()
 	if n == 0 {
 		return nil
