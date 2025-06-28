@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/tls"
 	"errors"
+	"fmt"
 	"net/smtp"
 )
 
@@ -23,16 +24,16 @@ func (m *Mail) Send() error {
 	}
 	for _, recp := range m.RcptTo {
 		if err := validateLine(recp); err != nil {
-			return err
+			return fmt.Errorf("smtp rcptto validate error: %w", err)
 		}
 	}
 	c, err := Dial(m.Addr)
 	if err != nil {
-		return err
+		return fmt.Errorf("tcp dial error: %w", err)
 	}
 	defer c.Close()
 	if err = c.hello(); err != nil {
-		return err
+		return fmt.Errorf("smtp hello error: %w", err)
 	}
 	if !m.StartTLSDisabled {
 		if ok, _ := c.Extension("STARTTLS"); ok {
@@ -41,7 +42,7 @@ func (m *Mail) Send() error {
 				testHookStartTLS(config)
 			}
 			if err = c.StartTLS(config); err != nil {
-				return err
+				return fmt.Errorf("starttls error: %w", err)
 			}
 		}
 	}
