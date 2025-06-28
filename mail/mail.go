@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/smtp"
+	"os"
 )
 
 type Mail struct {
@@ -51,35 +52,50 @@ func (m *Mail) Send() error {
 			return errors.New("smtp: server doesn't support AUTH")
 		}
 		if err = c.Auth(m.Auth); err != nil {
-			return err
+			return fmt.Errorf("smtp-auth error: %w", err)
 		}
 	}
 
 	for i := 0; i < m.MessageCount; i++ {
 		if err = c.Mail(m.MailFrom); err != nil {
-			return err
+			return fmt.Errorf("smtp mailfrom error: %w", err)
 		}
 		for _, addr := range m.RcptTo {
 			if err = c.Rcpt(addr); err != nil {
-				return err
+				return fmt.Errorf("smtp rcptto error: %w", err)
 			}
 		}
 		w, err := c.Data()
 		if err != nil {
-			return err
+			return fmt.Errorf("smtp data error: %w", err)
 		}
 
 		_, err = w.Write(m.appendIDtoSubject(m.Data))
 		if err != nil {
-			return err
+			return fmt.Errorf("smtp data write error: %w", err)
 		}
 		err = w.Close()
 		if err != nil {
-			return err
+			return fmt.Errorf("smtp data close error: %w", err)
 		}
 	}
 
 	return c.Quit()
+}
+
+func getFQDN() string {
+	if fqdn := os.Getenv("FQDN_DOMAIN"); fqdn != "" {
+		return fqdn
+	}
+	hostname, err := os.Hostname()
+	if err != nil {
+		return "localhost"
+	}
+	return hostname
+}
+
+func genMsgID(id string) string {
+	return fmt.Sprintf("<%s@%s>", id, getFQDN())
 }
 
 func (m *Mail) appendIDtoSubject(data []byte) []byte {
@@ -92,6 +108,9 @@ func (m *Mail) appendIDtoSubject(data []byte) []byte {
 			break
 		}
 	}
+
+	mid := []byte("Message-ID: " + genMsgID(id))
+	lines = append([][]byte{mid}, lines...)
 
 	return bytes.Join(lines, []byte("\n"))
 }
