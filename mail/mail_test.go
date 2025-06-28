@@ -3,6 +3,8 @@ package mail
 import (
 	"bytes"
 	"crypto/tls"
+	"io"
+	"log"
 	"net"
 	"net/smtp"
 	"os"
@@ -314,6 +316,7 @@ func TestMail_Send_Success(t *testing.T) {
 			mockServer := &MockServer{
 				Addr: "localhost:0",
 				Name: "test.example.com",
+				Log:  log.New(io.Discard, "", 0), // Disable logging for tests
 			}
 
 			// Create a listener to get a free port
@@ -380,6 +383,7 @@ func TestMail_Send_WithAuth(t *testing.T) {
 			mockServer := &MockServer{
 				Addr: "localhost:0",
 				Name: "test.example.com",
+				Log:  log.New(io.Discard, "", 0), // Disable logging for tests
 			}
 
 			// Create a listener to get a free port
@@ -496,6 +500,7 @@ func TestMail_Send_StartTLS(t *testing.T) {
 			mockServer := &MockServer{
 				Addr: "localhost:0",
 				Name: "test.example.com",
+				Log:  log.New(io.Discard, "", 0), // Disable logging for tests
 			}
 
 			// Create a listener to get a free port
@@ -562,6 +567,7 @@ func TestMail_Send_StartTLSHook(t *testing.T) {
 	mockServer := &MockServer{
 		Addr: "localhost:0",
 		Name: "test.example.com",
+		Log:  log.New(io.Discard, "", 0), // Disable logging for tests
 	}
 
 	// Create a listener to get a free port
