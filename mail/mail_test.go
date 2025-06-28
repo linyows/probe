@@ -49,9 +49,9 @@ func TestGetFQDN(t *testing.T) {
 			wantEmpty:  false,
 		},
 		{
-			name:       "without FQDN_DOMAIN env var",
-			setEnv:     false,
-			wantEmpty:  false,
+			name:      "without FQDN_DOMAIN env var",
+			setEnv:    false,
+			wantEmpty: false,
 		},
 	}
 
@@ -122,39 +122,39 @@ func TestGenMsgID(t *testing.T) {
 
 func TestMail_AppendIDtoSubject(t *testing.T) {
 	tests := []struct {
-		name               string
-		originalData       []byte
-		wantMsgIDAtStart   bool
+		name                string
+		originalData        []byte
+		wantMsgIDAtStart    bool
 		wantSubjectModified bool
-		wantDataUnchanged  bool
+		wantDataUnchanged   bool
 	}{
 		{
-			name:               "with subject header",
-			originalData:       []byte("Subject: Original Subject\nFrom: sender@example.com\n\nBody content"),
-			wantMsgIDAtStart:   true,
+			name:                "with subject header",
+			originalData:        []byte("Subject: Original Subject\nFrom: sender@example.com\n\nBody content"),
+			wantMsgIDAtStart:    true,
 			wantSubjectModified: true,
-			wantDataUnchanged:  false,
+			wantDataUnchanged:   false,
 		},
 		{
-			name:               "without subject header",
-			originalData:       []byte("From: sender@example.com\n\nBody content"),
-			wantMsgIDAtStart:   true,
+			name:                "without subject header",
+			originalData:        []byte("From: sender@example.com\n\nBody content"),
+			wantMsgIDAtStart:    true,
 			wantSubjectModified: false,
-			wantDataUnchanged:  true,
+			wantDataUnchanged:   true,
 		},
 		{
-			name:               "empty data",
-			originalData:       []byte(""),
-			wantMsgIDAtStart:   true,
+			name:                "empty data",
+			originalData:        []byte(""),
+			wantMsgIDAtStart:    true,
 			wantSubjectModified: false,
-			wantDataUnchanged:  true,
+			wantDataUnchanged:   true,
 		},
 		{
-			name:               "subject at end",
-			originalData:       []byte("From: sender@example.com\nSubject: Test Subject\n\nBody"),
-			wantMsgIDAtStart:   true,
+			name:                "subject at end",
+			originalData:        []byte("From: sender@example.com\nSubject: Test Subject\n\nBody"),
+			wantMsgIDAtStart:    true,
 			wantSubjectModified: true,
-			wantDataUnchanged:  false,
+			wantDataUnchanged:   false,
 		},
 	}
 
@@ -198,10 +198,10 @@ func TestMail_AppendIDtoSubject(t *testing.T) {
 
 func TestMail_Send_Validation(t *testing.T) {
 	tests := []struct {
-		name           string
-		mail           *Mail
-		wantError      bool
-		wantErrorMsg   string
+		name         string
+		mail         *Mail
+		wantError    bool
+		wantErrorMsg string
 	}{
 		{
 			name: "invalid MailFrom with newline",
@@ -268,9 +268,9 @@ func TestMail_Send_Validation(t *testing.T) {
 
 func TestMail_Send_Success(t *testing.T) {
 	tests := []struct {
-		name         string
-		mail         *Mail
-		wantError    bool
+		name      string
+		mail      *Mail
+		wantError bool
 	}{
 		{
 			name: "successful single message",
@@ -488,7 +488,7 @@ func TestMail_Send_StartTLS(t *testing.T) {
 			wantError:        false,
 		},
 		{
-			name:             "STARTTLS enabled", 
+			name:             "STARTTLS enabled",
 			startTLSDisabled: false,
 			wantError:        true, // Will fail due to TLS cert issues in test
 		},
@@ -592,7 +592,7 @@ func TestMail_Send_StartTLSHook(t *testing.T) {
 
 	mail := &Mail{
 		Addr:             addr,
-		MailFrom:         "sender@example.com", 
+		MailFrom:         "sender@example.com",
 		RcptTo:           []string{"recipient@example.com"},
 		Data:             []byte("Subject: Test\n\nTest message"),
 		StartTLSDisabled: false, // Enable STARTTLS to trigger hook
