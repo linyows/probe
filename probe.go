@@ -2,9 +2,12 @@ package probe
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"os"
+	"path/filepath"
+	"strings"
 
 	"github.com/go-playground/validator/v10"
 	"github.com/goccy/go-yaml"
@@ -46,13 +49,17 @@ func (p *Probe) ExitStatus() int {
 }
 
 func (p *Probe) Load() error {
-	y, err := ioutil.ReadFile(p.FilePath)
+	files, err := p.yamlFiles()
+	if err != nil {
+		return err
+	}
+	y, err := p.readYamlFiles(files)
 	if err != nil {
 		return err
 	}
 
 	v := validator.New()
-	dec := yaml.NewDecoder(bytes.NewReader(y), yaml.Validator(v))
+	dec := yaml.NewDecoder(bytes.NewReader([]byte(y)), yaml.Validator(v))
 	if err = dec.Decode(&p.workflow); err != nil {
 		return err
 	}
@@ -60,6 +67,70 @@ func (p *Probe) Load() error {
 	p.setDefaultsToSteps()
 
 	return nil
+}
+
+func (p *Probe) readYamlFiles(paths []string) (string, error) {
+	var y strings.Builder
+
+	for _, path := range paths {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return "", err
+		}
+		y.Write(data)
+	}
+
+	return y.String(), nil
+}
+
+// yamlFiles resolves paths and returns a list of YAML (.yml and .yaml) files
+func (p *Probe) yamlFiles() ([]string, error) {
+	var files []string
+	paths := strings.Split(p.FilePath, ",")
+
+	for _, path := range paths {
+		path = strings.TrimSpace(path)
+
+		// Check if it's a single file or a directory
+		if info, err := os.Stat(path); err == nil {
+			if info.IsDir() {
+				// Read all YAML files from the directory
+				rfiles, err := ioutil.ReadDir(path)
+				if err != nil {
+					return nil, err
+				}
+				for _, rf := range rfiles {
+					if !rf.IsDir() && p.isYamlFile(rf.Name()) {
+						files = append(files, filepath.Join(path, rf.Name()))
+					}
+				}
+			} else if p.isYamlFile(path) {
+				// Single file path
+				files = append(files, path)
+			}
+		} else {
+			// Handle wildcard pattern
+			matches, err := filepath.Glob(path)
+			if err != nil {
+				return nil, err
+			}
+			if len(matches) == 0 {
+				return nil, fmt.Errorf("%s: no such file or directory", path)
+			}
+			for _, match := range matches {
+				if p.isYamlFile(match) {
+					files = append(files, match)
+				}
+			}
+		}
+	}
+
+	return files, nil
+}
+
+// isYAMLFile checks if the filename has a .yml or .yaml extension
+func (p *Probe) isYamlFile(f string) bool {
+	return strings.HasSuffix(f, ".yml") || strings.HasSuffix(f, ".yaml")
 }
 
 func (p *Probe) setDefaultsToSteps() {

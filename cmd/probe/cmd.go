@@ -114,7 +114,7 @@ func (c *Cmd) start() int {
 			p.Config.RT = true
 		}
 		if err := p.Do(); err != nil {
-			fmt.Printf("%#v\n", err)
+			fmt.Printf("%v\n", err)
 		} else {
 			return p.ExitStatus()
 		}
