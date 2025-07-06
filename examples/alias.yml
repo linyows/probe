@@ -1,0 +1,19 @@
+name: Using Alias Example
+jobs:
+- name: Use Alias Headers
+  defaults:
+    http:
+      url: https://httpbin.org
+  steps:
+  - name: Post
+    uses: http
+    with:
+      post: /post
+      headers:
+        <<: *x_foobar_headers
+      body:
+        message: hello
+    test: |
+      res.code == 200 &&
+      res.body.form.message == "hello"
+    echo: steps[0].res.body.headers["X-Foobar"]

@@ -1,0 +1,3 @@
+shared:
+  headers: &x_foobar_headers
+    X-FooBar: bazbazbaz

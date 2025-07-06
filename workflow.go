@@ -188,6 +188,7 @@ func (st *Step) Do(jCtx *JobContext) {
 	ret, err := RunActions(st.Uses, []string{}, expW, jCtx.Config.Verbose)
 	if err != nil {
 		st.err = err
+		fmt.Printf("%s \"%s\" in %s-action -- %s\n", color.RedString("Error"), name, st.Uses, err)
 		jCtx.SetFailed()
 		return
 	}

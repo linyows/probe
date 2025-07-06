@@ -3,6 +3,8 @@ module github.com/linyows/probe
 go 1.23.0
 
 require (
+	github.com/expr-lang/expr v1.16.9
+	github.com/fatih/color v1.18.0
 	github.com/go-playground/validator/v10 v10.4.1
 	github.com/goccy/go-yaml v1.12.0
 	github.com/hashicorp/go-hclog v0.14.1
@@ -10,12 +12,9 @@ require (
 	github.com/jarcoal/httpmock v1.3.1
 	google.golang.org/grpc v1.67.0
 	google.golang.org/protobuf v1.34.2
-	gopkg.in/yaml.v2 v2.2.2
 )
 
 require (
-	github.com/expr-lang/expr v1.16.9 // indirect
-	github.com/fatih/color v1.18.0 // indirect
 	github.com/go-playground/locales v0.13.0 // indirect
 	github.com/go-playground/universal-translator v0.17.0 // indirect
 	github.com/golang/protobuf v1.5.3 // indirect
