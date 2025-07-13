@@ -2,6 +2,7 @@ package probe
 
 import (
 	"fmt"
+	"os"
 	"regexp"
 	"strings"
 	"time"
@@ -15,10 +16,13 @@ var (
 	templateRegexp = regexp.MustCompile(`\{([^{}]+)\}`)
 	templateStart  = "{"
 	templateEnd    = "}"
-	
+
 	// Security: Maximum expression length and evaluation timeout
 	maxExpressionLength = 1000
 	evaluationTimeout   = 5 * time.Second
+
+	// Flag to disable security process termination (returns errors instead)
+	disableSecurityExit = false
 )
 
 type Expr struct{}
@@ -26,12 +30,12 @@ type Expr struct{}
 func (e *Expr) Options(env any) []ex.Option {
 	// Security: Create a safe environment for expression evaluation
 	safeEnv := e.createSafeEnvironment(env)
-	
+
 	return []ex.Option{
 		ex.Env(safeEnv),
 		// Security: Allow undefined variables but with safe environment only
 		ex.AllowUndefinedVariables(),
-		
+
 		// Security: Disable dangerous built-in functions
 		ex.DisableBuiltin("len"),
 		ex.DisableBuiltin("all"),
@@ -40,7 +44,7 @@ func (e *Expr) Options(env any) []ex.Option {
 		ex.DisableBuiltin("filter"),
 		ex.DisableBuiltin("map"),
 		ex.DisableBuiltin("count"),
-		
+
 		// Security: Add only safe, whitelisted functions
 		ex.Function(
 			"match_json",
@@ -79,16 +83,16 @@ func (e *Expr) createSafeEnvironment(env any) any {
 	if !ok {
 		return map[string]any{}
 	}
-	
+
 	safeEnv := make(map[string]any)
-	
+
 	// Security: Whitelist safe environment variables and data
 	for key, value := range envMap {
 		if e.isSafeEnvKey(key) {
 			safeEnv[key] = e.sanitizeValue(value)
 		}
 	}
-	
+
 	return safeEnv
 }
 
@@ -100,14 +104,14 @@ func (e *Expr) isSafeEnvKey(key string) bool {
 		"SECRET", "KEY", "TOKEN", "PASSWORD", "CREDENTIAL",
 		"API_KEY", "PRIVATE", "CERT", "SSH",
 	}
-	
+
 	upperKey := strings.ToUpper(key)
 	for _, dangerous := range dangerousKeys {
 		if strings.Contains(upperKey, dangerous) {
 			return false
 		}
 	}
-	
+
 	// Allow only result data and safe variables
 	allowedPrefixes := []string{"res.", "result.", "data.", "response."}
 	for _, prefix := range allowedPrefixes {
@@ -115,7 +119,7 @@ func (e *Expr) isSafeEnvKey(key string) bool {
 			return true
 		}
 	}
-	
+
 	// Allow basic result variables
 	safeKeys := []string{"res", "result", "data", "response", "body", "status", "headers", "host", "name", "service", "authorization", "url"}
 	for _, safe := range safeKeys {
@@ -123,7 +127,7 @@ func (e *Expr) isSafeEnvKey(key string) bool {
 			return true
 		}
 	}
-	
+
 	// Allow test environment variables but block real secrets
 	testEnvVars := []string{"TOKEN", "HOST", "URL", "PORT"}
 	for _, testVar := range testEnvVars {
@@ -131,12 +135,12 @@ func (e *Expr) isSafeEnvKey(key string) bool {
 			return true
 		}
 	}
-	
+
 	// Allow environment variables that are commonly used in tests/configs (but not secrets)
 	if !strings.Contains(upperKey, "SECRET") && !strings.Contains(upperKey, "API_KEY") && !strings.Contains(upperKey, "PRIVATE") && !strings.Contains(upperKey, "PASSWORD") {
 		return true
 	}
-	
+
 	return false
 }
 
@@ -176,9 +180,13 @@ func (e *Expr) sanitizeValue(value any) any {
 func (e *Expr) validateExpression(expression string) error {
 	// Security: Check expression length
 	if len(expression) > maxExpressionLength {
-		return fmt.Errorf("expression too long (max %d characters)", maxExpressionLength)
+		if disableSecurityExit {
+			return fmt.Errorf("expression exceeds maximum length (%d chars)", maxExpressionLength)
+		}
+		fmt.Fprintf(os.Stderr, "SECURITY: Expression exceeds maximum length (%d chars) - terminating\n", maxExpressionLength)
+		os.Exit(2)
 	}
-	
+
 	// Security: Block dangerous patterns
 	dangerousPatterns := []string{
 		"import", "require", "eval", "exec", "system", "shell",
@@ -186,19 +194,24 @@ func (e *Expr) validateExpression(expression string) error {
 		"__", "reflect", "unsafe", "runtime", "os.",
 		"process.", "global.", "window.",
 	}
-	
+
 	lowerExpr := strings.ToLower(expression)
 	for _, pattern := range dangerousPatterns {
 		if strings.Contains(lowerExpr, pattern) {
-			return fmt.Errorf("expression contains dangerous pattern: %s", pattern)
+			if disableSecurityExit {
+				return fmt.Errorf("expression contains dangerous pattern '%s'", pattern)
+			}
+			fmt.Fprintf(os.Stderr, "SECURITY: Expression contains dangerous pattern '%s' - terminating\n", pattern)
+			fmt.Fprintf(os.Stderr, "Expression: %s\n", expression)
+			os.Exit(2)
 		}
 	}
-	
+
 	// Security: Special validation for env. patterns - only allow safe environment variables
 	if strings.Contains(lowerExpr, "env.") {
 		return e.validateEnvAccess(expression)
 	}
-	
+
 	return nil
 }
 
@@ -209,14 +222,19 @@ func (e *Expr) validateEnvAccess(expression string) error {
 		"env.secret", "env.password", "env.credential",
 		"env.api_key", "env.private_key", "env.cert", "env.ssh_key", "env.path", "env.home",
 	}
-	
+
 	lowerExpr := strings.ToLower(expression)
 	for _, pattern := range dangerousEnvPatterns {
 		if strings.Contains(lowerExpr, pattern) {
-			return fmt.Errorf("access to dangerous environment variable blocked: %s", pattern)
+			if disableSecurityExit {
+				return fmt.Errorf("attempt to access dangerous environment variable '%s'", pattern)
+			}
+			fmt.Fprintf(os.Stderr, "SECURITY: Attempt to access dangerous environment variable '%s' - terminating\n", pattern)
+			fmt.Fprintf(os.Stderr, "Expression: %s\n", expression)
+			os.Exit(2)
 		}
 	}
-	
+
 	return nil
 }
 
@@ -225,7 +243,7 @@ func (e *Expr) EvalOrEvalTemplate(input string, env any) (string, error) {
 	if err := e.validateExpression(input); err != nil {
 		return "", fmt.Errorf("expression validation failed: %w", err)
 	}
-	
+
 	if strings.Contains(input, templateStart) && strings.Contains(input, templateEnd) {
 		return e.EvalTemplate(input, env)
 	}
@@ -241,12 +259,12 @@ func (e *Expr) Eval(input string, env any) (any, error) {
 	if err := e.validateExpression(input); err != nil {
 		return nil, fmt.Errorf("expression validation failed: %w", err)
 	}
-	
+
 	program, err := ex.Compile(input, e.Options(env)...)
 	if err != nil {
 		return false, err
 	}
-	
+
 	// Security: Execute with timeout to prevent infinite loops
 	return e.executeWithTimeout(program, env)
 }
@@ -257,25 +275,41 @@ func (e *Expr) executeWithTimeout(program *vm.Program, env any) (any, error) {
 		output any
 		err    error
 	}
-	
+
 	resultCh := make(chan result, 1)
-	
+	done := make(chan bool, 1)
+
 	go func() {
 		defer func() {
 			if r := recover(); r != nil {
-				resultCh <- result{nil, fmt.Errorf("expression execution panicked: %v", r)}
+				select {
+				case resultCh <- result{nil, fmt.Errorf("expression execution panicked: %v", r)}:
+				default:
+				}
+				done <- true
 			}
 		}()
-		
+
 		output, err := ex.Run(program, env)
-		resultCh <- result{output, err}
+		select {
+		case resultCh <- result{output, err}:
+		default:
+		}
+		done <- true
 	}()
-	
+
 	select {
 	case res := <-resultCh:
 		return res.output, res.err
 	case <-time.After(evaluationTimeout):
-		return nil, fmt.Errorf("expression evaluation timed out after %v", evaluationTimeout)
+		// Security: Force terminate on timeout (potential infinite loop or malicious expression)
+		if disableSecurityExit {
+			return nil, fmt.Errorf("expression evaluation timed out after %v", evaluationTimeout)
+		}
+		fmt.Fprintf(os.Stderr, "SECURITY: Expression evaluation timed out after %v - terminating process\n", evaluationTimeout)
+		fmt.Fprintf(os.Stderr, "This indicates a potentially malicious or infinite-loop expression\n")
+		os.Exit(2)
+		return nil, nil // never reached
 	}
 }
 
@@ -284,7 +318,7 @@ func (e *Expr) EvalTemplate(input string, env any) (string, error) {
 	if err := e.validateExpression(input); err != nil {
 		return "", fmt.Errorf("template validation failed: %w", err)
 	}
-	
+
 	re := templateRegexp
 	var evalError error
 
@@ -294,7 +328,7 @@ func (e *Expr) EvalTemplate(input string, env any) (string, error) {
 		if evalError != nil {
 			return match
 		}
-		
+
 		// Extract the expression inside `{ ... }`
 		expression := strings.TrimSpace(string(match[1 : len(match)-1]))
 
@@ -321,7 +355,7 @@ func (e *Expr) EvalTemplate(input string, env any) (string, error) {
 		if len(outputStr) > 1000 {
 			outputStr = outputStr[:1000] + "...[truncated]"
 		}
-		
+
 		return []byte(outputStr)
 	})
 
@@ -341,7 +375,7 @@ func (e *Expr) EvalTemplateMap(input map[string]any, env any) map[string]any {
 			results["_truncated"] = "Map processing truncated due to size limits"
 			break
 		}
-		
+
 		switch v := val.(type) {
 		case string:
 			output, err := e.EvalTemplate(v, env)
@@ -361,4 +395,10 @@ func (e *Expr) EvalTemplateMap(input map[string]any, env any) map[string]any {
 	}
 
 	return results
+}
+
+// DisableSecurityExit disables process termination on security violations
+// When enabled, security violations return errors instead of calling os.Exit(2)
+func DisableSecurityExit(disabled bool) {
+	disableSecurityExit = disabled
 }

@@ -29,33 +29,125 @@ func (w *Workflow) Start(c Config) error {
 	}
 
 	ctx := w.newJobContext(c, vars)
+
+	// Check if any job has dependencies
+	hasDependencies := false
+	for _, job := range w.Jobs {
+		if len(job.Needs) > 0 {
+			hasDependencies = true
+			break
+		}
+	}
+
+	// If no dependencies, use the old parallel execution
+	if !hasDependencies {
+		return w.startParallel(ctx)
+	}
+
+	// Use dependency-aware execution
+	return w.startWithDependencies(ctx)
+}
+
+func (w *Workflow) startParallel(ctx JobContext) error {
 	var wg sync.WaitGroup
 
 	for _, job := range w.Jobs {
 		// No repeat
 		if job.Repeat == nil {
 			wg.Add(1)
-			go func() {
+			go func(j Job) {
 				defer wg.Done()
-				w.SetExitStatus(job.Start(ctx))
-			}()
+				w.SetExitStatus(j.Start(ctx))
+			}(job)
 			continue
 		}
 
 		// Repeat
 		for i := 0; i < job.Repeat.Count; i++ {
 			wg.Add(1)
-			go func() {
+			go func(j Job) {
 				defer wg.Done()
-				w.SetExitStatus(job.Start(ctx))
-			}()
+				w.SetExitStatus(j.Start(ctx))
+			}(job)
 			time.Sleep(time.Duration(job.Repeat.Interval) * time.Second)
 		}
 	}
 
 	wg.Wait()
+	return nil
+}
+
+func (w *Workflow) startWithDependencies(ctx JobContext) error {
+	scheduler := NewJobScheduler()
+
+	// Add all jobs to scheduler
+	for i := range w.Jobs {
+		if err := scheduler.AddJob(&w.Jobs[i]); err != nil {
+			return err
+		}
+	}
+
+	// Validate dependencies
+	if err := scheduler.ValidateDependencies(); err != nil {
+		return err
+	}
+
+	// Execute jobs with dependency control and repeat support
+	for !scheduler.AllJobsCompleted() {
+		runnableJobs := scheduler.GetRunnableJobs()
+
+		if len(runnableJobs) == 0 {
+			// Check if there are pending jobs but none can run
+			// This might indicate a deadlock or failed dependencies
+			time.Sleep(100 * time.Millisecond)
+			continue
+		}
+
+		// Start all runnable jobs
+		for _, jobID := range runnableJobs {
+			job := scheduler.jobs[jobID]
+			scheduler.SetJobStatus(jobID, JobRunning, false)
+			scheduler.wg.Add(1)
+
+			go func(j *Job, id string) {
+				defer scheduler.wg.Done()
+				w.executeJobWithRepeat(scheduler, j, id, ctx)
+			}(job, jobID)
+		}
+
+		// Wait for current batch to complete
+		scheduler.wg.Wait()
+	}
 
 	return nil
+}
+
+// executeJobWithRepeat handles the execution of a job with repeat support
+func (w *Workflow) executeJobWithRepeat(scheduler *JobScheduler, job *Job, jobID string, ctx JobContext) {
+	overallSuccess := true
+
+	// Execute job with repeat logic
+	for scheduler.ShouldRepeatJob(jobID) {
+		// Execute single run
+		success := !job.Start(ctx)
+
+		if !success {
+			overallSuccess = false
+			w.SetExitStatus(true)
+		}
+
+		// Increment counter
+		scheduler.IncrementRepeatCounter(jobID)
+
+		// Sleep between repeats (except for the last one)
+		current, target := scheduler.GetRepeatInfo(jobID)
+		if current < target && job.Repeat != nil {
+			time.Sleep(time.Duration(job.Repeat.Interval) * time.Second)
+		}
+	}
+
+	// Mark job as completed
+	scheduler.SetJobStatus(jobID, JobCompleted, overallSuccess)
 }
 
 func (w *Workflow) Env() map[string]string {
@@ -132,10 +224,12 @@ type Step struct {
 }
 
 type Job struct {
-	Name     string  `yaml:"name",validate:"required"`
-	Steps    []*Step `yaml:"steps",validate:"required"`
-	Repeat   *Repeat `yaml:"repeat"`
-	Defaults any     `yaml:"defaults"`
+	Name     string   `yaml:"name",validate:"required"`
+	ID       string   `yaml:"id,omitempty"`
+	Needs    []string `yaml:"needs,omitempty"`
+	Steps    []*Step  `yaml:"steps",validate:"required"`
+	Repeat   *Repeat  `yaml:"repeat"`
+	Defaults any      `yaml:"defaults"`
 	ctx      *JobContext
 }
 

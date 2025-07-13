@@ -1,0 +1,26 @@
+name: Simple Repeat + Needs Test
+jobs:
+- name: First
+  id: first  
+  repeat:
+    count: 2
+    interval: 1
+  defaults:
+    http:
+      url: https://httpbin.org
+  steps:
+  - name: First step
+    uses: http
+    with:
+      get: /get
+
+- name: Second
+  needs: [first]
+  defaults:
+    http:
+      url: https://httpbin.org  
+  steps:
+  - name: Second step
+    uses: http
+    with:
+      get: /get
