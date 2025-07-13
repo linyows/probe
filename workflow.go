@@ -225,8 +225,8 @@ type Step struct {
 
 type Job struct {
 	Name     string   `yaml:"name",validate:"required"`
-	ID       string   `yaml:"id"`
-	Needs    []string `yaml:"needs"`
+	ID       string   `yaml:"id,omitempty"`
+	Needs    []string `yaml:"needs,omitempty"`
 	Steps    []*Step  `yaml:"steps",validate:"required"`
 	Repeat   *Repeat  `yaml:"repeat"`
 	Defaults any      `yaml:"defaults"`
