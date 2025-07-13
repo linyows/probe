@@ -2,6 +2,7 @@ package probe
 
 import (
 	"fmt"
+	"os"
 	"regexp"
 	"strings"
 	"time"
@@ -176,7 +177,8 @@ func (e *Expr) sanitizeValue(value any) any {
 func (e *Expr) validateExpression(expression string) error {
 	// Security: Check expression length
 	if len(expression) > maxExpressionLength {
-		return fmt.Errorf("expression too long (max %d characters)", maxExpressionLength)
+		fmt.Fprintf(os.Stderr, "SECURITY: Expression exceeds maximum length (%d chars) - terminating\n", maxExpressionLength)
+		os.Exit(2)
 	}
 	
 	// Security: Block dangerous patterns
@@ -190,7 +192,9 @@ func (e *Expr) validateExpression(expression string) error {
 	lowerExpr := strings.ToLower(expression)
 	for _, pattern := range dangerousPatterns {
 		if strings.Contains(lowerExpr, pattern) {
-			return fmt.Errorf("expression contains dangerous pattern: %s", pattern)
+			fmt.Fprintf(os.Stderr, "SECURITY: Expression contains dangerous pattern '%s' - terminating\n", pattern)
+			fmt.Fprintf(os.Stderr, "Expression: %s\n", expression)
+			os.Exit(2)
 		}
 	}
 	
@@ -213,7 +217,9 @@ func (e *Expr) validateEnvAccess(expression string) error {
 	lowerExpr := strings.ToLower(expression)
 	for _, pattern := range dangerousEnvPatterns {
 		if strings.Contains(lowerExpr, pattern) {
-			return fmt.Errorf("access to dangerous environment variable blocked: %s", pattern)
+			fmt.Fprintf(os.Stderr, "SECURITY: Attempt to access dangerous environment variable '%s' - terminating\n", pattern)
+			fmt.Fprintf(os.Stderr, "Expression: %s\n", expression)
+			os.Exit(2)
 		}
 	}
 	
@@ -259,23 +265,36 @@ func (e *Expr) executeWithTimeout(program *vm.Program, env any) (any, error) {
 	}
 	
 	resultCh := make(chan result, 1)
+	done := make(chan bool, 1)
 	
 	go func() {
 		defer func() {
 			if r := recover(); r != nil {
-				resultCh <- result{nil, fmt.Errorf("expression execution panicked: %v", r)}
+				select {
+				case resultCh <- result{nil, fmt.Errorf("expression execution panicked: %v", r)}:
+				default:
+				}
+				done <- true
 			}
 		}()
 		
 		output, err := ex.Run(program, env)
-		resultCh <- result{output, err}
+		select {
+		case resultCh <- result{output, err}:
+		default:
+		}
+		done <- true
 	}()
 	
 	select {
 	case res := <-resultCh:
 		return res.output, res.err
 	case <-time.After(evaluationTimeout):
-		return nil, fmt.Errorf("expression evaluation timed out after %v", evaluationTimeout)
+		// Security: Force terminate on timeout (potential infinite loop or malicious expression)
+		fmt.Fprintf(os.Stderr, "SECURITY: Expression evaluation timed out after %v - terminating process\n", evaluationTimeout)
+		fmt.Fprintf(os.Stderr, "This indicates a potentially malicious or infinite-loop expression\n")
+		os.Exit(2)
+		return nil, nil // never reached
 	}
 }
 
