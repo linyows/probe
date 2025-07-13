@@ -16,6 +16,211 @@ type Workflow struct {
 	env        map[string]string
 }
 
+type JobStatus int
+
+const (
+	JobPending JobStatus = iota
+	JobRunning
+	JobCompleted
+	JobFailed
+)
+
+type JobScheduler struct {
+	jobs           map[string]*Job
+	status         map[string]JobStatus
+	results        map[string]bool
+	repeatCounters map[string]int // Track repeat execution count
+	repeatTargets  map[string]int // Target repeat count
+	mutex          sync.RWMutex
+	wg             sync.WaitGroup
+}
+
+func NewJobScheduler() *JobScheduler {
+	return &JobScheduler{
+		jobs:           make(map[string]*Job),
+		status:         make(map[string]JobStatus),
+		results:        make(map[string]bool),
+		repeatCounters: make(map[string]int),
+		repeatTargets:  make(map[string]int),
+	}
+}
+
+func (js *JobScheduler) AddJob(job *Job) error {
+	js.mutex.Lock()
+	defer js.mutex.Unlock()
+
+	// Generate ID if not provided
+	if job.ID == "" {
+		job.ID = job.Name
+	}
+
+	// Check for duplicate IDs
+	if _, exists := js.jobs[job.ID]; exists {
+		return fmt.Errorf("duplicate job ID: %s", job.ID)
+	}
+
+	js.jobs[job.ID] = job
+	js.status[job.ID] = JobPending
+
+	// Set repeat targets
+	if job.Repeat != nil {
+		js.repeatTargets[job.ID] = job.Repeat.Count
+		js.repeatCounters[job.ID] = 0
+	} else {
+		js.repeatTargets[job.ID] = 1 // No repeat = run once
+		js.repeatCounters[job.ID] = 0
+	}
+
+	return nil
+}
+
+func (js *JobScheduler) ValidateDependencies() error {
+	js.mutex.RLock()
+	defer js.mutex.RUnlock()
+
+	// Check if all dependencies exist
+	for jobID, job := range js.jobs {
+		for _, dep := range job.Needs {
+			if _, exists := js.jobs[dep]; !exists {
+				return fmt.Errorf("job '%s' depends on non-existent job '%s'", jobID, dep)
+			}
+		}
+	}
+
+	// Check for circular dependencies
+	return js.checkCircularDependencies()
+}
+
+func (js *JobScheduler) checkCircularDependencies() error {
+	visited := make(map[string]bool)
+	recStack := make(map[string]bool)
+
+	for jobID := range js.jobs {
+		if !visited[jobID] {
+			if js.hasCycleDFS(jobID, visited, recStack) {
+				return fmt.Errorf("circular dependency detected involving job '%s'", jobID)
+			}
+		}
+	}
+
+	return nil
+}
+
+func (js *JobScheduler) hasCycleDFS(jobID string, visited, recStack map[string]bool) bool {
+	visited[jobID] = true
+	recStack[jobID] = true
+
+	job := js.jobs[jobID]
+	for _, dep := range job.Needs {
+		if !visited[dep] {
+			if js.hasCycleDFS(dep, visited, recStack) {
+				return true
+			}
+		} else if recStack[dep] {
+			return true
+		}
+	}
+
+	recStack[jobID] = false
+	return false
+}
+
+func (js *JobScheduler) CanRunJob(jobID string) bool {
+	js.mutex.RLock()
+	defer js.mutex.RUnlock()
+
+	job := js.jobs[jobID]
+	if js.status[jobID] != JobPending {
+		return false
+	}
+
+	// Check if all dependencies are fully completed (all repeats done)
+	for _, dep := range job.Needs {
+		if !js.isJobFullyCompleted(dep) {
+			return false
+		}
+	}
+
+	return true
+}
+
+// isJobFullyCompleted checks if a job has completed all its repeat executions
+func (js *JobScheduler) isJobFullyCompleted(jobID string) bool {
+	if js.status[jobID] != JobCompleted {
+		return false
+	}
+
+	// Check if all repeat executions are done
+	target := js.repeatTargets[jobID]
+	counter := js.repeatCounters[jobID]
+
+	return counter >= target && js.results[jobID]
+}
+
+func (js *JobScheduler) SetJobStatus(jobID string, status JobStatus, success bool) {
+	js.mutex.Lock()
+	defer js.mutex.Unlock()
+
+	js.status[jobID] = status
+	if status == JobCompleted || status == JobFailed {
+		js.results[jobID] = success
+	}
+}
+
+// IncrementRepeatCounter increments the repeat counter for a job
+func (js *JobScheduler) IncrementRepeatCounter(jobID string) {
+	js.mutex.Lock()
+	defer js.mutex.Unlock()
+
+	js.repeatCounters[jobID]++
+}
+
+// ShouldRepeatJob checks if a job should be repeated
+func (js *JobScheduler) ShouldRepeatJob(jobID string) bool {
+	js.mutex.RLock()
+	defer js.mutex.RUnlock()
+
+	counter := js.repeatCounters[jobID]
+	target := js.repeatTargets[jobID]
+
+	return counter < target
+}
+
+// GetRepeatInfo returns current repeat counter and target for a job
+func (js *JobScheduler) GetRepeatInfo(jobID string) (current, target int) {
+	js.mutex.RLock()
+	defer js.mutex.RUnlock()
+
+	return js.repeatCounters[jobID], js.repeatTargets[jobID]
+}
+
+func (js *JobScheduler) GetRunnableJobs() []string {
+	js.mutex.RLock()
+	defer js.mutex.RUnlock()
+
+	var runnable []string
+	for jobID := range js.jobs {
+		if js.CanRunJob(jobID) {
+			runnable = append(runnable, jobID)
+		}
+	}
+
+	return runnable
+}
+
+func (js *JobScheduler) AllJobsCompleted() bool {
+	js.mutex.RLock()
+	defer js.mutex.RUnlock()
+
+	for _, status := range js.status {
+		if status != JobCompleted && status != JobFailed {
+			return false
+		}
+	}
+
+	return true
+}
+
 func (w *Workflow) SetExitStatus(isErr bool) {
 	if isErr {
 		w.exitStatus = 1
@@ -29,33 +234,125 @@ func (w *Workflow) Start(c Config) error {
 	}
 
 	ctx := w.newJobContext(c, vars)
+
+	// Check if any job has dependencies
+	hasDependencies := false
+	for _, job := range w.Jobs {
+		if len(job.Needs) > 0 {
+			hasDependencies = true
+			break
+		}
+	}
+
+	// If no dependencies, use the old parallel execution
+	if !hasDependencies {
+		return w.startParallel(ctx)
+	}
+
+	// Use dependency-aware execution
+	return w.startWithDependencies(ctx)
+}
+
+func (w *Workflow) startParallel(ctx JobContext) error {
 	var wg sync.WaitGroup
 
 	for _, job := range w.Jobs {
 		// No repeat
 		if job.Repeat == nil {
 			wg.Add(1)
-			go func() {
+			go func(j Job) {
 				defer wg.Done()
-				w.SetExitStatus(job.Start(ctx))
-			}()
+				w.SetExitStatus(j.Start(ctx))
+			}(job)
 			continue
 		}
 
 		// Repeat
 		for i := 0; i < job.Repeat.Count; i++ {
 			wg.Add(1)
-			go func() {
+			go func(j Job) {
 				defer wg.Done()
-				w.SetExitStatus(job.Start(ctx))
-			}()
+				w.SetExitStatus(j.Start(ctx))
+			}(job)
 			time.Sleep(time.Duration(job.Repeat.Interval) * time.Second)
 		}
 	}
 
 	wg.Wait()
+	return nil
+}
+
+func (w *Workflow) startWithDependencies(ctx JobContext) error {
+	scheduler := NewJobScheduler()
+
+	// Add all jobs to scheduler
+	for i := range w.Jobs {
+		if err := scheduler.AddJob(&w.Jobs[i]); err != nil {
+			return err
+		}
+	}
+
+	// Validate dependencies
+	if err := scheduler.ValidateDependencies(); err != nil {
+		return err
+	}
+
+	// Execute jobs with dependency control and repeat support
+	for !scheduler.AllJobsCompleted() {
+		runnableJobs := scheduler.GetRunnableJobs()
+
+		if len(runnableJobs) == 0 {
+			// Check if there are pending jobs but none can run
+			// This might indicate a deadlock or failed dependencies
+			time.Sleep(100 * time.Millisecond)
+			continue
+		}
+
+		// Start all runnable jobs
+		for _, jobID := range runnableJobs {
+			job := scheduler.jobs[jobID]
+			scheduler.SetJobStatus(jobID, JobRunning, false)
+			scheduler.wg.Add(1)
+
+			go func(j *Job, id string) {
+				defer scheduler.wg.Done()
+				w.executeJobWithRepeat(scheduler, j, id, ctx)
+			}(job, jobID)
+		}
+
+		// Wait for current batch to complete
+		scheduler.wg.Wait()
+	}
 
 	return nil
+}
+
+// executeJobWithRepeat handles the execution of a job with repeat support
+func (w *Workflow) executeJobWithRepeat(scheduler *JobScheduler, job *Job, jobID string, ctx JobContext) {
+	overallSuccess := true
+
+	// Execute job with repeat logic
+	for scheduler.ShouldRepeatJob(jobID) {
+		// Execute single run
+		success := !job.Start(ctx)
+
+		if !success {
+			overallSuccess = false
+			w.SetExitStatus(true)
+		}
+
+		// Increment counter
+		scheduler.IncrementRepeatCounter(jobID)
+
+		// Sleep between repeats (except for the last one)
+		current, target := scheduler.GetRepeatInfo(jobID)
+		if current < target && job.Repeat != nil {
+			time.Sleep(time.Duration(job.Repeat.Interval) * time.Second)
+		}
+	}
+
+	// Mark job as completed
+	scheduler.SetJobStatus(jobID, JobCompleted, overallSuccess)
 }
 
 func (w *Workflow) Env() map[string]string {
@@ -132,10 +429,12 @@ type Step struct {
 }
 
 type Job struct {
-	Name     string  `yaml:"name",validate:"required"`
-	Steps    []*Step `yaml:"steps",validate:"required"`
-	Repeat   *Repeat `yaml:"repeat"`
-	Defaults any     `yaml:"defaults"`
+	Name     string   `yaml:"name",validate:"required"`
+	ID       string   `yaml:"id"`
+	Needs    []string `yaml:"needs"`
+	Steps    []*Step  `yaml:"steps",validate:"required"`
+	Repeat   *Repeat  `yaml:"repeat"`
+	Defaults any      `yaml:"defaults"`
 	ctx      *JobContext
 }
 
