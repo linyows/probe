@@ -81,7 +81,9 @@ func (e *Expr) Options(env any) []ex.Option {
 func (e *Expr) createSafeEnvironment(env any) any {
 	envMap, ok := env.(map[string]any)
 	if !ok {
-		return map[string]any{}
+		// For non-map types (like structs with expr tags), return as-is
+		// This allows expr library to handle StepContext and similar safe structs
+		return env
 	}
 
 	safeEnv := make(map[string]any)
