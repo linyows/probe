@@ -3,6 +3,7 @@ package probe
 import (
 	"fmt"
 	"sync"
+	"time"
 )
 
 type JobStatus int
@@ -38,9 +39,9 @@ func (js *JobScheduler) AddJob(job *Job) error {
 	js.mutex.Lock()
 	defer js.mutex.Unlock()
 
-	// Generate ID if not provided
+	// Generate unique ID if not provided
 	if job.ID == "" {
-		job.ID = job.Name
+		job.ID = js.generateUniqueID(job.Name)
 	}
 
 	// Check for duplicate IDs
@@ -61,6 +62,34 @@ func (js *JobScheduler) AddJob(job *Job) error {
 	}
 
 	return nil
+}
+
+// generateUniqueID generates a unique ID based on the job name
+// If the name is already taken, it appends a number to make it unique
+func (js *JobScheduler) generateUniqueID(baseName string) string {
+	if baseName == "" {
+		baseName = "job"
+	}
+	
+	// First try the base name
+	if _, exists := js.jobs[baseName]; !exists {
+		return baseName
+	}
+	
+	// If base name exists, try with incrementing numbers
+	counter := 1
+	for {
+		candidateID := fmt.Sprintf("%s-%d", baseName, counter)
+		if _, exists := js.jobs[candidateID]; !exists {
+			return candidateID
+		}
+		counter++
+		
+		// Safety check to prevent infinite loop (though very unlikely)
+		if counter > 10000 {
+			return fmt.Sprintf("%s-%d", baseName, int(time.Now().UnixNano()))
+		}
+	}
 }
 
 func (js *JobScheduler) ValidateDependencies() error {

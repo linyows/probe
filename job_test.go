@@ -117,6 +117,81 @@ func TestJobScheduler_AddJob(t *testing.T) {
 	}
 }
 
+func TestJobScheduler_UniqueIDGeneration(t *testing.T) {
+	js := NewJobScheduler()
+
+	// Test multiple jobs with same name
+	job1 := &Job{Name: "same-name", Steps: []*Step{}}
+	job2 := &Job{Name: "same-name", Steps: []*Step{}}
+	job3 := &Job{Name: "same-name", Steps: []*Step{}}
+
+	err := js.AddJob(job1)
+	if err != nil {
+		t.Fatalf("AddJob should not return error: %v", err)
+	}
+
+	err = js.AddJob(job2)
+	if err != nil {
+		t.Fatalf("AddJob should not return error: %v", err)
+	}
+
+	err = js.AddJob(job3)
+	if err != nil {
+		t.Fatalf("AddJob should not return error: %v", err)
+	}
+
+	// Check that all jobs have unique IDs
+	expectedIDs := []string{"same-name", "same-name-1", "same-name-2"}
+	actualIDs := []string{job1.ID, job2.ID, job3.ID}
+
+	for i, expectedID := range expectedIDs {
+		if actualIDs[i] != expectedID {
+			t.Errorf("Expected ID[%d] to be '%s', got '%s'", i, expectedID, actualIDs[i])
+		}
+	}
+
+	// Verify all jobs are stored with their unique IDs
+	for _, id := range expectedIDs {
+		if _, exists := js.jobs[id]; !exists {
+			t.Errorf("Job with ID '%s' should exist in scheduler", id)
+		}
+	}
+}
+
+func TestJobScheduler_GenerateUniqueID(t *testing.T) {
+	js := NewJobScheduler()
+
+	// Test empty name
+	id := js.generateUniqueID("")
+	if id != "job" {
+		t.Errorf("Expected 'job' for empty name, got '%s'", id)
+	}
+
+	// Test normal name
+	id = js.generateUniqueID("test")
+	if id != "test" {
+		t.Errorf("Expected 'test' for unique name, got '%s'", id)
+	}
+
+	// Add a job to create conflict
+	js.jobs["test"] = &Job{}
+
+	// Test conflict resolution
+	id = js.generateUniqueID("test")
+	if id != "test-1" {
+		t.Errorf("Expected 'test-1' for conflicting name, got '%s'", id)
+	}
+
+	// Add more conflicts
+	js.jobs["test-1"] = &Job{}
+	js.jobs["test-2"] = &Job{}
+
+	id = js.generateUniqueID("test")
+	if id != "test-3" {
+		t.Errorf("Expected 'test-3' for multiple conflicts, got '%s'", id)
+	}
+}
+
 func TestJobScheduler_ValidateDependencies(t *testing.T) {
 	js := NewJobScheduler()
 
