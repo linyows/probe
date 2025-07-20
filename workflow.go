@@ -11,6 +11,21 @@ import (
 	"github.com/fatih/color"
 )
 
+// colorSuccess returns a *color.Color for success (RGB 0,175,0)
+func colorSuccess() *color.Color {
+	return color.RGB(0, 175, 0)
+}
+
+// colorError returns a *color.Color for errors (red)
+func colorError() *color.Color {
+	return color.New(color.FgRed)
+}
+
+// colorWarning returns a *color.Color for warnings (blue)
+func colorWarning() *color.Color {
+	return color.New(color.FgBlue)
+}
+
 type Workflow struct {
 	Name       string         `yaml:"name",validate:"required"`
 	Jobs       []Job          `yaml:"jobs",validate:"required"`
@@ -319,28 +334,33 @@ func (w *Workflow) printDetailedResults(wo *WorkflowOutput) {
 		duration := jo.EndTime.Sub(jo.StartTime)
 		totalTime += duration
 
-		statusColor := color.GreenString
-		statusIcon := "✔︎"
-		if !jo.Success {
-			statusColor = color.RedString
-			statusIcon = "✘"
+		statusColor := colorSuccess().SprintFunc()
+		statusIcon := "⏺ "
+		if jo.Status == "Skipped" {
+			statusColor = colorWarning().SprintFunc()
+		} else if !jo.Success {
+			statusColor = colorError().SprintFunc()
 		} else {
 			successCount++
 		}
 
-		fmt.Printf("%s (%s in %.2fs) %s\n",
+		fmt.Printf("%s%s (%s in %.2fs)\n",
+			statusColor(statusIcon),
 			jo.JobName,
-			statusColor(jo.Status),
-			duration.Seconds(),
-			statusColor(statusIcon))
+			jo.Status,
+			duration.Seconds())
 
 		// Print buffered output with proper indentation
 		output := strings.TrimSpace(jo.Buffer.String())
 		if output != "" {
 			lines := strings.Split(output, "\n")
-			for _, line := range lines {
+			for i, line := range lines {
 				if strings.TrimSpace(line) != "" {
-					fmt.Printf("└─  %s\n", line)
+					if i == 0 {
+						fmt.Printf("  ⎿ %s\n", line)
+					} else {
+						fmt.Printf("    %s\n", line)
+					}
 				}
 			}
 		}
@@ -354,12 +374,12 @@ func (w *Workflow) printDetailedResults(wo *WorkflowOutput) {
 	if successCount == totalJobs {
 		fmt.Printf("Total workflow time: %.2fs %s\n",
 			totalTime.Seconds(),
-			color.GreenString("✔︎ All jobs succeeded"))
+			colorSuccess().Sprintf("✔︎ All jobs succeeded"))
 	} else {
 		failedCount := totalJobs - successCount
 		fmt.Printf("Total workflow time: %.2fs %s\n",
 			totalTime.Seconds(),
-			color.RedString("✘ %d job(s) failed", failedCount))
+			colorError().Sprintf("✘ %d job(s) failed", failedCount))
 	}
 }
 
@@ -457,7 +477,7 @@ func (j *Job) Start(ctx JobContext) bool {
 	if err != nil {
 		fmt.Printf("Expr error(job name): %#v\n", err)
 	} else {
-		fmt.Printf("%s\n", name)
+		j.Name = name
 	}
 
 	var idx = 0
@@ -495,7 +515,7 @@ func (st *Step) Do(jCtx *JobContext) {
 	ret, err := RunActions(st.Uses, []string{}, expW, jCtx.Config.Verbose)
 	if err != nil {
 		st.err = err
-		fmt.Printf("%s \"%s\" in %s-action -- %s\n", color.RedString("Error"), name, st.Uses, err)
+		fmt.Printf("%s \"%s\" in %s-action -- %s\n", colorError().Sprintf("Error"), name, st.Uses, err)
 		jCtx.SetFailed()
 		return
 	}
@@ -546,13 +566,13 @@ func (st *Step) Do(jCtx *JobContext) {
 	if st.Test != "" {
 		str, ok := st.DoTest()
 		if ok {
-			output = fmt.Sprintf(output+"\n", color.GreenString("✔︎ "))
+			output = fmt.Sprintf(output+"\n", colorSuccess().Sprintf("✔︎ "))
 		} else {
-			output = fmt.Sprintf(output+"\n"+str+"\n", color.RedString("✘ "))
+			output = fmt.Sprintf(output+"\n"+str+"\n", colorError().Sprintf("✘ "))
 			jCtx.SetFailed()
 		}
 	} else {
-		output = fmt.Sprintf(output+"\n", color.BlueString("▲ "))
+		output = fmt.Sprintf(output+"\n", colorWarning().Sprintf("▲ "))
 	}
 	fmt.Print(output)
 
@@ -564,7 +584,7 @@ func (st *Step) Do(jCtx *JobContext) {
 func (st *Step) DoTestWithSequentialPrint() bool {
 	exprOut, err := st.expr.Eval(st.Test, st.ctx)
 	if err != nil {
-		fmt.Printf("%s: %s\nInput: %s\n", color.RedString("Test Error"), err, st.Test)
+		fmt.Printf("%s: %s\nInput: %s\n", colorError().Sprintf("Test Error"), err, st.Test)
 		return false
 	}
 
@@ -574,9 +594,9 @@ func (st *Step) DoTestWithSequentialPrint() bool {
 		return false
 	}
 
-	boolResultStr := color.GreenString("Success")
+	boolResultStr := colorSuccess().Sprintf("Success")
 	if !boolOutput {
-		boolResultStr = color.RedString("Failure")
+		boolResultStr = colorError().Sprintf("Failure")
 	}
 	fmt.Printf("Test: %s (input: %s, env: %#v)\n", boolResultStr, st.Test, st.ctx)
 
@@ -586,7 +606,7 @@ func (st *Step) DoTestWithSequentialPrint() bool {
 func (st *Step) DoEchoWithSequentialPrint() {
 	exprOut, err := st.expr.Eval(st.Echo, st.ctx)
 	if err != nil {
-		fmt.Printf("%s: %#v (input: %s)\n", color.RedString("Echo Error"), err, st.Echo)
+		fmt.Printf("%s: %#v (input: %s)\n", colorError().Sprintf("Echo Error"), err, st.Echo)
 	} else {
 		fmt.Printf("Echo: %s\n", exprOut)
 	}
@@ -669,5 +689,5 @@ func (st *Step) ShowRequestResponse(name string) {
 		}
 	}
 
-	fmt.Printf("RT: %s\n", color.BlueString(st.ctx.RT))
+	fmt.Printf("RT: %s\n", colorWarning().Sprintf("%s", st.ctx.RT))
 }
