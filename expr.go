@@ -211,25 +211,7 @@ func (e *Expr) validateExpression(expression string) error {
 		os.Exit(2)
 	}
 
-	// Security: Block dangerous patterns
-	dangerousPatterns := []string{
-		"import", "require", "eval", "exec", "system", "shell",
-		"file", "open", "read", "write", "delete", "remove",
-		"__", "reflect", "unsafe", "runtime", "os.",
-		"process.", "global.", "window.",
-	}
-
 	lowerExpr := strings.ToLower(expression)
-	for _, pattern := range dangerousPatterns {
-		if strings.Contains(lowerExpr, pattern) {
-			if disableSecurityExit {
-				return fmt.Errorf("expression contains dangerous pattern '%s'", pattern)
-			}
-			fmt.Fprintf(os.Stderr, "SECURITY: Expression contains dangerous pattern '%s' - terminating\n", pattern)
-			fmt.Fprintf(os.Stderr, "Expression: %s\n", expression)
-			os.Exit(2)
-		}
-	}
 
 	// Security: Special validation for env. patterns - only allow safe environment variables
 	if strings.Contains(lowerExpr, "env.") {
