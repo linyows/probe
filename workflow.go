@@ -2,11 +2,29 @@ package probe
 
 import (
 	"fmt"
+	"io"
+	"os"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/fatih/color"
 )
+
+// colorSuccess returns a *color.Color for success (RGB 0,175,0)
+func colorSuccess() *color.Color {
+	return color.RGB(0, 175, 0)
+}
+
+// colorError returns a *color.Color for errors (red)
+func colorError() *color.Color {
+	return color.New(color.FgRed)
+}
+
+// colorWarning returns a *color.Color for warnings (blue)
+func colorWarning() *color.Color {
+	return color.New(color.FgBlue)
+}
 
 type Workflow struct {
 	Name       string         `yaml:"name",validate:"required"`
@@ -16,6 +34,31 @@ type Workflow struct {
 	env        map[string]string
 }
 
+// JobOutput stores buffered output for a job
+type JobOutput struct {
+	JobName   string
+	JobID     string
+	Buffer    strings.Builder
+	Status    string
+	StartTime time.Time
+	EndTime   time.Time
+	Success   bool
+	mutex     sync.Mutex
+}
+
+// WorkflowOutput manages output for multiple jobs
+type WorkflowOutput struct {
+	Jobs        map[string]*JobOutput
+	mutex       sync.RWMutex
+	outputMutex sync.Mutex // Protects stdout redirection
+}
+
+func NewWorkflowOutput() *WorkflowOutput {
+	return &WorkflowOutput{
+		Jobs: make(map[string]*JobOutput),
+	}
+}
+
 func (w *Workflow) SetExitStatus(isErr bool) {
 	if isErr {
 		w.exitStatus = 1
@@ -23,6 +66,11 @@ func (w *Workflow) SetExitStatus(isErr bool) {
 }
 
 func (w *Workflow) Start(c Config) error {
+	// Print workflow name at the beginning
+	if w.Name != "" {
+		fmt.Printf("%s\n", color.New(color.Bold).Sprint(w.Name))
+	}
+
 	vars, err := w.evalVars()
 	if err != nil {
 		return err
@@ -92,15 +140,51 @@ func (w *Workflow) startWithDependencies(ctx JobContext) error {
 		return err
 	}
 
+	// Use buffered output if multiple jobs
+	useBuffering := len(w.Jobs) > 1
+	var workflowOutput *WorkflowOutput
+	if useBuffering {
+		workflowOutput = NewWorkflowOutput()
+		// Initialize job outputs
+		for _, job := range w.Jobs {
+			jobID := job.ID
+			if jobID == "" {
+				jobID = job.Name
+			}
+			jo := &JobOutput{
+				JobName:   job.Name,
+				JobID:     jobID,
+				StartTime: time.Now(),
+			}
+			workflowOutput.Jobs[jobID] = jo
+		}
+	}
+
 	// Execute jobs with dependency control and repeat support
 	for !scheduler.AllJobsCompleted() {
 		runnableJobs := scheduler.GetRunnableJobs()
 
 		if len(runnableJobs) == 0 {
 			// Check if there are pending jobs but none can run
-			// This might indicate a deadlock or failed dependencies
-			time.Sleep(100 * time.Millisecond)
-			continue
+			// This might indicate failed dependencies
+			skippedJobs := scheduler.MarkJobsWithFailedDependencies()
+			// Update skipped jobs in workflow output
+			if useBuffering {
+				for _, jobID := range skippedJobs {
+					if jo, exists := workflowOutput.Jobs[jobID]; exists {
+						jo.mutex.Lock()
+						jo.EndTime = jo.StartTime // Set end time same as start time (0 duration)
+						jo.Status = "Skipped"
+						jo.Success = false
+						jo.mutex.Unlock()
+					}
+				}
+			}
+			if len(skippedJobs) == 0 {
+				// If no jobs were skipped, we might have a deadlock
+				time.Sleep(100 * time.Millisecond)
+				continue
+			}
 		}
 
 		// Start all runnable jobs
@@ -111,12 +195,21 @@ func (w *Workflow) startWithDependencies(ctx JobContext) error {
 
 			go func(j *Job, id string) {
 				defer scheduler.wg.Done()
-				w.executeJobWithRepeat(scheduler, j, id, ctx)
+				if useBuffering {
+					w.executeJobWithBuffering(scheduler, j, id, ctx, workflowOutput)
+				} else {
+					w.executeJobWithRepeat(scheduler, j, id, ctx)
+				}
 			}(job, jobID)
 		}
 
 		// Wait for current batch to complete
 		scheduler.wg.Wait()
+	}
+
+	// Print detailed results if buffering was used
+	if useBuffering {
+		w.printDetailedResults(workflowOutput)
 	}
 
 	return nil
@@ -148,6 +241,146 @@ func (w *Workflow) executeJobWithRepeat(scheduler *JobScheduler, job *Job, jobID
 
 	// Mark job as completed
 	scheduler.SetJobStatus(jobID, JobCompleted, overallSuccess)
+}
+
+// executeJobWithBuffering handles job execution with buffered output
+func (w *Workflow) executeJobWithBuffering(scheduler *JobScheduler, job *Job, jobID string, ctx JobContext, wo *WorkflowOutput) {
+	jo := wo.Jobs[jobID]
+	jo.mutex.Lock()
+	jo.StartTime = time.Now()
+	jo.Status = "Running"
+	jo.mutex.Unlock()
+
+	// Store status update (don't print immediately)
+	// Status updates will be shown in detailed results
+
+	overallSuccess := true
+
+	// Execute job with repeat logic
+	for scheduler.ShouldRepeatJob(jobID) {
+		// Serialize stdout redirection to prevent race conditions
+		wo.outputMutex.Lock()
+
+		// Capture output by redirecting stdout temporarily
+		originalStdout := os.Stdout
+		r, wr, _ := os.Pipe()
+		os.Stdout = wr
+
+		// Execute single run
+		success := !job.Start(ctx)
+
+		// Restore stdout and capture output
+		wr.Close()
+		os.Stdout = originalStdout
+
+		wo.outputMutex.Unlock()
+
+		capturedOutput, _ := io.ReadAll(r)
+
+		// Add captured output to buffer
+		jo.mutex.Lock()
+		jo.Buffer.Write(capturedOutput)
+		jo.mutex.Unlock()
+
+		if !success {
+			overallSuccess = false
+			w.SetExitStatus(true)
+		}
+
+		// Increment counter
+		scheduler.IncrementRepeatCounter(jobID)
+
+		// Sleep between repeats (except for the last one)
+		current, target := scheduler.GetRepeatInfo(jobID)
+		if current < target && job.Repeat != nil {
+			time.Sleep(time.Duration(job.Repeat.Interval) * time.Second)
+		}
+	}
+
+	// Update final status (don't print immediately)
+	jo.mutex.Lock()
+	jo.EndTime = time.Now()
+	jo.Success = overallSuccess
+	if overallSuccess {
+		jo.Status = "Completed"
+	} else {
+		jo.Status = "Failed"
+	}
+	jo.mutex.Unlock()
+
+	// Mark job as completed
+	scheduler.SetJobStatus(jobID, JobCompleted, overallSuccess)
+}
+
+// printDetailedResults prints the final detailed results
+func (w *Workflow) printDetailedResults(wo *WorkflowOutput) {
+	fmt.Println()
+
+	totalTime := time.Duration(0)
+	successCount := 0
+
+	// Process jobs in original order
+	for _, job := range w.Jobs {
+		jobID := job.ID
+		if jobID == "" {
+			jobID = job.Name
+		}
+		jo, exists := wo.Jobs[jobID]
+		if !exists {
+			continue
+		}
+
+		jo.mutex.Lock()
+		duration := jo.EndTime.Sub(jo.StartTime)
+		totalTime += duration
+
+		statusColor := colorSuccess().SprintFunc()
+		statusIcon := "⏺ "
+		if jo.Status == "Skipped" {
+			statusColor = colorWarning().SprintFunc()
+		} else if !jo.Success {
+			statusColor = colorError().SprintFunc()
+		} else {
+			successCount++
+		}
+
+		fmt.Printf("%s%s (%s in %.2fs)\n",
+			statusColor(statusIcon),
+			jo.JobName,
+			jo.Status,
+			duration.Seconds())
+
+		// Print buffered output with proper indentation
+		output := strings.TrimSpace(jo.Buffer.String())
+		if output != "" {
+			lines := strings.Split(output, "\n")
+			for i, line := range lines {
+				if strings.TrimSpace(line) != "" {
+					if i == 0 {
+						fmt.Printf("  ⎿ %s\n", line)
+					} else {
+						fmt.Printf("    %s\n", line)
+					}
+				}
+			}
+		}
+		fmt.Println()
+
+		jo.mutex.Unlock()
+	}
+
+	// Print summary
+	totalJobs := len(wo.Jobs)
+	if successCount == totalJobs {
+		fmt.Printf("Total workflow time: %.2fs %s\n",
+			totalTime.Seconds(),
+			colorSuccess().Sprintf("✔︎ All jobs succeeded"))
+	} else {
+		failedCount := totalJobs - successCount
+		fmt.Printf("Total workflow time: %.2fs %s\n",
+			totalTime.Seconds(),
+			colorError().Sprintf("✘ %d job(s) failed", failedCount))
+	}
 }
 
 func (w *Workflow) Env() map[string]string {
@@ -244,7 +477,7 @@ func (j *Job) Start(ctx JobContext) bool {
 	if err != nil {
 		fmt.Printf("Expr error(job name): %#v\n", err)
 	} else {
-		fmt.Printf("%s\n", name)
+		j.Name = name
 	}
 
 	var idx = 0
@@ -282,7 +515,7 @@ func (st *Step) Do(jCtx *JobContext) {
 	ret, err := RunActions(st.Uses, []string{}, expW, jCtx.Config.Verbose)
 	if err != nil {
 		st.err = err
-		fmt.Printf("%s \"%s\" in %s-action -- %s\n", color.RedString("Error"), name, st.Uses, err)
+		fmt.Printf("%s \"%s\" in %s-action -- %s\n", colorError().Sprintf("Error"), name, st.Uses, err)
 		jCtx.SetFailed()
 		return
 	}
@@ -333,13 +566,13 @@ func (st *Step) Do(jCtx *JobContext) {
 	if st.Test != "" {
 		str, ok := st.DoTest()
 		if ok {
-			output = fmt.Sprintf(output+"\n", color.GreenString("✔︎ "))
+			output = fmt.Sprintf(output+"\n", colorSuccess().Sprintf("✔︎ "))
 		} else {
-			output = fmt.Sprintf(output+"\n"+str+"\n", color.RedString("✘ "))
+			output = fmt.Sprintf(output+"\n"+str+"\n", colorError().Sprintf("✘ "))
 			jCtx.SetFailed()
 		}
 	} else {
-		output = fmt.Sprintf(output+"\n", color.BlueString("▲ "))
+		output = fmt.Sprintf(output+"\n", colorWarning().Sprintf("▲ "))
 	}
 	fmt.Print(output)
 
@@ -351,7 +584,7 @@ func (st *Step) Do(jCtx *JobContext) {
 func (st *Step) DoTestWithSequentialPrint() bool {
 	exprOut, err := st.expr.Eval(st.Test, st.ctx)
 	if err != nil {
-		fmt.Printf("%s: %s\nInput: %s\n", color.RedString("Test Error"), err, st.Test)
+		fmt.Printf("%s: %s\nInput: %s\n", colorError().Sprintf("Test Error"), err, st.Test)
 		return false
 	}
 
@@ -361,9 +594,9 @@ func (st *Step) DoTestWithSequentialPrint() bool {
 		return false
 	}
 
-	boolResultStr := color.GreenString("Success")
+	boolResultStr := colorSuccess().Sprintf("Success")
 	if !boolOutput {
-		boolResultStr = color.RedString("Failure")
+		boolResultStr = colorError().Sprintf("Failure")
 	}
 	fmt.Printf("Test: %s (input: %s, env: %#v)\n", boolResultStr, st.Test, st.ctx)
 
@@ -373,7 +606,7 @@ func (st *Step) DoTestWithSequentialPrint() bool {
 func (st *Step) DoEchoWithSequentialPrint() {
 	exprOut, err := st.expr.Eval(st.Echo, st.ctx)
 	if err != nil {
-		fmt.Printf("%s: %#v (input: %s)\n", color.RedString("Echo Error"), err, st.Echo)
+		fmt.Printf("%s: %#v (input: %s)\n", colorError().Sprintf("Echo Error"), err, st.Echo)
 	} else {
 		fmt.Printf("Echo: %s\n", exprOut)
 	}
@@ -456,5 +689,5 @@ func (st *Step) ShowRequestResponse(name string) {
 		}
 	}
 
-	fmt.Printf("RT: %s\n", color.BlueString(st.ctx.RT))
+	fmt.Printf("RT: %s\n", colorWarning().Sprintf("%s", st.ctx.RT))
 }
