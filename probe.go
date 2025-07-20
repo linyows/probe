@@ -72,12 +72,17 @@ func (p *Probe) Load() error {
 func (p *Probe) readYamlFiles(paths []string) (string, error) {
 	var y strings.Builder
 
-	for _, path := range paths {
+	for i, path := range paths {
 		data, err := os.ReadFile(path)
 		if err != nil {
 			return "", err
 		}
 		y.Write(data)
+		
+		// Add newline between files to prevent concatenation issues
+		if i < len(paths)-1 && len(data) > 0 && data[len(data)-1] != '\n' {
+			y.WriteByte('\n')
+		}
 	}
 
 	return y.String(), nil

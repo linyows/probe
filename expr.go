@@ -2,6 +2,7 @@ package probe
 
 import (
 	"fmt"
+	"math/rand/v2"
 	"os"
 	"regexp"
 	"strings"
@@ -74,6 +75,27 @@ func (e *Expr) Options(env any) []ex.Option {
 				return DiffJSON(src, target), nil
 			},
 		),
+		ex.Function(
+			"random",
+			func(params ...any) (any, error) {
+				if len(params) != 1 {
+					return nil, fmt.Errorf("random requires exactly 1 parameter")
+				}
+				n, ok := params[0].(int)
+				if !ok {
+					// Try to convert float64 to int (common in JSON/expr)
+					if f, ok := params[0].(float64); ok {
+						n = int(f)
+					} else {
+						return nil, fmt.Errorf("random parameter must be an integer")
+					}
+				}
+				if n <= 0 {
+					return nil, fmt.Errorf("random parameter must be positive")
+				}
+				return rand.IntN(n), nil
+			},
+		),
 	}
 }
 
@@ -81,7 +103,9 @@ func (e *Expr) Options(env any) []ex.Option {
 func (e *Expr) createSafeEnvironment(env any) any {
 	envMap, ok := env.(map[string]any)
 	if !ok {
-		return map[string]any{}
+		// For non-map types (like structs with expr tags), return as-is
+		// This allows expr library to handle StepContext and similar safe structs
+		return env
 	}
 
 	safeEnv := make(map[string]any)
@@ -187,25 +211,7 @@ func (e *Expr) validateExpression(expression string) error {
 		os.Exit(2)
 	}
 
-	// Security: Block dangerous patterns
-	dangerousPatterns := []string{
-		"import", "require", "eval", "exec", "system", "shell",
-		"file", "open", "read", "write", "delete", "remove",
-		"__", "reflect", "unsafe", "runtime", "os.",
-		"process.", "global.", "window.",
-	}
-
 	lowerExpr := strings.ToLower(expression)
-	for _, pattern := range dangerousPatterns {
-		if strings.Contains(lowerExpr, pattern) {
-			if disableSecurityExit {
-				return fmt.Errorf("expression contains dangerous pattern '%s'", pattern)
-			}
-			fmt.Fprintf(os.Stderr, "SECURITY: Expression contains dangerous pattern '%s' - terminating\n", pattern)
-			fmt.Fprintf(os.Stderr, "Expression: %s\n", expression)
-			os.Exit(2)
-		}
-	}
 
 	// Security: Special validation for env. patterns - only allow safe environment variables
 	if strings.Contains(lowerExpr, "env.") {

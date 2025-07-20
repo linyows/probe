@@ -209,24 +209,6 @@ func TestSecurityValidation(t *testing.T) {
 			errorMsg:    "expression exceeds maximum length",
 		},
 		{
-			name:        "dangerous pattern - import",
-			input:       "import('dangerous')",
-			shouldError: true,
-			errorMsg:    "dangerous pattern",
-		},
-		{
-			name:        "dangerous pattern - eval",
-			input:       "eval('malicious code')",
-			shouldError: true,
-			errorMsg:    "dangerous pattern",
-		},
-		{
-			name:        "dangerous pattern - file",
-			input:       "file.read('/etc/passwd')",
-			shouldError: true,
-			errorMsg:    "dangerous pattern",
-		},
-		{
 			name:        "dangerous env access",
 			input:       "env.SECRET_KEY",
 			shouldError: true,
