@@ -2,6 +2,7 @@ package probe
 
 import (
 	"fmt"
+	"math/rand/v2"
 	"os"
 	"regexp"
 	"strings"
@@ -72,6 +73,27 @@ func (e *Expr) Options(env any) []ex.Option {
 					return nil, fmt.Errorf("diff_json parameters must be objects")
 				}
 				return DiffJSON(src, target), nil
+			},
+		),
+		ex.Function(
+			"random",
+			func(params ...any) (any, error) {
+				if len(params) != 1 {
+					return nil, fmt.Errorf("random requires exactly 1 parameter")
+				}
+				n, ok := params[0].(int)
+				if !ok {
+					// Try to convert float64 to int (common in JSON/expr)
+					if f, ok := params[0].(float64); ok {
+						n = int(f)
+					} else {
+						return nil, fmt.Errorf("random parameter must be an integer")
+					}
+				}
+				if n <= 0 {
+					return nil, fmt.Errorf("random parameter must be positive")
+				}
+				return rand.IntN(n), nil
 			},
 		),
 	}
