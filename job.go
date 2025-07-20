@@ -70,12 +70,12 @@ func (js *JobScheduler) generateUniqueID(baseName string) string {
 	if baseName == "" {
 		baseName = "job"
 	}
-	
+
 	// First try the base name
 	if _, exists := js.jobs[baseName]; !exists {
 		return baseName
 	}
-	
+
 	// If base name exists, try with incrementing numbers
 	counter := 1
 	for {
@@ -84,7 +84,7 @@ func (js *JobScheduler) generateUniqueID(baseName string) string {
 			return candidateID
 		}
 		counter++
-		
+
 		// Safety check to prevent infinite loop (though very unlikely)
 		if counter > 10000 {
 			return fmt.Sprintf("%s-%d", baseName, int(time.Now().UnixNano()))
@@ -237,4 +237,35 @@ func (js *JobScheduler) AllJobsCompleted() bool {
 	}
 
 	return true
+}
+
+// MarkJobsWithFailedDependencies marks jobs as failed if their dependencies have failed
+func (js *JobScheduler) MarkJobsWithFailedDependencies() []string {
+	js.mutex.Lock()
+	defer js.mutex.Unlock()
+
+	var skippedJobs []string
+
+	for jobID, job := range js.jobs {
+		if js.status[jobID] != JobPending {
+			continue
+		}
+
+		// Check if any dependency has failed
+		hasFailedDependency := false
+		for _, dep := range job.Needs {
+			if js.status[dep] == JobCompleted && !js.results[dep] {
+				hasFailedDependency = true
+				break
+			}
+		}
+
+		if hasFailedDependency {
+			js.status[jobID] = JobFailed
+			js.results[jobID] = false
+			skippedJobs = append(skippedJobs, jobID)
+		}
+	}
+
+	return skippedJobs
 }

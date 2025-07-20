@@ -2,6 +2,9 @@ package probe
 
 import (
 	"fmt"
+	"io"
+	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -16,6 +19,31 @@ type Workflow struct {
 	env        map[string]string
 }
 
+// JobOutput stores buffered output for a job
+type JobOutput struct {
+	JobName   string
+	JobID     string
+	Buffer    strings.Builder
+	Status    string
+	StartTime time.Time
+	EndTime   time.Time
+	Success   bool
+	mutex     sync.Mutex
+}
+
+// WorkflowOutput manages output for multiple jobs
+type WorkflowOutput struct {
+	Jobs        map[string]*JobOutput
+	mutex       sync.RWMutex
+	outputMutex sync.Mutex // Protects stdout redirection
+}
+
+func NewWorkflowOutput() *WorkflowOutput {
+	return &WorkflowOutput{
+		Jobs: make(map[string]*JobOutput),
+	}
+}
+
 func (w *Workflow) SetExitStatus(isErr bool) {
 	if isErr {
 		w.exitStatus = 1
@@ -23,6 +51,11 @@ func (w *Workflow) SetExitStatus(isErr bool) {
 }
 
 func (w *Workflow) Start(c Config) error {
+	// Print workflow name at the beginning
+	if w.Name != "" {
+		fmt.Printf("%s\n", color.New(color.Bold).Sprint(w.Name))
+	}
+
 	vars, err := w.evalVars()
 	if err != nil {
 		return err
@@ -92,15 +125,51 @@ func (w *Workflow) startWithDependencies(ctx JobContext) error {
 		return err
 	}
 
+	// Use buffered output if multiple jobs
+	useBuffering := len(w.Jobs) > 1
+	var workflowOutput *WorkflowOutput
+	if useBuffering {
+		workflowOutput = NewWorkflowOutput()
+		// Initialize job outputs
+		for _, job := range w.Jobs {
+			jobID := job.ID
+			if jobID == "" {
+				jobID = job.Name
+			}
+			jo := &JobOutput{
+				JobName:   job.Name,
+				JobID:     jobID,
+				StartTime: time.Now(),
+			}
+			workflowOutput.Jobs[jobID] = jo
+		}
+	}
+
 	// Execute jobs with dependency control and repeat support
 	for !scheduler.AllJobsCompleted() {
 		runnableJobs := scheduler.GetRunnableJobs()
 
 		if len(runnableJobs) == 0 {
 			// Check if there are pending jobs but none can run
-			// This might indicate a deadlock or failed dependencies
-			time.Sleep(100 * time.Millisecond)
-			continue
+			// This might indicate failed dependencies
+			skippedJobs := scheduler.MarkJobsWithFailedDependencies()
+			// Update skipped jobs in workflow output
+			if useBuffering {
+				for _, jobID := range skippedJobs {
+					if jo, exists := workflowOutput.Jobs[jobID]; exists {
+						jo.mutex.Lock()
+						jo.EndTime = jo.StartTime // Set end time same as start time (0 duration)
+						jo.Status = "Skipped"
+						jo.Success = false
+						jo.mutex.Unlock()
+					}
+				}
+			}
+			if len(skippedJobs) == 0 {
+				// If no jobs were skipped, we might have a deadlock
+				time.Sleep(100 * time.Millisecond)
+				continue
+			}
 		}
 
 		// Start all runnable jobs
@@ -111,12 +180,21 @@ func (w *Workflow) startWithDependencies(ctx JobContext) error {
 
 			go func(j *Job, id string) {
 				defer scheduler.wg.Done()
-				w.executeJobWithRepeat(scheduler, j, id, ctx)
+				if useBuffering {
+					w.executeJobWithBuffering(scheduler, j, id, ctx, workflowOutput)
+				} else {
+					w.executeJobWithRepeat(scheduler, j, id, ctx)
+				}
 			}(job, jobID)
 		}
 
 		// Wait for current batch to complete
 		scheduler.wg.Wait()
+	}
+
+	// Print detailed results if buffering was used
+	if useBuffering {
+		w.printDetailedResults(workflowOutput)
 	}
 
 	return nil
@@ -148,6 +226,141 @@ func (w *Workflow) executeJobWithRepeat(scheduler *JobScheduler, job *Job, jobID
 
 	// Mark job as completed
 	scheduler.SetJobStatus(jobID, JobCompleted, overallSuccess)
+}
+
+// executeJobWithBuffering handles job execution with buffered output
+func (w *Workflow) executeJobWithBuffering(scheduler *JobScheduler, job *Job, jobID string, ctx JobContext, wo *WorkflowOutput) {
+	jo := wo.Jobs[jobID]
+	jo.mutex.Lock()
+	jo.StartTime = time.Now()
+	jo.Status = "Running"
+	jo.mutex.Unlock()
+
+	// Store status update (don't print immediately)
+	// Status updates will be shown in detailed results
+
+	overallSuccess := true
+
+	// Execute job with repeat logic
+	for scheduler.ShouldRepeatJob(jobID) {
+		// Serialize stdout redirection to prevent race conditions
+		wo.outputMutex.Lock()
+
+		// Capture output by redirecting stdout temporarily
+		originalStdout := os.Stdout
+		r, wr, _ := os.Pipe()
+		os.Stdout = wr
+
+		// Execute single run
+		success := !job.Start(ctx)
+
+		// Restore stdout and capture output
+		wr.Close()
+		os.Stdout = originalStdout
+
+		wo.outputMutex.Unlock()
+
+		capturedOutput, _ := io.ReadAll(r)
+
+		// Add captured output to buffer
+		jo.mutex.Lock()
+		jo.Buffer.Write(capturedOutput)
+		jo.mutex.Unlock()
+
+		if !success {
+			overallSuccess = false
+			w.SetExitStatus(true)
+		}
+
+		// Increment counter
+		scheduler.IncrementRepeatCounter(jobID)
+
+		// Sleep between repeats (except for the last one)
+		current, target := scheduler.GetRepeatInfo(jobID)
+		if current < target && job.Repeat != nil {
+			time.Sleep(time.Duration(job.Repeat.Interval) * time.Second)
+		}
+	}
+
+	// Update final status (don't print immediately)
+	jo.mutex.Lock()
+	jo.EndTime = time.Now()
+	jo.Success = overallSuccess
+	if overallSuccess {
+		jo.Status = "Completed"
+	} else {
+		jo.Status = "Failed"
+	}
+	jo.mutex.Unlock()
+
+	// Mark job as completed
+	scheduler.SetJobStatus(jobID, JobCompleted, overallSuccess)
+}
+
+// printDetailedResults prints the final detailed results
+func (w *Workflow) printDetailedResults(wo *WorkflowOutput) {
+	fmt.Println()
+
+	totalTime := time.Duration(0)
+	successCount := 0
+
+	// Process jobs in original order
+	for _, job := range w.Jobs {
+		jobID := job.ID
+		if jobID == "" {
+			jobID = job.Name
+		}
+		jo, exists := wo.Jobs[jobID]
+		if !exists {
+			continue
+		}
+
+		jo.mutex.Lock()
+		duration := jo.EndTime.Sub(jo.StartTime)
+		totalTime += duration
+
+		statusColor := color.GreenString
+		statusIcon := "✔︎"
+		if !jo.Success {
+			statusColor = color.RedString
+			statusIcon = "✘"
+		} else {
+			successCount++
+		}
+
+		fmt.Printf("%s (%s in %.2fs) %s\n",
+			jo.JobName,
+			statusColor(jo.Status),
+			duration.Seconds(),
+			statusColor(statusIcon))
+
+		// Print buffered output with proper indentation
+		output := strings.TrimSpace(jo.Buffer.String())
+		if output != "" {
+			lines := strings.Split(output, "\n")
+			for _, line := range lines {
+				if strings.TrimSpace(line) != "" {
+					fmt.Printf("└─  %s\n", line)
+				}
+			}
+		}
+		fmt.Println()
+
+		jo.mutex.Unlock()
+	}
+
+	// Print summary
+	totalJobs := len(wo.Jobs)
+	if successCount == totalJobs {
+		fmt.Printf("Total workflow time: %.2fs %s\n",
+			totalTime.Seconds(),
+			color.GreenString("✔︎ All jobs succeeded"))
+	} else {
+		failedCount := totalJobs - successCount
+		fmt.Printf("Total workflow time: %.2fs %s\n",
+			totalTime.Seconds(),
+			color.RedString("✘ %d job(s) failed", failedCount))
+	}
 }
 
 func (w *Workflow) Env() map[string]string {
