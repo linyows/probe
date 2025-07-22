@@ -28,6 +28,14 @@ func colorDim() *color.Color {
 	return color.New(color.FgHiBlack)
 }
 
+// Icon constants
+const (
+	IconSuccess = "✔︎ "
+	IconError   = "✘ "
+	IconWarning = "▲ "
+	IconCircle  = "⏺ "
+)
+
 // OutputWriter defines the interface for different output implementations
 type OutputWriter interface {
 	// Workflow level output
@@ -114,11 +122,11 @@ func (o *Output) PrintStepResult(step StepResult) {
 
 	switch step.Status {
 	case StatusSuccess:
-		output = fmt.Sprintf(output+"\n", colorSuccess().Sprintf("✔︎ "))
+		output = fmt.Sprintf(output+"\n", colorSuccess().Sprintf(IconSuccess))
 	case StatusError:
-		output = fmt.Sprintf(output+"\n"+step.TestOutput+"\n", colorError().Sprintf("✘ "))
+		output = fmt.Sprintf(output+"\n"+step.TestOutput+"\n", colorError().Sprintf(IconError))
 	case StatusWarning:
-		output = fmt.Sprintf(output+"\n", colorWarning().Sprintf("▲ "))
+		output = fmt.Sprintf(output+"\n", colorWarning().Sprintf(IconWarning))
 	}
 
 	fmt.Print(output)
@@ -139,24 +147,24 @@ func (o *Output) PrintStepRepeatResult(stepIdx int, counter StepRepeatCounter, h
 	if hasTest {
 		totalCount := counter.SuccessCount + counter.FailureCount
 		successRate := float64(counter.SuccessCount) / float64(totalCount) * 100
-		statusColor := colorSuccess()
+		statusIcon := colorSuccess().Sprintf(IconSuccess)
 		if counter.FailureCount > 0 {
 			if counter.SuccessCount == 0 {
-				statusColor = colorError()
+				statusIcon = colorError().Sprintf(IconError)
 			} else {
-				statusColor = colorWarning()
+				statusIcon = colorWarning().Sprintf(IconWarning)
 			}
 		}
 
 		fmt.Printf("    %s %d/%d success (%.1f%%)\n",
-			statusColor.Sprintf("⏺"),
+			statusIcon,
 			counter.SuccessCount,
 			totalCount,
 			successRate)
 	} else {
 		totalCount := counter.SuccessCount + counter.FailureCount
 		fmt.Printf("    %s %d/%d completed (no test)\n",
-			colorWarning().Sprintf("⏺"),
+			colorWarning().Sprintf(IconWarning),
 			totalCount,
 			totalCount)
 	}
@@ -165,7 +173,7 @@ func (o *Output) PrintStepRepeatResult(stepIdx int, counter StepRepeatCounter, h
 // PrintJobResult prints the result of a job execution
 func (o *Output) PrintJobResult(jobName string, status StatusType, duration float64) {
 	statusColor := colorSuccess()
-	statusIcon := "⏺ "
+	statusIcon := IconCircle
 
 	switch status {
 	case StatusError:
@@ -214,12 +222,12 @@ func (o *Output) PrintWorkflowSummary(totalTime float64, successCount, totalJobs
 	if successCount == totalJobs {
 		fmt.Printf("Total workflow time: %.2fs %s\n",
 			totalTime,
-			colorSuccess().Sprintf("✔︎ All jobs succeeded"))
+			colorSuccess().Sprintf(IconSuccess+"All jobs succeeded"))
 	} else {
 		failedCount := totalJobs - successCount
 		fmt.Printf("Total workflow time: %.2fs %s\n",
 			totalTime,
-			colorError().Sprintf("✘ %d job(s) failed", failedCount))
+			colorError().Sprintf(IconError+"%d job(s) failed", failedCount))
 	}
 }
 
