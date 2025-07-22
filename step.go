@@ -1,6 +1,9 @@
 package probe
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
 type StepContext struct {
 	Vars map[string]any   `expr:"vars"`
@@ -8,6 +11,15 @@ type StepContext struct {
 	Res  map[string]any   `expr:"res"`
 	Req  map[string]any   `expr:"req"`
 	RT   string           `expr:"rt"`
+}
+
+// StepRepeatCounter tracks the execution results of repeated steps
+type StepRepeatCounter struct {
+	SuccessCount int
+	FailureCount int
+	Name         string
+	LastResult   bool
+	Output       strings.Builder
 }
 
 type Step struct {
