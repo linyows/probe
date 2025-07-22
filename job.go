@@ -15,6 +15,77 @@ const (
 	JobFailed
 )
 
+type Job struct {
+	Name     string   `yaml:"name",validate:"required"`
+	ID       string   `yaml:"id,omitempty"`
+	Needs    []string `yaml:"needs,omitempty"`
+	Steps    []*Step  `yaml:"steps",validate:"required"`
+	Repeat   *Repeat  `yaml:"repeat"`
+	Defaults any      `yaml:"defaults"`
+	ctx      *JobContext
+}
+
+func (j *Job) Start(ctx JobContext) bool {
+	j.ctx = &ctx
+	expr := &Expr{}
+
+	if j.Name == "" {
+		j.Name = "Unknown Job"
+	}
+	name, err := expr.EvalTemplate(j.Name, ctx)
+	if err != nil {
+		ctx.Output.PrintError("job name evaluation error: %v", err)
+		return true // return true indicates failure
+	} else {
+		j.Name = name
+		// Only print job name if not repeating and not using buffering (to avoid duplicate output)
+		if !ctx.IsRepeating && !ctx.UseBuffering {
+			ctx.Output.PrintJobName(name)
+		}
+	}
+
+	var idx = 0
+	for _, st := range j.Steps {
+		st.expr = expr
+		if len(st.Iter) == 0 {
+			st.idx = idx
+			idx += 1
+			st.SetCtx(ctx, nil)
+			st.Do(&ctx)
+			continue
+		}
+		// NOTE: Split JobContext to ExprEnv
+		for _, vars := range st.Iter {
+			st.idx = idx
+			idx += 1
+			st.SetCtx(ctx, vars)
+			st.Do(&ctx)
+		}
+	}
+
+	return j.ctx.Failed
+}
+
+type JobContext struct {
+	Vars map[string]any   `expr:"vars"`
+	Logs []map[string]any `expr:"steps"`
+	Config
+	Failed bool
+	// Repeat tracking
+	IsRepeating   bool
+	RepeatCurrent int
+	RepeatTotal   int
+	StepCounters  map[int]StepRepeatCounter // step index -> counter
+	// Output buffering
+	UseBuffering  bool
+	// Output writer
+	Output OutputWriter
+}
+
+func (j *JobContext) SetFailed() {
+	j.Failed = true
+}
+
 type JobScheduler struct {
 	jobs           map[string]*Job
 	status         map[string]JobStatus

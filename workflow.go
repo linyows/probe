@@ -7,31 +7,15 @@ import (
 	"strings"
 	"sync"
 	"time"
-
-	"github.com/fatih/color"
 )
 
-// colorSuccess returns a *color.Color for success (RGB 0,175,0)
-func colorSuccess() *color.Color {
-	return color.RGB(0, 175, 0)
-}
-
-// colorError returns a *color.Color for errors (red)
-func colorError() *color.Color {
-	return color.New(color.FgRed)
-}
-
-// colorWarning returns a *color.Color for warnings (blue)
-func colorWarning() *color.Color {
-	return color.New(color.FgBlue)
-}
-
 type Workflow struct {
-	Name       string         `yaml:"name",validate:"required"`
-	Jobs       []Job          `yaml:"jobs",validate:"required"`
-	Vars       map[string]any `yaml:"vars"`
-	exitStatus int
-	env        map[string]string
+	Name        string         `yaml:"name",validate:"required"`
+	Description string         `yaml:"description,omitempty"`
+	Jobs        []Job          `yaml:"jobs",validate:"required"`
+	Vars        map[string]any `yaml:"vars"`
+	exitStatus  int
+	env         map[string]string
 }
 
 // JobOutput stores buffered output for a job
@@ -66,10 +50,10 @@ func (w *Workflow) SetExitStatus(isErr bool) {
 }
 
 func (w *Workflow) Start(c Config) error {
-	// Print workflow name at the beginning
-	if w.Name != "" {
-		fmt.Printf("%s\n", color.New(color.Bold).Sprint(w.Name))
-	}
+	output := NewOutput(c.Verbose)
+
+	// Print workflow header at the beginning
+	output.PrintWorkflowHeader(w.Name, w.Description)
 
 	vars, err := w.evalVars()
 	if err != nil {
@@ -102,21 +86,35 @@ func (w *Workflow) startParallel(ctx JobContext) error {
 	for _, job := range w.Jobs {
 		// No repeat
 		if job.Repeat == nil {
+			// Set IsRepeating to false for jobs without repeat
+			jobCtx := ctx
+			jobCtx.IsRepeating = false
+			jobCtx.RepeatTotal = 1
+			jobCtx.RepeatCurrent = 1
+			jobCtx.StepCounters = make(map[int]StepRepeatCounter)
+			
 			wg.Add(1)
-			go func(j Job) {
+			go func(j Job, jCtx JobContext) {
 				defer wg.Done()
-				w.SetExitStatus(j.Start(ctx))
-			}(job)
+				w.SetExitStatus(j.Start(jCtx))
+			}(job, jobCtx)
 			continue
 		}
 
 		// Repeat
 		for i := 0; i < job.Repeat.Count; i++ {
+			// Set IsRepeating to true for jobs with repeat
+			jobCtx := ctx
+			jobCtx.IsRepeating = true
+			jobCtx.RepeatTotal = job.Repeat.Count
+			jobCtx.RepeatCurrent = i + 1
+			jobCtx.StepCounters = make(map[int]StepRepeatCounter)
+			
 			wg.Add(1)
-			go func(j Job) {
+			go func(j Job, jCtx JobContext) {
 				defer wg.Done()
-				w.SetExitStatus(j.Start(ctx))
-			}(job)
+				w.SetExitStatus(j.Start(jCtx))
+			}(job, jobCtx)
 			time.Sleep(time.Duration(job.Repeat.Interval) * time.Second)
 		}
 	}
@@ -209,7 +207,8 @@ func (w *Workflow) startWithDependencies(ctx JobContext) error {
 
 	// Print detailed results if buffering was used
 	if useBuffering {
-		w.printDetailedResults(workflowOutput)
+		output := NewOutput(ctx.Verbose)
+		w.printDetailedResults(workflowOutput, output)
 	}
 
 	return nil
@@ -219,8 +218,17 @@ func (w *Workflow) startWithDependencies(ctx JobContext) error {
 func (w *Workflow) executeJobWithRepeat(scheduler *JobScheduler, job *Job, jobID string, ctx JobContext) {
 	overallSuccess := true
 
+	// Initialize repeat tracking
+	_, total := scheduler.GetRepeatInfo(jobID)
+	ctx.IsRepeating = total > 1
+	ctx.RepeatTotal = total
+	ctx.StepCounters = make(map[int]StepRepeatCounter)
+
 	// Execute job with repeat logic
 	for scheduler.ShouldRepeatJob(jobID) {
+		current, _ := scheduler.GetRepeatInfo(jobID)
+		ctx.RepeatCurrent = current
+
 		// Execute single run
 		success := !job.Start(ctx)
 
@@ -251,6 +259,13 @@ func (w *Workflow) executeJobWithBuffering(scheduler *JobScheduler, job *Job, jo
 	jo.Status = "Running"
 	jo.mutex.Unlock()
 
+	// Initialize repeat tracking and buffering flag
+	_, total := scheduler.GetRepeatInfo(jobID)
+	ctx.IsRepeating = total > 1
+	ctx.RepeatTotal = total
+	ctx.StepCounters = make(map[int]StepRepeatCounter)
+	ctx.UseBuffering = true // Set buffering flag to prevent duplicate job names
+
 	// Store status update (don't print immediately)
 	// Status updates will be shown in detailed results
 
@@ -258,6 +273,8 @@ func (w *Workflow) executeJobWithBuffering(scheduler *JobScheduler, job *Job, jo
 
 	// Execute job with repeat logic
 	for scheduler.ShouldRepeatJob(jobID) {
+		current, _ := scheduler.GetRepeatInfo(jobID)
+		ctx.RepeatCurrent = current
 		// Serialize stdout redirection to prevent race conditions
 		wo.outputMutex.Lock()
 
@@ -297,6 +314,11 @@ func (w *Workflow) executeJobWithBuffering(scheduler *JobScheduler, job *Job, jo
 		}
 	}
 
+	// Print repeat step results after all executions complete
+	if ctx.IsRepeating {
+		w.printRepeatStepResults(&ctx, job, jo)
+	}
+
 	// Update final status (don't print immediately)
 	jo.mutex.Lock()
 	jo.EndTime = time.Now()
@@ -313,7 +335,7 @@ func (w *Workflow) executeJobWithBuffering(scheduler *JobScheduler, job *Job, jo
 }
 
 // printDetailedResults prints the final detailed results
-func (w *Workflow) printDetailedResults(wo *WorkflowOutput) {
+func (w *Workflow) printDetailedResults(wo *WorkflowOutput, output OutputWriter) {
 	fmt.Println()
 
 	totalTime := time.Duration(0)
@@ -334,53 +356,24 @@ func (w *Workflow) printDetailedResults(wo *WorkflowOutput) {
 		duration := jo.EndTime.Sub(jo.StartTime)
 		totalTime += duration
 
-		statusColor := colorSuccess().SprintFunc()
-		statusIcon := "⏺ "
+		status := StatusSuccess
 		if jo.Status == "Skipped" {
-			statusColor = colorWarning().SprintFunc()
+			status = StatusWarning
 		} else if !jo.Success {
-			statusColor = colorError().SprintFunc()
+			status = StatusError
 		} else {
 			successCount++
 		}
 
-		fmt.Printf("%s%s (%s in %.2fs)\n",
-			statusColor(statusIcon),
-			jo.JobName,
-			jo.Status,
-			duration.Seconds())
-
-		// Print buffered output with proper indentation
-		output := strings.TrimSpace(jo.Buffer.String())
-		if output != "" {
-			lines := strings.Split(output, "\n")
-			for i, line := range lines {
-				if strings.TrimSpace(line) != "" {
-					if i == 0 {
-						fmt.Printf("  ⎿ %s\n", line)
-					} else {
-						fmt.Printf("    %s\n", line)
-					}
-				}
-			}
-		}
-		fmt.Println()
+		output.PrintJobResult(jo.JobName, status, duration.Seconds())
+		output.PrintJobOutput(jo.Buffer.String())
 
 		jo.mutex.Unlock()
 	}
 
 	// Print summary
 	totalJobs := len(wo.Jobs)
-	if successCount == totalJobs {
-		fmt.Printf("Total workflow time: %.2fs %s\n",
-			totalTime.Seconds(),
-			colorSuccess().Sprintf("✔︎ All jobs succeeded"))
-	} else {
-		failedCount := totalJobs - successCount
-		fmt.Printf("Total workflow time: %.2fs %s\n",
-			totalTime.Seconds(),
-			colorError().Sprintf("✘ %d job(s) failed", failedCount))
-	}
+	output.PrintWorkflowSummary(totalTime.Seconds(), successCount, totalJobs)
 }
 
 func (w *Workflow) Env() map[string]string {
@@ -415,26 +408,8 @@ func (w *Workflow) newJobContext(c Config, vars map[string]any) JobContext {
 		Vars:   vars,
 		Logs:   []map[string]any{},
 		Config: c,
+		Output: NewOutput(c.Verbose),
 	}
-}
-
-type JobContext struct {
-	Vars map[string]any   `expr:"vars"`
-	Logs []map[string]any `expr:"steps"`
-	Config
-	Failed bool
-}
-
-func (j *JobContext) SetFailed() {
-	j.Failed = true
-}
-
-type StepContext struct {
-	Vars map[string]any   `expr:"vars"`
-	Logs []map[string]any `expr:"steps"`
-	Res  map[string]any   `expr:"res"`
-	Req  map[string]any   `expr:"req"`
-	RT   string           `expr:"rt"`
 }
 
 type Repeat struct {
@@ -442,252 +417,38 @@ type Repeat struct {
 	Interval int `yaml:"interval,validate:"gte=0,lt=600"`
 }
 
-type Step struct {
-	Name string           `yaml:"name"`
-	Uses string           `yaml:"uses" validate:"required"`
-	With map[string]any   `yaml:"with"`
-	Test string           `yaml:"test"`
-	Echo string           `yaml:"echo"`
-	Vars map[string]any   `yaml:"vars"`
-	Iter []map[string]any `yaml:"iter"`
-	err  error
-	ctx  StepContext
-	idx  int
-	expr *Expr
+type StepRepeatCounter struct {
+	SuccessCount int
+	FailureCount int
+	Name         string
+	LastResult   bool
+	Output       strings.Builder
 }
 
-type Job struct {
-	Name     string   `yaml:"name",validate:"required"`
-	ID       string   `yaml:"id,omitempty"`
-	Needs    []string `yaml:"needs,omitempty"`
-	Steps    []*Step  `yaml:"steps",validate:"required"`
-	Repeat   *Repeat  `yaml:"repeat"`
-	Defaults any      `yaml:"defaults"`
-	ctx      *JobContext
-}
-
-func (j *Job) Start(ctx JobContext) bool {
-	j.ctx = &ctx
-	expr := &Expr{}
-
-	if j.Name == "" {
-		j.Name = "Unknown Job"
-	}
-	name, err := expr.EvalTemplate(j.Name, ctx)
-	if err != nil {
-		fmt.Printf("Expr error(job name): %#v\n", err)
-	} else {
-		j.Name = name
-	}
-
-	var idx = 0
-	for _, st := range j.Steps {
-		st.expr = expr
-		if len(st.Iter) == 0 {
-			st.idx = idx
-			idx += 1
-			st.SetCtx(ctx, nil)
-			st.Do(&ctx)
-			continue
-		}
-		// NOTE: Split JobContext to ExprEnv
-		for _, vars := range st.Iter {
-			st.idx = idx
-			idx += 1
-			st.SetCtx(ctx, vars)
-			st.Do(&ctx)
+// printRepeatStepResults prints the final results of repeat step executions to buffer
+func (w *Workflow) printRepeatStepResults(ctx *JobContext, job *Job, jo *JobOutput) {
+	// Capture the step results output to buffer instead of printing directly
+	originalStdout := os.Stdout
+	r, wr, _ := os.Pipe()
+	os.Stdout = wr
+	
+	output := NewOutput(ctx.Config.Verbose)
+	
+	for i, step := range job.Steps {
+		if counter, exists := ctx.StepCounters[i]; exists {
+			hasTest := step.Test != ""
+			output.PrintStepRepeatResult(i, counter, hasTest)
 		}
 	}
-
-	return j.ctx.Failed
-}
-
-func (st *Step) Do(jCtx *JobContext) {
-	if st.Name == "" {
-		st.Name = "Unknown Step"
-	}
-	name, err := st.expr.EvalTemplate(st.Name, st.ctx)
-	if err != nil {
-		fmt.Printf("Expr error(step name): %#v\n", err)
-	}
-
-	expW := st.expr.EvalTemplateMap(st.With, st.ctx)
-	ret, err := RunActions(st.Uses, []string{}, expW, jCtx.Config.Verbose)
-	if err != nil {
-		st.err = err
-		fmt.Printf("%s \"%s\" in %s-action -- %s\n", colorError().Sprintf("Error"), name, st.Uses, err)
-		jCtx.SetFailed()
-		return
-	}
-
-	// parse json and sets
-	req, okreq := ret["req"].(map[string]any)
-	res, okres := ret["res"].(map[string]any)
-	rt, okrt := ret["rt"].(string)
-	if okres {
-		body, okbody := res["body"].(string)
-		if okbody && isJSON(body) {
-			res["rawbody"] = body
-			res["body"] = mustMarshalJSON(body)
-		}
-	}
-
-	// set log and logs
-	jCtx.Logs = append(jCtx.Logs, ret)
-	st.updateCtx(jCtx.Logs, req, res, rt)
-
-	if jCtx.Config.Verbose {
-		if !okreq || !okres {
-			fmt.Print("sorry, request or response is nil")
-			jCtx.SetFailed()
-			return
-		}
-		st.ShowRequestResponse(name)
-		if st.Test != "" {
-			if ok := st.DoTestWithSequentialPrint(); !ok {
-				jCtx.SetFailed()
-			}
-		}
-		if st.Echo != "" {
-			st.DoEchoWithSequentialPrint()
-		}
-		fmt.Println("- - -")
-		return
-	}
-
-	// Output format here:
-	//   1. ✔︎ Step name
-	num := color.HiBlackString(fmt.Sprintf("%2d.", st.idx))
-	ps := ""
-	if jCtx.Config.RT && okrt && st.ctx.RT != "" {
-		ps = color.HiBlackString(fmt.Sprintf(" (%s)", st.ctx.RT))
-	}
-	output := fmt.Sprintf("%s %%s %s%s", num, name, ps)
-	if st.Test != "" {
-		str, ok := st.DoTest()
-		if ok {
-			output = fmt.Sprintf(output+"\n", colorSuccess().Sprintf("✔︎ "))
-		} else {
-			output = fmt.Sprintf(output+"\n"+str+"\n", colorError().Sprintf("✘ "))
-			jCtx.SetFailed()
-		}
-	} else {
-		output = fmt.Sprintf(output+"\n", colorWarning().Sprintf("▲ "))
-	}
-	fmt.Print(output)
-
-	if st.Echo != "" {
-		st.DoEcho()
-	}
-}
-
-func (st *Step) DoTestWithSequentialPrint() bool {
-	exprOut, err := st.expr.Eval(st.Test, st.ctx)
-	if err != nil {
-		fmt.Printf("%s: %s\nInput: %s\n", colorError().Sprintf("Test Error"), err, st.Test)
-		return false
-	}
-
-	boolOutput, boolOk := exprOut.(bool)
-	if !boolOk {
-		fmt.Printf("Test: `%s` = %s\n", st.Test, exprOut)
-		return false
-	}
-
-	boolResultStr := colorSuccess().Sprintf("Success")
-	if !boolOutput {
-		boolResultStr = colorError().Sprintf("Failure")
-	}
-	fmt.Printf("Test: %s (input: %s, env: %#v)\n", boolResultStr, st.Test, st.ctx)
-
-	return boolOk
-}
-
-func (st *Step) DoEchoWithSequentialPrint() {
-	exprOut, err := st.expr.Eval(st.Echo, st.ctx)
-	if err != nil {
-		fmt.Printf("%s: %#v (input: %s)\n", colorError().Sprintf("Echo Error"), err, st.Echo)
-	} else {
-		fmt.Printf("Echo: %s\n", exprOut)
-	}
-}
-
-func (st *Step) DoTest() (string, bool) {
-	exprOut, err := st.expr.Eval(st.Test, st.ctx)
-	if err != nil {
-		return fmt.Sprintf("Test\nerror: %#v\n", err), false
-	}
-
-	boolOutput, boolOk := exprOut.(bool)
-	if !boolOk {
-		return fmt.Sprintf("Test: `%s` = %s\n", st.Test, exprOut), false
-	}
-
-	if !boolOutput {
-		// 7 spaces
-		output := fmt.Sprintf("       request: %#v\n", st.ctx.Req)
-		output += fmt.Sprintf("       response: %#v\n", st.ctx.Res)
-		return output, false
-	}
-
-	return "", true
-}
-
-func (st *Step) DoEcho() {
-	exprOut, err := st.expr.Eval(st.Echo, st.ctx)
-	if err != nil {
-		fmt.Printf("Echo\nerror: %#v\n", err)
-	} else {
-		// 7 spaces
-		fmt.Printf("       %s\n", exprOut)
-	}
-}
-
-func (st *Step) SetCtx(j JobContext, override map[string]any) {
-	vers := MergeMaps(j.Vars, st.Vars)
-	if override != nil {
-		vers = MergeMaps(vers, override)
-	}
-	st.ctx = StepContext{
-		Vars: vers,
-		Logs: j.Logs,
-	}
-}
-
-func (st *Step) updateCtx(logs []map[string]any, req, res map[string]any, rt string) {
-	st.ctx.Logs = logs
-	st.ctx.Req = req
-	st.ctx.Res = res
-	st.ctx.RT = rt
-}
-
-func (st *Step) ShowRequestResponse(name string) {
-	fmt.Printf("--- Step %d: %s\nRequest:\n", st.idx, name)
-
-	for k, v := range st.ctx.Req {
-		nested, ok := v.(map[string]any)
-		if ok {
-			fmt.Printf("  %s:\n", k)
-			for kk, vv := range nested {
-				fmt.Printf("    %s: %#v\n", kk, vv)
-			}
-		} else {
-			fmt.Printf("  %s: %#v\n", k, v)
-		}
-	}
-	fmt.Printf("Response:\n")
-
-	for k, v := range st.ctx.Res {
-		nested, ok := v.(map[string]any)
-		if ok {
-			fmt.Printf("  %s:\n", k)
-			for kk, vv := range nested {
-				fmt.Printf("    %s: %#v\n", kk, vv)
-			}
-		} else {
-			fmt.Printf("  %s: %#v\n", k, v)
-		}
-	}
-
-	fmt.Printf("RT: %s\n", colorWarning().Sprintf("%s", st.ctx.RT))
+	
+	// Restore stdout and capture the step results
+	wr.Close()
+	os.Stdout = originalStdout
+	
+	capturedOutput, _ := io.ReadAll(r)
+	
+	// Add captured step results to job buffer
+	jo.mutex.Lock()
+	jo.Buffer.Write(capturedOutput)
+	jo.mutex.Unlock()
 }

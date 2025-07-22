@@ -81,11 +81,11 @@ func (c *Cmd) isValid(flag string) bool {
 
 func (c *Cmd) usage() {
 	h := `
-___ ___  __ ___ ___
+ __  __  __  __  __
 |  ||  ||  ||  || _|
 |  ||  /| |||  /|  |
 | | |  \| |||  \| _|
-/_/ |_\_|__||__||__|
+|_| |_\_|__||__||__|
 
 Probe - A YAML-based workflow automation tool.
 https://github.com/linyows/probe (ver: %s, rev: %s)
