@@ -76,7 +76,7 @@ func TestJobScheduler_AddJob(t *testing.T) {
 		Steps: []*Step{},
 		Repeat: &Repeat{
 			Count:    3,
-			Interval: 1,
+			Interval: Interval{Duration: 1 * time.Second},
 		},
 	}
 
@@ -282,7 +282,7 @@ func TestJobScheduler_RepeatFunctionality(t *testing.T) {
 		ID:   "repeat-job",
 		Repeat: &Repeat{
 			Count:    3,
-			Interval: 0,
+			Interval: Interval{Duration: 0},
 		},
 		Steps: []*Step{},
 	}
@@ -353,7 +353,7 @@ func TestJobScheduler_IsJobFullyCompleted(t *testing.T) {
 	job2 := &Job{
 		Name:   "job2",
 		ID:     "job2",
-		Repeat: &Repeat{Count: 2, Interval: 0},
+		Repeat: &Repeat{Count: 2, Interval: Interval{Duration: 0}},
 		Steps:  []*Step{},
 	}
 	js.AddJob(job2)

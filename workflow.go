@@ -115,7 +115,7 @@ func (w *Workflow) startParallel(ctx JobContext) error {
 				defer wg.Done()
 				w.SetExitStatus(j.Start(jCtx))
 			}(job, jobCtx)
-			time.Sleep(time.Duration(job.Repeat.Interval) * time.Second)
+			time.Sleep(job.Repeat.Interval.Duration)
 		}
 	}
 
@@ -243,7 +243,7 @@ func (w *Workflow) executeJobWithRepeat(scheduler *JobScheduler, job *Job, jobID
 		// Sleep between repeats (except for the last one)
 		current, target := scheduler.GetRepeatInfo(jobID)
 		if current < target && job.Repeat != nil {
-			time.Sleep(time.Duration(job.Repeat.Interval) * time.Second)
+			time.Sleep(job.Repeat.Interval.Duration)
 		}
 	}
 
@@ -310,7 +310,7 @@ func (w *Workflow) executeJobWithBuffering(scheduler *JobScheduler, job *Job, jo
 		// Sleep between repeats (except for the last one)
 		current, target := scheduler.GetRepeatInfo(jobID)
 		if current < target && job.Repeat != nil {
-			time.Sleep(time.Duration(job.Repeat.Interval) * time.Second)
+			time.Sleep(job.Repeat.Interval.Duration)
 		}
 	}
 
@@ -412,10 +412,6 @@ func (w *Workflow) newJobContext(c Config, vars map[string]any) JobContext {
 	}
 }
 
-type Repeat struct {
-	Count    int `yaml:"count",validate:"required,gte=0,lt=100"`
-	Interval int `yaml:"interval,validate:"gte=0,lt=600"`
-}
 
 type StepRepeatCounter struct {
 	SuccessCount int
