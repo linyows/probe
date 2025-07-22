@@ -23,27 +23,32 @@ func colorWarning() *color.Color {
 	return color.New(color.FgBlue)
 }
 
+// colorDim returns a *color.Color for subdued text
+func colorDim() *color.Color {
+	return color.New(color.FgHiBlack)
+}
+
 // OutputWriter defines the interface for different output implementations
 type OutputWriter interface {
 	// Workflow level output
 	PrintWorkflowHeader(name, description string)
 	PrintJobName(name string)
-	
-	// Step level output 
+
+	// Step level output
 	PrintStepResult(step StepResult)
 	PrintStepRepeatStart(stepIdx int, stepName string, repeatCount int)
 	PrintStepRepeatResult(stepIdx int, counter StepRepeatCounter, hasTest bool)
-	
+
 	// Job level output
 	PrintJobResult(jobName string, status StatusType, duration float64)
 	PrintJobOutput(output string)
-	
+
 	// Workflow summary
 	PrintWorkflowSummary(totalTime float64, successCount, totalJobs int)
-	
+
 	// Error output
 	PrintError(format string, args ...interface{})
-	
+
 	// Verbose output
 	PrintVerbose(format string, args ...interface{})
 	PrintSeparator()
@@ -87,7 +92,7 @@ func (o *Output) PrintWorkflowHeader(name, description string) {
 		bold := color.New(color.Bold)
 		bold.Printf("%s\n", name)
 		if description != "" {
-			fmt.Printf("%s\n", description)
+			colorDim().Printf("%s\n", description)
 		}
 	}
 }
@@ -99,14 +104,14 @@ func (o *Output) PrintJobName(name string) {
 
 // PrintStepResult prints the result of a single step execution
 func (o *Output) PrintStepResult(step StepResult) {
-	num := colorWarning().Sprintf("%2d.", step.Index)
+	num := colorDim().Sprintf("%2d.", step.Index)
 	ps := ""
 	if step.RT != "" {
-		ps = colorWarning().Sprintf(" (%s)", step.RT)
+		ps = colorDim().Sprintf(" (%s)", step.RT)
 	}
-	
+
 	output := fmt.Sprintf("%s %%s %s%s", num, step.Name, ps)
-	
+
 	switch step.Status {
 	case StatusSuccess:
 		output = fmt.Sprintf(output+"\n", colorSuccess().Sprintf("✔︎ "))
@@ -115,9 +120,9 @@ func (o *Output) PrintStepResult(step StepResult) {
 	case StatusWarning:
 		output = fmt.Sprintf(output+"\n", colorWarning().Sprintf("▲ "))
 	}
-	
+
 	fmt.Print(output)
-	
+
 	if step.EchoOutput != "" {
 		fmt.Print(step.EchoOutput)
 	}
@@ -125,7 +130,7 @@ func (o *Output) PrintStepResult(step StepResult) {
 
 // PrintStepRepeatStart prints the start of a repeated step execution
 func (o *Output) PrintStepRepeatStart(stepIdx int, stepName string, repeatCount int) {
-	num := colorWarning().Sprintf("%2d.", stepIdx)
+	num := colorDim().Sprintf("%2d.", stepIdx)
 	fmt.Printf("%s %s (repeating %d times)\n", num, stepName, repeatCount)
 }
 
@@ -142,17 +147,17 @@ func (o *Output) PrintStepRepeatResult(stepIdx int, counter StepRepeatCounter, h
 				statusColor = colorWarning()
 			}
 		}
-		
-		fmt.Printf("    %s %d/%d success (%.1f%%)\n", 
-			statusColor.Sprintf("⏺"), 
-			counter.SuccessCount, 
-			totalCount, 
+
+		fmt.Printf("    %s %d/%d success (%.1f%%)\n",
+			statusColor.Sprintf("⏺"),
+			counter.SuccessCount,
+			totalCount,
 			successRate)
 	} else {
 		totalCount := counter.SuccessCount + counter.FailureCount
-		fmt.Printf("    %s %d/%d completed (no test)\n", 
-			colorWarning().Sprintf("⏺"), 
-			totalCount, 
+		fmt.Printf("    %s %d/%d completed (no test)\n",
+			colorWarning().Sprintf("⏺"),
+			totalCount,
 			totalCount)
 	}
 }
@@ -161,14 +166,14 @@ func (o *Output) PrintStepRepeatResult(stepIdx int, counter StepRepeatCounter, h
 func (o *Output) PrintJobResult(jobName string, status StatusType, duration float64) {
 	statusColor := colorSuccess()
 	statusIcon := "⏺ "
-	
+
 	switch status {
 	case StatusError:
 		statusColor = colorError()
 	case StatusWarning:
 		statusColor = colorWarning()
 	}
-	
+
 	statusStr := ""
 	switch status {
 	case StatusSuccess:
@@ -178,7 +183,7 @@ func (o *Output) PrintJobResult(jobName string, status StatusType, duration floa
 	case StatusWarning:
 		statusStr = "Skipped"
 	}
-	
+
 	fmt.Printf("%s%s (%s in %.2fs)\n",
 		statusColor.Sprintf(statusIcon),
 		jobName,
