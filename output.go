@@ -2,6 +2,7 @@ package probe
 
 import (
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/fatih/color"
@@ -36,6 +37,16 @@ const (
 	IconCircle  = "⏺ "
 )
 
+// LogLevel defines different logging levels
+type LogLevel int
+
+const (
+	LogLevelDebug LogLevel = iota
+	LogLevelInfo
+	LogLevelWarn
+	LogLevelError
+)
+
 // OutputWriter defines the interface for different output implementations
 type OutputWriter interface {
 	// Workflow level output
@@ -60,6 +71,12 @@ type OutputWriter interface {
 	// Verbose output
 	PrintVerbose(format string, args ...interface{})
 	PrintSeparator()
+
+	// Unified logging methods
+	LogDebug(format string, args ...interface{})
+	LogInfo(format string, args ...interface{})
+	LogWarn(format string, args ...interface{})
+	LogError(format string, args ...interface{})
 }
 
 // StatusType represents the status of execution
@@ -248,4 +265,26 @@ func (o *Output) PrintSeparator() {
 	if o.verbose {
 		fmt.Println("- - -")
 	}
+}
+
+// LogDebug prints debug messages (only in verbose mode)
+func (o *Output) LogDebug(format string, args ...interface{}) {
+	if o.verbose {
+		fmt.Printf("[DEBUG] %s\n", fmt.Sprintf(format, args...))
+	}
+}
+
+// LogInfo prints informational messages
+func (o *Output) LogInfo(format string, args ...interface{}) {
+	fmt.Printf("[INFO] %s\n", fmt.Sprintf(format, args...))
+}
+
+// LogWarn prints warning messages to stderr
+func (o *Output) LogWarn(format string, args ...interface{}) {
+	fmt.Fprintf(os.Stderr, "%s\n", colorWarning().Sprintf("[WARN] %s", fmt.Sprintf(format, args...)))
+}
+
+// LogError prints error messages to stderr
+func (o *Output) LogError(format string, args ...interface{}) {
+	fmt.Fprintf(os.Stderr, "%s\n", colorError().Sprintf("[ERROR] %s", fmt.Sprintf(format, args...)))
 }

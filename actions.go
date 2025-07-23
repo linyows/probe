@@ -73,7 +73,7 @@ func RunActions(name string, args []string, with map[string]any, verbose bool) (
 
 	log := hclog.New(&hclog.LoggerOptions{
 		Name:   "actions",
-		Output: os.Stdout,
+		Output: os.Stderr, // Plugin logs to stderr to avoid mixing with application output
 		Level:  loglevel,
 	})
 

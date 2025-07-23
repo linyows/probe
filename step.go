@@ -252,7 +252,7 @@ func (st *Step) DoTest() (string, bool) {
 func (st *Step) DoEcho() {
 	exprOut, err := st.expr.Eval(st.Echo, st.ctx)
 	if err != nil {
-		fmt.Printf("Echo\nerror: %#v\n", err)
+		fmt.Printf("[ERROR] Echo evaluation failed: %#v\n", err)
 	} else {
 		// 7 spaces
 		fmt.Printf("       %s\n", exprOut)
@@ -278,7 +278,7 @@ func (st *Step) updateCtx(logs []map[string]any, req, res map[string]any, rt str
 }
 
 func (st *Step) ShowRequestResponse(name string) {
-	fmt.Printf("--- Step %d: %s\nRequest:\n", st.idx, name)
+	fmt.Printf("[DEBUG] --- Step %d: %s\nRequest:\n", st.idx, name)
 	st.printMapData(st.ctx.Req)
 	
 	fmt.Printf("Response:\n")

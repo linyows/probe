@@ -3,7 +3,6 @@ package http
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	hp "net/http"
 	"net/url"
 	"os"
@@ -34,24 +33,28 @@ type Action struct {
 }
 
 func (a *Action) Run(args []string, with map[string]string) (map[string]string, error) {
-	a.log.Debug(fmt.Sprintf("received: %#v", with))
+	a.log.Debug("received request parameters", "params", with)
 
 	if err := updateMap(with); err != nil {
+		a.log.Error("failed to update request parameters", "error", err)
 		return map[string]string{}, err
 	}
 
-	a.log.Debug(fmt.Sprintf("updated: %#v", with))
+	a.log.Debug("updated request parameters", "params", with)
 
 	before := http.WithBefore(func(req *hp.Request) {
-		a.log.Debug(fmt.Sprintf("http.Request: %#v", req))
+		a.log.Debug("http request prepared", "request", req)
 	})
 	after := http.WithAfter(func(res *hp.Response) {
-		a.log.Debug(fmt.Sprintf("http.Response: %#v", res))
+		a.log.Debug("http response received", "response", res)
 	})
 	ret, err := http.Request(with, before, after)
 
-	a.log.Debug(fmt.Sprintf("return: %#v", ret))
-	a.log.Debug(fmt.Sprintf("error: %#v", err))
+	if err != nil {
+		a.log.Error("http request failed", "error", err)
+	} else {
+		a.log.Debug("http request completed successfully", "result", ret)
+	}
 
 	return ret, err
 }
