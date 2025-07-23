@@ -147,9 +147,13 @@ func (c *Client) Auth(a smtp.Auth) error {
 		return err
 	}
 	encoding := base64.StdEncoding
-	mech, resp, err := a.Start(&smtp.ServerInfo{c.serverName, c.tls, c.auth})
+	mech, resp, err := a.Start(&smtp.ServerInfo{
+		Name: c.serverName,
+		TLS:  c.tls,
+		Auth: []string{},
+	})
 	if err != nil {
-		c.Quit()
+		_ = c.Quit() // Ignore error on cleanup
 		return err
 	}
 	resp64 := make([]byte, encoding.EncodedLen(len(resp)))
@@ -169,8 +173,8 @@ func (c *Client) Auth(a smtp.Auth) error {
 			resp, err = a.Next(msg, code == 334)
 		}
 		if err != nil {
-			c.cmd(501, "*")
-			c.Quit()
+			_, _, _ = c.cmd(501, "*") // Ignore error
+			_ = c.Quit()        // Ignore error on cleanup
 			break
 		}
 		if resp == nil {

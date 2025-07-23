@@ -1,18 +1,20 @@
 package mail
 
 import (
+	"crypto/rand"
 	"crypto/sha1"
 	"encoding/hex"
 	"fmt"
 	"io"
-	"math/rand"
 	"time"
 )
 
 func HashID() string {
-	rand.Seed(time.Now().UnixNano())
 	hash := sha1.New()
-	io.WriteString(hash, fmt.Sprintf("%d", rand.Int63()))
+	timestamp := time.Now().UnixNano()
+	if _, err := io.WriteString(hash, fmt.Sprintf("%d", timestamp)); err != nil {
+		return ""
+	}
 	return fmt.Sprintf("%x", hash.Sum(nil))
 }
 

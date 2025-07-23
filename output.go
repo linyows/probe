@@ -193,7 +193,7 @@ func (o *Output) PrintJobResult(jobName string, status StatusType, duration floa
 	}
 
 	fmt.Printf("%s%s (%s in %.2fs)\n",
-		statusColor.Sprintf(statusIcon),
+		statusColor.Sprint(statusIcon),
 		jobName,
 		statusStr,
 		duration)

@@ -197,7 +197,9 @@ func TestJobScheduler_ValidateDependencies(t *testing.T) {
 
 	// Test with no dependencies
 	job1 := &Job{Name: "job1", ID: "job1", Steps: []*Step{}}
-	js.AddJob(job1)
+	if err := js.AddJob(job1); err != nil {
+		t.Fatalf("Failed to add job1: %v", err)
+	}
 
 	err := js.ValidateDependencies()
 	if err != nil {
@@ -206,7 +208,9 @@ func TestJobScheduler_ValidateDependencies(t *testing.T) {
 
 	// Test with valid dependencies
 	job2 := &Job{Name: "job2", ID: "job2", Needs: []string{"job1"}, Steps: []*Step{}}
-	js.AddJob(job2)
+	if err := js.AddJob(job2); err != nil {
+		t.Fatalf("Failed to add job2: %v", err)
+	}
 
 	err = js.ValidateDependencies()
 	if err != nil {
@@ -215,7 +219,9 @@ func TestJobScheduler_ValidateDependencies(t *testing.T) {
 
 	// Test with missing dependency
 	job3 := &Job{Name: "job3", ID: "job3", Needs: []string{"missing-job"}, Steps: []*Step{}}
-	js.AddJob(job3)
+	if err := js.AddJob(job3); err != nil {
+		t.Fatalf("Failed to add job3: %v", err)
+	}
 
 	err = js.ValidateDependencies()
 	if err == nil {
@@ -230,8 +236,12 @@ func TestJobScheduler_CircularDependencies(t *testing.T) {
 	job1 := &Job{Name: "job1", ID: "job1", Needs: []string{"job2"}, Steps: []*Step{}}
 	job2 := &Job{Name: "job2", ID: "job2", Needs: []string{"job1"}, Steps: []*Step{}}
 
-	js.AddJob(job1)
-	js.AddJob(job2)
+	if err := js.AddJob(job1); err != nil {
+		t.Fatalf("Failed to add job1: %v", err)
+	}
+	if err := js.AddJob(job2); err != nil {
+		t.Fatalf("Failed to add job2: %v", err)
+	}
 
 	err := js.ValidateDependencies()
 	if err == nil {
@@ -244,7 +254,9 @@ func TestJobScheduler_CanRunJob(t *testing.T) {
 
 	// Job without dependencies
 	job1 := &Job{Name: "job1", ID: "job1", Steps: []*Step{}}
-	js.AddJob(job1)
+	if err := js.AddJob(job1); err != nil {
+		t.Fatalf("Failed to add job1: %v", err)
+	}
 
 	if !js.CanRunJob("job1") {
 		t.Error("Job without dependencies should be runnable")
@@ -252,7 +264,9 @@ func TestJobScheduler_CanRunJob(t *testing.T) {
 
 	// Job with dependencies
 	job2 := &Job{Name: "job2", ID: "job2", Needs: []string{"job1"}, Steps: []*Step{}}
-	js.AddJob(job2)
+	if err := js.AddJob(job2); err != nil {
+		t.Fatalf("Failed to add job: %v", err)
+	}
 
 	if js.CanRunJob("job2") {
 		t.Error("Job with incomplete dependencies should not be runnable")
@@ -287,7 +301,9 @@ func TestJobScheduler_RepeatFunctionality(t *testing.T) {
 		Steps: []*Step{},
 	}
 
-	js.AddJob(job)
+	if err := js.AddJob(job); err != nil {
+		t.Fatalf("Failed to add job: %v", err)
+	}
 
 	// Test initial state
 	if !js.ShouldRepeatJob("repeat-job") {
@@ -330,7 +346,9 @@ func TestJobScheduler_IsJobFullyCompleted(t *testing.T) {
 
 	// Job without repeat
 	job1 := &Job{Name: "job1", ID: "job1", Steps: []*Step{}}
-	js.AddJob(job1)
+	if err := js.AddJob(job1); err != nil {
+		t.Fatalf("Failed to add job: %v", err)
+	}
 
 	// Not completed yet
 	if js.isJobFullyCompleted("job1") {
@@ -356,7 +374,9 @@ func TestJobScheduler_IsJobFullyCompleted(t *testing.T) {
 		Repeat: &Repeat{Count: 2, Interval: Interval{Duration: 0}},
 		Steps:  []*Step{},
 	}
-	js.AddJob(job2)
+	if err := js.AddJob(job2); err != nil {
+		t.Fatalf("Failed to add job: %v", err)
+	}
 
 	js.SetJobStatus("job2", JobCompleted, true)
 	js.IncrementRepeatCounter("job2")
@@ -381,9 +401,15 @@ func TestJobScheduler_GetRunnableJobs(t *testing.T) {
 	job2 := &Job{Name: "job2", ID: "job2", Needs: []string{"job1"}, Steps: []*Step{}}
 	job3 := &Job{Name: "job3", ID: "job3", Steps: []*Step{}}
 
-	js.AddJob(job1)
-	js.AddJob(job2)
-	js.AddJob(job3)
+	if err := js.AddJob(job1); err != nil {
+		t.Fatalf("Failed to add job: %v", err)
+	}
+	if err := js.AddJob(job2); err != nil {
+		t.Fatalf("Failed to add job: %v", err)
+	}
+	if err := js.AddJob(job3); err != nil {
+		t.Fatalf("Failed to add job: %v", err)
+	}
 
 	runnable := js.GetRunnableJobs()
 
@@ -434,8 +460,12 @@ func TestJobScheduler_AllJobsCompleted(t *testing.T) {
 	job1 := &Job{Name: "job1", ID: "job1", Steps: []*Step{}}
 	job2 := &Job{Name: "job2", ID: "job2", Steps: []*Step{}}
 
-	js.AddJob(job1)
-	js.AddJob(job2)
+	if err := js.AddJob(job1); err != nil {
+		t.Fatalf("Failed to add job: %v", err)
+	}
+	if err := js.AddJob(job2); err != nil {
+		t.Fatalf("Failed to add job: %v", err)
+	}
 
 	// Jobs pending
 	if js.AllJobsCompleted() {
@@ -459,7 +489,9 @@ func TestJobScheduler_SetJobStatus(t *testing.T) {
 	js := NewJobScheduler()
 
 	job := &Job{Name: "job1", ID: "job1", Steps: []*Step{}}
-	js.AddJob(job)
+	if err := js.AddJob(job); err != nil {
+		t.Fatalf("Failed to add job: %v", err)
+	}
 
 	// Test setting to running
 	js.SetJobStatus("job1", JobRunning, false)
@@ -491,7 +523,9 @@ func TestJobScheduler_ConcurrentAccess(t *testing.T) {
 
 	// Add a job
 	job := &Job{Name: "concurrent-job", ID: "concurrent-job", Steps: []*Step{}}
-	js.AddJob(job)
+	if err := js.AddJob(job); err != nil {
+		t.Fatalf("Failed to add job: %v", err)
+	}
 
 	// Test concurrent access to scheduler methods with smaller iteration count
 	done := make(chan bool, 4)

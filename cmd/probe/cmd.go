@@ -95,7 +95,7 @@ Usage: probe [options]
 Options:
 `
 	h = strings.TrimPrefix(h, "\n")
-	fmt.Fprint(flag.CommandLine.Output(), fmt.Sprintf(h, c.ver, c.rev))
+	fmt.Fprintf(flag.CommandLine.Output(), h, c.ver, c.rev)
 	flag.PrintDefaults()
 }
 

@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -100,7 +99,7 @@ func (p *Probe) yamlFiles() ([]string, error) {
 		if info, err := os.Stat(path); err == nil {
 			if info.IsDir() {
 				// Read all YAML files from the directory
-				rfiles, err := ioutil.ReadDir(path)
+				rfiles, err := os.ReadDir(path)
 				if err != nil {
 					return nil, err
 				}

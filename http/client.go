@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"io"
 	hp "net/http"
 	"strconv"
 	"strings"
@@ -19,7 +19,7 @@ type TransportOptions struct {
 }
 
 type Req struct {
-	URL    string            `map:"url" validate"required"`
+	URL    string            `map:"url" validate:"required"`
 	Method string            `map:"method" validate:"required"`
 	Proto  string            `map:"ver"`
 	Header map[string]string `map:"headers"`
@@ -91,7 +91,7 @@ func (r *Req) Do() (*Result, error) {
 		Code:   res.StatusCode,
 	}
 
-	body, err := ioutil.ReadAll(res.Body)
+	body, err := io.ReadAll(res.Body)
 	if err != nil {
 		return result, err
 	}

@@ -2,7 +2,7 @@ package mail
 
 import (
 	"bytes"
-	"io/ioutil"
+	"os"
 	"testing"
 )
 
@@ -12,7 +12,7 @@ func TestGetLatency(t *testing.T) {
 		t.Errorf("got error %s", err)
 	}
 
-	bytes, err := ioutil.ReadFile("./testdata/latency.csv")
+	bytes, err := os.ReadFile("./testdata/latency.csv")
 	if err != nil {
 		t.Errorf("csv read error %s", err)
 	}
