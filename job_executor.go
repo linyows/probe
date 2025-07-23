@@ -111,7 +111,7 @@ func (e *SequentialJobExecutor) Execute(job *Job, jobID string, ctx JobContext, 
 		ctx.RepeatCurrent = current
 
 		// Execute single run
-		success := !job.Start(ctx)
+		success := job.Start(ctx)
 
 		if !success {
 			overallSuccess = false
@@ -202,7 +202,7 @@ func (e *BufferedJobExecutor) executeWithBuffering(job *Job, jobID string, ctx J
 		os.Stdout = wr
 
 		// Execute single run
-		success := !job.Start(ctx)
+		success := job.Start(ctx)
 
 		// Restore stdout and capture output
 		wr.Close()
