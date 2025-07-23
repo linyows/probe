@@ -3,9 +3,9 @@ package probe
 
 
 type Workflow struct {
-	Name        string         `yaml:"name",validate:"required"`
+	Name        string         `yaml:"name" validate:"required"`
 	Description string         `yaml:"description,omitempty"`
-	Jobs        []Job          `yaml:"jobs",validate:"required"`
+	Jobs        []Job          `yaml:"jobs" validate:"required"`
 	Vars        map[string]any `yaml:"vars"`
 	exitStatus  int
 	env         map[string]string
