@@ -21,8 +21,8 @@ type JobOutput struct {
 // WorkflowOutput manages output for multiple jobs
 type WorkflowOutput struct {
 	Jobs        map[string]*JobOutput
-	mutex       sync.RWMutex
-	outputMutex sync.Mutex // Protects stdout redirection
+	mutex       sync.RWMutex //nolint:unused // Reserved for future concurrent access
+	outputMutex sync.Mutex   // Protects stdout redirection
 }
 
 // NewWorkflowOutput creates a new WorkflowOutput instance

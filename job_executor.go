@@ -257,6 +257,7 @@ func (e *BufferedJobExecutor) executeJobRepeatLoop(job *Job, jobID string, ctx J
 }
 
 // executeJobIteration executes a single iteration of the job with output capture
+//nolint:unused // Reserved for future use
 func (e *BufferedJobExecutor) executeJobIteration(job *Job, ctx JobContext, config ExecutionConfig, jo *JobOutput) bool {
 	// Serialize stdout redirection to prevent race conditions
 	config.WorkflowOutput.outputMutex.Lock()
@@ -274,6 +275,7 @@ func (e *BufferedJobExecutor) executeJobIteration(job *Job, ctx JobContext, conf
 }
 
 // captureJobOutput captures the stdout output during job execution
+//nolint:unused // Reserved for future use
 func (e *BufferedJobExecutor) captureJobOutput(job *Job, ctx JobContext) []byte {
 	// Capture output by redirecting stdout temporarily
 	originalStdout := os.Stdout

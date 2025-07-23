@@ -175,6 +175,7 @@ func (s *MockServerSession) setOptimisticID() error {
 	return nil
 }
 
+//nolint:unused // Reserved for future TLS support
 func (s *MockServerSession) startTLS(conn net.Conn) {
 	cert, err := tls.LoadX509KeyPair(s.server.TLS.CertPath, s.server.TLS.KeyPath)
 	if err != nil {
