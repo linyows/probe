@@ -92,6 +92,7 @@ func TestNewOutput(t *testing.T) {
 	output := NewOutput(false)
 	if output == nil {
 		t.Error("NewOutput() should return a non-nil Output")
+		return
 	}
 	
 	if output.verbose {

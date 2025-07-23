@@ -556,6 +556,7 @@ func TestMail_Send_StartTLSHook(t *testing.T) {
 		hookCalled = true
 		if config == nil {
 			t.Error("expected TLS config to be non-nil")
+			return
 		}
 		// Verify ServerName is set (will be IP address from listener)
 		if config.ServerName == "" {
