@@ -1,0 +1,11 @@
+name: Success Workflow
+description: Simple workflow that should succeed
+jobs:
+- name: test-job
+  steps:
+  - name: Success Step
+    uses: http
+    with:
+      url: https://httpbin.org
+      get: /status/200
+    test: res.code == 200
