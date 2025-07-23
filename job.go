@@ -25,16 +25,20 @@ type Job struct {
 	ctx      *JobContext
 }
 
-func (j *Job) Start(ctx JobContext) bool {
+func (j *Job) Start(ctx JobContext) error {
 	j.ctx = &ctx
 	expr := &Expr{}
 
 	if err := j.processJobName(expr, ctx); err != nil {
-		return false // return false indicates failure
+		return NewExecutionError("job_start", "failed to process job name", err)
 	}
 
 	j.executeSteps(expr, ctx)
-	return !j.ctx.Failed
+	if j.ctx.Failed {
+		return NewExecutionError("job_start", "job execution failed", nil).
+			WithContext("job_name", j.Name)
+	}
+	return nil
 }
 
 // processJobName evaluates and sets the job name, printing it if appropriate

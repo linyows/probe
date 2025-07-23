@@ -59,9 +59,13 @@ func (e *ParallelJobExecutor) Execute(job *Job, jobID string, ctx JobContext, co
 	if job.Repeat != nil {
 		for i := 0; i < job.Repeat.Count; i++ {
 			ctx.RepeatCurrent = i + 1
-			if !job.Start(ctx) {
+			if err := job.Start(ctx); err != nil {
 				success = false
 				e.workflow.SetExitStatus(true)
+				// Log the error for debugging
+				if ctx.Config.Verbose {
+					ctx.Output.PrintError("Job execution failed: %v", err)
+				}
 			}
 			// Sleep between repeats (except for the last one)
 			if i < job.Repeat.Count-1 {
@@ -70,9 +74,13 @@ func (e *ParallelJobExecutor) Execute(job *Job, jobID string, ctx JobContext, co
 		}
 	} else {
 		ctx.RepeatCurrent = 1
-		if !job.Start(ctx) {
+		if err := job.Start(ctx); err != nil {
 			success = false
 			e.workflow.SetExitStatus(true)
+			// Log the error for debugging
+			if ctx.Config.Verbose {
+				ctx.Output.PrintError("Job execution failed: %v", err)
+			}
 		}
 	}
 
@@ -111,11 +119,13 @@ func (e *SequentialJobExecutor) Execute(job *Job, jobID string, ctx JobContext, 
 		ctx.RepeatCurrent = current
 
 		// Execute single run
-		success := job.Start(ctx)
-
-		if !success {
+		if err := job.Start(ctx); err != nil {
 			overallSuccess = false
 			e.workflow.SetExitStatus(true)
+			// Log the error for debugging
+			if ctx.Config.Verbose {
+				ctx.Output.PrintError("Job execution failed: %v", err)
+			}
 		}
 
 		// Increment counter
@@ -229,7 +239,7 @@ func (e *BufferedJobExecutor) executeJobRepeatLoop(job *Job, jobID string, ctx J
 		os.Stdout = wr
 
 		// Execute single run
-		success := job.Start(ctx)
+		err := job.Start(ctx)
 
 		// Restore stdout and capture output
 		wr.Close()
@@ -244,7 +254,7 @@ func (e *BufferedJobExecutor) executeJobRepeatLoop(job *Job, jobID string, ctx J
 		jo.Buffer.Write(capturedOutput)
 		jo.mutex.Unlock()
 
-		if !success {
+		if err != nil {
 			overallSuccess = false
 			e.workflow.SetExitStatus(true)
 		}
@@ -270,8 +280,8 @@ func (e *BufferedJobExecutor) executeJobIteration(job *Job, ctx JobContext, conf
 	jo.Buffer.Write(capturedOutput)
 	jo.mutex.Unlock()
 
-	// Return success (job.Start returns false on failure, so we negate it)
-	return !job.Start(ctx)
+	// Return success (job.Start returns error on failure)
+	return job.Start(ctx) == nil
 }
 
 // captureJobOutput captures the stdout output during job execution
@@ -283,7 +293,7 @@ func (e *BufferedJobExecutor) captureJobOutput(job *Job, ctx JobContext) []byte 
 	os.Stdout = wr
 
 	// Execute single run
-	job.Start(ctx)
+	_ = job.Start(ctx) // Ignore error for output capture
 
 	// Restore stdout and capture output
 	wr.Close()
