@@ -30,11 +30,11 @@ func (j *Job) Start(ctx JobContext) bool {
 	expr := &Expr{}
 
 	if err := j.processJobName(expr, ctx); err != nil {
-		return true // return true indicates failure
+		return false // return false indicates failure
 	}
 
 	j.executeSteps(expr, ctx)
-	return j.ctx.Failed
+	return !j.ctx.Failed
 }
 
 // processJobName evaluates and sets the job name, printing it if appropriate
@@ -42,19 +42,19 @@ func (j *Job) processJobName(expr *Expr, ctx JobContext) error {
 	if j.Name == "" {
 		j.Name = "Unknown Job"
 	}
-	
+
 	name, err := expr.EvalTemplate(j.Name, ctx)
 	if err != nil {
 		ctx.Output.PrintError("job name evaluation error: %v", err)
 		return err
 	}
-	
+
 	j.Name = name
 	// Only print job name if not repeating and not using buffering (to avoid duplicate output)
 	if !ctx.IsRepeating && !ctx.UseBuffering {
 		ctx.Output.PrintJobName(name)
 	}
-	
+
 	return nil
 }
 
@@ -63,11 +63,11 @@ func (j *Job) executeSteps(expr *Expr, ctx JobContext) {
 	idx := 0
 	for _, st := range j.Steps {
 		st.expr = expr
-		
+
 		if len(st.Iter) == 0 {
-			j.executeStep(st, &idx, ctx, nil)
+			j.executeStep(st, &idx, *j.ctx, nil)
 		} else {
-			j.executeStepWithIterations(st, &idx, ctx)
+			j.executeStepWithIterations(st, &idx, *j.ctx)
 		}
 	}
 }
@@ -77,7 +77,7 @@ func (j *Job) executeStep(st *Step, idx *int, ctx JobContext, vars map[string]an
 	st.idx = *idx
 	*idx++
 	st.SetCtx(ctx, vars)
-	st.Do(&ctx)
+	st.Do(j.ctx)
 }
 
 // executeStepWithIterations executes a step multiple times with different variable sets
@@ -98,7 +98,7 @@ type JobContext struct {
 	RepeatTotal   int
 	StepCounters  map[int]StepRepeatCounter // step index -> counter
 	// Output buffering
-	UseBuffering  bool
+	UseBuffering bool
 	// Output writer
 	Output OutputWriter
 }

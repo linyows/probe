@@ -1,0 +1,11 @@
+name: Failure Workflow
+description: Simple workflow that should fail
+jobs:
+- name: test-job
+  steps:
+  - name: Failure Step
+    uses: http
+    with:
+      url: https://httpbin.org
+      get: /status/404
+    test: res.code == 200
