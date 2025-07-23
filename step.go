@@ -276,31 +276,29 @@ func (st *Step) updateCtx(logs []map[string]any, req, res map[string]any, rt str
 
 func (st *Step) ShowRequestResponse(name string) {
 	fmt.Printf("--- Step %d: %s\nRequest:\n", st.idx, name)
-
-	for k, v := range st.ctx.Req {
-		nested, ok := v.(map[string]any)
-		if ok {
-			fmt.Printf("  %s:\n", k)
-			for kk, vv := range nested {
-				fmt.Printf("    %s: %#v\n", kk, vv)
-			}
-		} else {
-			fmt.Printf("  %s: %#v\n", k, v)
-		}
-	}
+	st.printMapData(st.ctx.Req)
+	
 	fmt.Printf("Response:\n")
+	st.printMapData(st.ctx.Res)
+	
+	fmt.Printf("RT: %s\n", colorWarning().Sprintf("%s", st.ctx.RT))
+}
 
-	for k, v := range st.ctx.Res {
-		nested, ok := v.(map[string]any)
-		if ok {
-			fmt.Printf("  %s:\n", k)
-			for kk, vv := range nested {
-				fmt.Printf("    %s: %#v\n", kk, vv)
-			}
+// printMapData prints map data with proper formatting for nested structures
+func (st *Step) printMapData(data map[string]any) {
+	for k, v := range data {
+		if nested, ok := v.(map[string]any); ok {
+			st.printNestedMap(k, nested)
 		} else {
 			fmt.Printf("  %s: %#v\n", k, v)
 		}
 	}
+}
 
-	fmt.Printf("RT: %s\n", colorWarning().Sprintf("%s", st.ctx.RT))
+// printNestedMap prints nested map data with indentation
+func (st *Step) printNestedMap(key string, nested map[string]any) {
+	fmt.Printf("  %s:\n", key)
+	for kk, vv := range nested {
+		fmt.Printf("    %s: %#v\n", kk, vv)
+	}
 }
