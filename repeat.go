@@ -66,6 +66,6 @@ func (i Interval) MarshalYAML() (interface{}, error) {
 
 // Repeat defines the repeat configuration for jobs
 type Repeat struct {
-	Count    int      `yaml:"count",validate:"required,gte=0,lt=100"`
+	Count    int      `yaml:"count" validate:"required,gte=0,lt=100"`
 	Interval Interval `yaml:"interval"`
 }
