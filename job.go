@@ -35,7 +35,7 @@ func (j *Job) Start(ctx JobContext) bool {
 	name, err := expr.EvalTemplate(j.Name, ctx)
 	if err != nil {
 		ctx.Output.PrintError("job name evaluation error: %v", err)
-		return true // return true indicates failure
+		return false
 	} else {
 		j.Name = name
 		// Only print job name if not repeating and not using buffering (to avoid duplicate output)
@@ -63,7 +63,7 @@ func (j *Job) Start(ctx JobContext) bool {
 		}
 	}
 
-	return j.ctx.Failed
+	return !j.ctx.Failed
 }
 
 type JobContext struct {

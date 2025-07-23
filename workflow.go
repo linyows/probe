@@ -1,6 +1,7 @@
 package probe
 
 
+
 type Workflow struct {
 	Name        string         `yaml:"name",validate:"required"`
 	Description string         `yaml:"description,omitempty"`
