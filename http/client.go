@@ -19,7 +19,7 @@ type TransportOptions struct {
 }
 
 type Req struct {
-	URL    string            `map:"url" validate"required"`
+	URL    string            `map:"url" validate:"required"`
 	Method string            `map:"method" validate:"required"`
 	Proto  string            `map:"ver"`
 	Header map[string]string `map:"headers"`
