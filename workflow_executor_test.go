@@ -20,7 +20,7 @@ func TestWorkflowExecutor_DependencyManagement(t *testing.T) {
 					Steps: []*Step{},
 				},
 				{
-					Name:  "job2", 
+					Name:  "job2",
 					Steps: []*Step{},
 				},
 			},
@@ -77,9 +77,9 @@ func TestWorkflowExecutor_DependencyManagement(t *testing.T) {
 				Jobs: tt.jobs,
 			}
 
-			config := Config{Verbose: false}
+			config := Config{Verbose: false, Output: NewSilentOutput()}
 			err := workflow.Start(config)
-			
+
 			if tt.expectError && err == nil {
 				t.Error("Expected error but got none")
 			}
@@ -110,7 +110,7 @@ func TestWorkflowExecutor_ParallelExecution(t *testing.T) {
 			},
 		}
 
-		config := Config{Verbose: false}
+		config := Config{Verbose: false, Output: NewSilentOutput()}
 		start := time.Now()
 		err := workflow.Start(config)
 		duration := time.Since(start)
@@ -149,7 +149,7 @@ func TestWorkflowExecutor_SequentialWithDependencies(t *testing.T) {
 			},
 		}
 
-		config := Config{Verbose: false}
+		config := Config{Verbose: false, Output: NewSilentOutput()}
 		err := workflow.Start(config)
 
 		if err != nil {
@@ -175,13 +175,13 @@ func TestWorkflowExecutor_BufferedOutput(t *testing.T) {
 			},
 		}
 
-		config := Config{Verbose: false}
+		config := Config{Verbose: false, Output: NewSilentOutput()}
 		err := workflow.Start(config)
 
 		if err != nil {
 			t.Errorf("Buffered execution should not error: %v", err)
 		}
-		
+
 		// With dependencies and multiple jobs, buffering should be used
 		// This test mainly verifies that the workflow completes successfully
 	})
@@ -203,7 +203,7 @@ func TestWorkflowExecutor_RepeatJobs(t *testing.T) {
 			},
 		}
 
-		config := Config{Verbose: false}
+		config := Config{Verbose: false, Output: NewSilentOutput()}
 		start := time.Now()
 		err := workflow.Start(config)
 		duration := time.Since(start)
@@ -251,7 +251,7 @@ func TestWorkflowExecutor_MixedScenarios(t *testing.T) {
 			},
 		}
 
-		config := Config{Verbose: false}
+		config := Config{Verbose: false, Output: NewSilentOutput()}
 		err := workflow.Start(config)
 
 		if err != nil {
@@ -279,7 +279,7 @@ func TestWorkflowExecutor_ErrorHandling(t *testing.T) {
 			},
 		}
 
-		config := Config{Verbose: false}
+		config := Config{Verbose: false, Output: NewSilentOutput()}
 		err := workflow.Start(config)
 
 		// Should complete without error even if dependency logic is exercised
@@ -314,11 +314,11 @@ func TestWorkflowExecutor_PrintDetailedResults(t *testing.T) {
 		}
 		workflowOutput.Jobs["test-job"] = jobOutput
 
-		output := NewOutput(false)
+		output := NewSilentOutput()
 
 		// This should not panic and should execute successfully
 		workflow.printDetailedResults(workflowOutput, output)
-		
+
 		// If we get here without panic, the test passes
 	})
 }

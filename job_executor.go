@@ -337,7 +337,7 @@ func (e *BufferedJobExecutor) printRepeatStepResults(ctx *JobContext, job *Job, 
 	r, wr, _ := os.Pipe()
 	os.Stdout = wr
 
-	output := NewOutput(ctx.Config.Verbose)
+	output := ctx.Output
 
 	for i, step := range job.Steps {
 		if counter, exists := ctx.StepCounters[i]; exists {

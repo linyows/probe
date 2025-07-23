@@ -288,3 +288,56 @@ func (o *Output) LogWarn(format string, args ...interface{}) {
 func (o *Output) LogError(format string, args ...interface{}) {
 	fmt.Fprintf(os.Stderr, "%s\n", colorError().Sprintf("[ERROR] %s", fmt.Sprintf(format, args...)))
 }
+
+// SilentOutput is a no-op implementation of OutputWriter for testing
+type SilentOutput struct{}
+
+// NewSilentOutput creates a new silent output writer for testing
+func NewSilentOutput() *SilentOutput {
+	return &SilentOutput{}
+}
+
+// PrintWorkflowHeader does nothing in silent mode
+func (s *SilentOutput) PrintWorkflowHeader(name, description string) {}
+
+// PrintJobName does nothing in silent mode
+func (s *SilentOutput) PrintJobName(name string) {}
+
+// PrintStepResult does nothing in silent mode
+func (s *SilentOutput) PrintStepResult(step StepResult) {}
+
+// PrintStepRepeatStart does nothing in silent mode
+func (s *SilentOutput) PrintStepRepeatStart(stepIdx int, stepName string, repeatCount int) {}
+
+// PrintStepRepeatResult does nothing in silent mode
+func (s *SilentOutput) PrintStepRepeatResult(stepIdx int, counter StepRepeatCounter, hasTest bool) {}
+
+// PrintJobResult does nothing in silent mode
+func (s *SilentOutput) PrintJobResult(jobName string, status StatusType, duration float64) {}
+
+// PrintJobOutput does nothing in silent mode
+func (s *SilentOutput) PrintJobOutput(output string) {}
+
+// PrintWorkflowSummary does nothing in silent mode
+func (s *SilentOutput) PrintWorkflowSummary(totalTime float64, successCount, totalJobs int) {}
+
+// PrintError does nothing in silent mode
+func (s *SilentOutput) PrintError(format string, args ...interface{}) {}
+
+// PrintVerbose does nothing in silent mode
+func (s *SilentOutput) PrintVerbose(format string, args ...interface{}) {}
+
+// PrintSeparator does nothing in silent mode
+func (s *SilentOutput) PrintSeparator() {}
+
+// LogDebug does nothing in silent mode
+func (s *SilentOutput) LogDebug(format string, args ...interface{}) {}
+
+// LogInfo does nothing in silent mode
+func (s *SilentOutput) LogInfo(format string, args ...interface{}) {}
+
+// LogWarn does nothing in silent mode
+func (s *SilentOutput) LogWarn(format string, args ...interface{}) {}
+
+// LogError does nothing in silent mode
+func (s *SilentOutput) LogError(format string, args ...interface{}) {}

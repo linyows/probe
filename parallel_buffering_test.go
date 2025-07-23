@@ -14,7 +14,7 @@ func TestParallelExecution_EdgeCases(t *testing.T) {
 			Jobs: []Job{},
 		}
 		
-		config := Config{Verbose: false}
+		config := Config{Verbose: false, Output: NewSilentOutput()}
 		err := workflow.Start(config)
 		
 		if err != nil {
@@ -33,7 +33,7 @@ func TestParallelExecution_EdgeCases(t *testing.T) {
 			},
 		}
 		
-		config := Config{Verbose: false}
+		config := Config{Verbose: false, Output: NewSilentOutput()}
 		err := workflow.Start(config)
 		
 		if err != nil {
@@ -56,7 +56,7 @@ func TestParallelExecution_EdgeCases(t *testing.T) {
 			Jobs: jobs,
 		}
 		
-		config := Config{Verbose: false}
+		config := Config{Verbose: false, Output: NewSilentOutput()}
 		start := time.Now()
 		err := workflow.Start(config)
 		duration := time.Since(start)
@@ -85,7 +85,7 @@ func TestBufferedExecution_EdgeCases(t *testing.T) {
 			},
 		}
 		
-		config := Config{Verbose: false}
+		config := Config{Verbose: false, Output: NewSilentOutput()}
 		err := workflow.Start(config)
 		
 		if err != nil {
@@ -114,7 +114,7 @@ func TestBufferedExecution_EdgeCases(t *testing.T) {
 			},
 		}
 		
-		config := Config{Verbose: false}
+		config := Config{Verbose: false, Output: NewSilentOutput()}
 		err := workflow.Start(config)
 		
 		if err != nil {
@@ -139,7 +139,7 @@ func TestRepeatExecution_EdgeCases(t *testing.T) {
 			},
 		}
 		
-		config := Config{Verbose: false}
+		config := Config{Verbose: false, Output: NewSilentOutput()}
 		start := time.Now()
 		err := workflow.Start(config)
 		duration := time.Since(start)
@@ -169,7 +169,7 @@ func TestRepeatExecution_EdgeCases(t *testing.T) {
 			},
 		}
 		
-		config := Config{Verbose: false}
+		config := Config{Verbose: false, Output: NewSilentOutput()}
 		start := time.Now()
 		err := workflow.Start(config)
 		duration := time.Since(start)
@@ -200,7 +200,7 @@ func TestRepeatExecution_EdgeCases(t *testing.T) {
 			},
 		}
 		
-		config := Config{Verbose: false}
+		config := Config{Verbose: false, Output: NewSilentOutput()}
 		err := workflow.Start(config)
 		
 		if err != nil {
@@ -225,7 +225,7 @@ func TestExecutor_ConcurrencyEdgeCases(t *testing.T) {
 			},
 		}
 		
-		config := Config{Verbose: false}
+		config := Config{Verbose: false, Output: NewSilentOutput()}
 		err := workflow.Start(config)
 		
 		if err != nil {
@@ -256,7 +256,7 @@ func TestExecutor_ConcurrencyEdgeCases(t *testing.T) {
 			},
 		}
 		
-		config := Config{Verbose: false}
+		config := Config{Verbose: false, Output: NewSilentOutput()}
 		err := workflow.Start(config)
 		
 		if err != nil {

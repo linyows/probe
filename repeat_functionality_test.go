@@ -59,7 +59,7 @@ func TestRepeatFunctionality_Intervals(t *testing.T) {
 				},
 			}
 
-			config := Config{Verbose: false}
+			config := Config{Verbose: false, Output: NewSilentOutput()}
 			start := time.Now()
 			err := workflow.Start(config)
 			duration := time.Since(start)
@@ -130,7 +130,7 @@ func TestRepeatFunctionality_DifferentTimeUnits(t *testing.T) {
 				},
 			}
 
-			config := Config{Verbose: false}
+			config := Config{Verbose: false, Output: NewSilentOutput()}
 			start := time.Now()
 			err = workflow.Start(config)
 			elapsed := time.Since(start)
@@ -174,7 +174,7 @@ func TestRepeatFunctionality_ParallelVsSequential(t *testing.T) {
 			},
 		}
 
-		config := Config{Verbose: false}
+		config := Config{Verbose: false, Output: NewSilentOutput()}
 		start := time.Now()
 		err := workflow.Start(config)
 		duration := time.Since(start)
@@ -215,7 +215,7 @@ func TestRepeatFunctionality_ParallelVsSequential(t *testing.T) {
 			},
 		}
 
-		config := Config{Verbose: false}
+		config := Config{Verbose: false, Output: NewSilentOutput()}
 		start := time.Now()
 		err := workflow.Start(config)
 		duration := time.Since(start)
@@ -249,7 +249,7 @@ func TestRepeatFunctionality_EdgeCases(t *testing.T) {
 			},
 		}
 
-		config := Config{Verbose: false}
+		config := Config{Verbose: false, Output: NewSilentOutput()}
 		err := workflow.Start(config)
 
 		// Should handle zero count gracefully (might not execute or execute once)
@@ -273,7 +273,7 @@ func TestRepeatFunctionality_EdgeCases(t *testing.T) {
 			},
 		}
 
-		config := Config{Verbose: false}
+		config := Config{Verbose: false, Output: NewSilentOutput()}
 		start := time.Now()
 		err := workflow.Start(config)
 		duration := time.Since(start)
@@ -305,7 +305,7 @@ func TestRepeatFunctionality_EdgeCases(t *testing.T) {
 			},
 		}
 
-		config := Config{Verbose: false}
+		config := Config{Verbose: false, Output: NewSilentOutput()}
 		err := workflow.Start(config)
 
 		// Should handle negative intervals gracefully (likely treat as zero)

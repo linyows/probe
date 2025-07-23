@@ -1,14 +1,13 @@
 package probe
 
 import (
-	"fmt"
 	"sync"
 	"time"
 )
 
 // Start executes the workflow with the given configuration
 func (w *Workflow) Start(c Config) error {
-	output := NewOutput(c.Verbose)
+	output := c.Output
 
 	// Print workflow header at the beginning
 	output.PrintWorkflowHeader(w.Name, w.Description)
@@ -134,7 +133,7 @@ func (w *Workflow) startWithDependencies(ctx JobContext) error {
 		return err
 	}
 
-	w.printResultsIfBuffered(workflowOutput, ctx.Verbose)
+	w.printResultsIfBuffered(workflowOutput, ctx.Output)
 	return nil
 }
 
@@ -269,16 +268,15 @@ func (w *Workflow) createJobExecutor(useBuffering bool) JobExecutor {
 }
 
 // printResultsIfBuffered prints detailed results if buffered output was used
-func (w *Workflow) printResultsIfBuffered(workflowOutput *WorkflowOutput, verbose bool) {
+func (w *Workflow) printResultsIfBuffered(workflowOutput *WorkflowOutput, output OutputWriter) {
 	if workflowOutput != nil {
-		output := NewOutput(verbose)
 		w.printDetailedResults(workflowOutput, output)
 	}
 }
 
 // printDetailedResults prints the final detailed results
 func (w *Workflow) printDetailedResults(wo *WorkflowOutput, output OutputWriter) {
-	fmt.Println()
+	output.LogInfo("")
 
 	totalTime := time.Duration(0)
 	successCount := 0
