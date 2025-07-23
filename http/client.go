@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"io"
 	hp "net/http"
 	"strconv"
 	"strings"
@@ -91,7 +91,7 @@ func (r *Req) Do() (*Result, error) {
 		Code:   res.StatusCode,
 	}
 
-	body, err := ioutil.ReadAll(res.Body)
+	body, err := io.ReadAll(res.Body)
 	if err != nil {
 		return result, err
 	}
