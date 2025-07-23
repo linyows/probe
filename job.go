@@ -29,41 +29,62 @@ func (j *Job) Start(ctx JobContext) bool {
 	j.ctx = &ctx
 	expr := &Expr{}
 
+	if err := j.processJobName(expr, ctx); err != nil {
+		return true // return true indicates failure
+	}
+
+	j.executeSteps(expr, ctx)
+	return j.ctx.Failed
+}
+
+// processJobName evaluates and sets the job name, printing it if appropriate
+func (j *Job) processJobName(expr *Expr, ctx JobContext) error {
 	if j.Name == "" {
 		j.Name = "Unknown Job"
 	}
+	
 	name, err := expr.EvalTemplate(j.Name, ctx)
 	if err != nil {
 		ctx.Output.PrintError("job name evaluation error: %v", err)
-		return true // return true indicates failure
-	} else {
-		j.Name = name
-		// Only print job name if not repeating and not using buffering (to avoid duplicate output)
-		if !ctx.IsRepeating && !ctx.UseBuffering {
-			ctx.Output.PrintJobName(name)
-		}
+		return err
 	}
+	
+	j.Name = name
+	// Only print job name if not repeating and not using buffering (to avoid duplicate output)
+	if !ctx.IsRepeating && !ctx.UseBuffering {
+		ctx.Output.PrintJobName(name)
+	}
+	
+	return nil
+}
 
-	var idx = 0
+// executeSteps runs all steps in the job, handling iterations appropriately
+func (j *Job) executeSteps(expr *Expr, ctx JobContext) {
+	idx := 0
 	for _, st := range j.Steps {
 		st.expr = expr
+		
 		if len(st.Iter) == 0 {
-			st.idx = idx
-			idx += 1
-			st.SetCtx(ctx, nil)
-			st.Do(&ctx)
-			continue
-		}
-		// NOTE: Split JobContext to ExprEnv
-		for _, vars := range st.Iter {
-			st.idx = idx
-			idx += 1
-			st.SetCtx(ctx, vars)
-			st.Do(&ctx)
+			j.executeStep(st, &idx, ctx, nil)
+		} else {
+			j.executeStepWithIterations(st, &idx, ctx)
 		}
 	}
+}
 
-	return j.ctx.Failed
+// executeStep executes a single step without iterations
+func (j *Job) executeStep(st *Step, idx *int, ctx JobContext, vars map[string]any) {
+	st.idx = *idx
+	*idx++
+	st.SetCtx(ctx, vars)
+	st.Do(&ctx)
+}
+
+// executeStepWithIterations executes a step multiple times with different variable sets
+func (j *Job) executeStepWithIterations(st *Step, idx *int, ctx JobContext) {
+	for _, vars := range st.Iter {
+		j.executeStep(st, idx, ctx, vars)
+	}
 }
 
 type JobContext struct {

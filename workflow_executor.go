@@ -44,164 +44,232 @@ func (w *Workflow) startParallel(ctx JobContext) error {
 	executor := NewParallelJobExecutor(w)
 
 	for _, job := range w.Jobs {
-		jobID := job.ID
-		if jobID == "" {
-			jobID = job.Name
-		}
-
-		config := ExecutionConfig{
-			UseBuffering:    false,
-			UseParallel:     true,
-			HasDependencies: false,
-		}
+		jobID := w.getJobID(job)
+		config := w.createParallelExecutionConfig()
 
 		// Handle jobs without repeat
 		if job.Repeat == nil {
-			wg.Add(1)
-			go func(j Job, jID string, jCtx JobContext) {
-				defer wg.Done()
-				result := executor.Execute(&j, jID, jCtx, config)
-				if !result.Success {
-					w.SetExitStatus(true)
-				}
-			}(job, jobID, ctx)
+			w.executeJobOnce(&wg, executor, job, jobID, ctx, config)
 			continue
 		}
 
-		// Handle jobs with repeat - create separate goroutines for each repetition
-		for i := 0; i < job.Repeat.Count; i++ {
-			wg.Add(1)
-			go func(j Job, jID string, jCtx JobContext, iteration int) {
-				defer wg.Done()
-				
-				// Set up context for this specific iteration
-				jCtx.IsRepeating = true
-				jCtx.RepeatTotal = j.Repeat.Count
-				jCtx.RepeatCurrent = iteration + 1
-				jCtx.StepCounters = make(map[int]StepRepeatCounter)
-				
-				// Execute single iteration
-				if !j.Start(jCtx) {
-					w.SetExitStatus(true)
-				}
-			}(job, jobID, ctx, i)
-			
-			// Sleep between repeat launches (except for the last one)
-			if i < job.Repeat.Count-1 {
-				time.Sleep(job.Repeat.Interval.Duration)
-			}
-		}
+		// Handle jobs with repeat
+		w.executeJobWithRepeat(&wg, job, jobID, ctx)
 	}
 
 	wg.Wait()
 	return nil
 }
 
+// getJobID returns the job ID, using job name if ID is not set
+func (w *Workflow) getJobID(job Job) string {
+	if job.ID != "" {
+		return job.ID
+	}
+	return job.Name
+}
+
+// createParallelExecutionConfig creates a configuration for parallel execution
+func (w *Workflow) createParallelExecutionConfig() ExecutionConfig {
+	return ExecutionConfig{
+		UseBuffering:    false,
+		UseParallel:     true,
+		HasDependencies: false,
+	}
+}
+
+// executeJobOnce executes a job once in a separate goroutine
+func (w *Workflow) executeJobOnce(wg *sync.WaitGroup, executor JobExecutor, job Job, jobID string, ctx JobContext, config ExecutionConfig) {
+	wg.Add(1)
+	go func(j Job, jID string, jCtx JobContext) {
+		defer wg.Done()
+		result := executor.Execute(&j, jID, jCtx, config)
+		if !result.Success {
+			w.SetExitStatus(true)
+		}
+	}(job, jobID, ctx)
+}
+
+// executeJobWithRepeat handles jobs with repeat - creates separate goroutines for each repetition
+func (w *Workflow) executeJobWithRepeat(wg *sync.WaitGroup, job Job, jobID string, ctx JobContext) {
+	for i := 0; i < job.Repeat.Count; i++ {
+		wg.Add(1)
+		go func(j Job, jID string, jCtx JobContext, iteration int) {
+			defer wg.Done()
+			
+			// Set up context for this specific iteration
+			jCtx.IsRepeating = true
+			jCtx.RepeatTotal = j.Repeat.Count
+			jCtx.RepeatCurrent = iteration + 1
+			jCtx.StepCounters = make(map[int]StepRepeatCounter)
+			
+			// Execute single iteration
+			if !j.Start(jCtx) {
+				w.SetExitStatus(true)
+			}
+		}(job, jobID, ctx, i)
+		
+		// Sleep between repeat launches (except for the last one)
+		if i < job.Repeat.Count-1 {
+			time.Sleep(job.Repeat.Interval.Duration)
+		}
+	}
+}
+
 // startWithDependencies executes jobs with dependency management
 func (w *Workflow) startWithDependencies(ctx JobContext) error {
+	scheduler, err := w.initializeJobScheduler()
+	if err != nil {
+		return err
+	}
+
+	workflowOutput := w.setupBufferedOutputIfNeeded()
+	
+	err = w.executeJobsWithDependencies(scheduler, ctx, workflowOutput)
+	if err != nil {
+		return err
+	}
+
+	w.printResultsIfBuffered(workflowOutput, ctx.Verbose)
+	return nil
+}
+
+// initializeJobScheduler creates and sets up the job scheduler with dependencies
+func (w *Workflow) initializeJobScheduler() (*JobScheduler, error) {
 	scheduler := NewJobScheduler()
 
 	// Add all jobs to scheduler
 	for i := range w.Jobs {
 		if err := scheduler.AddJob(&w.Jobs[i]); err != nil {
-			return err
+			return nil, err
 		}
 	}
 
 	// Validate dependencies
 	if err := scheduler.ValidateDependencies(); err != nil {
-		return err
+		return nil, err
 	}
 
-	// Use buffered output if multiple jobs
+	return scheduler, nil
+}
+
+// setupBufferedOutputIfNeeded creates workflow output for buffering if multiple jobs exist
+func (w *Workflow) setupBufferedOutputIfNeeded() *WorkflowOutput {
 	useBuffering := len(w.Jobs) > 1
-	var workflowOutput *WorkflowOutput
-	if useBuffering {
-		workflowOutput = NewWorkflowOutput()
-		// Initialize job outputs
-		for _, job := range w.Jobs {
-			jobID := job.ID
-			if jobID == "" {
-				jobID = job.Name
-			}
-			jo := &JobOutput{
-				JobName:   job.Name,
-				JobID:     jobID,
-				StartTime: time.Now(),
-			}
-			workflowOutput.Jobs[jobID] = jo
-		}
+	if !useBuffering {
+		return nil
 	}
 
-	// Execute jobs with dependency control and repeat support
+	workflowOutput := NewWorkflowOutput()
+	// Initialize job outputs
+	for _, job := range w.Jobs {
+		jobID := job.ID
+		if jobID == "" {
+			jobID = job.Name
+		}
+		jo := &JobOutput{
+			JobName:   job.Name,
+			JobID:     jobID,
+			StartTime: time.Now(),
+		}
+		workflowOutput.Jobs[jobID] = jo
+	}
+
+	return workflowOutput
+}
+
+// executeJobsWithDependencies runs the main job execution loop with dependency management
+func (w *Workflow) executeJobsWithDependencies(scheduler *JobScheduler, ctx JobContext, workflowOutput *WorkflowOutput) error {
+	useBuffering := workflowOutput != nil
+
 	for !scheduler.AllJobsCompleted() {
 		runnableJobs := scheduler.GetRunnableJobs()
 
 		if len(runnableJobs) == 0 {
-			// Check if there are pending jobs but none can run
-			// This might indicate failed dependencies
-			skippedJobs := scheduler.MarkJobsWithFailedDependencies()
-			// Update skipped jobs in workflow output
-			if useBuffering {
-				for _, jobID := range skippedJobs {
-					if jo, exists := workflowOutput.Jobs[jobID]; exists {
-						jo.mutex.Lock()
-						jo.EndTime = jo.StartTime // Set end time same as start time (0 duration)
-						jo.Status = "Skipped"
-						jo.Success = false
-						jo.mutex.Unlock()
-					}
-				}
+			if err := w.handleNoRunnableJobs(scheduler, workflowOutput); err != nil {
+				return err
 			}
-			if len(skippedJobs) == 0 {
-				// If no jobs were skipped, we might have a deadlock
-				time.Sleep(100 * time.Millisecond)
-				continue
-			}
+			continue
 		}
 
-		// Start all runnable jobs using unified executors
-		for _, jobID := range runnableJobs {
-			job := scheduler.jobs[jobID]
-			scheduler.SetJobStatus(jobID, JobRunning, false)
-			scheduler.wg.Add(1)
-
-			go func(j *Job, id string) {
-				defer scheduler.wg.Done()
-				
-				config := ExecutionConfig{
-					UseBuffering:     useBuffering,
-					UseParallel:      false,
-					HasDependencies:  true,
-					WorkflowOutput:   workflowOutput,
-					JobScheduler:     scheduler,
-				}
-
-				var executor JobExecutor
-				if useBuffering {
-					executor = NewBufferedJobExecutor(w)
-				} else {
-					executor = NewSequentialJobExecutor(w)
-				}
-
-				result := executor.Execute(j, id, ctx, config)
-				if !result.Success {
-					w.SetExitStatus(true)
-				}
-			}(job, jobID)
-		}
-
-		// Wait for current batch to complete
+		w.processRunnableJobs(runnableJobs, scheduler, ctx, useBuffering, workflowOutput)
 		scheduler.wg.Wait()
 	}
 
-	// Print detailed results if buffering was used
+	return nil
+}
+
+// handleNoRunnableJobs handles the case when no jobs can be run (failed dependencies or deadlock)
+func (w *Workflow) handleNoRunnableJobs(scheduler *JobScheduler, workflowOutput *WorkflowOutput) error {
+	skippedJobs := scheduler.MarkJobsWithFailedDependencies()
+	
+	// Update skipped jobs in workflow output
+	if workflowOutput != nil {
+		w.updateSkippedJobsOutput(skippedJobs, workflowOutput)
+	}
+	
+	if len(skippedJobs) == 0 {
+		// If no jobs were skipped, we might have a deadlock
+		time.Sleep(100 * time.Millisecond)
+	}
+	
+	return nil
+}
+
+// updateSkippedJobsOutput updates the output for jobs that were skipped due to failed dependencies
+func (w *Workflow) updateSkippedJobsOutput(skippedJobs []string, workflowOutput *WorkflowOutput) {
+	for _, jobID := range skippedJobs {
+		if jo, exists := workflowOutput.Jobs[jobID]; exists {
+			jo.mutex.Lock()
+			jo.EndTime = jo.StartTime // Set end time same as start time (0 duration)
+			jo.Status = "Skipped"
+			jo.Success = false
+			jo.mutex.Unlock()
+		}
+	}
+}
+
+// processRunnableJobs starts execution of all currently runnable jobs
+func (w *Workflow) processRunnableJobs(runnableJobs []string, scheduler *JobScheduler, ctx JobContext, useBuffering bool, workflowOutput *WorkflowOutput) {
+	for _, jobID := range runnableJobs {
+		job := scheduler.jobs[jobID]
+		scheduler.SetJobStatus(jobID, JobRunning, false)
+		scheduler.wg.Add(1)
+
+		go func(j *Job, id string) {
+			defer scheduler.wg.Done()
+			
+			config := ExecutionConfig{
+				UseBuffering:     useBuffering,
+				UseParallel:      false,
+				HasDependencies:  true,
+				WorkflowOutput:   workflowOutput,
+				JobScheduler:     scheduler,
+			}
+
+			executor := w.createJobExecutor(useBuffering)
+			result := executor.Execute(j, id, ctx, config)
+			if !result.Success {
+				w.SetExitStatus(true)
+			}
+		}(job, jobID)
+	}
+}
+
+// createJobExecutor creates the appropriate job executor based on buffering requirements
+func (w *Workflow) createJobExecutor(useBuffering bool) JobExecutor {
 	if useBuffering {
-		output := NewOutput(ctx.Verbose)
+		return NewBufferedJobExecutor(w)
+	}
+	return NewSequentialJobExecutor(w)
+}
+
+// printResultsIfBuffered prints detailed results if buffered output was used
+func (w *Workflow) printResultsIfBuffered(workflowOutput *WorkflowOutput, verbose bool) {
+	if workflowOutput != nil {
+		output := NewOutput(verbose)
 		w.printDetailedResults(workflowOutput, output)
 	}
-
-	return nil
 }
 
 // printDetailedResults prints the final detailed results
