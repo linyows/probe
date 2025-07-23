@@ -119,6 +119,7 @@ func (o *Output) PrintWorkflowHeader(name, description string) {
 		if description != "" {
 			colorDim().Printf("%s\n", description)
 		}
+		fmt.Println("")
 	}
 }
 
@@ -209,11 +210,13 @@ func (o *Output) PrintJobResult(jobName string, status StatusType, duration floa
 		statusStr = "Skipped"
 	}
 
-	fmt.Printf("%s%s (%s in %.2fs)\n",
-		statusColor.Sprint(statusIcon),
-		jobName,
+	dt := colorDim().Sprintf("(%s in %.2fs)",
 		statusStr,
 		duration)
+	fmt.Printf("%s%s %s\n",
+		statusColor.Sprint(statusIcon),
+		jobName,
+		dt)
 }
 
 // PrintJobOutput prints buffered job output
