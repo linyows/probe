@@ -104,8 +104,12 @@ func (w *Workflow) executeJobWithRepeat(wg *sync.WaitGroup, job Job, jobID strin
 			jCtx.StepCounters = make(map[int]StepRepeatCounter)
 			
 			// Execute single iteration
-			if !j.Start(jCtx) {
+			if err := j.Start(jCtx); err != nil {
 				w.SetExitStatus(true)
+				// Log error if verbose mode is enabled
+				if jCtx.Config.Verbose {
+					jCtx.Output.PrintError("Job execution failed: %v", err)
+				}
 			}
 		}(job, jobID, ctx, i)
 		

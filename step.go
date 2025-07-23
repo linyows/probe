@@ -49,8 +49,11 @@ func (st *Step) Do(jCtx *JobContext) {
 	expW := st.expr.EvalTemplateMap(st.With, st.ctx)
 	ret, err := RunActions(st.Uses, []string{}, expW, jCtx.Config.Verbose)
 	if err != nil {
-		st.err = err
-		jCtx.Output.PrintError("\"%s\" in %s-action -- %s", name, st.Uses, err)
+		actionErr := NewActionError("step_execute", "action execution failed", err).
+			WithContext("step_name", name).
+			WithContext("action_type", st.Uses)
+		st.err = actionErr
+		jCtx.Output.PrintError("Action execution failed: %v", actionErr)
 		jCtx.SetFailed()
 		return
 	}

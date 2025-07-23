@@ -55,7 +55,7 @@ func (b *Bulk) Deliver() {
 	fail := 0
 	for err := range errCh {
 		if err != nil {
-			//log.Printf("Send failed: %v", err)
+			log.Printf("Send failed: %v", err)
 			fail++
 		} else {
 			success++

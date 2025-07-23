@@ -50,17 +50,20 @@ func (p *Probe) ExitStatus() int {
 func (p *Probe) Load() error {
 	files, err := p.yamlFiles()
 	if err != nil {
-		return err
+		return NewFileError("load_yaml_files", "failed to locate YAML files", err).
+			WithContext("workflow_path", p.FilePath)
 	}
 	y, err := p.readYamlFiles(files)
 	if err != nil {
-		return err
+		return NewFileError("read_yaml_files", "failed to read YAML files", err).
+			WithContext("files", files)
 	}
 
 	v := validator.New()
 	dec := yaml.NewDecoder(bytes.NewReader([]byte(y)), yaml.Validator(v))
 	if err = dec.Decode(&p.workflow); err != nil {
-		return err
+		return NewConfigurationError("decode_yaml", "failed to decode YAML workflow", err).
+			WithContext("workflow_path", p.FilePath)
 	}
 
 	p.setDefaultsToSteps()
