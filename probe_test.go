@@ -27,7 +27,7 @@ func TestLoad(t *testing.T) {
 	if err != nil {
 		t.Errorf("file read error %s", err)
 	}
-	got, err := yaml.Marshal(p.workflow)
+	got, _ := yaml.Marshal(p.workflow)
 	if string(got) != string(expects) {
 		t.Errorf("\nExpected:\n%s\nGot:\n%s", expects, got)
 	}

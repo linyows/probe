@@ -601,7 +601,7 @@ func TestMail_Send_StartTLSHook(t *testing.T) {
 	}
 
 	// This will fail due to certificate issues, but hook should be called
-	mail.Send()
+	_ = mail.Send() // Intentionally ignoring error for test
 
 	if !hookCalled {
 		t.Error("expected testHookStartTLS to be called")
