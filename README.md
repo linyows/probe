@@ -1,9 +1,12 @@
-Probe
-=====
+<p align="right">English | <a href="https://github.com/linyows/probe/blob/main/README.ja.md">日本語</a></p>
+
+<br><br><br><br><br><br>
 
 <p align="center">
   <img alt="PROBE" src="https://github.com/linyows/probe/blob/main/misc/probe.svg" width="200">
 </p>
+
+<br><br><br><br><br><br>
 
 <p align="center">
   <a href="https://github.com/linyows/probe/actions/workflows/build.yml">
