@@ -112,6 +112,8 @@ type JobContext struct {
 	Output OutputWriter
 	// Step results storage: stepID -> results map
 	Results map[string]map[string]any `expr:"results"`
+	// Shared results across all jobs (pointer to workflow results)
+	SharedResults *SharedResults
 }
 
 func (j *JobContext) SetFailed() {
