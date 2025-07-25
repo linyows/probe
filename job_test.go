@@ -22,23 +22,23 @@ func TestJob_validateSteps(t *testing.T) {
 		{
 			name: "valid steps with results and id",
 			steps: []*Step{
-				{ID: "auth_step", Name: "Auth", Uses: "http", Results: map[string]string{"token": "{{ res.body.token }}"}},
+				{ID: "auth_step", Name: "Auth", Uses: "http", Outputs: map[string]string{"token": "{{ res.body.token }}"}},
 				{Name: "Simple step", Uses: "echo"},
 			},
 			expectErr: false,
 		},
 		{
-			name: "invalid: results without id",
+			name: "invalid: outputs without id",
 			steps: []*Step{
-				{Name: "Step with results but no id", Uses: "http", Results: map[string]string{"data": "{{ res.body }}"}},
+				{Name: "Step with outputs but no id", Uses: "http", Outputs: map[string]string{"data": "{{ res.body }}"}},
 			},
 			expectErr: true,
-			errMsg:    "step with results must have an 'id' field",
+			errMsg:    "step with outputs must have an 'id' field",
 		},
 		{
 			name: "invalid step id format - uppercase",
 			steps: []*Step{
-				{ID: "Auth_Step", Name: "Auth", Uses: "http", Results: map[string]string{"token": "{{ res.body.token }}"}},
+				{ID: "Auth_Step", Name: "Auth", Uses: "http", Outputs: map[string]string{"token": "{{ res.body.token }}"}},
 			},
 			expectErr: true,
 			errMsg:    "invalid step ID 'Auth_Step' - only [a-z0-9_-] characters are allowed",
@@ -46,7 +46,7 @@ func TestJob_validateSteps(t *testing.T) {
 		{
 			name: "invalid step id format - special chars",
 			steps: []*Step{
-				{ID: "auth@step", Name: "Auth", Uses: "http", Results: map[string]string{"token": "{{ res.body.token }}"}},
+				{ID: "auth@step", Name: "Auth", Uses: "http", Outputs: map[string]string{"token": "{{ res.body.token }}"}},
 			},
 			expectErr: true,
 			errMsg:    "invalid step ID 'auth@step' - only [a-z0-9_-] characters are allowed",
@@ -54,8 +54,8 @@ func TestJob_validateSteps(t *testing.T) {
 		{
 			name: "duplicate step ids",
 			steps: []*Step{
-				{ID: "auth_step", Name: "Auth 1", Uses: "http", Results: map[string]string{"token": "{{ res.body.token }}"}},
-				{ID: "auth_step", Name: "Auth 2", Uses: "http", Results: map[string]string{"data": "{{ res.body.data }}"}},
+				{ID: "auth_step", Name: "Auth 1", Uses: "http", Outputs: map[string]string{"token": "{{ res.body.token }}"}},
+				{ID: "auth_step", Name: "Auth 2", Uses: "http", Outputs: map[string]string{"data": "{{ res.body.data }}"}},
 			},
 			expectErr: true,
 			errMsg:    "duplicate step ID 'auth_step'",
@@ -63,9 +63,9 @@ func TestJob_validateSteps(t *testing.T) {
 		{
 			name: "valid step ids with allowed characters",
 			steps: []*Step{
-				{ID: "step_1", Name: "Step 1", Uses: "http", Results: map[string]string{"data": "{{ res.body }}"}},
-				{ID: "step-2", Name: "Step 2", Uses: "http", Results: map[string]string{"result": "{{ res.status }}"}},
-				{ID: "step3", Name: "Step 3", Uses: "http", Results: map[string]string{"count": "{{ res.body.count }}"}},
+				{ID: "step_1", Name: "Step 1", Uses: "http", Outputs: map[string]string{"data": "{{ res.body }}"}},
+				{ID: "step-2", Name: "Step 2", Uses: "http", Outputs: map[string]string{"result": "{{ res.status }}"}},
+				{ID: "step3", Name: "Step 3", Uses: "http", Outputs: map[string]string{"count": "{{ res.body.count }}"}},
 			},
 			expectErr: false,
 		},
