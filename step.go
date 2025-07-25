@@ -33,7 +33,7 @@ type Step struct {
 	Echo string           `yaml:"echo"`
 	Vars map[string]any   `yaml:"vars"`
 	Iter []map[string]any `yaml:"iter"`
-	Wait string           `yaml:"wait"`
+	Wait string           `yaml:"wait,omitempty"`
 	err  error
 	ctx  StepContext
 	idx  int
