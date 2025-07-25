@@ -1,35 +1,75 @@
 package probe
 
 import (
+	"io/ioutil"
 	"os"
 	"os/exec"
+	"strings"
 	"testing"
+	"time"
+
+	"github.com/linyows/probe/testserver"
 )
 
 func TestEndToEndExitCodes(t *testing.T) {
+	// Start local test server with dynamic port
+	server := testserver.NewTestServer(0) // 0 means use any available port
+	if err := server.Start(); err != nil {
+		t.Fatalf("failed to start test server: %v", err)
+	}
+	defer server.Stop()
+	
+	// Give server time to start
+	time.Sleep(100 * time.Millisecond)
+	
+	serverURL := server.URL()
+	t.Logf("Test server started at: %s", serverURL)
+
+	// Get server port for creating test workflow files
+	port := strings.Split(serverURL, ":")[2]
+
 	tests := []struct {
 		name         string
-		workflowPath string
+		templatePath string
 		expectedCode int
 	}{
 		{
 			name:         "success workflow returns exit code 0",
-			workflowPath: "testdata/success.yml",
+			templatePath: "testdata/success-localhost.yml",
 			expectedCode: 0,
 		},
 		{
 			name:         "failure workflow returns exit code 1",
-			workflowPath: "testdata/failure.yml",
+			templatePath: "testdata/failure-localhost.yml",
 			expectedCode: 1,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cmd := exec.Command("go", "run", "./cmd/probe", "--workflow", tt.workflowPath)
-			cmd.Env = os.Environ()
+			// Create temporary workflow file with correct port
+			templateContent, err := ioutil.ReadFile(tt.templatePath)
+			if err != nil {
+				t.Fatalf("failed to read template file: %v", err)
+			}
+			
+			workflowContent := strings.ReplaceAll(string(templateContent), "PORT_PLACEHOLDER", port)
+			
+			// Create temporary file
+			tmpFile, err := ioutil.TempFile("", "test-workflow-*.yml")
+			if err != nil {
+				t.Fatalf("failed to create temp file: %v", err)
+			}
+			defer os.Remove(tmpFile.Name())
+			
+			if _, err := tmpFile.WriteString(workflowContent); err != nil {
+				t.Fatalf("failed to write temp file: %v", err)
+			}
+			tmpFile.Close()
 
-			err := cmd.Run()
+			cmd := exec.Command("go", "run", "./cmd/probe", "--workflow", tmpFile.Name())
+			output, err := cmd.CombinedOutput()
+			t.Logf("Command output: %s", string(output))
 
 			var exitCode int
 			if err != nil {
