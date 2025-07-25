@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/linyows/probe"
@@ -55,8 +56,8 @@ func newCmd(args []string) *Cmd {
 
 	for _, arg := range args[1:] {
 		if strings.HasPrefix(arg, "-") && !c.isValid(arg) {
-			fmt.Printf("Unknown flag: %s\n", arg)
-			fmt.Println("try --help to know more")
+			fmt.Fprintf(os.Stderr, "[ERROR] Unknown flag: %s\n", arg)
+			fmt.Fprintf(os.Stderr, "[INFO] try --help to know more\n")
 			return nil
 		}
 	}
@@ -106,7 +107,7 @@ func (c *Cmd) start() int {
 	//case c.Lint:
 	//case c.Init:
 	case c.WorkflowPath == "":
-		fmt.Println("Error: workflow is required")
+		fmt.Fprintf(os.Stderr, "[ERROR] workflow is required\n")
 		return 1
 	default:
 		p := probe.New(c.WorkflowPath, c.Verbose)
@@ -114,7 +115,7 @@ func (c *Cmd) start() int {
 			p.Config.RT = true
 		}
 		if err := p.Do(); err != nil {
-			fmt.Printf("%v\n", err)
+			fmt.Fprintf(os.Stderr, "[ERROR] %v\n", err)
 		} else {
 			return p.ExitStatus()
 		}

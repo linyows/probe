@@ -113,7 +113,8 @@ func TestBufferedJobExecutor_PrintRepeatStepResults(t *testing.T) {
 				LastResult:   true,
 			},
 		},
-		Config: Config{Verbose: false},
+		Config: Config{Verbose: false, Output: NewOutput(false)},
+		Output: NewOutput(false),
 	}
 	
 	job := &Job{

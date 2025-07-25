@@ -2,7 +2,6 @@ package mail
 
 import (
 	"fmt"
-	"log"
 	"strings"
 	"sync"
 	"time"
@@ -55,14 +54,14 @@ func (b *Bulk) Deliver() {
 	fail := 0
 	for err := range errCh {
 		if err != nil {
-			log.Printf("Send failed: %v", err)
+			fmt.Printf("[ERROR] Send failed: %v\n", err)
 			fail++
 		} else {
 			success++
 		}
 	}
 	if fail > 0 {
-		log.Printf("Delivery complete. Success: %d, Failed: %d", success, fail)
+		fmt.Printf("[INFO] Delivery complete. Success: %d, Failed: %d\n", success, fail)
 	}
 }
 

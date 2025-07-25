@@ -80,14 +80,14 @@ func (st *Step) Do(jCtx *JobContext) {
 			jCtx.SetFailed()
 			return
 		}
-		st.ShowRequestResponse(name)
+		st.ShowRequestResponse(name, jCtx)
 		if st.Test != "" {
-			if ok := st.DoTestWithSequentialPrint(); !ok {
+			if ok := st.DoTestWithSequentialPrint(jCtx); !ok {
 				jCtx.SetFailed()
 			}
 		}
 		if st.Echo != "" {
-			st.DoEchoWithSequentialPrint()
+			st.DoEchoWithSequentialPrint(jCtx)
 		}
 		jCtx.Output.PrintSeparator()
 		return
@@ -193,20 +193,21 @@ func (st *Step) handleRepeatExecution(jCtx *JobContext, name, rt string, okrt bo
 
 	// Handle echo output
 	if st.Echo != "" {
-		st.DoEcho()
+		st.DoEcho(jCtx)
 	}
 }
 
-func (st *Step) DoTestWithSequentialPrint() bool {
+func (st *Step) DoTestWithSequentialPrint(jCtx *JobContext) bool {
 	exprOut, err := st.expr.Eval(st.Test, st.ctx)
 	if err != nil {
-		fmt.Printf("%s: %s\nInput: %s\n", colorError().Sprintf("Test Error"), err, st.Test)
+		jCtx.Output.LogError("Test Error: %s", err)
+		jCtx.Output.LogError("Input: %s", st.Test)
 		return false
 	}
 
 	boolOutput, boolOk := exprOut.(bool)
 	if !boolOk {
-		fmt.Printf("Test: `%s` = %s\n", st.Test, exprOut)
+		jCtx.Output.LogDebug("Test: `%s` = %s", st.Test, exprOut)
 		return false
 	}
 
@@ -214,17 +215,17 @@ func (st *Step) DoTestWithSequentialPrint() bool {
 	if !boolOutput {
 		boolResultStr = colorError().Sprintf("Failure")
 	}
-	fmt.Printf("Test: %s (input: %s, env: %#v)\n", boolResultStr, st.Test, st.ctx)
+	jCtx.Output.LogDebug("Test: %s (input: %s, env: %#v)", boolResultStr, st.Test, st.ctx)
 
 	return boolOutput
 }
 
-func (st *Step) DoEchoWithSequentialPrint() {
+func (st *Step) DoEchoWithSequentialPrint(jCtx *JobContext) {
 	exprOut, err := st.expr.Eval(st.Echo, st.ctx)
 	if err != nil {
-		fmt.Printf("%s: %#v (input: %s)\n", colorError().Sprintf("Echo Error"), err, st.Echo)
+		jCtx.Output.LogError("Echo Error: %#v (input: %s)", err, st.Echo)
 	} else {
-		fmt.Printf("Echo: %s\n", exprOut)
+		jCtx.Output.LogDebug("Echo: %s", exprOut)
 	}
 }
 
@@ -249,13 +250,13 @@ func (st *Step) DoTest() (string, bool) {
 	return "", true
 }
 
-func (st *Step) DoEcho() {
+func (st *Step) DoEcho(jCtx *JobContext) {
 	exprOut, err := st.expr.Eval(st.Echo, st.ctx)
 	if err != nil {
-		fmt.Printf("Echo\nerror: %#v\n", err)
+		jCtx.Output.LogError("Echo evaluation failed: %#v", err)
 	} else {
 		// 7 spaces
-		fmt.Printf("       %s\n", exprOut)
+		jCtx.Output.LogDebug("       %s", exprOut)
 	}
 }
 
@@ -277,31 +278,32 @@ func (st *Step) updateCtx(logs []map[string]any, req, res map[string]any, rt str
 	st.ctx.RT = rt
 }
 
-func (st *Step) ShowRequestResponse(name string) {
-	fmt.Printf("--- Step %d: %s\nRequest:\n", st.idx, name)
-	st.printMapData(st.ctx.Req)
+func (st *Step) ShowRequestResponse(name string, jCtx *JobContext) {
+	jCtx.Output.LogDebug("--- Step %d: %s", st.idx, name)
+	jCtx.Output.LogDebug("Request:")
+	st.printMapData(st.ctx.Req, jCtx)
 	
-	fmt.Printf("Response:\n")
-	st.printMapData(st.ctx.Res)
+	jCtx.Output.LogDebug("Response:")
+	st.printMapData(st.ctx.Res, jCtx)
 	
-	fmt.Printf("RT: %s\n", colorWarning().Sprintf("%s", st.ctx.RT))
+	jCtx.Output.LogDebug("RT: %s", colorWarning().Sprintf("%s", st.ctx.RT))
 }
 
 // printMapData prints map data with proper formatting for nested structures
-func (st *Step) printMapData(data map[string]any) {
+func (st *Step) printMapData(data map[string]any, jCtx *JobContext) {
 	for k, v := range data {
 		if nested, ok := v.(map[string]any); ok {
-			st.printNestedMap(k, nested)
+			st.printNestedMap(k, nested, jCtx)
 		} else {
-			fmt.Printf("  %s: %#v\n", k, v)
+			jCtx.Output.LogDebug("  %s: %#v", k, v)
 		}
 	}
 }
 
 // printNestedMap prints nested map data with indentation
-func (st *Step) printNestedMap(key string, nested map[string]any) {
-	fmt.Printf("  %s:\n", key)
+func (st *Step) printNestedMap(key string, nested map[string]any, jCtx *JobContext) {
+	jCtx.Output.LogDebug("  %s:", key)
 	for kk, vv := range nested {
-		fmt.Printf("    %s: %#v\n", kk, vv)
+		jCtx.Output.LogDebug("    %s: %#v", kk, vv)
 	}
 }

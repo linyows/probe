@@ -1,14 +1,13 @@
 package probe
 
 import (
-	"fmt"
 	"sync"
 	"time"
 )
 
 // Start executes the workflow with the given configuration
 func (w *Workflow) Start(c Config) error {
-	output := NewOutput(c.Verbose)
+	output := c.Output
 
 	// Print workflow header at the beginning
 	output.PrintWorkflowHeader(w.Name, w.Description)
@@ -96,13 +95,13 @@ func (w *Workflow) executeJobWithRepeat(wg *sync.WaitGroup, job Job, jobID strin
 		wg.Add(1)
 		go func(j Job, jID string, jCtx JobContext, iteration int) {
 			defer wg.Done()
-			
+
 			// Set up context for this specific iteration
 			jCtx.IsRepeating = true
 			jCtx.RepeatTotal = j.Repeat.Count
 			jCtx.RepeatCurrent = iteration + 1
 			jCtx.StepCounters = make(map[int]StepRepeatCounter)
-			
+
 			// Execute single iteration
 			if err := j.Start(jCtx); err != nil {
 				w.SetExitStatus(true)
@@ -112,7 +111,7 @@ func (w *Workflow) executeJobWithRepeat(wg *sync.WaitGroup, job Job, jobID strin
 				}
 			}
 		}(job, jobID, ctx, i)
-		
+
 		// Sleep between repeat launches (except for the last one)
 		if i < job.Repeat.Count-1 {
 			time.Sleep(job.Repeat.Interval.Duration)
@@ -128,13 +127,13 @@ func (w *Workflow) startWithDependencies(ctx JobContext) error {
 	}
 
 	workflowOutput := w.setupBufferedOutputIfNeeded()
-	
+
 	err = w.executeJobsWithDependencies(scheduler, ctx, workflowOutput)
 	if err != nil {
 		return err
 	}
 
-	w.printResultsIfBuffered(workflowOutput, ctx.Verbose)
+	w.printResultsIfBuffered(workflowOutput, ctx.Output)
 	return nil
 }
 
@@ -206,17 +205,17 @@ func (w *Workflow) executeJobsWithDependencies(scheduler *JobScheduler, ctx JobC
 // handleNoRunnableJobs handles the case when no jobs can be run (failed dependencies or deadlock)
 func (w *Workflow) handleNoRunnableJobs(scheduler *JobScheduler, workflowOutput *WorkflowOutput) error {
 	skippedJobs := scheduler.MarkJobsWithFailedDependencies()
-	
+
 	// Update skipped jobs in workflow output
 	if workflowOutput != nil {
 		w.updateSkippedJobsOutput(skippedJobs, workflowOutput)
 	}
-	
+
 	if len(skippedJobs) == 0 {
 		// If no jobs were skipped, we might have a deadlock
 		time.Sleep(100 * time.Millisecond)
 	}
-	
+
 	return nil
 }
 
@@ -242,13 +241,13 @@ func (w *Workflow) processRunnableJobs(runnableJobs []string, scheduler *JobSche
 
 		go func(j *Job, id string) {
 			defer scheduler.wg.Done()
-			
+
 			config := ExecutionConfig{
-				UseBuffering:     useBuffering,
-				UseParallel:      false,
-				HasDependencies:  true,
-				WorkflowOutput:   workflowOutput,
-				JobScheduler:     scheduler,
+				UseBuffering:    useBuffering,
+				UseParallel:     false,
+				HasDependencies: true,
+				WorkflowOutput:  workflowOutput,
+				JobScheduler:    scheduler,
 			}
 
 			executor := w.createJobExecutor(useBuffering)
@@ -269,17 +268,14 @@ func (w *Workflow) createJobExecutor(useBuffering bool) JobExecutor {
 }
 
 // printResultsIfBuffered prints detailed results if buffered output was used
-func (w *Workflow) printResultsIfBuffered(workflowOutput *WorkflowOutput, verbose bool) {
+func (w *Workflow) printResultsIfBuffered(workflowOutput *WorkflowOutput, output OutputWriter) {
 	if workflowOutput != nil {
-		output := NewOutput(verbose)
 		w.printDetailedResults(workflowOutput, output)
 	}
 }
 
 // printDetailedResults prints the final detailed results
 func (w *Workflow) printDetailedResults(wo *WorkflowOutput, output OutputWriter) {
-	fmt.Println()
-
 	totalTime := time.Duration(0)
 	successCount := 0
 
