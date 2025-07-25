@@ -135,30 +135,30 @@ func (o *Output) PrintJobName(name string) {
 // PrintStepResult prints the result of a single step execution
 func (o *Output) PrintStepResult(step StepResult) {
 	num := colorDim().Sprintf("%2d.", step.Index)
-	
+
 	// Add wait time indicator if present
 	waitPrefix := ""
 	if step.WaitTime != "" {
 		waitPrefix = colorDim().Sprintf("%s%s → ", IconWait, step.WaitTime)
 	}
-	
+
 	// Add response time suffix if present
 	ps := ""
 	if step.RT != "" {
 		ps = colorDim().Sprintf(" (%s)", step.RT)
 	}
 
-	output := fmt.Sprintf("%s %%s %s%s%s", num, waitPrefix, step.Name, ps)
+	var output string
 
 	switch step.Status {
 	case StatusSuccess:
-		output = fmt.Sprintf(output+"\n", colorSuccess().Sprintf(IconSuccess))
+		output = fmt.Sprintf("%s %s %s%s%s\n", num, colorSuccess().Sprintf(IconSuccess), waitPrefix, step.Name, ps)
 	case StatusError:
-		output = fmt.Sprintf(output+"\n"+step.TestOutput+"\n", colorError().Sprintf(IconError))
+		output = fmt.Sprintf("%s %s %s%s%s\n"+step.TestOutput+"\n", num, colorError().Sprintf(IconError), waitPrefix, step.Name, ps)
 	case StatusWarning:
-		output = fmt.Sprintf(output+"\n", colorWarning().Sprintf(IconWarning))
+		output = fmt.Sprintf("%s %s %s%s%s\n", num, colorWarning().Sprintf(IconWarning), waitPrefix, step.Name, ps)
 	case StatusSkipped:
-		output = fmt.Sprintf(output+"\n", colorDim().Sprintf(IconSkip))
+		output = fmt.Sprintf("%s %s %s%s%s\n", num, colorWarning().Sprintf(IconSkip), waitPrefix, colorDim().Sprintf("%s", step.Name), ps)
 	}
 
 	fmt.Print(output)
