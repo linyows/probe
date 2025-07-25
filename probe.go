@@ -22,7 +22,7 @@ type Config struct {
 	Log     io.Writer
 	Verbose bool
 	RT      bool
-	Output  OutputWriter
+	Printer PrintWriter
 }
 
 func New(path string, v bool) *Probe {
@@ -32,20 +32,20 @@ func New(path string, v bool) *Probe {
 			Log:     os.Stdout,
 			Verbose: v,
 			RT:      false,
-			Output:  NewOutput(v),
+			Printer:  NewPrinter(v),
 		},
 	}
 }
 
-// NewWithOutput creates a new Probe with a custom OutputWriter (useful for testing)
-func NewWithOutput(path string, v bool, output OutputWriter) *Probe {
+// NewWithPrinter creates a new Probe with a custom PrintWriter (useful for testing)
+func NewWithPrinter(path string, v bool, printer PrintWriter) *Probe {
 	return &Probe{
 		FilePath: path,
 		Config: Config{
 			Log:     os.Stdout,
 			Verbose: v,
 			RT:      false,
-			Output:  output,
+			Printer:  printer,
 		},
 	}
 }

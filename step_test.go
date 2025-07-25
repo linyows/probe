@@ -172,7 +172,7 @@ func TestStep_handleWait(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			step := &Step{Wait: tt.wait}
 			jCtx := &JobContext{
-				Output: &Output{},
+				Printer: &Printer{},
 			}
 
 			start := time.Now()
@@ -281,7 +281,7 @@ func TestStep_shouldSkip(t *testing.T) {
 				expr:   &Expr{},
 			}
 			jCtx := &JobContext{
-				Output: &Output{},
+				Printer: &Printer{},
 			}
 
 			result := step.shouldSkip(jCtx)

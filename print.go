@@ -49,8 +49,8 @@ const (
 	LogLevelError
 )
 
-// OutputWriter defines the interface for different output implementations
-type OutputWriter interface {
+// PrintWriter defines the interface for different print implementations
+type PrintWriter interface {
 	// Workflow level output
 	PrintWorkflowHeader(name, description string)
 	PrintJobName(name string)
@@ -103,20 +103,20 @@ type StepResult struct {
 	HasTest    bool
 }
 
-// Output implements OutputWriter for console output
-type Output struct {
+// Printer implements PrintWriter for console print
+type Printer struct {
 	verbose bool
 }
 
-// NewOutput creates a new console output writer
-func NewOutput(verbose bool) *Output {
-	return &Output{
+// NewPrinter creates a new console print writer
+func NewPrinter(verbose bool) *Printer {
+	return &Printer{
 		verbose: verbose,
 	}
 }
 
 // PrintWorkflowHeader prints the workflow name and description
-func (o *Output) PrintWorkflowHeader(name, description string) {
+func (p *Printer) PrintWorkflowHeader(name, description string) {
 	if name != "" {
 		bold := color.New(color.Bold)
 		bold.Printf("%s\n", name)
@@ -128,12 +128,12 @@ func (o *Output) PrintWorkflowHeader(name, description string) {
 }
 
 // PrintJobName prints the job name
-func (o *Output) PrintJobName(name string) {
+func (p *Printer) PrintJobName(name string) {
 	fmt.Printf("%s\n", name)
 }
 
 // PrintStepResult prints the result of a single step execution
-func (o *Output) PrintStepResult(step StepResult) {
+func (p *Printer) PrintStepResult(step StepResult) {
 	num := colorDim().Sprintf("%2d.", step.Index)
 
 	// Add wait time indicator if present
@@ -169,13 +169,13 @@ func (o *Output) PrintStepResult(step StepResult) {
 }
 
 // PrintStepRepeatStart prints the start of a repeated step execution
-func (o *Output) PrintStepRepeatStart(stepIdx int, stepName string, repeatCount int) {
+func (p *Printer) PrintStepRepeatStart(stepIdx int, stepName string, repeatCount int) {
 	num := colorDim().Sprintf("%2d.", stepIdx)
 	fmt.Printf("%s %s (repeating %d times)\n", num, stepName, repeatCount)
 }
 
 // PrintStepRepeatResult prints the final result of a repeated step execution
-func (o *Output) PrintStepRepeatResult(stepIdx int, counter StepRepeatCounter, hasTest bool) {
+func (p *Printer) PrintStepRepeatResult(stepIdx int, counter StepRepeatCounter, hasTest bool) {
 	if hasTest {
 		totalCount := counter.SuccessCount + counter.FailureCount
 		successRate := float64(counter.SuccessCount) / float64(totalCount) * 100
@@ -203,7 +203,7 @@ func (o *Output) PrintStepRepeatResult(stepIdx int, counter StepRepeatCounter, h
 }
 
 // PrintJobResult prints the result of a job execution
-func (o *Output) PrintJobResult(jobName string, status StatusType, duration float64) {
+func (p *Printer) PrintJobResult(jobName string, status StatusType, duration float64) {
 	statusColor := colorSuccess()
 	statusIcon := IconCircle
 
@@ -234,7 +234,7 @@ func (o *Output) PrintJobResult(jobName string, status StatusType, duration floa
 }
 
 // PrintJobOutput prints buffered job output
-func (o *Output) PrintJobOutput(output string) {
+func (p *Printer) PrintJobOutput(output string) {
 	output = strings.TrimSpace(output)
 	if output != "" {
 		lines := strings.Split(output, "\n")
@@ -252,7 +252,7 @@ func (o *Output) PrintJobOutput(output string) {
 }
 
 // PrintWorkflowSummary prints the workflow execution summary
-func (o *Output) PrintWorkflowSummary(totalTime float64, successCount, totalJobs int) {
+func (p *Printer) PrintWorkflowSummary(totalTime float64, successCount, totalJobs int) {
 	if successCount == totalJobs {
 		fmt.Printf("Total workflow time: %.2fs %s\n",
 			totalTime,
@@ -266,95 +266,95 @@ func (o *Output) PrintWorkflowSummary(totalTime float64, successCount, totalJobs
 }
 
 // PrintError prints an error message
-func (o *Output) PrintError(format string, args ...interface{}) {
+func (p *Printer) PrintError(format string, args ...interface{}) {
 	fmt.Printf("%s: %s\n", colorError().Sprintf("Error"), fmt.Sprintf(format, args...))
 }
 
 // PrintVerbose prints verbose output (only if verbose mode is enabled)
-func (o *Output) PrintVerbose(format string, args ...interface{}) {
-	if o.verbose {
+func (p *Printer) PrintVerbose(format string, args ...interface{}) {
+	if p.verbose {
 		fmt.Printf(format, args...)
 	}
 }
 
 // PrintSeparator prints a separator line for verbose output
-func (o *Output) PrintSeparator() {
-	if o.verbose {
+func (p *Printer) PrintSeparator() {
+	if p.verbose {
 		fmt.Println("- - -")
 	}
 }
 
 // LogDebug prints debug messages (only in verbose mode)
-func (o *Output) LogDebug(format string, args ...interface{}) {
-	if o.verbose {
+func (p *Printer) LogDebug(format string, args ...interface{}) {
+	if p.verbose {
 		fmt.Printf("[DEBUG] %s\n", fmt.Sprintf(format, args...))
 	}
 }
 
 // LogInfo prints informational messages
-func (o *Output) LogInfo(format string, args ...interface{}) {
+func (p *Printer) LogInfo(format string, args ...interface{}) {
 	fmt.Printf("[INFO] %s\n", fmt.Sprintf(format, args...))
 }
 
 // LogWarn prints warning messages to stderr
-func (o *Output) LogWarn(format string, args ...interface{}) {
+func (p *Printer) LogWarn(format string, args ...interface{}) {
 	fmt.Fprintf(os.Stderr, "%s\n", colorWarning().Sprintf("[WARN] %s", fmt.Sprintf(format, args...)))
 }
 
 // LogError prints error messages to stderr
-func (o *Output) LogError(format string, args ...interface{}) {
+func (p *Printer) LogError(format string, args ...interface{}) {
 	fmt.Fprintf(os.Stderr, "%s\n", colorError().Sprintf("[ERROR] %s", fmt.Sprintf(format, args...)))
 }
 
-// SilentOutput is a no-op implementation of OutputWriter for testing
-type SilentOutput struct{}
+// SilentPrinter is a no-op implementation of PrintWriter for testing
+type SilentPrinter struct{}
 
-// NewSilentOutput creates a new silent output writer for testing
-func NewSilentOutput() *SilentOutput {
-	return &SilentOutput{}
+// NewSilentPrinter creates a new silent print writer for testing
+func NewSilentPrinter() *SilentPrinter {
+	return &SilentPrinter{}
 }
 
 // PrintWorkflowHeader does nothing in silent mode
-func (s *SilentOutput) PrintWorkflowHeader(name, description string) {}
+func (s *SilentPrinter) PrintWorkflowHeader(name, description string) {}
 
 // PrintJobName does nothing in silent mode
-func (s *SilentOutput) PrintJobName(name string) {}
+func (s *SilentPrinter) PrintJobName(name string) {}
 
 // PrintStepResult does nothing in silent mode
-func (s *SilentOutput) PrintStepResult(step StepResult) {}
+func (s *SilentPrinter) PrintStepResult(step StepResult) {}
 
 // PrintStepRepeatStart does nothing in silent mode
-func (s *SilentOutput) PrintStepRepeatStart(stepIdx int, stepName string, repeatCount int) {}
+func (s *SilentPrinter) PrintStepRepeatStart(stepIdx int, stepName string, repeatCount int) {}
 
 // PrintStepRepeatResult does nothing in silent mode
-func (s *SilentOutput) PrintStepRepeatResult(stepIdx int, counter StepRepeatCounter, hasTest bool) {}
+func (s *SilentPrinter) PrintStepRepeatResult(stepIdx int, counter StepRepeatCounter, hasTest bool) {}
 
 // PrintJobResult does nothing in silent mode
-func (s *SilentOutput) PrintJobResult(jobName string, status StatusType, duration float64) {}
+func (s *SilentPrinter) PrintJobResult(jobName string, status StatusType, duration float64) {}
 
 // PrintJobOutput does nothing in silent mode
-func (s *SilentOutput) PrintJobOutput(output string) {}
+func (s *SilentPrinter) PrintJobOutput(output string) {}
 
 // PrintWorkflowSummary does nothing in silent mode
-func (s *SilentOutput) PrintWorkflowSummary(totalTime float64, successCount, totalJobs int) {}
+func (s *SilentPrinter) PrintWorkflowSummary(totalTime float64, successCount, totalJobs int) {}
 
 // PrintError does nothing in silent mode
-func (s *SilentOutput) PrintError(format string, args ...interface{}) {}
+func (s *SilentPrinter) PrintError(format string, args ...interface{}) {}
 
 // PrintVerbose does nothing in silent mode
-func (s *SilentOutput) PrintVerbose(format string, args ...interface{}) {}
+func (s *SilentPrinter) PrintVerbose(format string, args ...interface{}) {}
 
 // PrintSeparator does nothing in silent mode
-func (s *SilentOutput) PrintSeparator() {}
+func (s *SilentPrinter) PrintSeparator() {}
 
 // LogDebug does nothing in silent mode
-func (s *SilentOutput) LogDebug(format string, args ...interface{}) {}
+func (s *SilentPrinter) LogDebug(format string, args ...interface{}) {}
 
 // LogInfo does nothing in silent mode
-func (s *SilentOutput) LogInfo(format string, args ...interface{}) {}
+func (s *SilentPrinter) LogInfo(format string, args ...interface{}) {}
 
 // LogWarn does nothing in silent mode
-func (s *SilentOutput) LogWarn(format string, args ...interface{}) {}
+func (s *SilentPrinter) LogWarn(format string, args ...interface{}) {}
 
 // LogError does nothing in silent mode
-func (s *SilentOutput) LogError(format string, args ...interface{}) {}
+func (s *SilentPrinter) LogError(format string, args ...interface{}) {}

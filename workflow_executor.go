@@ -7,7 +7,7 @@ import (
 
 // Start executes the workflow with the given configuration
 func (w *Workflow) Start(c Config) error {
-	output := c.Output
+	output := c.Printer
 
 	// Print workflow header at the beginning
 	output.PrintWorkflowHeader(w.Name, w.Description)
@@ -112,7 +112,7 @@ func (w *Workflow) executeJobWithRepeat(wg *sync.WaitGroup, job Job, jobID strin
 				w.SetExitStatus(true)
 				// Log error if verbose mode is enabled
 				if jCtx.Config.Verbose {
-					jCtx.Output.PrintError("Job execution failed: %v", err)
+					jCtx.Printer.PrintError("Job execution failed: %v", err)
 				}
 			}
 		}(job, jobID, ctx, i)
@@ -138,7 +138,7 @@ func (w *Workflow) startWithDependencies(ctx JobContext) error {
 		return err
 	}
 
-	w.printResultsIfBuffered(workflowOutput, ctx.Output)
+	w.printResultsIfBuffered(workflowOutput, ctx.Printer)
 	return nil
 }
 
@@ -273,14 +273,14 @@ func (w *Workflow) createJobExecutor(useBuffering bool) JobExecutor {
 }
 
 // printResultsIfBuffered prints detailed results if buffered output was used
-func (w *Workflow) printResultsIfBuffered(workflowOutput *WorkflowOutput, output OutputWriter) {
+func (w *Workflow) printResultsIfBuffered(workflowOutput *WorkflowOutput, printer PrintWriter) {
 	if workflowOutput != nil {
-		w.printDetailedResults(workflowOutput, output)
+		w.printDetailedResults(workflowOutput, printer)
 	}
 }
 
 // printDetailedResults prints the final detailed results
-func (w *Workflow) printDetailedResults(wo *WorkflowOutput, output OutputWriter) {
+func (w *Workflow) printDetailedResults(wo *WorkflowOutput, printer PrintWriter) {
 	totalTime := time.Duration(0)
 	successCount := 0
 
@@ -308,13 +308,13 @@ func (w *Workflow) printDetailedResults(wo *WorkflowOutput, output OutputWriter)
 			successCount++
 		}
 
-		output.PrintJobResult(jo.JobName, status, duration.Seconds())
-		output.PrintJobOutput(jo.Buffer.String())
+		printer.PrintJobResult(jo.JobName, status, duration.Seconds())
+		printer.PrintJobOutput(jo.Buffer.String())
 
 		jo.mutex.Unlock()
 	}
 
 	// Print summary
 	totalJobs := len(wo.Jobs)
-	output.PrintWorkflowSummary(totalTime.Seconds(), successCount, totalJobs)
+	printer.PrintWorkflowSummary(totalTime.Seconds(), successCount, totalJobs)
 }

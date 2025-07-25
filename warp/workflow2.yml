@@ -1,0 +1,38 @@
+name: Same destination transmission experiment
+jobs:
+  - name: Send bulk mails from sender 1
+    steps:
+      - use: bulkmail
+        with:
+          addr: localhost:5871
+          from: alice@msa1.local
+          to: bob@mx1.local
+          my-hostname: msa1-local
+          subject: Experiment: Sender 1
+          session: 5
+          message: 10000
+          length: 800
+  - name: Send bulk mails from sender 2
+    steps:
+      - use: bulkmail
+        with:
+          addr: localhost:5872
+          from: carol@msa2.local
+          to: bob@mx1.local
+          my-hostname: msa2-local
+          subject: Experiment: Sender 2
+          session: 5
+          message: 10000
+          length: 800
+  - name: Send bulk mails from sender 3
+    steps:
+      - use: bulkmail
+        with:
+          addr: localhost:5873
+          from: mallory@msa3.local
+          to: bob@mx1.local
+          my-hostname: msa3-local
+          subject: Experiment: Sender 3
+          session: 5
+          message: 10000
+          length: 800

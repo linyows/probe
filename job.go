@@ -54,14 +54,14 @@ func (j *Job) processJobName(expr *Expr, ctx JobContext) error {
 
 	name, err := expr.EvalTemplate(j.Name, ctx)
 	if err != nil {
-		ctx.Output.PrintError("job name evaluation error: %v", err)
+		ctx.Printer.PrintError("job name evaluation error: %v", err)
 		return err
 	}
 
 	j.Name = name
 	// Only print job name if not repeating and not using buffering (to avoid duplicate output)
 	if !ctx.IsRepeating && !ctx.UseBuffering {
-		ctx.Output.PrintJobName(name)
+		ctx.Printer.PrintJobName(name)
 	}
 
 	return nil
@@ -108,8 +108,8 @@ type JobContext struct {
 	StepCounters  map[int]StepRepeatCounter // step index -> counter
 	// Output buffering
 	UseBuffering bool
-	// Output writer
-	Output OutputWriter
+	// Print writer
+	Printer PrintWriter
 	// Step results storage: stepID -> results map
 	Results map[string]map[string]any `expr:"results"`
 	// Shared results across all jobs (pointer to workflow results)

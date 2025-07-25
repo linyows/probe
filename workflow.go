@@ -96,7 +96,7 @@ func (w *Workflow) newJobContext(c Config, vars map[string]any) JobContext {
 		Vars:          vars,
 		Logs:          []map[string]any{},
 		Config:        c,
-		Output:        c.Output,
+		Printer:        c.Printer,
 		SharedResults: w.sharedResults,
 	}
 }

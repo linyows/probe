@@ -87,21 +87,21 @@ func TestRepeatNoTestDisplay(t *testing.T) {
 	}
 }
 
-// Output interface tests
-func TestNewOutput(t *testing.T) {
-	output := NewOutput(false)
-	if output == nil {
-		t.Error("NewOutput() should return a non-nil Output")
+// Printer interface tests
+func TestNewPrinter(t *testing.T) {
+	printer := NewPrinter(false)
+	if printer == nil {
+		t.Error("NewPrinter() should return a non-nil Printer")
 		return
 	}
 	
-	if output.verbose {
-		t.Error("NewOutput(false) should set verbose to false")
+	if printer.verbose {
+		t.Error("NewPrinter(false) should set verbose to false")
 	}
 	
-	verboseOutput := NewOutput(true)
-	if !verboseOutput.verbose {
-		t.Error("NewOutput(true) should set verbose to true")
+	verbosePrinter := NewPrinter(true)
+	if !verbosePrinter.verbose {
+		t.Error("NewPrinter(true) should set verbose to true")
 	}
 }
 

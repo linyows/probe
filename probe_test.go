@@ -17,7 +17,7 @@ func TestLoad(t *testing.T) {
 			Log:     os.Stdout,
 			Verbose: true,
 			RT:      false,
-			Output:  NewSilentOutput(),
+			Printer:  NewSilentPrinter(),
 		},
 	}
 	err := p.Load()
@@ -51,7 +51,7 @@ func TestNew(t *testing.T) {
 					Log:     os.Stdout,
 					Verbose: true,
 					RT:      false,
-					Output:  NewOutput(true),
+					Printer:  NewPrinter(true),
 				},
 			},
 		},
@@ -65,7 +65,7 @@ func TestNew(t *testing.T) {
 					Log:     os.Stdout,
 					Verbose: false,
 					RT:      false,
-					Output:  NewOutput(false),
+					Printer:  NewPrinter(false),
 				},
 			},
 		},
@@ -272,7 +272,7 @@ func TestLoadWithInvalidYaml(t *testing.T) {
 			Log:     io.Discard,
 			Verbose: false,
 			RT:      false,
-			Output:  NewSilentOutput(),
+			Printer:  NewSilentPrinter(),
 		},
 	}
 
@@ -321,7 +321,7 @@ func TestDoWithInvalidPath(t *testing.T) {
 			Log:     io.Discard,
 			Verbose: false,
 			RT:      false,
-			Output:  NewSilentOutput(),
+			Printer:  NewSilentPrinter(),
 		},
 	}
 
