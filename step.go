@@ -26,19 +26,21 @@ type StepRepeatCounter struct {
 }
 
 type Step struct {
-	Name string           `yaml:"name"`
-	Uses string           `yaml:"uses" validate:"required"`
-	With map[string]any   `yaml:"with"`
-	Test string           `yaml:"test"`
-	Echo string           `yaml:"echo"`
-	Vars   map[string]any   `yaml:"vars"`
-	Iter   []map[string]any `yaml:"iter"`
-	Wait   string           `yaml:"wait,omitempty"`
-	SkipIf string           `yaml:"skipif,omitempty"`
-	err  error
-	ctx  StepContext
-	idx  int
-	expr *Expr
+	Name    string             `yaml:"name"`
+	ID      string             `yaml:"id,omitempty"`
+	Uses    string             `yaml:"uses" validate:"required"`
+	With    map[string]any     `yaml:"with"`
+	Test    string             `yaml:"test"`
+	Echo    string             `yaml:"echo"`
+	Vars    map[string]any     `yaml:"vars"`
+	Iter    []map[string]any   `yaml:"iter"`
+	Wait    string             `yaml:"wait,omitempty"`
+	SkipIf  string             `yaml:"skipif,omitempty"`
+	Results map[string]string  `yaml:"results,omitempty"`
+	err     error
+	ctx     StepContext
+	idx     int
+	expr    *Expr
 }
 
 func (st *Step) Do(jCtx *JobContext) {
@@ -112,6 +114,9 @@ func (st *Step) Do(jCtx *JobContext) {
 		st.handleRepeatExecution(jCtx, name, rt, okrt)
 		return
 	}
+
+	// Save step results if defined
+	st.saveResults(jCtx)
 
 	// Create step result for output
 	stepResult := st.createStepResult(name, rt, okrt, jCtx)
@@ -468,5 +473,35 @@ func (st *Step) createSkippedStepResult(name string, jCtx *JobContext) StepResul
 		RT:       "",
 		WaitTime: st.getWaitTimeForDisplay(),
 		HasTest:  false,
+	}
+}
+
+// saveResults evaluates and saves step results to JobContext
+func (st *Step) saveResults(jCtx *JobContext) {
+	if len(st.Results) == 0 || st.ID == "" {
+		return // No results to save or no ID (should be caught by validation)
+	}
+
+	// Initialize Results map if needed
+	if jCtx.Results == nil {
+		jCtx.Results = make(map[string]map[string]any)
+	}
+
+	// Evaluate each result expression
+	results := make(map[string]any)
+	for resultName, resultExpr := range st.Results {
+		result, err := st.expr.Eval(resultExpr, st.ctx)
+		if err != nil {
+			jCtx.Output.PrintError("result '%s' evaluation error: %v", resultName, err)
+			continue // Skip this result but continue with others
+		}
+		results[resultName] = result
+	}
+
+	// Save results under step ID
+	jCtx.Results[st.ID] = results
+
+	if jCtx.Config.Verbose {
+		jCtx.Output.LogDebug("Step '%s' results saved: %v", st.ID, results)
 	}
 }
