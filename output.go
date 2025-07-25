@@ -36,6 +36,7 @@ const (
 	IconWarning = "▲ "
 	IconCircle  = "⏺ "
 	IconWait    = "🕐︎"
+	IconSkip    = "⏭ "
 )
 
 // LogLevel defines different logging levels
@@ -157,7 +158,7 @@ func (o *Output) PrintStepResult(step StepResult) {
 	case StatusWarning:
 		output = fmt.Sprintf(output+"\n", colorWarning().Sprintf(IconWarning))
 	case StatusSkipped:
-		output = fmt.Sprintf(output+"\n", colorDim().Sprintf("⏭ "))
+		output = fmt.Sprintf(output+"\n", colorDim().Sprintf(IconSkip))
 	}
 
 	fmt.Print(output)
