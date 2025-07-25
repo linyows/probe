@@ -31,9 +31,10 @@ type Step struct {
 	With map[string]any   `yaml:"with"`
 	Test string           `yaml:"test"`
 	Echo string           `yaml:"echo"`
-	Vars map[string]any   `yaml:"vars"`
-	Iter []map[string]any `yaml:"iter"`
-	Wait string           `yaml:"wait,omitempty"`
+	Vars   map[string]any   `yaml:"vars"`
+	Iter   []map[string]any `yaml:"iter"`
+	Wait   string           `yaml:"wait,omitempty"`
+	SkipIf string           `yaml:"skipif,omitempty"`
 	err  error
 	ctx  StepContext
 	idx  int
@@ -50,6 +51,12 @@ func (st *Step) Do(jCtx *JobContext) {
 	name, err := st.expr.EvalTemplate(st.Name, st.ctx)
 	if err != nil {
 		jCtx.Output.PrintError("step name evaluation error: %v", err)
+		return
+	}
+
+	// Check if step should be skipped
+	if st.shouldSkip(jCtx) {
+		st.handleSkip(name, jCtx)
 		return
 	}
 
@@ -378,4 +385,88 @@ func (st *Step) getWaitTimeForDisplay() string {
 	}
 
 	return st.formatWaitTime(duration)
+}
+
+// shouldSkip evaluates the skipif expression and returns true if step should be skipped
+func (st *Step) shouldSkip(jCtx *JobContext) bool {
+	if st.SkipIf == "" {
+		return false
+	}
+
+	result, err := st.expr.Eval(st.SkipIf, st.ctx)
+	if err != nil {
+		jCtx.Output.PrintError("skipif evaluation error: %v", err)
+		return false // Don't skip on evaluation error
+	}
+
+	boolResult, ok := result.(bool)
+	if !ok {
+		jCtx.Output.PrintError("skipif expression must return boolean, got: %T", result)
+		return false // Don't skip on type error
+	}
+
+	return boolResult
+}
+
+// handleSkip handles the skipped step logic
+func (st *Step) handleSkip(name string, jCtx *JobContext) {
+	if jCtx.Config.Verbose {
+		jCtx.Output.LogDebug("--- Step %d: %s (SKIPPED)", st.idx, name)
+		jCtx.Output.LogDebug("Skip condition: %s", st.SkipIf)
+		jCtx.Output.PrintSeparator()
+		return
+	}
+
+	// Handle repeat execution for skipped steps
+	if jCtx.IsRepeating {
+		st.handleSkipRepeatExecution(jCtx, name)
+		return
+	}
+
+	// Create step result for skipped step
+	stepResult := st.createSkippedStepResult(name, jCtx)
+	jCtx.Output.PrintStepResult(stepResult)
+}
+
+// handleSkipRepeatExecution handles skipped step in repeat mode
+func (st *Step) handleSkipRepeatExecution(jCtx *JobContext, name string) {
+	// Initialize counter if first execution
+	counter, exists := jCtx.StepCounters[st.idx]
+	if !exists {
+		counter = StepRepeatCounter{
+			Name: name,
+		}
+	}
+
+	// Count as successful (skipped is not a failure)
+	counter.SuccessCount++
+	counter.LastResult = true
+
+	// Store updated counter
+	jCtx.StepCounters[st.idx] = counter
+
+	// Display on first execution and final execution only
+	totalCount := counter.SuccessCount + counter.FailureCount
+	isFirstExecution := totalCount == 1
+	isFinalExecution := jCtx.RepeatCurrent == jCtx.RepeatTotal
+
+	if isFirstExecution {
+		jCtx.Output.PrintStepRepeatStart(st.idx, name+" (SKIPPED)", jCtx.RepeatTotal)
+	}
+	
+	if isFinalExecution {
+		jCtx.Output.PrintStepRepeatResult(st.idx, counter, false) // hasTest = false for skipped
+	}
+}
+
+// createSkippedStepResult creates a StepResult for a skipped step
+func (st *Step) createSkippedStepResult(name string, jCtx *JobContext) StepResult {
+	return StepResult{
+		Index:    st.idx,
+		Name:     name + " (SKIPPED)",
+		Status:   StatusSkipped,
+		RT:       "",
+		WaitTime: st.getWaitTimeForDisplay(),
+		HasTest:  false,
+	}
 }
