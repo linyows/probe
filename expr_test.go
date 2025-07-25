@@ -360,20 +360,22 @@ func TestValueSanitization(t *testing.T) {
 	expr := &Expr{}
 
 	t.Run("truncates long strings", func(t *testing.T) {
-		longString := strings.Repeat("a", 10001)
+		longString := strings.Repeat("a", 1000001)
 		result := expr.sanitizeValue(longString)
 		resultStr := result.(string)
 
-		// The actual truncation includes "...[truncated]" suffix which adds extra chars
-		if len(resultStr) <= 10000 {
+		// The actual truncation includes truncation message suffix which adds extra chars
+		if len(resultStr) <= 1000000 {
 			t.Errorf("string appears not to be long enough to test truncation, got %d chars", len(resultStr))
 		}
-		if !strings.Contains(resultStr, "...[truncated]") {
+		if !strings.Contains(resultStr, "⚠︎ probe truncated") {
 			t.Errorf("truncated string should contain truncation marker")
 		}
-		// Check that the original long part was truncated
-		if len(strings.Replace(resultStr, "...[truncated]", "", 1)) > 10000 {
-			t.Errorf("string content should be truncated to 10000 chars")
+		// Check that the original long part was truncated to maxStringLength
+		truncationMsg := getTruncationMessage()
+		originalContent := strings.Replace(resultStr, truncationMsg, "", 1)
+		if len(originalContent) > 1000000 {
+			t.Errorf("string content should be truncated to %d chars, got %d", 1000000, len(originalContent))
 		}
 	})
 
