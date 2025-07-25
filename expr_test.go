@@ -2,6 +2,7 @@ package probe
 
 import (
 	"reflect"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -359,20 +360,22 @@ func TestValueSanitization(t *testing.T) {
 	expr := &Expr{}
 
 	t.Run("truncates long strings", func(t *testing.T) {
-		longString := strings.Repeat("a", 10001)
+		longString := strings.Repeat("a", 1000001)
 		result := expr.sanitizeValue(longString)
 		resultStr := result.(string)
 
-		// The actual truncation includes "...[truncated]" suffix which adds extra chars
-		if len(resultStr) <= 10000 {
+		// The actual truncation includes truncation message suffix which adds extra chars
+		if len(resultStr) <= 1000000 {
 			t.Errorf("string appears not to be long enough to test truncation, got %d chars", len(resultStr))
 		}
-		if !strings.Contains(resultStr, "...[truncated]") {
+		if !strings.Contains(resultStr, "⚠︎ probe truncated") {
 			t.Errorf("truncated string should contain truncation marker")
 		}
-		// Check that the original long part was truncated
-		if len(strings.Replace(resultStr, "...[truncated]", "", 1)) > 10000 {
-			t.Errorf("string content should be truncated to 10000 chars")
+		// Check that the original long part was truncated to maxStringLength
+		truncationMsg := getTruncationMessage()
+		originalContent := strings.Replace(resultStr, truncationMsg, "", 1)
+		if len(originalContent) > 1000000 {
+			t.Errorf("string content should be truncated to %d chars, got %d", 1000000, len(originalContent))
 		}
 	})
 
@@ -446,6 +449,334 @@ func TestTimeoutProtection(t *testing.T) {
 		}
 		if duration > time.Second {
 			t.Errorf("simple expression took too long: %v", duration)
+		}
+	})
+}
+
+func TestNewCustomFunctions(t *testing.T) {
+	expr := &Expr{}
+	env := map[string]any{}
+
+	t.Run("random_int", func(t *testing.T) {
+		tests := []struct {
+			name      string
+			input     string
+			expectErr bool
+		}{
+			{
+				name:      "valid random_int with positive integer",
+				input:     "random_int(100)",
+				expectErr: false,
+			},
+			{
+				name:      "valid random_int with float64 (common in JSON)",
+				input:     "random_int(100.0)",
+				expectErr: false,
+			},
+			{
+				name:      "invalid random_int with zero",
+				input:     "random_int(0)",
+				expectErr: true,
+			},
+			{
+				name:      "invalid random_int with negative",
+				input:     "random_int(-1)",
+				expectErr: true,
+			},
+			{
+				name:      "invalid random_int with string",
+				input:     "random_int('100')",
+				expectErr: true,
+			},
+			{
+				name:      "invalid random_int with no params",
+				input:     "random_int()",
+				expectErr: true,
+			},
+			{
+				name:      "invalid random_int with multiple params",
+				input:     "random_int(100, 200)",
+				expectErr: true,
+			},
+		}
+
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				result, err := expr.Eval(tt.input, env)
+				if tt.expectErr {
+					if err == nil {
+						t.Errorf("expected error but got none")
+					}
+					return
+				}
+				if err != nil {
+					t.Errorf("unexpected error: %v", err)
+					return
+				}
+				
+				// Check result is integer and in valid range
+				if val, ok := result.(int); ok {
+					if tt.input == "random_int(100)" || tt.input == "random_int(100.0)" {
+						if val < 0 || val >= 100 {
+							t.Errorf("random_int(100) returned %d, expected 0 <= result < 100", val)
+						}
+					}
+				} else {
+					t.Errorf("expected int result, got %T", result)
+				}
+			})
+		}
+	})
+
+	t.Run("random_str", func(t *testing.T) {
+		tests := []struct {
+			name      string
+			input     string
+			expectErr bool
+			length    int
+		}{
+			{
+				name:      "valid random_str with positive length",
+				input:     "random_str(10)",
+				expectErr: false,
+				length:    10,
+			},
+			{
+				name:      "valid random_str with float64",
+				input:     "random_str(5.0)",
+				expectErr: false,
+				length:    5,
+			},
+			{
+				name:      "valid random_str with large length",
+				input:     "random_str(10000)",
+				expectErr: false,
+				length:    10000,
+			},
+			{
+				name:      "invalid random_str with zero",
+				input:     "random_str(0)",
+				expectErr: true,
+			},
+			{
+				name:      "invalid random_str with negative",
+				input:     "random_str(-1)",
+				expectErr: true,
+			},
+			{
+				name:      "invalid random_str too long",
+				input:     "random_str(1000001)",
+				expectErr: true,
+			},
+			{
+				name:      "invalid random_str with string",
+				input:     "random_str('10')",
+				expectErr: true,
+			},
+			{
+				name:      "invalid random_str with no params",
+				input:     "random_str()",
+				expectErr: true,
+			},
+			{
+				name:      "invalid random_str with multiple params",
+				input:     "random_str(10, 20)",
+				expectErr: true,
+			},
+		}
+
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				result, err := expr.Eval(tt.input, env)
+				if tt.expectErr {
+					if err == nil {
+						t.Errorf("expected error but got none")
+					}
+					return
+				}
+				if err != nil {
+					t.Errorf("unexpected error: %v", err)
+					return
+				}
+				
+				// Check result is string with correct length
+				if str, ok := result.(string); ok {
+					if len(str) != tt.length {
+						t.Errorf("random_str(%d) returned string of length %d, expected %d", tt.length, len(str), tt.length)
+					}
+					
+					// Check charset (alphanumeric)
+					matched, err := regexp.MatchString("^[a-zA-Z0-9]+$", str)
+					if err != nil {
+						t.Errorf("regex error: %v", err)
+					}
+					if !matched {
+						t.Errorf("random_str returned invalid characters: %s", str)
+					}
+				} else {
+					t.Errorf("expected string result, got %T", result)
+				}
+			})
+		}
+	})
+
+	t.Run("unixtime", func(t *testing.T) {
+		tests := []struct {
+			name      string
+			input     string
+			expectErr bool
+		}{
+			{
+				name:      "valid unixtime with no params",
+				input:     "unixtime()",
+				expectErr: false,
+			},
+			{
+				name:      "invalid unixtime with params",
+				input:     "unixtime(123)",
+				expectErr: true,
+			},
+			{
+				name:      "invalid unixtime with string param",
+				input:     "unixtime('now')",
+				expectErr: true,
+			},
+		}
+
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				beforeCall := time.Now().Unix()
+				result, err := expr.Eval(tt.input, env)
+				afterCall := time.Now().Unix()
+				
+				if tt.expectErr {
+					if err == nil {
+						t.Errorf("expected error but got none")
+					}
+					return
+				}
+				if err != nil {
+					t.Errorf("unexpected error: %v", err)
+					return
+				}
+				
+				// Check result is int64 and reasonable timestamp
+				if val, ok := result.(int64); ok {
+					if val < beforeCall || val > afterCall {
+						t.Errorf("unixtime() returned %d, expected between %d and %d", val, beforeCall, afterCall)
+					}
+				} else {
+					t.Errorf("expected int64 result, got %T", result)
+				}
+			})
+		}
+	})
+
+	t.Run("template evaluation with custom functions", func(t *testing.T) {
+		tests := []struct {
+			name     string
+			template string
+		}{
+			{
+				name:     "random_int in template",
+				template: "User ID: {random_int(9999)}",
+			},
+			{
+				name:     "random_str in template",
+				template: "Session: {random_str(16)}",
+			},
+			{
+				name:     "unixtime in template",
+				template: "Timestamp: {unixtime()}",
+			},
+			{
+				name:     "multiple functions in template",
+				template: "ID: {random_int(1000)}, Token: {random_str(8)}, Time: {unixtime()}",
+			},
+		}
+
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				result, err := expr.EvalTemplate(tt.template, env)
+				if err != nil {
+					t.Errorf("unexpected error: %v", err)
+					return
+				}
+				
+				// Basic validation that template was processed
+				if result == tt.template {
+					t.Errorf("template was not processed: %s", result)
+				}
+				
+				// Check that placeholders were replaced
+				if regexp.MustCompile(`\{[^}]+\}`).MatchString(result) {
+					t.Errorf("template still contains unreplaced placeholders: %s", result)
+				}
+			})
+		}
+	})
+}
+
+func TestNewCustomFunctionsEdgeCases(t *testing.T) {
+	expr := &Expr{}
+	env := map[string]any{}
+
+	t.Run("random_int boundary values", func(t *testing.T) {
+		// Test with 1 (smallest valid value)
+		result, err := expr.Eval("random_int(1)", env)
+		if err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+		if val, ok := result.(int); ok {
+			if val != 0 {
+				t.Errorf("random_int(1) should always return 0, got %d", val)
+			}
+		}
+
+		// Test with 2 (returns 0 or 1)
+		result, err = expr.Eval("random_int(2)", env)
+		if err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+		if val, ok := result.(int); ok {
+			if val < 0 || val >= 2 {
+				t.Errorf("random_int(2) returned %d, expected 0 or 1", val)
+			}
+		}
+	})
+
+	t.Run("random_str boundary values", func(t *testing.T) {
+		// Test with 1 (smallest valid length)
+		result, err := expr.Eval("random_str(1)", env)
+		if err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+		if str, ok := result.(string); ok {
+			if len(str) != 1 {
+				t.Errorf("random_str(1) returned string of length %d, expected 1", len(str))
+			}
+		}
+	})
+
+	t.Run("unixtime consistency", func(t *testing.T) {
+		// Call unixtime multiple times in quick succession
+		results := make([]int64, 3)
+		for i := 0; i < 3; i++ {
+			result, err := expr.Eval("unixtime()", env)
+			if err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
+			if val, ok := result.(int64); ok {
+				results[i] = val
+			}
+		}
+
+		// All results should be within a reasonable time range (same second or consecutive seconds)
+		for i := 1; i < len(results); i++ {
+			diff := results[i] - results[i-1]
+			if diff < 0 || diff > 1 {
+				t.Errorf("unixtime() calls returned inconsistent results: %v", results)
+			}
 		}
 	})
 }
