@@ -193,3 +193,128 @@ func TestStep_handleWait(t *testing.T) {
 		})
 	}
 }
+
+func TestStep_shouldSkip(t *testing.T) {
+	tests := []struct {
+		name     string
+		skipif   string
+		context  StepContext
+		expected bool
+		hasError bool
+	}{
+		{
+			name:     "no skipif condition",
+			skipif:   "",
+			context:  StepContext{},
+			expected: false,
+			hasError: false,
+		},
+		{
+			name:   "skipif returns true",
+			skipif: "true",
+			context: StepContext{
+				Vars: map[string]any{},
+			},
+			expected: true,
+			hasError: false,
+		},
+		{
+			name:   "skipif returns false",
+			skipif: "false",
+			context: StepContext{
+				Vars: map[string]any{},
+			},
+			expected: false,
+			hasError: false,
+		},
+		{
+			name:   "skipif with variable condition - skip",
+			skipif: `vars.env == "production"`,
+			context: StepContext{
+				Vars: map[string]any{
+					"env": "production",
+				},
+			},
+			expected: true,
+			hasError: false,
+		},
+		{
+			name:   "skipif with variable condition - don't skip",
+			skipif: `vars.env == "production"`,
+			context: StepContext{
+				Vars: map[string]any{
+					"env": "development",
+				},
+			},
+			expected: false,
+			hasError: false,
+		},
+		{
+			name:   "skipif with empty variable condition",
+			skipif: `vars.url == ""`,
+			context: StepContext{
+				Vars: map[string]any{
+					"url": "",
+				},
+			},
+			expected: true,
+			hasError: false,
+		},
+		{
+			name:   "skipif with contains condition",
+			skipif: `vars.url contains "production"`,
+			context: StepContext{
+				Vars: map[string]any{
+					"url": "https://production.example.com",
+				},
+			},
+			expected: true,
+			hasError: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			step := &Step{
+				SkipIf: tt.skipif,
+				ctx:    tt.context,
+				expr:   &Expr{},
+			}
+			jCtx := &JobContext{
+				Output: &Output{},
+			}
+
+			result := step.shouldSkip(jCtx)
+			if result != tt.expected {
+				t.Errorf("shouldSkip() = %v, want %v", result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestStep_createSkippedStepResult(t *testing.T) {
+	step := &Step{
+		idx:  1,
+		Wait: "2s",
+	}
+	jCtx := &JobContext{}
+	name := "Test Step"
+
+	result := step.createSkippedStepResult(name, jCtx)
+
+	if result.Index != 1 {
+		t.Errorf("Index = %v, want %v", result.Index, 1)
+	}
+	if result.Name != "Test Step (SKIPPED)" {
+		t.Errorf("Name = %v, want %v", result.Name, "Test Step (SKIPPED)")
+	}
+	if result.Status != StatusSkipped {
+		t.Errorf("Status = %v, want %v", result.Status, StatusSkipped)
+	}
+	if result.WaitTime != "2s" {
+		t.Errorf("WaitTime = %v, want %v", result.WaitTime, "2s")
+	}
+	if result.HasTest != false {
+		t.Errorf("HasTest = %v, want %v", result.HasTest, false)
+	}
+}
