@@ -53,7 +53,7 @@ func (st *Step) Do(jCtx *JobContext) {
 	st.handleWait(jCtx)
 	name, err := st.expr.EvalTemplate(st.Name, st.ctx)
 	if err != nil {
-		jCtx.Output.PrintError("step name evaluation error: %v", err)
+		jCtx.Printer.PrintError("step name evaluation error: %v", err)
 		return
 	}
 
@@ -70,7 +70,7 @@ func (st *Step) Do(jCtx *JobContext) {
 			WithContext("step_name", name).
 			WithContext("action_type", st.Uses)
 		st.err = actionErr
-		jCtx.Output.PrintError("Action execution failed: %v", actionErr)
+		jCtx.Printer.PrintError("Action execution failed: %v", actionErr)
 		jCtx.SetFailed()
 		return
 	}
@@ -93,7 +93,7 @@ func (st *Step) Do(jCtx *JobContext) {
 
 	if jCtx.Config.Verbose {
 		if !okreq || !okres {
-			jCtx.Output.PrintVerbose("sorry, request or response is nil")
+			jCtx.Printer.PrintVerbose("sorry, request or response is nil")
 			jCtx.SetFailed()
 			return
 		}
@@ -110,7 +110,7 @@ func (st *Step) Do(jCtx *JobContext) {
 		// Save step results even in verbose mode
 		st.saveResults(jCtx)
 		
-		jCtx.Output.PrintSeparator()
+		jCtx.Printer.PrintSeparator()
 		return
 	}
 
@@ -125,7 +125,7 @@ func (st *Step) Do(jCtx *JobContext) {
 
 	// Create step result for output
 	stepResult := st.createStepResult(name, rt, okrt, jCtx)
-	jCtx.Output.PrintStepResult(stepResult)
+	jCtx.Printer.PrintStepResult(stepResult)
 }
 
 // createStepResult creates a StepResult from step execution
@@ -209,11 +209,11 @@ func (st *Step) handleRepeatExecution(jCtx *JobContext, name, rt string, okrt bo
 	isFinalExecution := jCtx.RepeatCurrent == jCtx.RepeatTotal
 
 	if isFirstExecution {
-		jCtx.Output.PrintStepRepeatStart(st.idx, name, jCtx.RepeatTotal)
+		jCtx.Printer.PrintStepRepeatStart(st.idx, name, jCtx.RepeatTotal)
 	}
 	
 	if isFinalExecution {
-		jCtx.Output.PrintStepRepeatResult(st.idx, counter, hasTest)
+		jCtx.Printer.PrintStepRepeatResult(st.idx, counter, hasTest)
 	}
 
 	// Handle echo output
@@ -225,14 +225,14 @@ func (st *Step) handleRepeatExecution(jCtx *JobContext, name, rt string, okrt bo
 func (st *Step) DoTestWithSequentialPrint(jCtx *JobContext) bool {
 	exprOut, err := st.expr.Eval(st.Test, st.ctx)
 	if err != nil {
-		jCtx.Output.LogError("Test Error: %s", err)
-		jCtx.Output.LogError("Input: %s", st.Test)
+		jCtx.Printer.LogError("Test Error: %s", err)
+		jCtx.Printer.LogError("Input: %s", st.Test)
 		return false
 	}
 
 	boolOutput, boolOk := exprOut.(bool)
 	if !boolOk {
-		jCtx.Output.LogDebug("Test: `%s` = %s", st.Test, exprOut)
+		jCtx.Printer.LogDebug("Test: `%s` = %s", st.Test, exprOut)
 		return false
 	}
 
@@ -240,7 +240,7 @@ func (st *Step) DoTestWithSequentialPrint(jCtx *JobContext) bool {
 	if !boolOutput {
 		boolResultStr = colorError().Sprintf("Failure")
 	}
-	jCtx.Output.LogDebug("Test: %s (input: %s, env: %#v)", boolResultStr, st.Test, st.ctx)
+	jCtx.Printer.LogDebug("Test: %s (input: %s, env: %#v)", boolResultStr, st.Test, st.ctx)
 
 	return boolOutput
 }
@@ -248,9 +248,9 @@ func (st *Step) DoTestWithSequentialPrint(jCtx *JobContext) bool {
 func (st *Step) DoEchoWithSequentialPrint(jCtx *JobContext) {
 	exprOut, err := st.expr.Eval(st.Echo, st.ctx)
 	if err != nil {
-		jCtx.Output.LogError("Echo Error: %#v (input: %s)", err, st.Echo)
+		jCtx.Printer.LogError("Echo Error: %#v (input: %s)", err, st.Echo)
 	} else {
-		jCtx.Output.LogDebug("Echo: %s", exprOut)
+		jCtx.Printer.LogDebug("Echo: %s", exprOut)
 	}
 }
 
@@ -278,10 +278,10 @@ func (st *Step) DoTest() (string, bool) {
 func (st *Step) DoEcho(jCtx *JobContext) {
 	exprOut, err := st.expr.Eval(st.Echo, st.ctx)
 	if err != nil {
-		jCtx.Output.LogError("Echo evaluation failed: %#v", err)
+		jCtx.Printer.LogError("Echo evaluation failed: %#v", err)
 	} else {
 		// 7 spaces
-		jCtx.Output.LogDebug("       %s", exprOut)
+		jCtx.Printer.LogDebug("       %s", exprOut)
 	}
 }
 
@@ -314,14 +314,14 @@ func (st *Step) updateCtx(logs []map[string]any, req, res map[string]any, rt str
 }
 
 func (st *Step) ShowRequestResponse(name string, jCtx *JobContext) {
-	jCtx.Output.LogDebug("--- Step %d: %s", st.idx, name)
-	jCtx.Output.LogDebug("Request:")
+	jCtx.Printer.LogDebug("--- Step %d: %s", st.idx, name)
+	jCtx.Printer.LogDebug("Request:")
 	st.printMapData(st.ctx.Req, jCtx)
 	
-	jCtx.Output.LogDebug("Response:")
+	jCtx.Printer.LogDebug("Response:")
 	st.printMapData(st.ctx.Res, jCtx)
 	
-	jCtx.Output.LogDebug("RT: %s", colorWarning().Sprintf("%s", st.ctx.RT))
+	jCtx.Printer.LogDebug("RT: %s", colorWarning().Sprintf("%s", st.ctx.RT))
 }
 
 // printMapData prints map data with proper formatting for nested structures
@@ -330,16 +330,16 @@ func (st *Step) printMapData(data map[string]any, jCtx *JobContext) {
 		if nested, ok := v.(map[string]any); ok {
 			st.printNestedMap(k, nested, jCtx)
 		} else {
-			jCtx.Output.LogDebug("  %s: %#v", k, v)
+			jCtx.Printer.LogDebug("  %s: %#v", k, v)
 		}
 	}
 }
 
 // printNestedMap prints nested map data with indentation
 func (st *Step) printNestedMap(key string, nested map[string]any, jCtx *JobContext) {
-	jCtx.Output.LogDebug("  %s:", key)
+	jCtx.Printer.LogDebug("  %s:", key)
 	for kk, vv := range nested {
-		jCtx.Output.LogDebug("    %s: %#v", kk, vv)
+		jCtx.Printer.LogDebug("    %s: %#v", kk, vv)
 	}
 }
 
@@ -351,7 +351,7 @@ func (st *Step) handleWait(jCtx *JobContext) string {
 
 	duration, err := st.parseWaitDuration(st.Wait)
 	if err != nil {
-		jCtx.Output.PrintError("wait duration parsing error: %v", err)
+		jCtx.Printer.PrintError("wait duration parsing error: %v", err)
 		return ""
 	}
 
@@ -415,13 +415,13 @@ func (st *Step) shouldSkip(jCtx *JobContext) bool {
 
 	result, err := st.expr.Eval(st.SkipIf, st.ctx)
 	if err != nil {
-		jCtx.Output.PrintError("skipif evaluation error: %v", err)
+		jCtx.Printer.PrintError("skipif evaluation error: %v", err)
 		return false // Don't skip on evaluation error
 	}
 
 	boolResult, ok := result.(bool)
 	if !ok {
-		jCtx.Output.PrintError("skipif expression must return boolean, got: %T", result)
+		jCtx.Printer.PrintError("skipif expression must return boolean, got: %T", result)
 		return false // Don't skip on type error
 	}
 
@@ -431,9 +431,9 @@ func (st *Step) shouldSkip(jCtx *JobContext) bool {
 // handleSkip handles the skipped step logic
 func (st *Step) handleSkip(name string, jCtx *JobContext) {
 	if jCtx.Config.Verbose {
-		jCtx.Output.LogDebug("--- Step %d: %s (SKIPPED)", st.idx, name)
-		jCtx.Output.LogDebug("Skip condition: %s", st.SkipIf)
-		jCtx.Output.PrintSeparator()
+		jCtx.Printer.LogDebug("--- Step %d: %s (SKIPPED)", st.idx, name)
+		jCtx.Printer.LogDebug("Skip condition: %s", st.SkipIf)
+		jCtx.Printer.PrintSeparator()
 		return
 	}
 
@@ -445,7 +445,7 @@ func (st *Step) handleSkip(name string, jCtx *JobContext) {
 
 	// Create step result for skipped step
 	stepResult := st.createSkippedStepResult(name, jCtx)
-	jCtx.Output.PrintStepResult(stepResult)
+	jCtx.Printer.PrintStepResult(stepResult)
 }
 
 // handleSkipRepeatExecution handles skipped step in repeat mode
@@ -471,11 +471,11 @@ func (st *Step) handleSkipRepeatExecution(jCtx *JobContext, name string) {
 	isFinalExecution := jCtx.RepeatCurrent == jCtx.RepeatTotal
 
 	if isFirstExecution {
-		jCtx.Output.PrintStepRepeatStart(st.idx, name+" (SKIPPED)", jCtx.RepeatTotal)
+		jCtx.Printer.PrintStepRepeatStart(st.idx, name+" (SKIPPED)", jCtx.RepeatTotal)
 	}
 	
 	if isFinalExecution {
-		jCtx.Output.PrintStepRepeatResult(st.idx, counter, false) // hasTest = false for skipped
+		jCtx.Printer.PrintStepRepeatResult(st.idx, counter, false) // hasTest = false for skipped
 	}
 }
 
@@ -507,7 +507,7 @@ func (st *Step) saveResults(jCtx *JobContext) {
 	for resultName, resultExpr := range st.Results {
 		result, err := st.expr.Eval(resultExpr, st.ctx)
 		if err != nil {
-			jCtx.Output.PrintError("result '%s' evaluation error: %v", resultName, err)
+			jCtx.Printer.PrintError("result '%s' evaluation error: %v", resultName, err)
 			continue // Skip this result but continue with others
 		}
 		results[resultName] = result
@@ -522,6 +522,6 @@ func (st *Step) saveResults(jCtx *JobContext) {
 	}
 
 	if jCtx.Config.Verbose {
-		jCtx.Output.LogDebug("Step '%s' results saved: %v", st.ID, results)
+		jCtx.Printer.LogDebug("Step '%s' results saved: %v", st.ID, results)
 	}
 }

@@ -64,7 +64,7 @@ func (e *ParallelJobExecutor) Execute(job *Job, jobID string, ctx JobContext, co
 				e.workflow.SetExitStatus(true)
 				// Log the error for debugging
 				if ctx.Config.Verbose {
-					ctx.Output.PrintError("Job execution failed: %v", err)
+					ctx.Printer.PrintError("Job execution failed: %v", err)
 				}
 			}
 			// Sleep between repeats (except for the last one)
@@ -79,7 +79,7 @@ func (e *ParallelJobExecutor) Execute(job *Job, jobID string, ctx JobContext, co
 			e.workflow.SetExitStatus(true)
 			// Log the error for debugging
 			if ctx.Config.Verbose {
-				ctx.Output.PrintError("Job execution failed: %v", err)
+				ctx.Printer.PrintError("Job execution failed: %v", err)
 			}
 		}
 	}
@@ -124,7 +124,7 @@ func (e *SequentialJobExecutor) Execute(job *Job, jobID string, ctx JobContext, 
 			e.workflow.SetExitStatus(true)
 			// Log the error for debugging
 			if ctx.Config.Verbose {
-				ctx.Output.PrintError("Job execution failed: %v", err)
+				ctx.Printer.PrintError("Job execution failed: %v", err)
 			}
 		}
 
@@ -337,7 +337,7 @@ func (e *BufferedJobExecutor) printRepeatStepResults(ctx *JobContext, job *Job, 
 	r, wr, _ := os.Pipe()
 	os.Stdout = wr
 
-	output := ctx.Output
+	output := ctx.Printer
 
 	for i, step := range job.Steps {
 		if counter, exists := ctx.StepCounters[i]; exists {
