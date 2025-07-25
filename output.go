@@ -87,6 +87,7 @@ const (
 	StatusSuccess StatusType = iota
 	StatusError
 	StatusWarning
+	StatusSkipped
 )
 
 // StepResult represents the result of a step execution
@@ -155,6 +156,8 @@ func (o *Output) PrintStepResult(step StepResult) {
 		output = fmt.Sprintf(output+"\n"+step.TestOutput+"\n", colorError().Sprintf(IconError))
 	case StatusWarning:
 		output = fmt.Sprintf(output+"\n", colorWarning().Sprintf(IconWarning))
+	case StatusSkipped:
+		output = fmt.Sprintf(output+"\n", colorDim().Sprintf("⏭ "))
 	}
 
 	fmt.Print(output)
