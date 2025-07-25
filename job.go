@@ -59,10 +59,7 @@ func (j *Job) processJobName(expr *Expr, ctx JobContext) error {
 	}
 
 	j.Name = name
-	// Only print job name if not repeating and not using buffering (to avoid duplicate output)
-	if !ctx.IsRepeating && !ctx.UseBuffering {
-		ctx.Printer.PrintJobName(name)
-	}
+	// Job names are now handled by the buffered output system
 
 	return nil
 }
@@ -106,8 +103,6 @@ type JobContext struct {
 	RepeatCurrent int
 	RepeatTotal   int
 	StepCounters  map[int]StepRepeatCounter // step index -> counter
-	// Output buffering
-	UseBuffering bool
 	// Print writer
 	Printer PrintWriter
 	// Shared outputs across all jobs (accessible via expressions as "outputs")
