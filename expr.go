@@ -76,10 +76,10 @@ func (e *Expr) Options(env any) []ex.Option {
 			},
 		),
 		ex.Function(
-			"random",
+			"random_int",
 			func(params ...any) (any, error) {
 				if len(params) != 1 {
-					return nil, fmt.Errorf("random requires exactly 1 parameter")
+					return nil, fmt.Errorf("random_int requires exactly 1 parameter")
 				}
 				n, ok := params[0].(int)
 				if !ok {
@@ -87,13 +87,53 @@ func (e *Expr) Options(env any) []ex.Option {
 					if f, ok := params[0].(float64); ok {
 						n = int(f)
 					} else {
-						return nil, fmt.Errorf("random parameter must be an integer")
+						return nil, fmt.Errorf("random_int parameter must be an integer")
 					}
 				}
 				if n <= 0 {
-					return nil, fmt.Errorf("random parameter must be positive")
+					return nil, fmt.Errorf("random_int parameter must be positive")
 				}
 				return rand.IntN(n), nil
+			},
+		),
+		ex.Function(
+			"random_str",
+			func(params ...any) (any, error) {
+				if len(params) != 1 {
+					return nil, fmt.Errorf("random_str requires exactly 1 parameter")
+				}
+				length, ok := params[0].(int)
+				if !ok {
+					// Try to convert float64 to int (common in JSON/expr)
+					if f, ok := params[0].(float64); ok {
+						length = int(f)
+					} else {
+						return nil, fmt.Errorf("random_str parameter must be an integer")
+					}
+				}
+				if length <= 0 {
+					return nil, fmt.Errorf("random_str parameter must be positive")
+				}
+				if length > 1000000 {
+					return nil, fmt.Errorf("random_str parameter must be <= 1000000")
+				}
+
+				const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+				b := make([]byte, length)
+				for i := range b {
+					b[i] = charset[rand.IntN(len(charset))]
+				}
+				
+				return string(b), nil
+			},
+		),
+		ex.Function(
+			"unixtime",
+			func(params ...any) (any, error) {
+				if len(params) != 0 {
+					return nil, fmt.Errorf("unixtime takes no parameters")
+				}
+				return time.Now().Unix(), nil
 			},
 		),
 	}
