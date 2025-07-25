@@ -2,7 +2,10 @@ package probe
 
 import (
 	"fmt"
+	"regexp"
+	"strconv"
 	"strings"
+	"time"
 )
 
 type StepContext struct {
@@ -30,6 +33,7 @@ type Step struct {
 	Echo string           `yaml:"echo"`
 	Vars map[string]any   `yaml:"vars"`
 	Iter []map[string]any `yaml:"iter"`
+	Wait string           `yaml:"wait"`
 	err  error
 	ctx  StepContext
 	idx  int
@@ -40,6 +44,9 @@ func (st *Step) Do(jCtx *JobContext) {
 	if st.Name == "" {
 		st.Name = "Unknown Step"
 	}
+	
+	// Handle wait before step execution
+	st.handleWait(jCtx)
 	name, err := st.expr.EvalTemplate(st.Name, st.ctx)
 	if err != nil {
 		jCtx.Output.PrintError("step name evaluation error: %v", err)
@@ -111,6 +118,7 @@ func (st *Step) createStepResult(name, rt string, okrt bool, jCtx *JobContext) S
 		Name:    name,
 		HasTest: st.Test != "",
 		RT:      "",
+		WaitTime: st.getWaitTimeForDisplay(),
 	}
 
 	if jCtx.Config.RT && okrt && rt != "" {
@@ -306,4 +314,68 @@ func (st *Step) printNestedMap(key string, nested map[string]any, jCtx *JobConte
 	for kk, vv := range nested {
 		jCtx.Output.LogDebug("    %s: %#v", kk, vv)
 	}
+}
+
+// handleWait processes the wait field and sleeps if necessary
+func (st *Step) handleWait(jCtx *JobContext) string {
+	if st.Wait == "" {
+		return ""
+	}
+
+	duration, err := st.parseWaitDuration(st.Wait)
+	if err != nil {
+		jCtx.Output.PrintError("wait duration parsing error: %v", err)
+		return ""
+	}
+
+	if duration > 0 {
+		time.Sleep(duration)
+		return st.formatWaitTime(duration)
+	}
+
+	return ""
+}
+
+// parseWaitDuration parses wait string to time.Duration
+func (st *Step) parseWaitDuration(wait string) (time.Duration, error) {
+	// Check if it's a plain number (treat as seconds for backward compatibility)
+	if matched, _ := regexp.MatchString(`^\d+$`, wait); matched {
+		if seconds, err := strconv.Atoi(wait); err == nil {
+			return time.Duration(seconds) * time.Second, nil
+		}
+		return 0, fmt.Errorf("invalid wait value: %s", wait)
+	}
+
+	// Parse as duration string (e.g., "1s", "500ms", "2m")
+	duration, err := time.ParseDuration(wait)
+	if err != nil {
+		return 0, fmt.Errorf("invalid wait format: %s", wait)
+	}
+
+	return duration, nil
+}
+
+// formatWaitTime formats duration for display
+func (st *Step) formatWaitTime(duration time.Duration) string {
+	if duration < time.Second {
+		return duration.String()
+	}
+	if duration%time.Second == 0 {
+		return fmt.Sprintf("%ds", int(duration/time.Second))
+	}
+	return duration.String()
+}
+
+// getWaitTimeForDisplay returns formatted wait time for display
+func (st *Step) getWaitTimeForDisplay() string {
+	if st.Wait == "" {
+		return ""
+	}
+
+	duration, err := st.parseWaitDuration(st.Wait)
+	if err != nil {
+		return ""
+	}
+
+	return st.formatWaitTime(duration)
 }
