@@ -29,6 +29,11 @@ func (j *Job) Start(ctx JobContext) error {
 	j.ctx = &ctx
 	expr := &Expr{}
 
+	// Validate steps before execution
+	if err := j.validateSteps(); err != nil {
+		return NewExecutionError("job_start", "step validation failed", err)
+	}
+
 	if err := j.processJobName(expr, ctx); err != nil {
 		return NewExecutionError("job_start", "failed to process job name", err)
 	}
@@ -105,6 +110,8 @@ type JobContext struct {
 	UseBuffering bool
 	// Output writer
 	Output OutputWriter
+	// Step results storage: stepID -> results map
+	Results map[string]map[string]any `expr:"results"`
 }
 
 func (j *JobContext) SetFailed() {
@@ -364,4 +371,53 @@ func (js *JobScheduler) MarkJobsWithFailedDependencies() []string {
 	}
 
 	return skippedJobs
+}
+
+// validateSteps validates step configurations in the job
+func (j *Job) validateSteps() error {
+	stepIDs := make(map[string]int) // stepID -> stepIndex for duplicate check
+
+	for i, step := range j.Steps {
+		// Validate step ID format if provided
+		if step.ID != "" {
+			if !isValidStepID(step.ID) {
+				return fmt.Errorf("step %d: invalid step ID '%s' - only [a-z0-9_-] characters are allowed", i, step.ID)
+			}
+
+			// Check for duplicate step IDs within the job
+			if existingIndex, exists := stepIDs[step.ID]; exists {
+				return fmt.Errorf("step %d: duplicate step ID '%s' (already used in step %d)", i, step.ID, existingIndex)
+			}
+			stepIDs[step.ID] = i
+		}
+
+		// Validate that results require an ID
+		if len(step.Results) > 0 && step.ID == "" {
+			stepName := step.Name
+			if stepName == "" {
+				stepName = fmt.Sprintf("step %d", i)
+			}
+			return fmt.Errorf("%s: step with results must have an 'id' field", stepName)
+		}
+	}
+
+	return nil
+}
+
+// isValidStepID validates step ID format: only [a-z0-9_-] allowed
+func isValidStepID(id string) bool {
+	if id == "" {
+		return false
+	}
+	
+	// Check each character
+	for _, char := range id {
+		if !((char >= 'a' && char <= 'z') || 
+			 (char >= '0' && char <= '9') || 
+			 char == '_' || char == '-') {
+			return false
+		}
+	}
+	
+	return true
 }

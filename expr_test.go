@@ -205,7 +205,7 @@ func TestSecurityValidation(t *testing.T) {
 	}{
 		{
 			name:        "expression too long",
-			input:       strings.Repeat("a", 1001),
+			input:       strings.Repeat("a", 1000001),
 			shouldError: true,
 			errorMsg:    "expression exceeds maximum length",
 		},

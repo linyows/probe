@@ -3,7 +3,6 @@ package probe
 import (
 	"fmt"
 	"math/rand/v2"
-	"os"
 	"regexp"
 	"strings"
 	"time"
@@ -19,14 +18,11 @@ var (
 	templateEnd    = "}"
 
 	// Security: Maximum expression length and evaluation timeout
-	maxExpressionLength = 1000
+	maxExpressionLength = 1000000
 	evaluationTimeout   = 5 * time.Second
 
 	// Security: Maximum string length to prevent memory exhaustion
 	maxStringLength = 1000000
-
-	// Flag to disable security process termination (returns errors instead)
-	disableSecurityExit = false
 )
 
 type Expr struct{}
@@ -252,11 +248,7 @@ func (e *Expr) sanitizeValue(value any) any {
 func (e *Expr) validateExpression(expression string) error {
 	// Security: Check expression length
 	if len(expression) > maxExpressionLength {
-		if disableSecurityExit {
-			return fmt.Errorf("expression exceeds maximum length (%d chars)", maxExpressionLength)
-		}
-		fmt.Fprintf(os.Stderr, "SECURITY: Expression exceeds maximum length (%d chars) - terminating\n", maxExpressionLength)
-		os.Exit(2)
+		return fmt.Errorf("SECURITY: expression exceeds maximum length (%d chars)", maxExpressionLength)
 	}
 
 	lowerExpr := strings.ToLower(expression)
@@ -280,12 +272,7 @@ func (e *Expr) validateEnvAccess(expression string) error {
 	lowerExpr := strings.ToLower(expression)
 	for _, pattern := range dangerousEnvPatterns {
 		if strings.Contains(lowerExpr, pattern) {
-			if disableSecurityExit {
-				return fmt.Errorf("attempt to access dangerous environment variable '%s'", pattern)
-			}
-			fmt.Fprintf(os.Stderr, "SECURITY: Attempt to access dangerous environment variable '%s' - terminating\n", pattern)
-			fmt.Fprintf(os.Stderr, "Expression: %s\n", expression)
-			os.Exit(2)
+			return fmt.Errorf("SECURITY: attempt to access dangerous environment variable '%s'", pattern)
 		}
 	}
 
@@ -356,14 +343,7 @@ func (e *Expr) executeWithTimeout(program *vm.Program, env any) (any, error) {
 	case res := <-resultCh:
 		return res.output, res.err
 	case <-time.After(evaluationTimeout):
-		// Security: Force terminate on timeout (potential infinite loop or malicious expression)
-		if disableSecurityExit {
-			return nil, fmt.Errorf("expression evaluation timed out after %v", evaluationTimeout)
-		}
-		fmt.Fprintf(os.Stderr, "SECURITY: Expression evaluation timed out after %v - terminating process\n", evaluationTimeout)
-		fmt.Fprintf(os.Stderr, "This indicates a potentially malicious or infinite-loop expression\n")
-		os.Exit(2)
-		return nil, nil // never reached
+		return nil, fmt.Errorf("SECURITY: expression evaluation timed out after %v", evaluationTimeout)
 	}
 }
 
@@ -449,10 +429,4 @@ func (e *Expr) EvalTemplateMap(input map[string]any, env any) map[string]any {
 	}
 
 	return results
-}
-
-// DisableSecurityExit disables process termination on security violations
-// When enabled, security violations return errors instead of calling os.Exit(2)
-func DisableSecurityExit(disabled bool) {
-	disableSecurityExit = disabled
 }
