@@ -332,7 +332,7 @@ func (e *BufferedJobExecutor) finalizeJobExecution(jo *JobOutput, startTime time
 
 // printRepeatStepResults prints the final results of repeat step executions to buffer
 func (e *BufferedJobExecutor) printRepeatStepResults(ctx *JobContext, job *Job, jo *JobOutput) {
-	// Capture the step results output to buffer instead of printing directly
+	// Capture the step outputs output to buffer instead of printing directly
 	originalStdout := os.Stdout
 	r, wr, _ := os.Pipe()
 	os.Stdout = wr
@@ -346,13 +346,13 @@ func (e *BufferedJobExecutor) printRepeatStepResults(ctx *JobContext, job *Job, 
 		}
 	}
 
-	// Restore stdout and capture the step results
+	// Restore stdout and capture the step outputs
 	wr.Close()
 	os.Stdout = originalStdout
 
 	capturedOutput, _ := io.ReadAll(r)
 
-	// Add captured step results to job buffer
+	// Add captured step outputs to job buffer
 	jo.mutex.Lock()
 	jo.Buffer.Write(capturedOutput)
 	jo.mutex.Unlock()

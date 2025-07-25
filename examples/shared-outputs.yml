@@ -1,4 +1,4 @@
-name: Test Results Variables
+name: Test Outputs Variables
 
 x_defaults: &defaults
   http:
@@ -11,30 +11,30 @@ jobs:
   id: job1
   defaults: *defaults
   steps:
-  - name: Get my IP with set to results
+  - name: Get my IP with set to outputs
     id: step1
     uses: http
     with:
       get: /get
     echo: res.body.origin
-    results:
+    outputs:
       token: res.body.origin
-  - name: Post by results ip
+  - name: Post by outputs ip
     uses: http
     with:
       post: /post
       body:
-        myip: "{results.step1.token}"
+        myip: "{outputs.step1.token}"
     echo: res.body.json.myip
 
 - name: Test Job 2
   needs: [job1]
   defaults: *defaults
   steps:
-  - name: Use shared results over job
+  - name: Use shared outputs over job
     uses: http
     with:
       post: /post
       body:
-        myip: "{results.step1.token}"
-    echo: results.step1.token
+        myip: "{outputs.step1.token}"
+    echo: outputs.step1.token

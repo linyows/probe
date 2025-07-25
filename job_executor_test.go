@@ -142,7 +142,7 @@ func TestBufferedJobExecutor_PrintRepeatStepResults(t *testing.T) {
 		t.Error("printRepeatStepResults should generate output")
 	}
 	
-	// Should contain step results (success ratio or similar indicator)
+	// Should contain step outputs (success ratio or similar indicator)
 	if !strings.Contains(output, "success") {
 		t.Errorf("Output should contain success indicator, got: %s", output)
 	}

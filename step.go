@@ -14,7 +14,7 @@ type StepContext struct {
 	Res     map[string]any            `expr:"res"`
 	Req     map[string]any            `expr:"req"`
 	RT      string                    `expr:"rt"`
-	Results map[string]map[string]any `expr:"results"`
+	Outputs map[string]map[string]any `expr:"outputs"`
 }
 
 // StepRepeatCounter tracks the execution results of repeated steps
@@ -37,7 +37,7 @@ type Step struct {
 	Iter    []map[string]any   `yaml:"iter"`
 	Wait    string             `yaml:"wait,omitempty"`
 	SkipIf  string             `yaml:"skipif,omitempty"`
-	Results map[string]string  `yaml:"results,omitempty"`
+	Outputs map[string]string  `yaml:"outputs,omitempty"`
 	err     error
 	ctx     StepContext
 	idx     int
@@ -107,8 +107,8 @@ func (st *Step) Do(jCtx *JobContext) {
 			st.DoEchoWithSequentialPrint(jCtx)
 		}
 		
-		// Save step results even in verbose mode
-		st.saveResults(jCtx)
+		// Save step outputs even in verbose mode
+		st.saveOutputs(jCtx)
 		
 		jCtx.Printer.PrintSeparator()
 		return
@@ -120,8 +120,8 @@ func (st *Step) Do(jCtx *JobContext) {
 		return
 	}
 
-	// Save step results if defined
-	st.saveResults(jCtx)
+	// Save step outputs if defined
+	st.saveOutputs(jCtx)
 
 	// Create step result for output
 	stepResult := st.createStepResult(name, rt, okrt, jCtx)
@@ -291,18 +291,16 @@ func (st *Step) SetCtx(j JobContext, override map[string]any) {
 		vers = MergeMaps(vers, override)
 	}
 	
-	// Use SharedResults if available, otherwise fallback to job-level results
-	var results map[string]map[string]any
-	if j.SharedResults != nil {
-		results = j.SharedResults.GetAll()
-	} else {
-		results = j.Results
+	// Use outputs from the unified Outputs structure
+	var outputs map[string]map[string]any
+	if j.Outputs != nil {
+		outputs = j.Outputs.GetAll()
 	}
 	
 	st.ctx = StepContext{
 		Vars:    vers,
 		Logs:    j.Logs,
-		Results: results,
+		Outputs: outputs,
 	}
 }
 
@@ -491,37 +489,29 @@ func (st *Step) createSkippedStepResult(name string, jCtx *JobContext) StepResul
 	}
 }
 
-// saveResults evaluates and saves step results to JobContext
-func (st *Step) saveResults(jCtx *JobContext) {
-	if len(st.Results) == 0 || st.ID == "" {
-		return // No results to save or no ID (should be caught by validation)
+// saveOutputs evaluates and saves step outputs to JobContext
+func (st *Step) saveOutputs(jCtx *JobContext) {
+	if len(st.Outputs) == 0 || st.ID == "" {
+		return // No outputs to save or no ID (should be caught by validation)
 	}
 
-	// Initialize Results map if needed
-	if jCtx.Results == nil {
-		jCtx.Results = make(map[string]map[string]any)
-	}
-
-	// Evaluate each result expression
-	results := make(map[string]any)
-	for resultName, resultExpr := range st.Results {
-		result, err := st.expr.Eval(resultExpr, st.ctx)
+	// Evaluate each output expression
+	outputs := make(map[string]any)
+	for outputName, outputExpr := range st.Outputs {
+		result, err := st.expr.Eval(outputExpr, st.ctx)
 		if err != nil {
-			jCtx.Printer.PrintError("result '%s' evaluation error: %v", resultName, err)
-			continue // Skip this result but continue with others
+			jCtx.Printer.PrintError("output '%s' evaluation error: %v", outputName, err)
+			continue // Skip this output but continue with others
 		}
-		results[resultName] = result
+		outputs[outputName] = result
 	}
 
-	// Save results under step ID (job-level)
-	jCtx.Results[st.ID] = results
-	
-	// Also save to SharedResults if available (workflow-level)
-	if jCtx.SharedResults != nil {
-		jCtx.SharedResults.Set(st.ID, results)
+	// Save outputs to the unified Outputs structure
+	if jCtx.Outputs != nil {
+		jCtx.Outputs.Set(st.ID, outputs)
 	}
 
 	if jCtx.Config.Verbose {
-		jCtx.Printer.LogDebug("Step '%s' results saved: %v", st.ID, results)
+		jCtx.Printer.LogDebug("Step '%s' outputs saved: %v", st.ID, outputs)
 	}
 }

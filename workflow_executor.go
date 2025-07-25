@@ -13,8 +13,8 @@ func (w *Workflow) Start(c Config) error {
 	output.PrintWorkflowHeader(w.Name, w.Description)
 
 	// Initialize shared results
-	if w.sharedResults == nil {
-		w.sharedResults = NewSharedResults()
+	if w.sharedOutputs == nil {
+		w.sharedOutputs = NewOutputs()
 	}
 
 	vars, err := w.evalVars()

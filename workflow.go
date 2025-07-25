@@ -4,45 +4,45 @@ import (
 	"sync"
 )
 
-// SharedResults manages step results across the entire workflow
-type SharedResults struct {
-	data map[string]map[string]any  // stepID -> resultName -> value
+// Outputs manages step outputs across the entire workflow
+type Outputs struct {
+	data map[string]map[string]any  // stepID -> outputName -> value
 	mu   sync.RWMutex
 }
 
-// NewSharedResults creates a new SharedResults instance
-func NewSharedResults() *SharedResults {
-	return &SharedResults{
+// NewOutputs creates a new Outputs instance
+func NewOutputs() *Outputs {
+	return &Outputs{
 		data: make(map[string]map[string]any),
 	}
 }
 
-// Set stores results for a step
-func (sr *SharedResults) Set(stepID string, results map[string]any) {
-	sr.mu.Lock()
-	defer sr.mu.Unlock()
-	sr.data[stepID] = results
+// Set stores outputs for a step
+func (o *Outputs) Set(stepID string, outputs map[string]any) {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	o.data[stepID] = outputs
 }
 
-// Get retrieves results for a step
-func (sr *SharedResults) Get(stepID string) (map[string]any, bool) {
-	sr.mu.RLock()
-	defer sr.mu.RUnlock()
-	results, exists := sr.data[stepID]
-	return results, exists
+// Get retrieves outputs for a step
+func (o *Outputs) Get(stepID string) (map[string]any, bool) {
+	o.mu.RLock()
+	defer o.mu.RUnlock()
+	outputs, exists := o.data[stepID]
+	return outputs, exists
 }
 
-// GetAll returns all results (safe copy for expression evaluation)
-func (sr *SharedResults) GetAll() map[string]map[string]any {
-	sr.mu.RLock()
-	defer sr.mu.RUnlock()
+// GetAll returns all outputs (safe copy for expression evaluation)
+func (o *Outputs) GetAll() map[string]map[string]any {
+	o.mu.RLock()
+	defer o.mu.RUnlock()
 	copy := make(map[string]map[string]any)
-	for k, v := range sr.data {
-		copyResults := make(map[string]any)
+	for k, v := range o.data {
+		copyOutputs := make(map[string]any)
 		for rk, rv := range v {
-			copyResults[rk] = rv
+			copyOutputs[rk] = rv
 		}
-		copy[k] = copyResults
+		copy[k] = copyOutputs
 	}
 	return copy
 }
@@ -54,8 +54,8 @@ type Workflow struct {
 	Vars        map[string]any `yaml:"vars"`
 	exitStatus  int
 	env         map[string]string
-	// Shared results across all jobs
-	sharedResults *SharedResults
+	// Shared outputs across all jobs
+	sharedOutputs *Outputs
 }
 
 func (w *Workflow) SetExitStatus(isErr bool) {
@@ -97,6 +97,6 @@ func (w *Workflow) newJobContext(c Config, vars map[string]any) JobContext {
 		Logs:          []map[string]any{},
 		Config:        c,
 		Printer:        c.Printer,
-		SharedResults: w.sharedResults,
+		Outputs: w.sharedOutputs,
 	}
 }

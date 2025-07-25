@@ -110,10 +110,8 @@ type JobContext struct {
 	UseBuffering bool
 	// Print writer
 	Printer PrintWriter
-	// Step results storage: stepID -> results map
-	Results map[string]map[string]any `expr:"results"`
-	// Shared results across all jobs (pointer to workflow results)
-	SharedResults *SharedResults
+	// Shared outputs across all jobs (accessible via expressions as "outputs")
+	Outputs *Outputs `expr:"outputs"`
 }
 
 func (j *JobContext) SetFailed() {
@@ -393,13 +391,13 @@ func (j *Job) validateSteps() error {
 			stepIDs[step.ID] = i
 		}
 
-		// Validate that results require an ID
-		if len(step.Results) > 0 && step.ID == "" {
+		// Validate that outputs require an ID
+		if len(step.Outputs) > 0 && step.ID == "" {
 			stepName := step.Name
 			if stepName == "" {
 				stepName = fmt.Sprintf("step %d", i)
 			}
-			return fmt.Errorf("%s: step with results must have an 'id' field", stepName)
+			return fmt.Errorf("%s: step with outputs must have an 'id' field", stepName)
 		}
 	}
 
