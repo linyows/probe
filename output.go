@@ -35,6 +35,7 @@ const (
 	IconError   = "✘ "
 	IconWarning = "▲ "
 	IconCircle  = "⏺ "
+	IconWait    = "🕐︎"
 )
 
 // LogLevel defines different logging levels
@@ -94,6 +95,7 @@ type StepResult struct {
 	Name       string
 	Status     StatusType
 	RT         string
+	WaitTime   string
 	TestOutput string
 	EchoOutput string
 	HasTest    bool
@@ -131,12 +133,20 @@ func (o *Output) PrintJobName(name string) {
 // PrintStepResult prints the result of a single step execution
 func (o *Output) PrintStepResult(step StepResult) {
 	num := colorDim().Sprintf("%2d.", step.Index)
+	
+	// Add wait time indicator if present
+	waitPrefix := ""
+	if step.WaitTime != "" {
+		waitPrefix = colorDim().Sprintf("%s%s → ", IconWait, step.WaitTime)
+	}
+	
+	// Add response time suffix if present
 	ps := ""
 	if step.RT != "" {
 		ps = colorDim().Sprintf(" (%s)", step.RT)
 	}
 
-	output := fmt.Sprintf("%s %%s %s%s", num, step.Name, ps)
+	output := fmt.Sprintf("%s %%s %s%s%s", num, waitPrefix, step.Name, ps)
 
 	switch step.Status {
 	case StatusSuccess:
