@@ -17,7 +17,7 @@ jobs:
       post: /post
       body:
         message: "Setup completed"
-        setup_id: "{random(9999)}"
+        setup_id: "{random_int(9999)}"
     test: res.code == 200
     echo: res.body.json.setup_id
 
