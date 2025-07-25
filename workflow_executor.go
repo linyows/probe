@@ -1,7 +1,6 @@
 package probe
 
 import (
-	"sync"
 	"time"
 )
 
@@ -12,7 +11,7 @@ func (w *Workflow) Start(c Config) error {
 	// Print workflow header at the beginning
 	output.PrintWorkflowHeader(w.Name, w.Description)
 
-	// Initialize shared results
+	// Initialize shared outputs
 	if w.sharedOutputs == nil {
 		w.sharedOutputs = NewOutputs()
 	}
@@ -24,121 +23,26 @@ func (w *Workflow) Start(c Config) error {
 
 	ctx := w.newJobContext(c, vars)
 
-	// Check if any job has dependencies
-	hasDependencies := false
-	for _, job := range w.Jobs {
-		if len(job.Needs) > 0 {
-			hasDependencies = true
-			break
-		}
-	}
-
-	// If no dependencies, use the old parallel execution
-	if !hasDependencies {
-		return w.startParallel(ctx)
-	}
-
-	// Use dependency-aware execution
-	return w.startWithDependencies(ctx)
+	// Always use buffered execution with dependency management
+	return w.startWithBufferedExecution(ctx)
 }
 
-// startParallel executes jobs in parallel without dependencies using unified executor
-func (w *Workflow) startParallel(ctx JobContext) error {
-	var wg sync.WaitGroup
-	executor := NewParallelJobExecutor(w)
 
-	for _, job := range w.Jobs {
-		jobID := w.getJobID(job)
-		config := w.createParallelExecutionConfig()
-
-		// Handle jobs without repeat
-		if job.Repeat == nil {
-			w.executeJobOnce(&wg, executor, job, jobID, ctx, config)
-			continue
-		}
-
-		// Handle jobs with repeat
-		w.executeJobWithRepeat(&wg, job, jobID, ctx)
-	}
-
-	wg.Wait()
-	return nil
-}
-
-// getJobID returns the job ID, using job name if ID is not set
-func (w *Workflow) getJobID(job Job) string {
-	if job.ID != "" {
-		return job.ID
-	}
-	return job.Name
-}
-
-// createParallelExecutionConfig creates a configuration for parallel execution
-func (w *Workflow) createParallelExecutionConfig() ExecutionConfig {
-	return ExecutionConfig{
-		UseBuffering:    false,
-		UseParallel:     true,
-		HasDependencies: false,
-	}
-}
-
-// executeJobOnce executes a job once in a separate goroutine
-func (w *Workflow) executeJobOnce(wg *sync.WaitGroup, executor JobExecutor, job Job, jobID string, ctx JobContext, config ExecutionConfig) {
-	wg.Add(1)
-	go func(j Job, jID string, jCtx JobContext) {
-		defer wg.Done()
-		result := executor.Execute(&j, jID, jCtx, config)
-		if !result.Success {
-			w.SetExitStatus(true)
-		}
-	}(job, jobID, ctx)
-}
-
-// executeJobWithRepeat handles jobs with repeat - creates separate goroutines for each repetition
-func (w *Workflow) executeJobWithRepeat(wg *sync.WaitGroup, job Job, jobID string, ctx JobContext) {
-	for i := 0; i < job.Repeat.Count; i++ {
-		wg.Add(1)
-		go func(j Job, jID string, jCtx JobContext, iteration int) {
-			defer wg.Done()
-
-			// Set up context for this specific iteration
-			jCtx.IsRepeating = true
-			jCtx.RepeatTotal = j.Repeat.Count
-			jCtx.RepeatCurrent = iteration + 1
-			jCtx.StepCounters = make(map[int]StepRepeatCounter)
-
-			// Execute single iteration
-			if err := j.Start(jCtx); err != nil {
-				w.SetExitStatus(true)
-				// Log error if verbose mode is enabled
-				if jCtx.Config.Verbose {
-					jCtx.Printer.PrintError("Job execution failed: %v", err)
-				}
-			}
-		}(job, jobID, ctx, i)
-
-		// Sleep between repeat launches (except for the last one)
-		if i < job.Repeat.Count-1 {
-			time.Sleep(job.Repeat.Interval.Duration)
-		}
-	}
-}
-
-// startWithDependencies executes jobs with dependency management
-func (w *Workflow) startWithDependencies(ctx JobContext) error {
+// startWithBufferedExecution executes all jobs with buffered output and dependency management
+func (w *Workflow) startWithBufferedExecution(ctx JobContext) error {
 	scheduler, err := w.initializeJobScheduler()
 	if err != nil {
 		return err
 	}
 
-	workflowOutput := w.setupBufferedOutputIfNeeded()
+	workflowOutput := w.setupBufferedOutput()
 
 	err = w.executeJobsWithDependencies(scheduler, ctx, workflowOutput)
 	if err != nil {
 		return err
 	}
 
-	w.printResultsIfBuffered(workflowOutput, ctx.Printer)
+	w.printDetailedResults(workflowOutput, ctx.Printer)
 	return nil
 }
 
@@ -161,13 +65,8 @@ func (w *Workflow) initializeJobScheduler() (*JobScheduler, error) {
 	return scheduler, nil
 }
 
-// setupBufferedOutputIfNeeded creates workflow output for buffering if multiple jobs exist
-func (w *Workflow) setupBufferedOutputIfNeeded() *WorkflowOutput {
-	useBuffering := len(w.Jobs) > 1
-	if !useBuffering {
-		return nil
-	}
-
+// setupBufferedOutput creates workflow output for buffering
+func (w *Workflow) setupBufferedOutput() *WorkflowOutput {
 	workflowOutput := NewWorkflowOutput()
 	// Initialize job outputs
 	for _, job := range w.Jobs {
@@ -188,7 +87,6 @@ func (w *Workflow) setupBufferedOutputIfNeeded() *WorkflowOutput {
 
 // executeJobsWithDependencies runs the main job execution loop with dependency management
 func (w *Workflow) executeJobsWithDependencies(scheduler *JobScheduler, ctx JobContext, workflowOutput *WorkflowOutput) error {
-	useBuffering := workflowOutput != nil
 
 	for !scheduler.AllJobsCompleted() {
 		runnableJobs := scheduler.GetRunnableJobs()
@@ -200,7 +98,7 @@ func (w *Workflow) executeJobsWithDependencies(scheduler *JobScheduler, ctx JobC
 			continue
 		}
 
-		w.processRunnableJobs(runnableJobs, scheduler, ctx, useBuffering, workflowOutput)
+		w.processRunnableJobs(runnableJobs, scheduler, ctx, workflowOutput)
 		scheduler.wg.Wait()
 	}
 
@@ -238,7 +136,7 @@ func (w *Workflow) updateSkippedJobsOutput(skippedJobs []string, workflowOutput 
 }
 
 // processRunnableJobs starts execution of all currently runnable jobs
-func (w *Workflow) processRunnableJobs(runnableJobs []string, scheduler *JobScheduler, ctx JobContext, useBuffering bool, workflowOutput *WorkflowOutput) {
+func (w *Workflow) processRunnableJobs(runnableJobs []string, scheduler *JobScheduler, ctx JobContext, workflowOutput *WorkflowOutput) {
 	for _, jobID := range runnableJobs {
 		job := scheduler.jobs[jobID]
 		scheduler.SetJobStatus(jobID, JobRunning, false)
@@ -248,14 +146,12 @@ func (w *Workflow) processRunnableJobs(runnableJobs []string, scheduler *JobSche
 			defer scheduler.wg.Done()
 
 			config := ExecutionConfig{
-				UseBuffering:    useBuffering,
-				UseParallel:     false,
 				HasDependencies: true,
 				WorkflowOutput:  workflowOutput,
 				JobScheduler:    scheduler,
 			}
 
-			executor := w.createJobExecutor(useBuffering)
+			executor := NewBufferedJobExecutor(w)
 			result := executor.Execute(j, id, ctx, config)
 			if !result.Success {
 				w.SetExitStatus(true)
@@ -264,20 +160,7 @@ func (w *Workflow) processRunnableJobs(runnableJobs []string, scheduler *JobSche
 	}
 }
 
-// createJobExecutor creates the appropriate job executor based on buffering requirements
-func (w *Workflow) createJobExecutor(useBuffering bool) JobExecutor {
-	if useBuffering {
-		return NewBufferedJobExecutor(w)
-	}
-	return NewSequentialJobExecutor(w)
-}
 
-// printResultsIfBuffered prints detailed results if buffered output was used
-func (w *Workflow) printResultsIfBuffered(workflowOutput *WorkflowOutput, printer PrintWriter) {
-	if workflowOutput != nil {
-		w.printDetailedResults(workflowOutput, printer)
-	}
-}
 
 // printDetailedResults prints the final detailed results
 func (w *Workflow) printDetailedResults(wo *WorkflowOutput, printer PrintWriter) {

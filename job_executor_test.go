@@ -10,26 +10,6 @@ import (
 func TestJobExecutor_Creation(t *testing.T) {
 	workflow := &Workflow{Name: "test-workflow"}
 	
-	t.Run("ParallelJobExecutor creation", func(t *testing.T) {
-		executor := NewParallelJobExecutor(workflow)
-		if executor == nil {
-			t.Fatal("NewParallelJobExecutor should not return nil")
-		}
-		
-		// Ensure it implements JobExecutor interface
-		var _ JobExecutor = executor
-	})
-	
-	t.Run("SequentialJobExecutor creation", func(t *testing.T) {
-		executor := NewSequentialJobExecutor(workflow)
-		if executor == nil {
-			t.Fatal("NewSequentialJobExecutor should not return nil")
-		}
-		
-		// Ensure it implements JobExecutor interface
-		var _ JobExecutor = executor
-	})
-	
 	t.Run("BufferedJobExecutor creation", func(t *testing.T) {
 		executor := NewBufferedJobExecutor(workflow)
 		if executor == nil {
@@ -71,19 +51,9 @@ func TestExecutionConfig_Structure(t *testing.T) {
 	workflowOutput := NewWorkflowOutput()
 	
 	config := ExecutionConfig{
-		UseBuffering:     true,
-		UseParallel:      false,
 		HasDependencies:  true,
 		WorkflowOutput:   workflowOutput,
 		JobScheduler:     scheduler,
-	}
-	
-	if !config.UseBuffering {
-		t.Error("ExecutionConfig.UseBuffering should be true")
-	}
-	
-	if config.UseParallel {
-		t.Error("ExecutionConfig.UseParallel should be false")
 	}
 	
 	if !config.HasDependencies {
@@ -149,30 +119,20 @@ func TestBufferedJobExecutor_PrintRepeatStepResults(t *testing.T) {
 }
 
 func TestJobExecutor_Integration_WithMockJob(t *testing.T) {
-	// Test that the executors can handle basic job execution scenarios
+	// Test that the executor can handle basic job execution scenarios
 	// without relying on the actual job.Start() method which has plugin dependencies
 	
 	t.Run("executor creation and interface compliance", func(t *testing.T) {
 		workflow := &Workflow{Name: "test-workflow"}
 		
-		// Test that all executors can be created and implement the interface
-		parallelExecutor := NewParallelJobExecutor(workflow)
-		sequentialExecutor := NewSequentialJobExecutor(workflow) 
+		// Test that the executor can be created and implement the interface
 		bufferedExecutor := NewBufferedJobExecutor(workflow)
 		
-		if parallelExecutor == nil {
-			t.Error("ParallelJobExecutor creation failed")
-		}
-		if sequentialExecutor == nil {
-			t.Error("SequentialJobExecutor creation failed")
-		}
 		if bufferedExecutor == nil {
 			t.Error("BufferedJobExecutor creation failed")
 		}
 		
 		// Verify interface compliance
-		var _ JobExecutor = parallelExecutor
-		var _ JobExecutor = sequentialExecutor
 		var _ JobExecutor = bufferedExecutor
 	})
 }

@@ -16,8 +16,6 @@ type ExecutionResult struct {
 
 // ExecutionConfig contains configuration for job execution
 type ExecutionConfig struct {
-	UseBuffering    bool
-	UseParallel     bool
 	HasDependencies bool
 	WorkflowOutput  *WorkflowOutput
 	JobScheduler    *JobScheduler
@@ -28,126 +26,6 @@ type JobExecutor interface {
 	Execute(job *Job, jobID string, ctx JobContext, config ExecutionConfig) ExecutionResult
 }
 
-// ParallelJobExecutor handles parallel job execution without dependencies
-type ParallelJobExecutor struct {
-	workflow *Workflow
-}
-
-// NewParallelJobExecutor creates a new parallel job executor
-func NewParallelJobExecutor(w *Workflow) *ParallelJobExecutor {
-	return &ParallelJobExecutor{workflow: w}
-}
-
-// Execute runs a job in parallel mode
-func (e *ParallelJobExecutor) Execute(job *Job, jobID string, ctx JobContext, config ExecutionConfig) ExecutionResult {
-	startTime := time.Now()
-
-	// Initialize repeat tracking
-	if job.Repeat != nil {
-		ctx.IsRepeating = true
-		ctx.RepeatTotal = job.Repeat.Count
-		ctx.StepCounters = make(map[int]StepRepeatCounter)
-	} else {
-		ctx.IsRepeating = false
-		ctx.RepeatTotal = 1
-		ctx.StepCounters = make(map[int]StepRepeatCounter)
-	}
-
-	success := true
-
-	// Execute with or without repeat
-	if job.Repeat != nil {
-		for i := 0; i < job.Repeat.Count; i++ {
-			ctx.RepeatCurrent = i + 1
-			if err := job.Start(ctx); err != nil {
-				success = false
-				e.workflow.SetExitStatus(true)
-				// Log the error for debugging
-				if ctx.Config.Verbose {
-					ctx.Printer.PrintError("Job execution failed: %v", err)
-				}
-			}
-			// Sleep between repeats (except for the last one)
-			if i < job.Repeat.Count-1 {
-				time.Sleep(job.Repeat.Interval.Duration)
-			}
-		}
-	} else {
-		ctx.RepeatCurrent = 1
-		if err := job.Start(ctx); err != nil {
-			success = false
-			e.workflow.SetExitStatus(true)
-			// Log the error for debugging
-			if ctx.Config.Verbose {
-				ctx.Printer.PrintError("Job execution failed: %v", err)
-			}
-		}
-	}
-
-	return ExecutionResult{
-		Success:  success,
-		Duration: time.Since(startTime),
-		Output:   "",
-		Error:    nil,
-	}
-}
-
-// SequentialJobExecutor handles sequential job execution with dependencies
-type SequentialJobExecutor struct {
-	workflow *Workflow
-}
-
-// NewSequentialJobExecutor creates a new sequential job executor
-func NewSequentialJobExecutor(w *Workflow) *SequentialJobExecutor {
-	return &SequentialJobExecutor{workflow: w}
-}
-
-// Execute runs a job in sequential mode with dependency management
-func (e *SequentialJobExecutor) Execute(job *Job, jobID string, ctx JobContext, config ExecutionConfig) ExecutionResult {
-	startTime := time.Now()
-	overallSuccess := true
-
-	// Initialize repeat tracking
-	_, total := config.JobScheduler.GetRepeatInfo(jobID)
-	ctx.IsRepeating = total > 1
-	ctx.RepeatTotal = total
-	ctx.StepCounters = make(map[int]StepRepeatCounter)
-
-	// Execute job with repeat logic
-	for config.JobScheduler.ShouldRepeatJob(jobID) {
-		current, _ := config.JobScheduler.GetRepeatInfo(jobID)
-		ctx.RepeatCurrent = current
-
-		// Execute single run
-		if err := job.Start(ctx); err != nil {
-			overallSuccess = false
-			e.workflow.SetExitStatus(true)
-			// Log the error for debugging
-			if ctx.Config.Verbose {
-				ctx.Printer.PrintError("Job execution failed: %v", err)
-			}
-		}
-
-		// Increment counter
-		config.JobScheduler.IncrementRepeatCounter(jobID)
-
-		// Sleep between repeats (except for the last one)
-		current, target := config.JobScheduler.GetRepeatInfo(jobID)
-		if current < target && job.Repeat != nil {
-			time.Sleep(job.Repeat.Interval.Duration)
-		}
-	}
-
-	// Mark job as completed
-	config.JobScheduler.SetJobStatus(jobID, JobCompleted, overallSuccess)
-
-	return ExecutionResult{
-		Success:  overallSuccess,
-		Duration: time.Since(startTime),
-		Output:   "",
-		Error:    nil,
-	}
-}
 
 // BufferedJobExecutor handles job execution with buffered output
 type BufferedJobExecutor struct {
@@ -218,7 +96,6 @@ func (e *BufferedJobExecutor) setupBufferedContext(ctx JobContext, jobID string,
 	ctx.IsRepeating = total > 1
 	ctx.RepeatTotal = total
 	ctx.StepCounters = make(map[int]StepRepeatCounter)
-	ctx.UseBuffering = true
 	return ctx
 }
 
