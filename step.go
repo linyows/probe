@@ -9,11 +9,12 @@ import (
 )
 
 type StepContext struct {
-	Vars map[string]any   `expr:"vars"`
-	Logs []map[string]any `expr:"steps"`
-	Res  map[string]any   `expr:"res"`
-	Req  map[string]any   `expr:"req"`
-	RT   string           `expr:"rt"`
+	Vars    map[string]any            `expr:"vars"`
+	Logs    []map[string]any          `expr:"steps"`
+	Res     map[string]any            `expr:"res"`
+	Req     map[string]any            `expr:"req"`
+	RT      string                    `expr:"rt"`
+	Results map[string]map[string]any `expr:"results"`
 }
 
 // StepRepeatCounter tracks the execution results of repeated steps
@@ -105,6 +106,10 @@ func (st *Step) Do(jCtx *JobContext) {
 		if st.Echo != "" {
 			st.DoEchoWithSequentialPrint(jCtx)
 		}
+		
+		// Save step results even in verbose mode
+		st.saveResults(jCtx)
+		
 		jCtx.Output.PrintSeparator()
 		return
 	}
@@ -285,9 +290,19 @@ func (st *Step) SetCtx(j JobContext, override map[string]any) {
 	if override != nil {
 		vers = MergeMaps(vers, override)
 	}
+	
+	// Use SharedResults if available, otherwise fallback to job-level results
+	var results map[string]map[string]any
+	if j.SharedResults != nil {
+		results = j.SharedResults.GetAll()
+	} else {
+		results = j.Results
+	}
+	
 	st.ctx = StepContext{
-		Vars: vers,
-		Logs: j.Logs,
+		Vars:    vers,
+		Logs:    j.Logs,
+		Results: results,
 	}
 }
 
@@ -498,8 +513,13 @@ func (st *Step) saveResults(jCtx *JobContext) {
 		results[resultName] = result
 	}
 
-	// Save results under step ID
+	// Save results under step ID (job-level)
 	jCtx.Results[st.ID] = results
+	
+	// Also save to SharedResults if available (workflow-level)
+	if jCtx.SharedResults != nil {
+		jCtx.SharedResults.Set(st.ID, results)
+	}
 
 	if jCtx.Config.Verbose {
 		jCtx.Output.LogDebug("Step '%s' results saved: %v", st.ID, results)

@@ -1,0 +1,40 @@
+name: Test Results Variables
+
+x_defaults: &defaults
+  http:
+    url: https://httpbin.org
+    headers:
+      content-type: application/json
+
+jobs:
+- name: Test Job 1
+  id: job1
+  defaults: *defaults
+  steps:
+  - name: Get my IP with set to results
+    id: step1
+    uses: http
+    with:
+      get: /get
+    echo: res.body.origin
+    results:
+      token: res.body.origin
+  - name: Post by results ip
+    uses: http
+    with:
+      post: /post
+      body:
+        myip: "{results.step1.token}"
+    echo: res.body.json.myip
+
+- name: Test Job 2
+  needs: [job1]
+  defaults: *defaults
+  steps:
+  - name: Use shared results over job
+    uses: http
+    with:
+      post: /post
+      body:
+        myip: "{results.step1.token}"
+    echo: results.step1.token

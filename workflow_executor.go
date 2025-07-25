@@ -12,6 +12,11 @@ func (w *Workflow) Start(c Config) error {
 	// Print workflow header at the beginning
 	output.PrintWorkflowHeader(w.Name, w.Description)
 
+	// Initialize shared results
+	if w.sharedResults == nil {
+		w.sharedResults = NewSharedResults()
+	}
+
 	vars, err := w.evalVars()
 	if err != nil {
 		return err
