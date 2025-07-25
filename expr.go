@@ -19,7 +19,7 @@ var (
 	templateEnd    = "}"
 
 	// Security: Maximum expression length and evaluation timeout
-	maxExpressionLength = 1000
+	maxExpressionLength = 1000000
 	evaluationTimeout   = 5 * time.Second
 
 	// Security: Maximum string length to prevent memory exhaustion
