@@ -17,7 +17,7 @@ type ExecutionResult struct {
 // ExecutionConfig contains configuration for job execution
 type ExecutionConfig struct {
 	HasDependencies bool
-	WorkflowOutput  *WorkflowOutput
+	WorkflowPrinter *WorkflowPrinter
 	JobScheduler    *JobScheduler
 }
 
@@ -41,11 +41,11 @@ func NewBufferedJobExecutor(w *Workflow) *BufferedJobExecutor {
 func (e *BufferedJobExecutor) Execute(job *Job, jobID string, ctx JobContext, config ExecutionConfig) ExecutionResult {
 	startTime := time.Now()
 
-	jo := config.WorkflowOutput.Jobs[jobID]
-	jo.mutex.Lock()
-	jo.StartTime = startTime
-	jo.Status = "Running"
-	jo.mutex.Unlock()
+	jp := config.WorkflowPrinter.Jobs[jobID]
+	jp.mutex.Lock()
+	jp.StartTime = startTime
+	jp.Status = "Running"
+	jp.mutex.Unlock()
 
 	// Use the existing buffered execution logic
 	result := e.executeWithBuffering(job, jobID, ctx, config)
@@ -61,33 +61,33 @@ func (e *BufferedJobExecutor) Execute(job *Job, jobID string, ctx JobContext, co
 // executeWithBuffering contains the buffered execution logic
 func (e *BufferedJobExecutor) executeWithBuffering(job *Job, jobID string, ctx JobContext, config ExecutionConfig) ExecutionResult {
 	startTime := time.Now()
-	jo := config.WorkflowOutput.Jobs[jobID]
+	jp := config.WorkflowPrinter.Jobs[jobID]
 
-	e.initializeJobForBuffering(jo, startTime)
+	e.initializeJobForBuffering(jp, startTime)
 	ctx = e.setupBufferedContext(ctx, jobID, config)
 
-	overallSuccess := e.executeJobRepeatLoop(job, jobID, ctx, config, jo)
+	overallSuccess := e.executeJobRepeatLoop(job, jobID, ctx, config, jp)
 
 	if ctx.IsRepeating {
-		e.printRepeatStepResults(&ctx, job, jo)
+		e.printRepeatStepResults(&ctx, job, jp)
 	}
 
-	duration := e.finalizeJobExecution(jo, startTime, overallSuccess, jobID, config)
+	duration := e.finalizeJobExecution(jp, startTime, overallSuccess, jobID, config)
 
 	return ExecutionResult{
 		Success:  overallSuccess,
 		Duration: duration,
-		Output:   jo.Buffer.String(),
+		Output:   jp.Buffer.String(),
 		Error:    nil,
 	}
 }
 
 // initializeJobForBuffering sets up the job output for buffered execution
-func (e *BufferedJobExecutor) initializeJobForBuffering(jo *JobOutput, startTime time.Time) {
-	jo.mutex.Lock()
-	jo.StartTime = startTime
-	jo.Status = "Running"
-	jo.mutex.Unlock()
+func (e *BufferedJobExecutor) initializeJobForBuffering(jp *JobPrinter, startTime time.Time) {
+	jp.mutex.Lock()
+	jp.StartTime = startTime
+	jp.Status = "Running"
+	jp.mutex.Unlock()
 }
 
 // setupBufferedContext initializes the job context for buffered execution
@@ -100,7 +100,7 @@ func (e *BufferedJobExecutor) setupBufferedContext(ctx JobContext, jobID string,
 }
 
 // executeJobRepeatLoop handles the main execution loop with repeat logic
-func (e *BufferedJobExecutor) executeJobRepeatLoop(job *Job, jobID string, ctx JobContext, config ExecutionConfig, jo *JobOutput) bool {
+func (e *BufferedJobExecutor) executeJobRepeatLoop(job *Job, jobID string, ctx JobContext, config ExecutionConfig, jp *JobPrinter) bool {
 	overallSuccess := true
 
 	for config.JobScheduler.ShouldRepeatJob(jobID) {
@@ -108,7 +108,7 @@ func (e *BufferedJobExecutor) executeJobRepeatLoop(job *Job, jobID string, ctx J
 		ctx.RepeatCurrent = current
 
 		// Serialize stdout redirection to prevent race conditions
-		config.WorkflowOutput.outputMutex.Lock()
+		config.WorkflowPrinter.outputMutex.Lock()
 
 		// Capture output by redirecting stdout temporarily
 		originalStdout := os.Stdout
@@ -122,14 +122,14 @@ func (e *BufferedJobExecutor) executeJobRepeatLoop(job *Job, jobID string, ctx J
 		wr.Close()
 		os.Stdout = originalStdout
 
-		config.WorkflowOutput.outputMutex.Unlock()
+		config.WorkflowPrinter.outputMutex.Unlock()
 
 		capturedOutput, _ := io.ReadAll(r)
 
 		// Add captured output to buffer
-		jo.mutex.Lock()
-		jo.Buffer.Write(capturedOutput)
-		jo.mutex.Unlock()
+		jp.mutex.Lock()
+		jp.Buffer.Write(capturedOutput)
+		jp.mutex.Unlock()
 
 		if err != nil {
 			overallSuccess = false
@@ -145,25 +145,25 @@ func (e *BufferedJobExecutor) executeJobRepeatLoop(job *Job, jobID string, ctx J
 
 // executeJobIteration executes a single iteration of the job with output capture
 //nolint:unused // Reserved for future use
-func (e *BufferedJobExecutor) executeJobIteration(job *Job, ctx JobContext, config ExecutionConfig, jo *JobOutput) bool {
+func (e *BufferedJobExecutor) executeJobIteration(job *Job, ctx JobContext, config ExecutionConfig, jp *JobPrinter) bool {
 	// Serialize stdout redirection to prevent race conditions
-	config.WorkflowOutput.outputMutex.Lock()
-	defer config.WorkflowOutput.outputMutex.Unlock()
+	config.WorkflowPrinter.outputMutex.Lock()
+	defer config.WorkflowPrinter.outputMutex.Unlock()
 
-	capturedOutput := e.captureJobOutput(job, ctx)
+	capturedOutput := e.captureJobResults(job, ctx)
 
 	// Add captured output to buffer
-	jo.mutex.Lock()
-	jo.Buffer.Write(capturedOutput)
-	jo.mutex.Unlock()
+	jp.mutex.Lock()
+	jp.Buffer.Write(capturedOutput)
+	jp.mutex.Unlock()
 
 	// Return success (job.Start returns error on failure)
 	return job.Start(ctx) == nil
 }
 
-// captureJobOutput captures the stdout output during job execution
+// captureJobResults captures the stdout results during job execution
 //nolint:unused // Reserved for future use
-func (e *BufferedJobExecutor) captureJobOutput(job *Job, ctx JobContext) []byte {
+func (e *BufferedJobExecutor) captureJobResults(job *Job, ctx JobContext) []byte {
 	// Capture output by redirecting stdout temporarily
 	originalStdout := os.Stdout
 	r, wr, _ := os.Pipe()
@@ -189,17 +189,17 @@ func (e *BufferedJobExecutor) sleepBetweenRepeats(jobID string, job *Job, config
 }
 
 // finalizeJobExecution updates the final job status and marks it as completed
-func (e *BufferedJobExecutor) finalizeJobExecution(jo *JobOutput, startTime time.Time, overallSuccess bool, jobID string, config ExecutionConfig) time.Duration {
-	jo.mutex.Lock()
+func (e *BufferedJobExecutor) finalizeJobExecution(jp *JobPrinter, startTime time.Time, overallSuccess bool, jobID string, config ExecutionConfig) time.Duration {
+	jp.mutex.Lock()
 	duration := time.Since(startTime)
-	jo.EndTime = jo.StartTime.Add(duration)
-	jo.Success = overallSuccess
+	jp.EndTime = jp.StartTime.Add(duration)
+	jp.Success = overallSuccess
 	if overallSuccess {
-		jo.Status = "Completed"
+		jp.Status = "Completed"
 	} else {
-		jo.Status = "Failed"
+		jp.Status = "Failed"
 	}
-	jo.mutex.Unlock()
+	jp.mutex.Unlock()
 
 	// Mark job as completed
 	config.JobScheduler.SetJobStatus(jobID, JobCompleted, overallSuccess)
@@ -208,7 +208,7 @@ func (e *BufferedJobExecutor) finalizeJobExecution(jo *JobOutput, startTime time
 }
 
 // printRepeatStepResults prints the final results of repeat step executions to buffer
-func (e *BufferedJobExecutor) printRepeatStepResults(ctx *JobContext, job *Job, jo *JobOutput) {
+func (e *BufferedJobExecutor) printRepeatStepResults(ctx *JobContext, job *Job, jp *JobPrinter) {
 	// Capture the step outputs output to buffer instead of printing directly
 	originalStdout := os.Stdout
 	r, wr, _ := os.Pipe()
@@ -230,7 +230,7 @@ func (e *BufferedJobExecutor) printRepeatStepResults(ctx *JobContext, job *Job, 
 	capturedOutput, _ := io.ReadAll(r)
 
 	// Add captured step outputs to job buffer
-	jo.mutex.Lock()
-	jo.Buffer.Write(capturedOutput)
-	jo.mutex.Unlock()
+	jp.mutex.Lock()
+	jp.Buffer.Write(capturedOutput)
+	jp.mutex.Unlock()
 }

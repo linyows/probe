@@ -43,14 +43,14 @@ func (w *Workflow) startWithBufferedExecution(ctx JobContext) error {
 		return err
 	}
 
-	workflowOutput := w.setupBufferedOutput()
+	workflowPrinter := w.setupBufferedOutput()
 
-	err = w.executeJobsWithDependencies(scheduler, ctx, workflowOutput)
+	err = w.executeJobsWithDependencies(scheduler, ctx, workflowPrinter)
 	if err != nil {
 		return err
 	}
 
-	w.printDetailedResults(workflowOutput, ctx.Printer)
+	w.printDetailedResults(workflowPrinter, ctx.Printer)
 	return nil
 }
 
@@ -73,40 +73,40 @@ func (w *Workflow) initJobScheduler() (*JobScheduler, error) {
 	return scheduler, nil
 }
 
-// setupBufferedOutput creates workflow output for buffering
-func (w *Workflow) setupBufferedOutput() *WorkflowOutput {
-	workflowOutput := NewWorkflowOutput()
+// setupBufferedOutput creates workflow printer for buffering
+func (w *Workflow) setupBufferedOutput() *WorkflowPrinter {
+	workflowPrinter := NewWorkflowPrinter()
 	// Initialize job outputs
 	for _, job := range w.Jobs {
 		jobID := job.ID
 		if jobID == "" {
 			jobID = job.Name
 		}
-		jo := &JobOutput{
+		jp := &JobPrinter{
 			JobName:   job.Name,
 			JobID:     jobID,
 			StartTime: time.Now(),
 		}
-		workflowOutput.Jobs[jobID] = jo
+		workflowPrinter.Jobs[jobID] = jp
 	}
 
-	return workflowOutput
+	return workflowPrinter
 }
 
 // executeJobsWithDependencies runs the main job execution loop with dependency management
-func (w *Workflow) executeJobsWithDependencies(scheduler *JobScheduler, ctx JobContext, workflowOutput *WorkflowOutput) error {
+func (w *Workflow) executeJobsWithDependencies(scheduler *JobScheduler, ctx JobContext, workflowPrinter *WorkflowPrinter) error {
 
 	for !scheduler.AllJobsCompleted() {
 		runnableJobs := scheduler.GetRunnableJobs()
 
 		if len(runnableJobs) == 0 {
-			if err := w.handleNoRunnableJobs(scheduler, workflowOutput); err != nil {
+			if err := w.handleNoRunnableJobs(scheduler, workflowPrinter); err != nil {
 				return err
 			}
 			continue
 		}
 
-		w.processRunnableJobs(runnableJobs, scheduler, ctx, workflowOutput)
+		w.processRunnableJobs(runnableJobs, scheduler, ctx, workflowPrinter)
 		scheduler.wg.Wait()
 	}
 
@@ -114,12 +114,12 @@ func (w *Workflow) executeJobsWithDependencies(scheduler *JobScheduler, ctx JobC
 }
 
 // handleNoRunnableJobs handles the case when no jobs can be run (failed dependencies or deadlock)
-func (w *Workflow) handleNoRunnableJobs(scheduler *JobScheduler, workflowOutput *WorkflowOutput) error {
+func (w *Workflow) handleNoRunnableJobs(scheduler *JobScheduler, workflowPrinter *WorkflowPrinter) error {
 	skippedJobs := scheduler.MarkJobsWithFailedDependencies()
 
-	// Update skipped jobs in workflow output
-	if workflowOutput != nil {
-		w.updateSkippedJobsOutput(skippedJobs, workflowOutput)
+	// Update skipped jobs in workflow printer
+	if workflowPrinter != nil {
+		w.updateSkippedJobsOutput(skippedJobs, workflowPrinter)
 	}
 
 	if len(skippedJobs) == 0 {
@@ -131,20 +131,20 @@ func (w *Workflow) handleNoRunnableJobs(scheduler *JobScheduler, workflowOutput 
 }
 
 // updateSkippedJobsOutput updates the output for jobs that were skipped due to failed dependencies
-func (w *Workflow) updateSkippedJobsOutput(skippedJobs []string, workflowOutput *WorkflowOutput) {
+func (w *Workflow) updateSkippedJobsOutput(skippedJobs []string, workflowPrinter *WorkflowPrinter) {
 	for _, jobID := range skippedJobs {
-		if jo, exists := workflowOutput.Jobs[jobID]; exists {
-			jo.mutex.Lock()
-			jo.EndTime = jo.StartTime // Set end time same as start time (0 duration)
-			jo.Status = "Skipped"
-			jo.Success = false
-			jo.mutex.Unlock()
+		if jp, exists := workflowPrinter.Jobs[jobID]; exists {
+			jp.mutex.Lock()
+			jp.EndTime = jp.StartTime // Set end time same as start time (0 duration)
+			jp.Status = "Skipped"
+			jp.Success = false
+			jp.mutex.Unlock()
 		}
 	}
 }
 
 // processRunnableJobs starts execution of all currently runnable jobs
-func (w *Workflow) processRunnableJobs(runnableJobs []string, scheduler *JobScheduler, ctx JobContext, workflowOutput *WorkflowOutput) {
+func (w *Workflow) processRunnableJobs(runnableJobs []string, scheduler *JobScheduler, ctx JobContext, workflowPrinter *WorkflowPrinter) {
 	for _, jobID := range runnableJobs {
 		job := scheduler.jobs[jobID]
 		scheduler.SetJobStatus(jobID, JobRunning, false)
@@ -155,7 +155,7 @@ func (w *Workflow) processRunnableJobs(runnableJobs []string, scheduler *JobSche
 
 			config := ExecutionConfig{
 				HasDependencies: true,
-				WorkflowOutput:  workflowOutput,
+				WorkflowPrinter: workflowPrinter,
 				JobScheduler:    scheduler,
 			}
 
@@ -169,7 +169,7 @@ func (w *Workflow) processRunnableJobs(runnableJobs []string, scheduler *JobSche
 }
 
 // printDetailedResults prints the final detailed results
-func (w *Workflow) printDetailedResults(wo *WorkflowOutput, printer PrintWriter) {
+func (w *Workflow) printDetailedResults(wp *WorkflowPrinter, printer PrintWriter) {
 	totalTime := time.Duration(0)
 	successCount := 0
 
@@ -179,32 +179,32 @@ func (w *Workflow) printDetailedResults(wo *WorkflowOutput, printer PrintWriter)
 		if jobID == "" {
 			jobID = job.Name
 		}
-		jo, exists := wo.Jobs[jobID]
+		jp, exists := wp.Jobs[jobID]
 		if !exists {
 			continue
 		}
 
-		jo.mutex.Lock()
-		duration := jo.EndTime.Sub(jo.StartTime)
+		jp.mutex.Lock()
+		duration := jp.EndTime.Sub(jp.StartTime)
 		totalTime += duration
 
 		status := StatusSuccess
-		if jo.Status == "Skipped" {
+		if jp.Status == "Skipped" {
 			status = StatusWarning
-		} else if !jo.Success {
+		} else if !jp.Success {
 			status = StatusError
 		} else {
 			successCount++
 		}
 
-		printer.PrintJobResult(jo.JobName, status, duration.Seconds())
-		printer.PrintJobOutput(jo.Buffer.String())
+		printer.PrintJobResult(jp.JobName, status, duration.Seconds())
+		printer.PrintJobResults(jp.Buffer.String())
 
-		jo.mutex.Unlock()
+		jp.mutex.Unlock()
 	}
 
 	// Print summary
-	totalJobs := len(wo.Jobs)
+	totalJobs := len(wp.Jobs)
 	printer.PrintWorkflowSummary(totalTime.Seconds(), successCount, totalJobs)
 }
 
