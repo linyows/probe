@@ -62,7 +62,7 @@ type PrintWriter interface {
 
 	// Job level output
 	PrintJobResult(jobName string, status StatusType, duration float64)
-	PrintJobOutput(output string)
+	PrintJobResults(output string)
 
 	// Workflow summary
 	PrintWorkflowSummary(totalTime float64, successCount, totalJobs int)
@@ -233,8 +233,8 @@ func (p *Printer) PrintJobResult(jobName string, status StatusType, duration flo
 		dt)
 }
 
-// PrintJobOutput prints buffered job output
-func (p *Printer) PrintJobOutput(output string) {
+// PrintJobResults prints buffered job results
+func (p *Printer) PrintJobResults(output string) {
 	output = strings.TrimSpace(output)
 	if output != "" {
 		lines := strings.Split(output, "\n")
@@ -332,8 +332,8 @@ func (s *SilentPrinter) PrintStepRepeatResult(stepIdx int, counter StepRepeatCou
 // PrintJobResult does nothing in silent mode
 func (s *SilentPrinter) PrintJobResult(jobName string, status StatusType, duration float64) {}
 
-// PrintJobOutput does nothing in silent mode
-func (s *SilentPrinter) PrintJobOutput(output string) {}
+// PrintJobResults does nothing in silent mode
+func (s *SilentPrinter) PrintJobResults(output string) {}
 
 // PrintWorkflowSummary does nothing in silent mode
 func (s *SilentPrinter) PrintWorkflowSummary(totalTime float64, successCount, totalJobs int) {}
