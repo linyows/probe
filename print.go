@@ -52,7 +52,7 @@ const (
 // PrintWriter defines the interface for different print implementations
 type PrintWriter interface {
 	// Workflow level output
-	PrintWorkflowHeader(name, description string)
+	PrintHeader(name, description string)
 	PrintJobName(name string)
 
 	// Step level output
@@ -115,8 +115,8 @@ func NewPrinter(verbose bool) *Printer {
 	}
 }
 
-// PrintWorkflowHeader prints the workflow name and description
-func (p *Printer) PrintWorkflowHeader(name, description string) {
+// PrintHeader prints the workflow name and description
+func (p *Printer) PrintHeader(name, description string) {
 	if name != "" {
 		bold := color.New(color.Bold)
 		bold.Printf("%s\n", name)
@@ -314,8 +314,8 @@ func NewSilentPrinter() *SilentPrinter {
 	return &SilentPrinter{}
 }
 
-// PrintWorkflowHeader does nothing in silent mode
-func (s *SilentPrinter) PrintWorkflowHeader(name, description string) {}
+// PrintHeader does nothing in silent mode
+func (s *SilentPrinter) PrintHeader(name, description string) {}
 
 // PrintJobName does nothing in silent mode
 func (s *SilentPrinter) PrintJobName(name string) {}
