@@ -11,7 +11,7 @@ test:
 		sed -E 's/^FAIL$$/\x1B[31m✘ FAIL\x1B[0m/'
 
 lint:
-	golangci-lint run
+	golangci-lint run ./...
 
 key:
 	@rm -rf keys/*.pem
