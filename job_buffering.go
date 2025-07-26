@@ -6,8 +6,8 @@ import (
 	"time"
 )
 
-// JobOutput stores buffered output for a job
-type JobOutput struct {
+// JobPrinter stores buffered output for a job
+type JobPrinter struct {
 	JobName   string
 	JobID     string
 	Buffer    strings.Builder
@@ -18,16 +18,16 @@ type JobOutput struct {
 	mutex     sync.Mutex
 }
 
-// WorkflowOutput manages output for multiple jobs
-type WorkflowOutput struct {
-	Jobs        map[string]*JobOutput
+// WorkflowPrinter manages output for multiple jobs
+type WorkflowPrinter struct {
+	Jobs        map[string]*JobPrinter
 	mutex       sync.RWMutex //nolint:unused // Reserved for future concurrent access
 	outputMutex sync.Mutex   // Protects stdout redirection
 }
 
-// NewWorkflowOutput creates a new WorkflowOutput instance
-func NewWorkflowOutput() *WorkflowOutput {
-	return &WorkflowOutput{
-		Jobs: make(map[string]*JobOutput),
+// NewWorkflowPrinter creates a new WorkflowPrinter instance
+func NewWorkflowPrinter() *WorkflowPrinter {
+	return &WorkflowPrinter{
+		Jobs: make(map[string]*JobPrinter),
 	}
 }
