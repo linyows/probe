@@ -19,4 +19,4 @@ jobs:
       with:
         go-version: ${{ matrix.go-version }}
     - name: Run test
-      run: go test -v -short ./...
+      run: make test
