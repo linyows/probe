@@ -20,3 +20,7 @@ jobs:
         go-version: ${{ matrix.go-version }}
     - name: Run test
       run: make test
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    - name: Run octocov
+      uses: k1LoW/octocov-action@v0
