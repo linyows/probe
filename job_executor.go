@@ -26,7 +26,6 @@ type JobExecutor interface {
 	Execute(job *Job, jobID string, ctx JobContext, config ExecutionConfig) ExecutionResult
 }
 
-
 // BufferedJobExecutor handles job execution with buffered output
 type BufferedJobExecutor struct {
 	workflow *Workflow
@@ -69,7 +68,7 @@ func (e *BufferedJobExecutor) executeWithBuffering(job *Job, jobID string, ctx J
 	overallSuccess := e.executeJobRepeatLoop(job, jobID, ctx, config, jb)
 
 	if ctx.IsRepeating {
-		e.printRepeatStepResults(&ctx, job, jb)
+		e.appendRepeatStepResults(&ctx, job, jb)
 	}
 
 	duration := e.finalizeJobExecution(jb, startTime, overallSuccess, jobID, config)
@@ -144,6 +143,7 @@ func (e *BufferedJobExecutor) executeJobRepeatLoop(job *Job, jobID string, ctx J
 }
 
 // executeJobIteration executes a single iteration of the job with output capture
+//
 //nolint:unused // Reserved for future use
 func (e *BufferedJobExecutor) executeJobIteration(job *Job, ctx JobContext, config ExecutionConfig, jb *JobBuffer) bool {
 	// Serialize stdout redirection to prevent race conditions
@@ -162,6 +162,7 @@ func (e *BufferedJobExecutor) executeJobIteration(job *Job, ctx JobContext, conf
 }
 
 // captureJobResults captures the stdout results during job execution
+//
 //nolint:unused // Reserved for future use
 func (e *BufferedJobExecutor) captureJobResults(job *Job, ctx JobContext) []byte {
 	// Capture output by redirecting stdout temporarily
@@ -207,19 +208,17 @@ func (e *BufferedJobExecutor) finalizeJobExecution(jb *JobBuffer, startTime time
 	return duration
 }
 
-// printRepeatStepResults prints the final results of repeat step executions to buffer
-func (e *BufferedJobExecutor) printRepeatStepResults(ctx *JobContext, job *Job, jb *JobBuffer) {
+// appendRepeatStepResults appends the final results of repeat step executions to buffer
+func (e *BufferedJobExecutor) appendRepeatStepResults(ctx *JobContext, job *Job, jb *JobBuffer) {
 	// Capture the step outputs output to buffer instead of printing directly
 	originalStdout := os.Stdout
 	r, wr, _ := os.Pipe()
 	os.Stdout = wr
 
-	output := ctx.Printer
-
 	for i, step := range job.Steps {
 		if counter, exists := ctx.StepCounters[i]; exists {
 			hasTest := step.Test != ""
-			output.PrintStepRepeatResult(i, counter, hasTest)
+			ctx.Printer.PrintStepRepeatResult(i, counter, hasTest)
 		}
 	}
 

@@ -69,7 +69,7 @@ func TestExecutionConfig_Structure(t *testing.T) {
 	}
 }
 
-func TestBufferedJobExecutor_PrintRepeatStepResults(t *testing.T) {
+func TestBufferedJobExecutor_AppendRepeatStepResults(t *testing.T) {
 	workflow := &Workflow{Name: "test-workflow"}
 	executor := NewBufferedJobExecutor(workflow)
 	
@@ -104,12 +104,12 @@ func TestBufferedJobExecutor_PrintRepeatStepResults(t *testing.T) {
 	}
 	
 	// Call the method
-	executor.printRepeatStepResults(&ctx, job, jobBuffer)
+	executor.appendRepeatStepResults(&ctx, job, jobBuffer)
 	
 	// Check if output was captured
 	output := jobBuffer.Buffer.String()
 	if len(output) == 0 {
-		t.Error("printRepeatStepResults should generate output")
+		t.Error("appendRepeatStepResults should generate output")
 	}
 	
 	// Should contain step outputs (success ratio or similar indicator)
