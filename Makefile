@@ -4,14 +4,14 @@ build:
 	env CGO_ENABLED=0 go build -ldflags="-s -w" -o probe ./cmd/probe/...
 
 test:
-	@go test -v . | \
+	@go test -v ./... -coverprofile=coverage.out -covermode=count | \
 		sed -E 's/--- PASS:/--- \x1B[38;5;34m✔︎ \x1B[0mPASS:/g' | \
 		sed -E 's/--- FAIL:/--- \x1B[31m✘ FAIL\x1B[0m:/g' | \
 		sed -E 's/^PASS$$/\x1B[38;5;34m✔︎ PASS\x1B[0m/' | \
 		sed -E 's/^FAIL$$/\x1B[31m✘ FAIL\x1B[0m/'
 
 lint:
-	golangci-lint run
+	golangci-lint run ./...
 
 key:
 	@rm -rf keys/*.pem
