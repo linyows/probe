@@ -29,10 +29,15 @@ func NewTestServer(port int) *TestServer {
 				"status": statusCode,
 				"path":   r.URL.Path,
 			}
-			json.NewEncoder(w).Encode(response)
+			if err := json.NewEncoder(w).Encode(response); err != nil {
+				http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+				return
+			}
 		} else {
 			w.WriteHeader(http.StatusBadRequest)
-			json.NewEncoder(w).Encode(map[string]string{"error": "invalid status code"})
+			if err := json.NewEncoder(w).Encode(map[string]string{"error": "invalid status code"}); err != nil {
+				http.Error(w, "Failed to encode error response", http.StatusInternalServerError)
+			}
 		}
 	})
 	
@@ -50,7 +55,10 @@ func NewTestServer(port int) *TestServer {
 			"origin": r.RemoteAddr,
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(response)
+		if err := json.NewEncoder(w).Encode(response); err != nil {
+			http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+			return
+		}
 	})
 	
 	// POST endpoint - similar to httpbin.org/post
@@ -62,7 +70,10 @@ func NewTestServer(port int) *TestServer {
 		
 		var body interface{}
 		if r.Header.Get("Content-Type") == "application/json" {
-			json.NewDecoder(r.Body).Decode(&body)
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				// Ignore decode errors for malformed JSON
+				body = nil
+			}
 		}
 		
 		response := map[string]interface{}{
@@ -73,7 +84,10 @@ func NewTestServer(port int) *TestServer {
 			"json":    body,
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(response)
+		if err := json.NewEncoder(w).Encode(response); err != nil {
+			http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+			return
+		}
 	})
 	
 	server := &http.Server{
@@ -97,7 +111,9 @@ func (ts *TestServer) Start() error {
 	ts.port = listener.Addr().(*net.TCPAddr).Port
 	
 	go func() {
-		ts.server.Serve(listener)
+		if err := ts.server.Serve(listener); err != nil && err != http.ErrServerClosed {
+			_ = err // Explicitly ignore error
+		}
 	}()
 	return nil
 }

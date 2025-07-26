@@ -1,7 +1,6 @@
 package probe
 
 import (
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"strings"
@@ -17,7 +16,11 @@ func TestEndToEndExitCodes(t *testing.T) {
 	if err := server.Start(); err != nil {
 		t.Fatalf("failed to start test server: %v", err)
 	}
-	defer server.Stop()
+	defer func() {
+		if err := server.Stop(); err != nil {
+			t.Logf("Error stopping server: %v", err)
+		}
+	}()
 	
 	// Give server time to start
 	time.Sleep(100 * time.Millisecond)
@@ -48,7 +51,7 @@ func TestEndToEndExitCodes(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Create temporary workflow file with correct port
-			templateContent, err := ioutil.ReadFile(tt.templatePath)
+			templateContent, err := os.ReadFile(tt.templatePath)
 			if err != nil {
 				t.Fatalf("failed to read template file: %v", err)
 			}
@@ -56,7 +59,7 @@ func TestEndToEndExitCodes(t *testing.T) {
 			workflowContent := strings.ReplaceAll(string(templateContent), "PORT_PLACEHOLDER", port)
 			
 			// Create temporary file
-			tmpFile, err := ioutil.TempFile("", "test-workflow-*.yml")
+			tmpFile, err := os.CreateTemp("", "test-workflow-*.yml")
 			if err != nil {
 				t.Fatalf("failed to create temp file: %v", err)
 			}
