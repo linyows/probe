@@ -51,8 +51,8 @@ const (
 	LogLevelError
 )
 
-// JobPrinter stores buffered output for a job
-type JobPrinter struct {
+// JobBuffer stores buffered output for a job
+type JobBuffer struct {
 	JobName   string
 	JobID     string
 	Buffer    strings.Builder
@@ -63,17 +63,17 @@ type JobPrinter struct {
 	mutex     sync.Mutex
 }
 
-// WorkflowPrinter manages output for multiple jobs
-type WorkflowPrinter struct {
-	Jobs        map[string]*JobPrinter
+// WorkflowBuffer manages output for multiple jobs
+type WorkflowBuffer struct {
+	Jobs        map[string]*JobBuffer
 	mutex       sync.RWMutex //nolint:unused // Reserved for future concurrent access
 	outputMutex sync.Mutex   // Protects stdout redirection
 }
 
-// NewWorkflowPrinter creates a new WorkflowPrinter instance
-func NewWorkflowPrinter() *WorkflowPrinter {
-	return &WorkflowPrinter{
-		Jobs: make(map[string]*JobPrinter),
+// NewWorkflowBuffer creates a new WorkflowBuffer instance
+func NewWorkflowBuffer() *WorkflowBuffer {
+	return &WorkflowBuffer{
+		Jobs: make(map[string]*JobBuffer),
 	}
 }
 
@@ -89,11 +89,11 @@ type PrintWriter interface {
 	PrintStepRepeatResult(stepIdx int, counter StepRepeatCounter, hasTest bool)
 
 	// Job level output
-	PrintJobResult(jobName string, status StatusType, duration float64)
+	PrintJobStatus(jobName string, status StatusType, duration float64)
 	PrintJobResults(output string)
 
 	// Workflow summary
-	PrintWorkflowSummary(totalTime float64, successCount, totalJobs int)
+	PrintFooter(totalTime float64, successCount, totalJobs int)
 
 	// Error output
 	PrintError(format string, args ...interface{})
@@ -230,8 +230,8 @@ func (p *Printer) PrintStepRepeatResult(stepIdx int, counter StepRepeatCounter, 
 	}
 }
 
-// PrintJobResult prints the result of a job execution
-func (p *Printer) PrintJobResult(jobName string, status StatusType, duration float64) {
+// PrintJobStatus prints the result of a job execution
+func (p *Printer) PrintJobStatus(jobName string, status StatusType, duration float64) {
 	statusColor := colorSuccess()
 	statusIcon := IconCircle
 
@@ -279,8 +279,8 @@ func (p *Printer) PrintJobResults(output string) {
 	fmt.Println()
 }
 
-// PrintWorkflowSummary prints the workflow execution summary
-func (p *Printer) PrintWorkflowSummary(totalTime float64, successCount, totalJobs int) {
+// PrintFooter prints the workflow execution summary
+func (p *Printer) PrintFooter(totalTime float64, successCount, totalJobs int) {
 	if successCount == totalJobs {
 		fmt.Printf("Total workflow time: %.2fs %s\n",
 			totalTime,
@@ -357,14 +357,14 @@ func (s *SilentPrinter) PrintStepRepeatStart(stepIdx int, stepName string, repea
 // PrintStepRepeatResult does nothing in silent mode
 func (s *SilentPrinter) PrintStepRepeatResult(stepIdx int, counter StepRepeatCounter, hasTest bool) {}
 
-// PrintJobResult does nothing in silent mode
-func (s *SilentPrinter) PrintJobResult(jobName string, status StatusType, duration float64) {}
+// PrintJobStatus does nothing in silent mode
+func (s *SilentPrinter) PrintJobStatus(jobName string, status StatusType, duration float64) {}
 
 // PrintJobResults does nothing in silent mode
 func (s *SilentPrinter) PrintJobResults(output string) {}
 
-// PrintWorkflowSummary does nothing in silent mode
-func (s *SilentPrinter) PrintWorkflowSummary(totalTime float64, successCount, totalJobs int) {}
+// PrintFooter does nothing in silent mode
+func (s *SilentPrinter) PrintFooter(totalTime float64, successCount, totalJobs int) {}
 
 // PrintError does nothing in silent mode
 func (s *SilentPrinter) PrintError(format string, args ...interface{}) {}

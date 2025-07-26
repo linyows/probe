@@ -48,20 +48,20 @@ func TestExecutionResult_Structure(t *testing.T) {
 
 func TestExecutionConfig_Structure(t *testing.T) {
 	scheduler := NewJobScheduler()
-	workflowPrinter := NewWorkflowPrinter()
+	workflowBuffer := NewWorkflowBuffer()
 	
 	config := ExecutionConfig{
-		HasDependencies:  true,
-		WorkflowPrinter:  workflowPrinter,
-		JobScheduler:     scheduler,
+		HasDependencies: true,
+		WorkflowBuffer:  workflowBuffer,
+		JobScheduler:    scheduler,
 	}
 	
 	if !config.HasDependencies {
 		t.Error("ExecutionConfig.HasDependencies should be true")
 	}
 	
-	if config.WorkflowPrinter != workflowPrinter {
-		t.Error("ExecutionConfig.WorkflowPrinter should match assigned value")
+	if config.WorkflowBuffer != workflowBuffer {
+		t.Error("ExecutionConfig.WorkflowBuffer should match assigned value")
 	}
 	
 	if config.JobScheduler != scheduler {
@@ -97,17 +97,17 @@ func TestBufferedJobExecutor_PrintRepeatStepResults(t *testing.T) {
 		},
 	}
 	
-	jobPrinter := &JobPrinter{
+	jobBuffer := &JobBuffer{
 		JobName: job.Name,
 		JobID:   "test-job",
 		Buffer:  strings.Builder{},
 	}
 	
 	// Call the method
-	executor.printRepeatStepResults(&ctx, job, jobPrinter)
+	executor.printRepeatStepResults(&ctx, job, jobBuffer)
 	
 	// Check if output was captured
-	output := jobPrinter.Buffer.String()
+	output := jobBuffer.Buffer.String()
 	if len(output) == 0 {
 		t.Error("printRepeatStepResults should generate output")
 	}

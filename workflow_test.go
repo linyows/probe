@@ -306,9 +306,9 @@ func TestWorkflowExecutor_PrintDetailedResults(t *testing.T) {
 			},
 		}
 
-		// Create workflow printer
-		workflowPrinter := NewWorkflowPrinter()
-		jobPrinter := &JobPrinter{
+		// Create workflow buffer
+		workflowBuffer := NewWorkflowBuffer()
+		jobBuffer := &JobBuffer{
 			JobName:   "test-job",
 			JobID:     "test-job",
 			Buffer:    strings.Builder{},
@@ -317,12 +317,12 @@ func TestWorkflowExecutor_PrintDetailedResults(t *testing.T) {
 			EndTime:   time.Now(),
 			Success:   true,
 		}
-		workflowPrinter.Jobs["test-job"] = jobPrinter
+		workflowBuffer.Jobs["test-job"] = jobBuffer
 
 		output := NewSilentPrinter()
 
 		// This should not panic and should execute successfully
-		workflow.printDetailedResults(workflowPrinter, output)
+		workflow.printResults(workflowBuffer, output)
 
 		// If we get here without panic, the test passes
 	})
@@ -588,39 +588,39 @@ func TestExecutor_ConcurrencyEdgeCases(t *testing.T) {
 
 func TestBuffering_OutputCapture(t *testing.T) {
 	t.Run("buffered output isolation", func(t *testing.T) {
-		// Create workflow printer manually to test buffering
-		workflowPrinter := NewWorkflowPrinter()
+		// Create workflow buffer manually to test buffering
+		workflowBuffer := NewWorkflowBuffer()
 
 		// Test that job outputs are isolated
-		job1Printer := &JobPrinter{
+		job1Buffer := &JobBuffer{
 			JobName: "job1",
 			JobID:   "job1",
 			Buffer:  strings.Builder{},
 		}
-		job2Printer := &JobPrinter{
+		job2Buffer := &JobBuffer{
 			JobName: "job2",
 			JobID:   "job2",
 			Buffer:  strings.Builder{},
 		}
 
-		workflowPrinter.Jobs["job1"] = job1Printer
-		workflowPrinter.Jobs["job2"] = job2Printer
+		workflowBuffer.Jobs["job1"] = job1Buffer
+		workflowBuffer.Jobs["job2"] = job2Buffer
 
 		// Write to different job buffers
-		job1Printer.Buffer.WriteString("output from job1")
-		job2Printer.Buffer.WriteString("output from job2")
+		job1Buffer.Buffer.WriteString("output from job1")
+		job2Buffer.Buffer.WriteString("output from job2")
 
 		// Verify isolation
-		if !strings.Contains(job1Printer.Buffer.String(), "job1") {
+		if !strings.Contains(job1Buffer.Buffer.String(), "job1") {
 			t.Error("Job1 buffer should contain job1 output")
 		}
-		if strings.Contains(job1Printer.Buffer.String(), "job2") {
+		if strings.Contains(job1Buffer.Buffer.String(), "job2") {
 			t.Error("Job1 buffer should not contain job2 output")
 		}
-		if !strings.Contains(job2Printer.Buffer.String(), "job2") {
+		if !strings.Contains(job2Buffer.Buffer.String(), "job2") {
 			t.Error("Job2 buffer should contain job2 output")
 		}
-		if strings.Contains(job2Printer.Buffer.String(), "job1") {
+		if strings.Contains(job2Buffer.Buffer.String(), "job1") {
 			t.Error("Job2 buffer should not contain job1 output")
 		}
 	})
