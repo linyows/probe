@@ -72,10 +72,10 @@ func (st *Step) prepare(jCtx *JobContext) (string, bool) {
 	if st.Name == "" {
 		st.Name = "Unknown Step"
 	}
-	
+
 	// Handle wait before step execution
 	st.handleWait(jCtx)
-	
+
 	// Evaluate step name
 	name, err := st.expr.EvalTemplate(st.Name, st.ctx)
 	if err != nil {
@@ -118,7 +118,7 @@ func (st *Step) processActionResult(actionResult map[string]any, jCtx *JobContex
 	req, _ := actionResult["req"].(map[string]any)
 	res, okres := actionResult["res"].(map[string]any)
 	rt, _ := actionResult["rt"].(string)
-	
+
 	if okres {
 		body, okbody := res["body"].(string)
 		if okbody && isJSON(body) {
@@ -266,7 +266,7 @@ func (st *Step) handleRepeatExecution(jCtx *JobContext, name, rt string, okrt bo
 	if isFirstExecution {
 		jCtx.Printer.PrintStepRepeatStart(st.idx, name, jCtx.RepeatTotal)
 	}
-	
+
 	if isFinalExecution {
 		jCtx.Printer.PrintStepRepeatResult(st.idx, counter, hasTest)
 	}
@@ -345,13 +345,13 @@ func (st *Step) SetCtx(j JobContext, override map[string]any) {
 	if override != nil {
 		vers = MergeMaps(vers, override)
 	}
-	
+
 	// Use outputs from the unified Outputs structure
 	var outputs map[string]map[string]any
 	if j.Outputs != nil {
 		outputs = j.Outputs.GetAll()
 	}
-	
+
 	st.ctx = StepContext{
 		Vars:    vers,
 		Logs:    j.Logs,
@@ -370,10 +370,10 @@ func (st *Step) ShowRequestResponse(name string, jCtx *JobContext) {
 	jCtx.Printer.LogDebug("--- Step %d: %s", st.idx, name)
 	jCtx.Printer.LogDebug("Request:")
 	st.printMapData(st.ctx.Req, jCtx)
-	
+
 	jCtx.Printer.LogDebug("Response:")
 	st.printMapData(st.ctx.Res, jCtx)
-	
+
 	jCtx.Printer.LogDebug("RT: %s", colorWarning().Sprintf("%s", st.ctx.RT))
 }
 
@@ -526,7 +526,7 @@ func (st *Step) handleSkipRepeatExecution(jCtx *JobContext, name string) {
 	if isFirstExecution {
 		jCtx.Printer.PrintStepRepeatStart(st.idx, name+" (SKIPPED)", jCtx.RepeatTotal)
 	}
-	
+
 	if isFinalExecution {
 		jCtx.Printer.PrintStepRepeatResult(st.idx, counter, false) // hasTest = false for skipped
 	}

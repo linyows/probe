@@ -43,8 +43,8 @@ func (j *Job) Start(ctx JobContext) error {
 		return NewExecutionError("job_start", "step validation failed", err)
 	}
 
-	if err := j.processJobName(expr, ctx); err != nil {
-		return NewExecutionError("job_start", "failed to process job name", err)
+	if err := j.expandJobName(expr, ctx); err != nil {
+		return NewExecutionError("job_start", "failed to expand job name", err)
 	}
 
 	j.executeSteps(expr, ctx)
@@ -55,21 +55,19 @@ func (j *Job) Start(ctx JobContext) error {
 	return nil
 }
 
-// processJobName evaluates and sets the job name, printing it if appropriate
-func (j *Job) processJobName(expr *Expr, ctx JobContext) error {
+// expandJobName evaluates and sets the job name, printing it if appropriate
+func (j *Job) expandJobName(expr *Expr, ctx JobContext) error {
 	if j.Name == "" {
 		j.Name = "Unknown Job"
+		return nil
 	}
 
 	name, err := expr.EvalTemplate(j.Name, ctx)
 	if err != nil {
-		ctx.Printer.PrintError("job name evaluation error: %v", err)
 		return err
 	}
 
 	j.Name = name
-	// Job names are now handled by the buffered output system
-
 	return nil
 }
 

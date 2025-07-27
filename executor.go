@@ -33,11 +33,10 @@ func NewExecutor(w *Workflow) *Executor {
 
 // Execute runs a job with buffered output
 func (e *Executor) Execute(job *Job, jobID string, ctx JobContext, config ExecutionConfig) ExecutionResult {
-	startTime := time.Now()
-
 	jb := config.WorkflowBuffer.Jobs[jobID]
+
 	jb.mutex.Lock()
-	jb.StartTime = startTime
+	jb.StartTime = time.Now()
 	jb.Status = "Running"
 	jb.mutex.Unlock()
 
@@ -54,11 +53,9 @@ func (e *Executor) Execute(job *Job, jobID string, ctx JobContext, config Execut
 
 // executeWithBuffering contains the buffered execution logic
 func (e *Executor) executeWithBuffering(job *Job, jobID string, ctx JobContext, config ExecutionConfig) ExecutionResult {
-	startTime := time.Now()
 	jb := config.WorkflowBuffer.Jobs[jobID]
 
-	e.initializeJobForBuffering(jb, startTime)
-	ctx = e.setupBufferedContext(ctx, jobID, config)
+	ctx = e.setupContext(ctx, jobID, config)
 
 	overallSuccess := e.executeJobRepeatLoop(job, jobID, ctx, config, jb)
 
@@ -66,7 +63,7 @@ func (e *Executor) executeWithBuffering(job *Job, jobID string, ctx JobContext, 
 		e.appendRepeatStepResults(&ctx, job, jb)
 	}
 
-	duration := e.finalizeJobExecution(jb, startTime, overallSuccess, jobID, config)
+	duration := e.finalize(jb, overallSuccess, jobID, config)
 
 	return ExecutionResult{
 		Success:  overallSuccess,
@@ -76,16 +73,8 @@ func (e *Executor) executeWithBuffering(job *Job, jobID string, ctx JobContext, 
 	}
 }
 
-// initializeJobForBuffering sets up the job output for buffered execution
-func (e *Executor) initializeJobForBuffering(jb *JobBuffer, startTime time.Time) {
-	jb.mutex.Lock()
-	jb.StartTime = startTime
-	jb.Status = "Running"
-	jb.mutex.Unlock()
-}
-
-// setupBufferedContext initializes the job context for buffered execution
-func (e *Executor) setupBufferedContext(ctx JobContext, jobID string, config ExecutionConfig) JobContext {
+// setupContext initializes the job context for buffered execution
+func (e *Executor) setupContext(ctx JobContext, jobID string, config ExecutionConfig) JobContext {
 	_, total := config.JobScheduler.GetRepeatInfo(jobID)
 	ctx.IsRepeating = total > 1
 	ctx.RepeatTotal = total
@@ -184,10 +173,10 @@ func (e *Executor) sleepBetweenRepeats(jobID string, job *Job, config ExecutionC
 	}
 }
 
-// finalizeJobExecution updates the final job status and marks it as completed
-func (e *Executor) finalizeJobExecution(jb *JobBuffer, startTime time.Time, overallSuccess bool, jobID string, config ExecutionConfig) time.Duration {
+// finalize updates the final job status and marks it as completed
+func (e *Executor) finalize(jb *JobBuffer, overallSuccess bool, jobID string, config ExecutionConfig) time.Duration {
 	jb.mutex.Lock()
-	duration := time.Since(startTime)
+	duration := time.Since(jb.StartTime)
 	jb.EndTime = jb.StartTime.Add(duration)
 	jb.Success = overallSuccess
 	if overallSuccess {

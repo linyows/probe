@@ -22,7 +22,6 @@ type Config struct {
 	Log     io.Writer
 	Verbose bool
 	RT      bool
-	Printer PrintWriter
 }
 
 func New(path string, v bool) *Probe {
@@ -32,20 +31,6 @@ func New(path string, v bool) *Probe {
 			Log:     os.Stdout,
 			Verbose: v,
 			RT:      false,
-			Printer:  NewPrinter(v),
-		},
-	}
-}
-
-// NewWithPrinter creates a new Probe with a custom PrintWriter (useful for testing)
-func NewWithPrinter(path string, v bool, printer PrintWriter) *Probe {
-	return &Probe{
-		FilePath: path,
-		Config: Config{
-			Log:     os.Stdout,
-			Verbose: v,
-			RT:      false,
-			Printer:  printer,
 		},
 	}
 }
@@ -95,7 +80,7 @@ func (p *Probe) readYamlFiles(paths []string) (string, error) {
 			return "", err
 		}
 		y.Write(data)
-		
+
 		// Add newline between files to prevent concatenation issues
 		if i < len(paths)-1 && len(data) > 0 && data[len(data)-1] != '\n' {
 			y.WriteByte('\n')

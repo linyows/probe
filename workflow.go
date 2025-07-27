@@ -1,6 +1,8 @@
 package probe
 
-import "time"
+import (
+	"time"
+)
 
 type Workflow struct {
 	Name        string         `yaml:"name" validate:"required"`
@@ -11,14 +13,17 @@ type Workflow struct {
 	env         map[string]string
 	// Shared outputs across all jobs
 	outputs *Outputs
+	printer PrintWriter
 }
 
 // Start executes the workflow with the given configuration
 func (w *Workflow) Start(c Config) error {
-	output := c.Printer
+	if w.printer == nil {
+		w.printer = NewPrinter(c.Verbose)
+	}
 
 	// Print workflow header at the beginning
-	output.PrintHeader(w.Name, w.Description)
+	w.printer.PrintHeader(w.Name, w.Description)
 
 	// Initialize shared outputs
 	if w.outputs == nil {
@@ -44,7 +49,7 @@ func (w *Workflow) Start(c Config) error {
 		return err
 	}
 
-	w.printResults(wb, ctx.Printer)
+	w.printResults(wb)
 
 	return nil
 }
@@ -164,7 +169,7 @@ func (w *Workflow) processRunnableJobs(runnableJobs []string, scheduler *JobSche
 }
 
 // printResults prints the final detailed results
-func (w *Workflow) printResults(wb *WorkflowBuffer, pw PrintWriter) {
+func (w *Workflow) printResults(wb *WorkflowBuffer) {
 	totalTime := time.Duration(0)
 	successCount := 0
 
@@ -192,13 +197,13 @@ func (w *Workflow) printResults(wb *WorkflowBuffer, pw PrintWriter) {
 			successCount++
 		}
 
-		pw.PrintJobStatus(jb.JobName, status, duration.Seconds())
-		pw.PrintJobResults(jb.Buffer.String())
+		w.printer.PrintJobStatus(jb.JobName, status, duration.Seconds())
+		w.printer.PrintJobResults(jb.Buffer.String())
 
 		jb.mutex.Unlock()
 	}
 
-	pw.PrintFooter(totalTime.Seconds(), successCount, len(wb.Jobs))
+	w.printer.PrintFooter(totalTime.Seconds(), successCount, len(wb.Jobs))
 }
 
 func (w *Workflow) SetExitStatus(isErr bool) {
@@ -239,7 +244,7 @@ func (w *Workflow) newJobContext(c Config, vars map[string]any) JobContext {
 		Vars:    vars,
 		Logs:    []map[string]any{},
 		Config:  c,
-		Printer: c.Printer,
+		Printer: w.printer,
 		Outputs: w.outputs,
 	}
 }
