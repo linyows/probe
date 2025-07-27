@@ -10,14 +10,11 @@ import (
 func TestJobExecutor_Creation(t *testing.T) {
 	workflow := &Workflow{Name: "test-workflow"}
 	
-	t.Run("BufferedJobExecutor creation", func(t *testing.T) {
-		executor := NewBufferedJobExecutor(workflow)
+	t.Run("Executor creation", func(t *testing.T) {
+		executor := NewExecutor(workflow)
 		if executor == nil {
-			t.Fatal("NewBufferedJobExecutor should not return nil")
+			t.Fatal("NewExecutor should not return nil")
 		}
-		
-		// Ensure it implements JobExecutor interface
-		var _ JobExecutor = executor
 	})
 }
 
@@ -69,9 +66,9 @@ func TestExecutionConfig_Structure(t *testing.T) {
 	}
 }
 
-func TestBufferedJobExecutor_AppendRepeatStepResults(t *testing.T) {
+func TestExecutor_AppendRepeatStepResults(t *testing.T) {
 	workflow := &Workflow{Name: "test-workflow"}
-	executor := NewBufferedJobExecutor(workflow)
+	executor := NewExecutor(workflow)
 	
 	// Create test context with step counters
 	ctx := JobContext{
@@ -125,14 +122,11 @@ func TestJobExecutor_Integration_WithMockJob(t *testing.T) {
 	t.Run("executor creation and interface compliance", func(t *testing.T) {
 		workflow := &Workflow{Name: "test-workflow"}
 		
-		// Test that the executor can be created and implement the interface
-		bufferedExecutor := NewBufferedJobExecutor(workflow)
+		// Test that the executor can be created
+		executor := NewExecutor(workflow)
 		
-		if bufferedExecutor == nil {
-			t.Error("BufferedJobExecutor creation failed")
+		if executor == nil {
+			t.Error("Executor creation failed")
 		}
-		
-		// Verify interface compliance
-		var _ JobExecutor = bufferedExecutor
 	})
 }

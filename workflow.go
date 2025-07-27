@@ -154,7 +154,7 @@ func (w *Workflow) processRunnableJobs(runnableJobs []string, scheduler *JobSche
 				JobScheduler:    scheduler,
 			}
 
-			executor := NewBufferedJobExecutor(w)
+			executor := NewExecutor(w)
 			result := executor.Execute(j, id, ctx, config)
 			if !result.Success {
 				w.SetExitStatus(true)
