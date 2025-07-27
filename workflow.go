@@ -19,7 +19,12 @@ type Workflow struct {
 // Start executes the workflow with the given configuration
 func (w *Workflow) Start(c Config) error {
 	if w.printer == nil {
-		w.printer = NewPrinter(c.Verbose)
+		// Collect all job IDs for buffer initialization
+		jobIDs := make([]string, len(w.Jobs))
+		for i, job := range w.Jobs {
+			jobIDs[i] = job.ID
+		}
+		w.printer = NewPrinter(c.Verbose, jobIDs)
 	}
 
 	// Print workflow header at the beginning
@@ -47,6 +52,9 @@ func (w *Workflow) Start(c Config) error {
 
 	w.printResults(ctx.WorkflowBuffer)
 
+	//fmt.Println("---------------------------------------")
+	//w.printer.PrintBuffer()
+	//fmt.Println("---------------------------------------")
 	return nil
 }
 
@@ -187,8 +195,8 @@ func (w *Workflow) printResults(wb *WorkflowBuffer) {
 			successCount++
 		}
 
-		w.printer.PrintJobStatus(jb.JobName, status, duration.Seconds())
-		w.printer.PrintJobResults(jb.Buffer.String())
+		w.printer.PrintJobStatus(jb.JobID, jb.JobName, status, duration.Seconds())
+		w.printer.PrintJobResults(jb.JobID, jb.Buffer.String())
 
 		jb.mutex.Unlock()
 	}
@@ -231,12 +239,12 @@ func (w *Workflow) evalVars() (map[string]any, error) {
 
 func (w *Workflow) newJobContext(c Config, vars map[string]any) (JobContext, error) {
 	wb := w.setupWorkflowBuffer()
-	
+
 	scheduler, err := w.initJobScheduler()
 	if err != nil {
 		return JobContext{}, err
 	}
-	
+
 	return JobContext{
 		Vars:           vars,
 		Logs:           []map[string]any{},

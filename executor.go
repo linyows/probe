@@ -157,7 +157,7 @@ func (e *Executor) appendRepeatStepResults(ctx *JobContext) {
 	for i, step := range e.job.Steps {
 		if counter, exists := ctx.StepCounters[i]; exists {
 			hasTest := step.Test != ""
-			ctx.Printer.PrintStepRepeatResult(i, counter, hasTest)
+			ctx.Printer.PrintStepRepeatResult(jobID, i, counter, hasTest)
 		}
 	}
 

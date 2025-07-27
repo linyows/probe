@@ -84,13 +84,13 @@ type PrintWriter interface {
 	PrintJobName(name string)
 
 	// Step level output
-	PrintStepResult(step StepResult)
-	PrintStepRepeatStart(stepIdx int, stepName string, repeatCount int)
-	PrintStepRepeatResult(stepIdx int, counter StepRepeatCounter, hasTest bool)
+	PrintStepResult(jobID string, step StepResult)
+	PrintStepRepeatStart(jobID string, stepIdx int, stepName string, repeatCount int)
+	PrintStepRepeatResult(jobID string, stepIdx int, counter StepRepeatCounter, hasTest bool)
 
 	// Job level output
-	PrintJobStatus(jobName string, status StatusType, duration float64)
-	PrintJobResults(output string)
+	PrintJobStatus(jobID string, jobName string, status StatusType, duration float64)
+	PrintJobResults(jobID string, output string)
 
 	// Workflow summary
 	PrintFooter(totalTime float64, successCount, totalJobs int)
@@ -107,6 +107,8 @@ type PrintWriter interface {
 	LogInfo(format string, args ...interface{})
 	LogWarn(format string, args ...interface{})
 	LogError(format string, args ...interface{})
+
+	PrintBuffer()
 }
 
 // StatusType represents the status of execution
@@ -133,13 +135,64 @@ type StepResult struct {
 
 // Printer implements PrintWriter for console print
 type Printer struct {
-	verbose bool
+	verbose   bool
+	Buffer    map[string]*strings.Builder
+	BufferIDs []string // Order preservation for PrintBuffer
+	mutex     sync.RWMutex
 }
 
 // NewPrinter creates a new console print writer
-func NewPrinter(verbose bool) *Printer {
+func NewPrinter(verbose bool, bufferIDs []string) *Printer {
+	buffer := make(map[string]*strings.Builder)
+	
+	// Pre-initialize buffers for all provided job IDs
+	for _, id := range bufferIDs {
+		buffer[id] = &strings.Builder{}
+	}
+	
 	return &Printer{
-		verbose: verbose,
+		verbose:   verbose,
+		Buffer:    buffer,
+		BufferIDs: bufferIDs, // Store order information
+	}
+}
+
+// appendToBuffer appends content to a specific job ID's buffer
+func (p *Printer) appendToBuffer(jobID string, content string) {
+	p.mutex.Lock()
+	defer p.mutex.Unlock()
+
+	if buffer, exists := p.Buffer[jobID]; exists {
+		buffer.WriteString(content)
+	} else {
+		// Create new buffer if it doesn't exist
+		buffer := &strings.Builder{}
+		buffer.WriteString(content)
+		p.Buffer[jobID] = buffer
+	}
+}
+
+// getFromBuffer returns the content of the buffer for a specific job ID
+func (p *Printer) getFromBuffer(jobID string) string {
+	p.mutex.RLock()
+	defer p.mutex.RUnlock()
+
+	if buffer, exists := p.Buffer[jobID]; exists {
+		return buffer.String()
+	}
+
+	return ""
+}
+
+func (p *Printer) PrintBuffer() {
+	p.mutex.RLock()
+	defer p.mutex.RUnlock()
+
+	// Print buffers in the order specified by BufferIDs (YAML order)
+	for _, jobID := range p.BufferIDs {
+		if builder, exists := p.Buffer[jobID]; exists {
+			fmt.Print(builder.String())
+		}
 	}
 }
 
@@ -161,7 +214,7 @@ func (p *Printer) PrintJobName(name string) {
 }
 
 // PrintStepResult prints the result of a single step execution
-func (p *Printer) PrintStepResult(step StepResult) {
+func (p *Printer) PrintStepResult(jobID string, step StepResult) {
 	num := colorDim().Sprintf("%2d.", step.Index)
 
 	// Add wait time indicator if present
@@ -189,21 +242,27 @@ func (p *Printer) PrintStepResult(step StepResult) {
 		output = fmt.Sprintf("%s %s %s%s%s\n", num, colorWarning().Sprintf(IconSkip), waitPrefix, colorDim().Sprintf("%s", step.Name), ps)
 	}
 
-	fmt.Print(output)
-
 	if step.EchoOutput != "" {
-		fmt.Print(step.EchoOutput)
+		output += step.EchoOutput
 	}
+
+	fmt.Print(output)
+	//p.appendToBuffer(jobID, output)
 }
 
 // PrintStepRepeatStart prints the start of a repeated step execution
-func (p *Printer) PrintStepRepeatStart(stepIdx int, stepName string, repeatCount int) {
+func (p *Printer) PrintStepRepeatStart(jobID string, stepIdx int, stepName string, repeatCount int) {
 	num := colorDim().Sprintf("%2d.", stepIdx)
-	fmt.Printf("%s %s (repeating %d times)\n", num, stepName, repeatCount)
+	output := fmt.Sprintf("%s %s (repeating %d times)\n", num, stepName, repeatCount)
+
+	fmt.Print(output)
+	//p.appendToBuffer(jobID, output)
 }
 
 // PrintStepRepeatResult prints the final result of a repeated step execution
-func (p *Printer) PrintStepRepeatResult(stepIdx int, counter StepRepeatCounter, hasTest bool) {
+func (p *Printer) PrintStepRepeatResult(jobID string, stepIdx int, counter StepRepeatCounter, hasTest bool) {
+	var output string
+
 	if hasTest {
 		totalCount := counter.SuccessCount + counter.FailureCount
 		successRate := float64(counter.SuccessCount) / float64(totalCount) * 100
@@ -216,22 +275,25 @@ func (p *Printer) PrintStepRepeatResult(stepIdx int, counter StepRepeatCounter, 
 			}
 		}
 
-		fmt.Printf("    %s %d/%d success (%.1f%%)\n",
+		output = fmt.Sprintf("    %s %d/%d success (%.1f%%)\n",
 			statusIcon,
 			counter.SuccessCount,
 			totalCount,
 			successRate)
 	} else {
 		totalCount := counter.SuccessCount + counter.FailureCount
-		fmt.Printf("    %s %d/%d completed (no test)\n",
+		output = fmt.Sprintf("    %s %d/%d completed (no test)\n",
 			colorWarning().Sprintf(IconWarning),
 			totalCount,
 			totalCount)
 	}
+
+	fmt.Print(output)
+	//p.appendToBuffer(jobID, output)
 }
 
 // PrintJobStatus prints the result of a job execution
-func (p *Printer) PrintJobStatus(jobName string, status StatusType, duration float64) {
+func (p *Printer) PrintJobStatus(jobID string, jobName string, status StatusType, duration float64) {
 	statusColor := colorSuccess()
 	statusIcon := IconCircle
 
@@ -255,28 +317,36 @@ func (p *Printer) PrintJobStatus(jobName string, status StatusType, duration flo
 	dt := colorDim().Sprintf("(%s in %.2fs)",
 		statusStr,
 		duration)
-	fmt.Printf("%s%s %s\n",
+	output := fmt.Sprintf("%s%s %s\n",
 		statusColor.Sprint(statusIcon),
 		jobName,
 		dt)
+
+	fmt.Print(output)
+	p.appendToBuffer(jobID, output)
 }
 
 // PrintJobResults prints buffered job results
-func (p *Printer) PrintJobResults(output string) {
+func (p *Printer) PrintJobResults(jobID string, output string) {
+	txt := ""
+
 	output = strings.TrimSpace(output)
 	if output != "" {
 		lines := strings.Split(output, "\n")
 		for i, line := range lines {
 			if strings.TrimSpace(line) != "" {
 				if i == 0 {
-					fmt.Printf("  ⎿ %s\n", line)
+					txt += fmt.Sprintf("  ⎿ %s\n", line)
 				} else {
-					fmt.Printf("    %s\n", line)
+					txt += fmt.Sprintf("    %s\n", line)
 				}
 			}
 		}
 	}
-	fmt.Println()
+
+	txt += "\n"
+	fmt.Print(txt)
+	p.appendToBuffer(jobID, txt)
 }
 
 // PrintFooter prints the workflow execution summary
@@ -349,19 +419,22 @@ func (s *SilentPrinter) PrintHeader(name, description string) {}
 func (s *SilentPrinter) PrintJobName(name string) {}
 
 // PrintStepResult does nothing in silent mode
-func (s *SilentPrinter) PrintStepResult(step StepResult) {}
+func (s *SilentPrinter) PrintStepResult(jobID string, step StepResult) {}
 
 // PrintStepRepeatStart does nothing in silent mode
-func (s *SilentPrinter) PrintStepRepeatStart(stepIdx int, stepName string, repeatCount int) {}
+func (s *SilentPrinter) PrintStepRepeatStart(jobID string, stepIdx int, stepName string, repeatCount int) {
+}
 
 // PrintStepRepeatResult does nothing in silent mode
-func (s *SilentPrinter) PrintStepRepeatResult(stepIdx int, counter StepRepeatCounter, hasTest bool) {}
+func (s *SilentPrinter) PrintStepRepeatResult(jobID string, stepIdx int, counter StepRepeatCounter, hasTest bool) {
+}
 
 // PrintJobStatus does nothing in silent mode
-func (s *SilentPrinter) PrintJobStatus(jobName string, status StatusType, duration float64) {}
+func (s *SilentPrinter) PrintJobStatus(jobID string, jobName string, status StatusType, duration float64) {
+}
 
 // PrintJobResults does nothing in silent mode
-func (s *SilentPrinter) PrintJobResults(output string) {}
+func (s *SilentPrinter) PrintJobResults(jobID string, output string) {}
 
 // PrintFooter does nothing in silent mode
 func (s *SilentPrinter) PrintFooter(totalTime float64, successCount, totalJobs int) {}
@@ -386,3 +459,5 @@ func (s *SilentPrinter) LogWarn(format string, args ...interface{}) {}
 
 // LogError does nothing in silent mode
 func (s *SilentPrinter) LogError(format string, args ...interface{}) {}
+
+func (s *SilentPrinter) PrintBuffer() {}

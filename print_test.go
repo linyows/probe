@@ -1,6 +1,8 @@
 package probe
 
 import (
+	"io"
+	"os"
 	"strings"
 	"testing"
 
@@ -89,7 +91,7 @@ func TestRepeatNoTestDisplay(t *testing.T) {
 
 // Printer interface tests
 func TestNewPrinter(t *testing.T) {
-	printer := NewPrinter(false)
+	printer := NewPrinter(false, []string{})
 	if printer == nil {
 		t.Error("NewPrinter() should return a non-nil Printer")
 		return
@@ -99,9 +101,95 @@ func TestNewPrinter(t *testing.T) {
 		t.Error("NewPrinter(false) should set verbose to false")
 	}
 	
-	verbosePrinter := NewPrinter(true)
+	verbosePrinter := NewPrinter(true, []string{})
 	if !verbosePrinter.verbose {
 		t.Error("NewPrinter(true) should set verbose to true")
+	}
+}
+
+func TestNewPrinter_BufferInitialization(t *testing.T) {
+	tests := []struct {
+		name      string
+		bufferIDs []string
+	}{
+		{
+			name:      "empty buffer IDs",
+			bufferIDs: []string{},
+		},
+		{
+			name:      "single buffer ID",
+			bufferIDs: []string{"job1"},
+		},
+		{
+			name:      "multiple buffer IDs",
+			bufferIDs: []string{"job1", "job2", "job3"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			printer := NewPrinter(false, tt.bufferIDs)
+			
+			if printer.Buffer == nil {
+				t.Error("Buffer should not be nil")
+				return
+			}
+			
+			// Check BufferIDs are stored correctly
+			if len(printer.BufferIDs) != len(tt.bufferIDs) {
+				t.Errorf("Expected %d BufferIDs, got %d", len(tt.bufferIDs), len(printer.BufferIDs))
+			}
+			
+			for i, expectedID := range tt.bufferIDs {
+				if i >= len(printer.BufferIDs) || printer.BufferIDs[i] != expectedID {
+					t.Errorf("BufferIDs[%d]: expected '%s', got '%s'", i, expectedID, printer.BufferIDs[i])
+				}
+			}
+			
+			// Check that all provided IDs have initialized buffers
+			for _, id := range tt.bufferIDs {
+				if _, exists := printer.Buffer[id]; !exists {
+					t.Errorf("Buffer for ID '%s' should be initialized", id)
+				}
+				if printer.Buffer[id] == nil {
+					t.Errorf("Buffer for ID '%s' should not be nil", id)
+				}
+			}
+			
+			// Check that buffer count matches expected
+			if len(printer.Buffer) != len(tt.bufferIDs) {
+				t.Errorf("Expected %d buffers, got %d", len(tt.bufferIDs), len(printer.Buffer))
+			}
+		})
+	}
+}
+
+func TestPrintBuffer_OrderPreservation(t *testing.T) {
+	// Test that PrintBuffer outputs in the order specified by BufferIDs
+	bufferIDs := []string{"job3", "job1", "job2"} // Intentionally out of alphabetical order
+	printer := NewPrinter(false, bufferIDs)
+	
+	// Add content to buffers in different order
+	printer.appendToBuffer("job1", "Content from job1\n")
+	printer.appendToBuffer("job2", "Content from job2\n")
+	printer.appendToBuffer("job3", "Content from job3\n")
+	
+	// Capture output
+	oldStdout := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+	
+	printer.PrintBuffer()
+	
+	w.Close()
+	os.Stdout = oldStdout
+	
+	output, _ := io.ReadAll(r)
+	outputStr := string(output)
+	
+	expectedOutput := "Content from job3\nContent from job1\nContent from job2\n"
+	if outputStr != expectedOutput {
+		t.Errorf("Expected output:\n%s\nGot output:\n%s", expectedOutput, outputStr)
 	}
 }
 

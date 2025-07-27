@@ -56,7 +56,7 @@ func TestExecutor_AppendRepeatStepResults(t *testing.T) {
 			},
 		},
 		Config:         Config{Verbose: false},
-		Printer:        NewPrinter(false),
+		Printer:        NewPrinter(false, []string{}),
 		WorkflowBuffer: workflowBuffer,
 	}
 

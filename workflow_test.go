@@ -774,7 +774,7 @@ func TestJobContextRepeatTracking(t *testing.T) {
 		RepeatCurrent: 5,
 		RepeatTotal:   10,
 		StepCounters:  make(map[int]StepRepeatCounter),
-		Printer:       NewPrinter(false),
+		Printer:       NewPrinter(false, []string{}),
 	}
 
 	// Test initial state
@@ -861,7 +861,7 @@ func TestStepHandleRepeatExecution(t *testing.T) {
 				RepeatCurrent: tt.repeatCurrent,
 				RepeatTotal:   tt.repeatTotal,
 				StepCounters:  make(map[int]StepRepeatCounter),
-				Printer:       NewPrinter(false),
+				Printer:       NewPrinter(false, []string{}),
 			}
 
 			// Simulate multiple executions by pre-populating counter
@@ -912,7 +912,7 @@ func TestStepRepeatCounterUpdate(t *testing.T) {
 		RepeatCurrent: 3,
 		RepeatTotal:   10,
 		StepCounters:  make(map[int]StepRepeatCounter),
-		Printer:       NewPrinter(false),
+		Printer:       NewPrinter(false, []string{}),
 	}
 
 	step := &Step{

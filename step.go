@@ -154,7 +154,7 @@ func (st *Step) finalize(name string, actionResult map[string]any, jCtx *JobCont
 	// Standard execution: save outputs and create result
 	st.saveOutputs(jCtx)
 	stepResult := st.createStepResult(name, rt, okrt, jCtx)
-	jCtx.Printer.PrintStepResult(stepResult)
+	jCtx.Printer.PrintStepResult(jCtx.CurrentJobID, stepResult)
 }
 
 // handleVerboseMode handles verbose execution mode
@@ -264,11 +264,11 @@ func (st *Step) handleRepeatExecution(jCtx *JobContext, name, rt string, okrt bo
 	isFinalExecution := jCtx.RepeatCurrent == jCtx.RepeatTotal
 
 	if isFirstExecution {
-		jCtx.Printer.PrintStepRepeatStart(st.idx, name, jCtx.RepeatTotal)
+		jCtx.Printer.PrintStepRepeatStart(jCtx.CurrentJobID, st.idx, name, jCtx.RepeatTotal)
 	}
 
 	if isFinalExecution {
-		jCtx.Printer.PrintStepRepeatResult(st.idx, counter, hasTest)
+		jCtx.Printer.PrintStepRepeatResult(jCtx.CurrentJobID, st.idx, counter, hasTest)
 	}
 
 	// Handle echo output
@@ -498,7 +498,7 @@ func (st *Step) handleSkip(name string, jCtx *JobContext) {
 
 	// Create step result for skipped step
 	stepResult := st.createSkippedStepResult(name, jCtx)
-	jCtx.Printer.PrintStepResult(stepResult)
+	jCtx.Printer.PrintStepResult(jCtx.CurrentJobID, stepResult)
 }
 
 // handleSkipRepeatExecution handles skipped step in repeat mode
@@ -524,11 +524,11 @@ func (st *Step) handleSkipRepeatExecution(jCtx *JobContext, name string) {
 	isFinalExecution := jCtx.RepeatCurrent == jCtx.RepeatTotal
 
 	if isFirstExecution {
-		jCtx.Printer.PrintStepRepeatStart(st.idx, name+" (SKIPPED)", jCtx.RepeatTotal)
+		jCtx.Printer.PrintStepRepeatStart(jCtx.CurrentJobID, st.idx, name+" (SKIPPED)", jCtx.RepeatTotal)
 	}
 
 	if isFinalExecution {
-		jCtx.Printer.PrintStepRepeatResult(st.idx, counter, false) // hasTest = false for skipped
+		jCtx.Printer.PrintStepRepeatResult(jCtx.CurrentJobID, st.idx, counter, false) // hasTest = false for skipped
 	}
 }
 
