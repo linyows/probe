@@ -3,7 +3,6 @@ package probe
 import (
 	"strings"
 	"testing"
-	"time"
 )
 
 // Test basic executor creation and interface compliance
@@ -19,30 +18,7 @@ func TestJobExecutor_Creation(t *testing.T) {
 	})
 }
 
-func TestExecutionResult_Structure(t *testing.T) {
-	result := ExecutionResult{
-		Success:  true,
-		Duration: 100 * time.Millisecond,
-		Output:   "test output",
-		Error:    nil,
-	}
-
-	if !result.Success {
-		t.Error("ExecutionResult.Success should be true")
-	}
-
-	if result.Duration != 100*time.Millisecond {
-		t.Errorf("ExecutionResult.Duration = %v, want %v", result.Duration, 100*time.Millisecond)
-	}
-
-	if result.Output != "test output" {
-		t.Errorf("ExecutionResult.Output = %v, want %v", result.Output, "test output")
-	}
-
-	if result.Error != nil {
-		t.Errorf("ExecutionResult.Error = %v, want nil", result.Error)
-	}
-}
+// TestExecutionResult_Structure is no longer needed as ExecutionResult has been removed
 
 // TestExecutionConfig_Structure is no longer needed as ExecutionConfig has been removed
 

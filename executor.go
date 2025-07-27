@@ -6,13 +6,6 @@ import (
 	"time"
 )
 
-// ExecutionResult represents the result of a job execution
-type ExecutionResult struct {
-	Success  bool
-	Duration time.Duration
-	Output   string
-	Error    error
-}
 
 // Executor handles job execution with buffered output
 type Executor struct {
@@ -36,7 +29,7 @@ func (e *Executor) setJobID() {
 }
 
 // Execute runs a job with buffered output
-func (e *Executor) Execute(ctx JobContext) ExecutionResult {
+func (e *Executor) Execute(ctx JobContext) bool {
 	e.setJobID()
 	jobID := e.job.ID
 	
@@ -48,18 +41,11 @@ func (e *Executor) Execute(ctx JobContext) ExecutionResult {
 	jb.mutex.Unlock()
 
 	// Use the existing buffered execution logic
-	result := e.executeWithBuffering(ctx)
-
-	return ExecutionResult{
-		Success:  result.Success,
-		Duration: result.Duration,
-		Output:   result.Output,
-		Error:    result.Error,
-	}
+	return e.executeWithBuffering(ctx)
 }
 
 // executeWithBuffering contains the buffered execution logic
-func (e *Executor) executeWithBuffering(ctx JobContext) ExecutionResult {
+func (e *Executor) executeWithBuffering(ctx JobContext) bool {
 	ctx = e.setupContext(ctx)
 
 	overallSuccess := e.executeJobRepeatLoop(ctx)
@@ -68,17 +54,9 @@ func (e *Executor) executeWithBuffering(ctx JobContext) ExecutionResult {
 		e.appendRepeatStepResults(&ctx)
 	}
 
-	duration := e.finalize(overallSuccess, ctx)
+	e.finalize(overallSuccess, ctx)
 
-	jobID := e.job.ID
-	jb := ctx.WorkflowBuffer.Jobs[jobID]
-
-	return ExecutionResult{
-		Success:  overallSuccess,
-		Duration: duration,
-		Output:   jb.Buffer.String(),
-		Error:    nil,
-	}
+	return overallSuccess
 }
 
 // setupContext initializes the job context for buffered execution
@@ -148,7 +126,7 @@ func (e *Executor) sleepBetweenRepeats(ctx JobContext) {
 }
 
 // finalize updates the final job status and marks it as completed
-func (e *Executor) finalize(overallSuccess bool, ctx JobContext) time.Duration {
+func (e *Executor) finalize(overallSuccess bool, ctx JobContext) {
 	jobID := e.job.ID
 	jb := ctx.WorkflowBuffer.Jobs[jobID]
 	jb.mutex.Lock()
@@ -164,8 +142,6 @@ func (e *Executor) finalize(overallSuccess bool, ctx JobContext) time.Duration {
 
 	// Mark job as completed
 	ctx.JobScheduler.SetJobStatus(jobID, JobCompleted, overallSuccess)
-
-	return duration
 }
 
 // appendRepeatStepResults appends the final results of repeat step executions to buffer

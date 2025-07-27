@@ -150,8 +150,8 @@ func (w *Workflow) processRunnableJobs(runnableJobs []string, ctx JobContext) {
 			defer ctx.JobScheduler.wg.Done()
 
 			executor := NewExecutor(w, j)
-			result := executor.Execute(ctx)
-			if !result.Success {
+			success := executor.Execute(ctx)
+			if !success {
 				w.SetExitStatus(true)
 			}
 		}(job, jobID)
