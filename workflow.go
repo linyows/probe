@@ -35,21 +35,17 @@ func (w *Workflow) Start(c Config) error {
 		return err
 	}
 
-	ctx := w.newJobContext(c, vars)
-
-	sc, err := w.initJobScheduler()
+	ctx, err := w.newJobContext(c, vars)
 	if err != nil {
 		return err
 	}
 
-	wb := w.setupWorkflowBuffer()
-
-	err = w.startJobsWithDependencies(sc, ctx, wb)
+	err = w.startJobsWithDependencies(ctx)
 	if err != nil {
 		return err
 	}
 
-	w.printResults(wb)
+	w.printResults(ctx.WorkflowBuffer)
 
 	return nil
 }
@@ -94,32 +90,32 @@ func (w *Workflow) setupWorkflowBuffer() *WorkflowBuffer {
 }
 
 // startJobsWithDependencies runs the main job execution loop with dependency management
-func (w *Workflow) startJobsWithDependencies(sc *JobScheduler, ctx JobContext, wb *WorkflowBuffer) error {
+func (w *Workflow) startJobsWithDependencies(ctx JobContext) error {
 
-	for !sc.AllJobsCompleted() {
-		runnableJobs := sc.GetRunnableJobs()
+	for !ctx.JobScheduler.AllJobsCompleted() {
+		runnableJobs := ctx.JobScheduler.GetRunnableJobs()
 
 		if len(runnableJobs) == 0 {
-			if err := w.handleNoRunnableJobs(sc, wb); err != nil {
+			if err := w.handleNoRunnableJobs(ctx); err != nil {
 				return err
 			}
 			continue
 		}
 
-		w.processRunnableJobs(runnableJobs, sc, ctx, wb)
-		sc.wg.Wait()
+		w.processRunnableJobs(runnableJobs, ctx)
+		ctx.JobScheduler.wg.Wait()
 	}
 
 	return nil
 }
 
 // handleNoRunnableJobs handles the case when no jobs can be run (failed dependencies or deadlock)
-func (w *Workflow) handleNoRunnableJobs(scheduler *JobScheduler, workflowBuffer *WorkflowBuffer) error {
-	skippedJobs := scheduler.MarkJobsWithFailedDependencies()
+func (w *Workflow) handleNoRunnableJobs(ctx JobContext) error {
+	skippedJobs := ctx.JobScheduler.MarkJobsWithFailedDependencies()
 
 	// Update skipped jobs in workflow printer
-	if workflowBuffer != nil {
-		w.updateSkippedJobsOutput(skippedJobs, workflowBuffer)
+	if ctx.WorkflowBuffer != nil {
+		w.updateSkippedJobsOutput(skippedJobs, ctx.WorkflowBuffer)
 	}
 
 	if len(skippedJobs) == 0 {
@@ -144,23 +140,17 @@ func (w *Workflow) updateSkippedJobsOutput(skippedJobs []string, workflowBuffer 
 }
 
 // processRunnableJobs starts execution of all currently runnable jobs
-func (w *Workflow) processRunnableJobs(runnableJobs []string, scheduler *JobScheduler, ctx JobContext, workflowBuffer *WorkflowBuffer) {
+func (w *Workflow) processRunnableJobs(runnableJobs []string, ctx JobContext) {
 	for _, jobID := range runnableJobs {
-		job := scheduler.jobs[jobID]
-		scheduler.SetJobStatus(jobID, JobRunning, false)
-		scheduler.wg.Add(1)
+		job := ctx.JobScheduler.jobs[jobID]
+		ctx.JobScheduler.SetJobStatus(jobID, JobRunning, false)
+		ctx.JobScheduler.wg.Add(1)
 
 		go func(j *Job, id string) {
-			defer scheduler.wg.Done()
+			defer ctx.JobScheduler.wg.Done()
 
-			config := ExecutionConfig{
-				HasDependencies: true,
-				WorkflowBuffer:  workflowBuffer,
-				JobScheduler:    scheduler,
-			}
-
-			executor := NewExecutor(w)
-			result := executor.Execute(j, id, ctx, config)
+			executor := NewExecutor(w, j)
+			result := executor.Execute(ctx)
 			if !result.Success {
 				w.SetExitStatus(true)
 			}
@@ -239,12 +229,21 @@ func (w *Workflow) evalVars() (map[string]any, error) {
 	return vars, nil
 }
 
-func (w *Workflow) newJobContext(c Config, vars map[string]any) JobContext {
-	return JobContext{
-		Vars:    vars,
-		Logs:    []map[string]any{},
-		Config:  c,
-		Printer: w.printer,
-		Outputs: w.outputs,
+func (w *Workflow) newJobContext(c Config, vars map[string]any) (JobContext, error) {
+	wb := w.setupWorkflowBuffer()
+	
+	scheduler, err := w.initJobScheduler()
+	if err != nil {
+		return JobContext{}, err
 	}
+	
+	return JobContext{
+		Vars:           vars,
+		Logs:           []map[string]any{},
+		Config:         c,
+		Printer:        w.printer,
+		WorkflowBuffer: wb,
+		JobScheduler:   scheduler,
+		Outputs:        w.outputs,
+	}, nil
 }

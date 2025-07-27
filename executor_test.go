@@ -9,9 +9,10 @@ import (
 // Test basic executor creation and interface compliance
 func TestJobExecutor_Creation(t *testing.T) {
 	workflow := &Workflow{Name: "test-workflow"}
+	job := &Job{Name: "test-job", Steps: []*Step{}}
 
 	t.Run("Executor creation", func(t *testing.T) {
-		executor := NewExecutor(workflow)
+		executor := NewExecutor(workflow, job)
 		if executor == nil {
 			t.Fatal("NewExecutor should not return nil")
 		}
@@ -43,32 +44,30 @@ func TestExecutionResult_Structure(t *testing.T) {
 	}
 }
 
-func TestExecutionConfig_Structure(t *testing.T) {
-	scheduler := NewJobScheduler()
-	workflowBuffer := NewWorkflowBuffer()
-
-	config := ExecutionConfig{
-		HasDependencies: true,
-		WorkflowBuffer:  workflowBuffer,
-		JobScheduler:    scheduler,
-	}
-
-	if !config.HasDependencies {
-		t.Error("ExecutionConfig.HasDependencies should be true")
-	}
-
-	if config.WorkflowBuffer != workflowBuffer {
-		t.Error("ExecutionConfig.WorkflowBuffer should match assigned value")
-	}
-
-	if config.JobScheduler != scheduler {
-		t.Error("ExecutionConfig.JobScheduler should match assigned value")
-	}
-}
+// TestExecutionConfig_Structure is no longer needed as ExecutionConfig has been removed
 
 func TestExecutor_AppendRepeatStepResults(t *testing.T) {
 	workflow := &Workflow{Name: "test-workflow"}
-	executor := NewExecutor(workflow)
+	job := &Job{
+		Name: "test-job",
+		ID:   "test-job",
+		Steps: []*Step{
+			{
+				Name: "test-step",
+				Test: "status == 200",
+			},
+		},
+	}
+	executor := NewExecutor(workflow, job)
+
+	// Create WorkflowBuffer with JobBuffer
+	workflowBuffer := NewWorkflowBuffer()
+	jobBuffer := &JobBuffer{
+		JobName: job.Name,
+		JobID:   "test-job",
+		Buffer:  strings.Builder{},
+	}
+	workflowBuffer.Jobs["test-job"] = jobBuffer
 
 	// Create test context with step counters
 	ctx := JobContext{
@@ -80,28 +79,13 @@ func TestExecutor_AppendRepeatStepResults(t *testing.T) {
 				LastResult:   true,
 			},
 		},
-		Config:  Config{Verbose: false},
-		Printer: NewPrinter(false),
-	}
-
-	job := &Job{
-		Name: "test-job",
-		Steps: []*Step{
-			{
-				Name: "test-step",
-				Test: "status == 200",
-			},
-		},
-	}
-
-	jobBuffer := &JobBuffer{
-		JobName: job.Name,
-		JobID:   "test-job",
-		Buffer:  strings.Builder{},
+		Config:         Config{Verbose: false},
+		Printer:        NewPrinter(false),
+		WorkflowBuffer: workflowBuffer,
 	}
 
 	// Call the method
-	executor.appendRepeatStepResults(&ctx, job, jobBuffer)
+	executor.appendRepeatStepResults(&ctx)
 
 	// Check if output was captured
 	output := jobBuffer.Buffer.String()
@@ -121,9 +105,10 @@ func TestJobExecutor_Integration_WithMockJob(t *testing.T) {
 
 	t.Run("executor creation and interface compliance", func(t *testing.T) {
 		workflow := &Workflow{Name: "test-workflow"}
+		job := &Job{Name: "test-job", Steps: []*Step{}}
 
 		// Test that the executor can be created
-		executor := NewExecutor(workflow)
+		executor := NewExecutor(workflow, job)
 
 		if executor == nil {
 			t.Error("Executor creation failed")

@@ -16,6 +16,10 @@ type JobContext struct {
 	StepCounters  map[int]StepRepeatCounter // step index -> counter
 	// Print writer
 	Printer PrintWriter
+	// Workflow buffer for managing job-level output
+	WorkflowBuffer *WorkflowBuffer
+	// Job scheduler for managing job dependencies and execution
+	JobScheduler *JobScheduler
 	// Shared outputs across all jobs (accessible via expressions as "outputs")
 	Outputs *Outputs `expr:"outputs"`
 }
