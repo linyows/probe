@@ -45,40 +45,80 @@ type Step struct {
 }
 
 func (st *Step) Do(jCtx *JobContext) {
+	// 1. Preparation phase: validation, wait, skip check
+	name, shouldContinue := st.prepare(jCtx)
+	if !shouldContinue {
+		return
+	}
+
+	// 2. Action execution phase
+	actionResult, err := st.executeAction(name, jCtx)
+	if err != nil {
+		st.handleActionError(err, name, jCtx)
+		return
+	}
+
+	// 3. Result processing phase
+	st.processActionResult(actionResult, jCtx)
+
+	// 4. Finalization phase: test, echo, output save, result creation
+	st.finalize(name, actionResult, jCtx)
+}
+
+// prepare handles step preparation: validation, wait, and skip check
+// Returns (stepName, shouldContinue)
+func (st *Step) prepare(jCtx *JobContext) (string, bool) {
+	// Set default name if empty
 	if st.Name == "" {
 		st.Name = "Unknown Step"
 	}
 	
 	// Handle wait before step execution
 	st.handleWait(jCtx)
+	
+	// Evaluate step name
 	name, err := st.expr.EvalTemplate(st.Name, st.ctx)
 	if err != nil {
 		jCtx.Printer.PrintError("step name evaluation error: %v", err)
-		return
+		return "", false
 	}
 
 	// Check if step should be skipped
 	if st.shouldSkip(jCtx) {
 		st.handleSkip(name, jCtx)
-		return
+		return name, false
 	}
 
+	return name, true
+}
+
+// executeAction executes the step action and returns the result
+func (st *Step) executeAction(name string, jCtx *JobContext) (map[string]any, error) {
 	expW := st.expr.EvalTemplateMap(st.With, st.ctx)
 	ret, err := RunActions(st.Uses, []string{}, expW, jCtx.Config.Verbose)
 	if err != nil {
-		actionErr := NewActionError("step_execute", "action execution failed", err).
-			WithContext("step_name", name).
-			WithContext("action_type", st.Uses)
-		st.err = actionErr
-		jCtx.Printer.PrintError("Action execution failed: %v", actionErr)
-		jCtx.SetFailed()
-		return
+		return nil, err
 	}
+	return ret, nil
+}
 
-	// parse json and sets
-	req, okreq := ret["req"].(map[string]any)
-	res, okres := ret["res"].(map[string]any)
-	rt, okrt := ret["rt"].(string)
+// handleActionError handles action execution errors
+func (st *Step) handleActionError(err error, name string, jCtx *JobContext) {
+	actionErr := NewActionError("step_execute", "action execution failed", err).
+		WithContext("step_name", name).
+		WithContext("action_type", st.Uses)
+	st.err = actionErr
+	jCtx.Printer.PrintError("Action execution failed: %v", actionErr)
+	jCtx.SetFailed()
+}
+
+// processActionResult processes the action result and updates context
+func (st *Step) processActionResult(actionResult map[string]any, jCtx *JobContext) {
+	// Parse and process JSON response
+	req, _ := actionResult["req"].(map[string]any)
+	res, okres := actionResult["res"].(map[string]any)
+	rt, _ := actionResult["rt"].(string)
+	
 	if okres {
 		body, okbody := res["body"].(string)
 		if okbody && isJSON(body) {
@@ -87,30 +127,21 @@ func (st *Step) Do(jCtx *JobContext) {
 		}
 	}
 
-	// set log and logs
-	jCtx.Logs = append(jCtx.Logs, ret)
+	// Update logs and context
+	jCtx.Logs = append(jCtx.Logs, actionResult)
 	st.updateCtx(jCtx.Logs, req, res, rt)
+}
 
+// finalize handles the final phase: test, echo, output save, and result creation
+func (st *Step) finalize(name string, actionResult map[string]any, jCtx *JobContext) {
+	// Extract commonly used values
+	req, okreq := actionResult["req"].(map[string]any)
+	res, okres := actionResult["res"].(map[string]any)
+	rt, okrt := actionResult["rt"].(string)
+
+	// Handle verbose mode
 	if jCtx.Config.Verbose {
-		if !okreq || !okres {
-			jCtx.Printer.PrintVerbose("sorry, request or response is nil")
-			jCtx.SetFailed()
-			return
-		}
-		st.ShowRequestResponse(name, jCtx)
-		if st.Test != "" {
-			if ok := st.DoTestWithSequentialPrint(jCtx); !ok {
-				jCtx.SetFailed()
-			}
-		}
-		if st.Echo != "" {
-			st.DoEchoWithSequentialPrint(jCtx)
-		}
-		
-		// Save step outputs even in verbose mode
-		st.saveOutputs(jCtx)
-		
-		jCtx.Printer.PrintSeparator()
+		st.handleVerboseMode(name, req, res, okreq, okres, jCtx)
 		return
 	}
 
@@ -120,12 +151,36 @@ func (st *Step) Do(jCtx *JobContext) {
 		return
 	}
 
-	// Save step outputs if defined
+	// Standard execution: save outputs and create result
 	st.saveOutputs(jCtx)
-
-	// Create step result for output
 	stepResult := st.createStepResult(name, rt, okrt, jCtx)
 	jCtx.Printer.PrintStepResult(stepResult)
+}
+
+// handleVerboseMode handles verbose execution mode
+func (st *Step) handleVerboseMode(name string, req, res map[string]any, okreq, okres bool, jCtx *JobContext) {
+	if !okreq || !okres {
+		jCtx.Printer.PrintVerbose("sorry, request or response is nil")
+		jCtx.SetFailed()
+		return
+	}
+	
+	st.ShowRequestResponse(name, jCtx)
+	
+	if st.Test != "" {
+		if ok := st.DoTestWithSequentialPrint(jCtx); !ok {
+			jCtx.SetFailed()
+		}
+	}
+	
+	if st.Echo != "" {
+		st.DoEchoWithSequentialPrint(jCtx)
+	}
+	
+	// Save step outputs even in verbose mode
+	st.saveOutputs(jCtx)
+	
+	jCtx.Printer.PrintSeparator()
 }
 
 // createStepResult creates a StepResult from step execution
