@@ -64,17 +64,20 @@ func TestExecutor_AppendRepeatStepResults(t *testing.T) {
 	executor.appendRepeatStepResults(&ctx)
 
 	// Check if step results were added to WorkflowBuffer
-	stepResults := workflowBuffer.GetStepResults("test-job")
-	if len(stepResults) == 0 {
+	jobBuffer, exists := workflowBuffer.Jobs["test-job"]
+	if !exists {
+		t.Fatal("Job buffer should exist after appendRepeatStepResults")
+	}
+	if len(jobBuffer.StepResults) == 0 {
 		t.Error("appendRepeatStepResults should add StepResults to WorkflowBuffer")
 	}
 
 	// Should have created a StepResult with RepeatCounter
-	if len(stepResults) != 1 {
-		t.Errorf("Expected 1 step result, got %d", len(stepResults))
+	if len(jobBuffer.StepResults) != 1 {
+		t.Errorf("Expected 1 step result, got %d", len(jobBuffer.StepResults))
 	}
 
-	stepResult := stepResults[0]
+	stepResult := jobBuffer.StepResults[0]
 	if stepResult.RepeatCounter == nil {
 		t.Error("StepResult should have RepeatCounter")
 	}
