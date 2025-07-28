@@ -2,6 +2,7 @@ package probe
 
 import (
 	"fmt"
+	"sync"
 	"testing"
 	"time"
 )
@@ -824,4 +825,67 @@ func TestStep_Do_Integration(t *testing.T) {
 
 		t.Logf("Do() method executed successfully with refactored structure (skipped execution)")
 	})
+}
+
+func TestSleepWithMessage(t *testing.T) {
+	tests := []struct {
+		name           string
+		duration       time.Duration
+		message        string
+		expectFnCalled bool
+		minCalls       int
+		maxCalls       int
+	}{
+		{
+			name:           "Short duration under 1s - no call",
+			duration:       500 * time.Millisecond,
+			message:        "ignored",
+			expectFnCalled: false,
+		},
+		{
+			name:           "2.5s duration - expect 2 to 3 calls",
+			duration:       2500 * time.Millisecond,
+			message:        "hello",
+			expectFnCalled: true,
+			minCalls:       2,
+			maxCalls:       3,
+		},
+		{
+			name:           "Exact 1s duration - expect 1 call",
+			duration:       1 * time.Second,
+			message:        "one",
+			expectFnCalled: true,
+			minCalls:       1,
+			maxCalls:       1,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var mu sync.Mutex
+			var calls []string
+
+			sleepWithMessage(tt.duration, tt.message, func(m string) {
+				mu.Lock()
+				defer mu.Unlock()
+				calls = append(calls, m)
+			})
+
+			if tt.expectFnCalled {
+				count := len(calls)
+				if count < tt.minCalls || count > tt.maxCalls {
+					t.Errorf("expected between %d and %d calls, got %d", tt.minCalls, tt.maxCalls, count)
+				}
+				for _, msg := range calls {
+					if msg != tt.message {
+						t.Errorf("unexpected message: got %s, want %s", msg, tt.message)
+					}
+				}
+			} else {
+				if len(calls) > 0 {
+					t.Errorf("expected no calls, but got %d", len(calls))
+				}
+			}
+		})
+	}
 }
