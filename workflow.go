@@ -13,7 +13,7 @@ type Workflow struct {
 	env         map[string]string
 	// Shared outputs across all jobs
 	outputs *Outputs
-	printer PrintWriter
+	printer *Printer
 }
 
 // Start executes the workflow with the given configuration
@@ -53,8 +53,8 @@ func (w *Workflow) Start(c Config) error {
 
 	w.printer.StopSpinner()
 
-	// Print workflow report using WorkflowBuffer data (replaces os.Pipe buffering)
-	w.printer.PrintReport(ctx.WorkflowBuffer)
+	// Print workflow report using Result data
+	w.printer.PrintReport(ctx.Result)
 
 	return nil
 }
@@ -78,24 +78,24 @@ func (w *Workflow) initJobScheduler() (*JobScheduler, error) {
 	return scheduler, nil
 }
 
-// setupWorkflowBuffer creates workflow buffer for buffering
-func (w *Workflow) setupWorkflowBuffer() *WorkflowBuffer {
-	wb := NewWorkflowBuffer()
+// setupResult creates result for managing execution results
+func (w *Workflow) setupResult() *Result {
+	rs := NewResult()
 	// Initialize job outputs
 	for _, job := range w.Jobs {
 		jobID := job.ID
 		if jobID == "" {
 			jobID = job.Name
 		}
-		jb := &JobBuffer{
+		jr := &JobResult{
 			JobName:   job.Name,
 			JobID:     jobID,
 			StartTime: time.Now(),
 		}
-		wb.Jobs[jobID] = jb
+		rs.Jobs[jobID] = jr
 	}
 
-	return wb
+	return rs
 }
 
 // startJobsWithDependencies runs the main job execution loop with dependency management
@@ -123,8 +123,8 @@ func (w *Workflow) handleNoRunnableJobs(ctx JobContext) error {
 	skippedJobs := ctx.JobScheduler.MarkJobsWithFailedDependencies()
 
 	// Update skipped jobs in workflow printer
-	if ctx.WorkflowBuffer != nil {
-		w.updateSkippedJobsOutput(skippedJobs, ctx.WorkflowBuffer)
+	if ctx.Result != nil {
+		w.updateSkippedJobsOutput(skippedJobs, ctx.Result)
 	}
 
 	if len(skippedJobs) == 0 {
@@ -136,14 +136,14 @@ func (w *Workflow) handleNoRunnableJobs(ctx JobContext) error {
 }
 
 // updateSkippedJobsOutput updates the output for jobs that were skipped due to failed dependencies
-func (w *Workflow) updateSkippedJobsOutput(skippedJobs []string, workflowBuffer *WorkflowBuffer) {
+func (w *Workflow) updateSkippedJobsOutput(skippedJobs []string, rs *Result) {
 	for _, jobID := range skippedJobs {
-		if jb, exists := workflowBuffer.Jobs[jobID]; exists {
-			jb.mutex.Lock()
-			jb.EndTime = jb.StartTime // Set end time same as start time (0 duration)
-			jb.Status = "Skipped"
-			jb.Success = false
-			jb.mutex.Unlock()
+		if jr, exists := rs.Jobs[jobID]; exists {
+			jr.mutex.Lock()
+			jr.EndTime = jr.StartTime // Set end time same as start time (0 duration)
+			jr.Status = "Skipped"
+			jr.Success = false
+			jr.mutex.Unlock()
 		}
 	}
 }
@@ -201,7 +201,7 @@ func (w *Workflow) evalVars() (map[string]any, error) {
 }
 
 func (w *Workflow) newJobContext(c Config, vars map[string]any) (JobContext, error) {
-	wb := w.setupWorkflowBuffer()
+	rs := w.setupResult()
 
 	scheduler, err := w.initJobScheduler()
 	if err != nil {
@@ -213,7 +213,7 @@ func (w *Workflow) newJobContext(c Config, vars map[string]any) (JobContext, err
 		Logs:           []map[string]any{},
 		Config:         c,
 		Printer:        w.printer,
-		WorkflowBuffer: wb,
+		Result: rs,
 		JobScheduler:   scheduler,
 		Outputs:        w.outputs,
 	}, nil

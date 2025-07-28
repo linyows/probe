@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/briandowns/spinner"
@@ -57,83 +56,6 @@ const (
 	LogLevelError
 )
 
-// JobBuffer stores buffered output for a job
-type JobBuffer struct {
-	JobName     string
-	JobID       string
-	Status      string
-	StartTime   time.Time
-	EndTime     time.Time
-	Success     bool
-	StepResults []StepResult // Store all step results for this job
-	mutex       sync.Mutex
-}
-
-// WorkflowBuffer manages output for multiple jobs
-type WorkflowBuffer struct {
-	Jobs map[string]*JobBuffer
-}
-
-// NewWorkflowBuffer creates a new WorkflowBuffer instance
-func NewWorkflowBuffer() *WorkflowBuffer {
-	return &WorkflowBuffer{
-		Jobs: make(map[string]*JobBuffer),
-	}
-}
-
-// AddStepResult adds a StepResult to the specified job buffer
-func (wb *WorkflowBuffer) AddStepResult(jobID string, stepResult StepResult) {
-	if jb, exists := wb.Jobs[jobID]; exists {
-		jb.mutex.Lock()
-		defer jb.mutex.Unlock()
-		jb.StepResults = append(jb.StepResults, stepResult)
-	}
-}
-
-// PrintWriter defines the interface for different print implementations
-type PrintWriter interface {
-	// Workflow level output
-	PrintHeader(name, description string)
-
-	// Error output
-	PrintError(format string, args ...interface{})
-
-	// Verbose output
-	PrintVerbose(format string, args ...interface{})
-	PrintSeparator()
-
-	// Unified logging methods
-	LogDebug(format string, args ...interface{})
-	LogError(format string, args ...interface{})
-
-	PrintReport(wb *WorkflowBuffer)
-	StartSpinner()
-	StopSpinner()
-	AddSpinnerSuffix(txt string)
-}
-
-// StatusType represents the status of execution
-type StatusType int
-
-const (
-	StatusSuccess StatusType = iota
-	StatusError
-	StatusWarning
-	StatusSkipped
-)
-
-// StepResult represents the result of a step execution
-type StepResult struct {
-	Index         int
-	Name          string
-	Status        StatusType
-	RT            string
-	WaitTime      string
-	TestOutput    string
-	EchoOutput    string
-	HasTest       bool
-	RepeatCounter *StepRepeatCounter // For repeat execution information
-}
 
 // Printer implements PrintWriter for console print
 type Printer struct {
@@ -273,9 +195,9 @@ func (p *Printer) generateFooter(totalTime float64, successCount, totalJobs int,
 	}
 }
 
-// generateReport generates a complete workflow report string using WorkflowBuffer data
-func (p *Printer) generateReport(wb *WorkflowBuffer) string {
-	if wb == nil {
+// generateReport generates a complete workflow report string using Result data
+func (p *Printer) generateReport(rs *Result) string {
+	if rs == nil {
 		return ""
 	}
 
@@ -285,42 +207,42 @@ func (p *Printer) generateReport(wb *WorkflowBuffer) string {
 
 	// Generate step results and job summaries for each job in BufferIDs order
 	for _, jobID := range p.BufferIDs {
-		if jb, exists := wb.Jobs[jobID]; exists {
-			jb.mutex.Lock()
+		if jr, exists := rs.Jobs[jobID]; exists {
+			jr.mutex.Lock()
 
 			// Calculate job status and duration
-			duration := jb.EndTime.Sub(jb.StartTime)
+			duration := jr.EndTime.Sub(jr.StartTime)
 			totalTime += duration
 
 			status := StatusSuccess
-			if jb.Status == "Skipped" {
+			if jr.Status == "Skipped" {
 				status = StatusWarning
-			} else if !jb.Success {
+			} else if !jr.Success {
 				status = StatusError
 			} else {
 				successCount++
 			}
 
 			// Generate job status output
-			p.generateJobStatus(jb.JobID, jb.JobName, status, duration.Seconds(), &output)
+			p.generateJobStatus(jr.JobID, jr.JobName, status, duration.Seconds(), &output)
 
 			// Generate job results from StepResults
-			stepOutput := p.generateJobResultsFromStepResults(jb.StepResults)
-			p.generateJobResults(jb.JobID, stepOutput, &output)
+			stepOutput := p.generateJobResultsFromStepResults(jr.StepResults)
+			p.generateJobResults(jr.JobID, stepOutput, &output)
 
-			jb.mutex.Unlock()
+			jr.mutex.Unlock()
 		}
 	}
 
 	// Generate workflow footer
-	p.generateFooter(totalTime.Seconds(), successCount, len(wb.Jobs), &output)
+	p.generateFooter(totalTime.Seconds(), successCount, len(rs.Jobs), &output)
 
 	return output.String()
 }
 
-// PrintReport prints a complete workflow report using WorkflowBuffer data
-func (p *Printer) PrintReport(wb *WorkflowBuffer) {
-	reportOutput := p.generateReport(wb)
+// PrintReport prints a complete workflow report using Result data
+func (p *Printer) PrintReport(rs *Result) {
+	reportOutput := p.generateReport(rs)
 	if reportOutput != "" {
 		fmt.Print(reportOutput)
 	}
@@ -379,21 +301,38 @@ func (p *Printer) generateJobResultsFromStepResults(stepResults []StepResult) st
 	return output.String()
 }
 
+// generateHeader generates the workflow header string
+func (p *Printer) generateHeader(name, description string) string {
+	if name == "" {
+		return ""
+	}
+	
+	var output strings.Builder
+	bold := color.New(color.Bold)
+	output.WriteString(bold.Sprintf("%s\n", name))
+	if description != "" {
+		output.WriteString(colorDim().Sprintf("%s\n", description))
+	}
+	output.WriteString("\n")
+	return output.String()
+}
+
 // PrintHeader prints the workflow name and description
 func (p *Printer) PrintHeader(name, description string) {
-	if name != "" {
-		bold := color.New(color.Bold)
-		bold.Printf("%s\n", name)
-		if description != "" {
-			colorDim().Printf("%s\n", description)
-		}
-		fmt.Println("")
+	header := p.generateHeader(name, description)
+	if header != "" {
+		fmt.Print(header)
 	}
+}
+
+// generateError generates an error message string
+func (p *Printer) generateError(format string, args ...interface{}) string {
+	return fmt.Sprintf("%s: %s\n", colorError().Sprintf("Error"), fmt.Sprintf(format, args...))
 }
 
 // PrintError prints an error message
 func (p *Printer) PrintError(format string, args ...interface{}) {
-	fmt.Printf("%s: %s\n", colorError().Sprintf("Error"), fmt.Sprintf(format, args...))
+	fmt.Print(p.generateError(format, args...))
 }
 
 // PrintVerbose prints verbose output (only if verbose mode is enabled)
@@ -410,54 +349,25 @@ func (p *Printer) PrintSeparator() {
 	}
 }
 
+// generateLogDebug generates debug message string
+func (p *Printer) generateLogDebug(format string, args ...interface{}) string {
+	return fmt.Sprintf("[DEBUG] %s\n", fmt.Sprintf(format, args...))
+}
+
 // LogDebug prints debug messages (only in verbose mode)
 func (p *Printer) LogDebug(format string, args ...interface{}) {
 	if p.verbose {
-		fmt.Printf("[DEBUG] %s\n", fmt.Sprintf(format, args...))
+		fmt.Print(p.generateLogDebug(format, args...))
 	}
+}
+
+// generateLogError generates error log message string
+func (p *Printer) generateLogError(format string, args ...interface{}) string {
+	return fmt.Sprintf("%s\n", colorError().Sprintf("[ERROR] %s", fmt.Sprintf(format, args...)))
 }
 
 // LogError prints error messages to stderr
 func (p *Printer) LogError(format string, args ...interface{}) {
-	fmt.Fprintf(os.Stderr, "%s\n", colorError().Sprintf("[ERROR] %s", fmt.Sprintf(format, args...)))
+	fmt.Fprint(os.Stderr, p.generateLogError(format, args...))
 }
 
-// SilentPrinter is a no-op implementation of PrintWriter for testing
-type SilentPrinter struct{}
-
-// NewSilentPrinter creates a new silent print writer for testing
-func NewSilentPrinter() *SilentPrinter {
-	return &SilentPrinter{}
-}
-
-// PrintHeader does nothing in silent mode
-func (s *SilentPrinter) PrintHeader(name, description string) {}
-
-// AddSpinnerSuffix does nothing in silent mode
-func (s *SilentPrinter) AddSpinnerSuffix(txt string) {
-}
-
-// StartSpinner does nothing in silent mode
-func (s *SilentPrinter) StartSpinner() {
-}
-
-// StopSpinner does nothing in silent mode
-func (s *SilentPrinter) StopSpinner() {
-}
-
-// PrintError does nothing in silent mode
-func (s *SilentPrinter) PrintError(format string, args ...interface{}) {}
-
-// PrintVerbose does nothing in silent mode
-func (s *SilentPrinter) PrintVerbose(format string, args ...interface{}) {}
-
-// PrintSeparator does nothing in silent mode
-func (s *SilentPrinter) PrintSeparator() {}
-
-// LogDebug does nothing in silent mode
-func (s *SilentPrinter) LogDebug(format string, args ...interface{}) {}
-
-// LogError does nothing in silent mode
-func (s *SilentPrinter) LogError(format string, args ...interface{}) {}
-
-func (s *SilentPrinter) PrintReport(wb *WorkflowBuffer) {}

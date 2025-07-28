@@ -1,8 +1,6 @@
 package probe
 
 import (
-	"io"
-	"os"
 	"strings"
 	"testing"
 	"time"
@@ -219,131 +217,157 @@ func TestStepResult(t *testing.T) {
 	}
 }
 
-// PrintReport method tests
-func TestPrinter_PrintReport(t *testing.T) {
-	// Create printer with job IDs
-	jobIDs := []string{"job1", "job2"}
-	printer := NewPrinter(false, jobIDs)
-
-	// Create WorkflowBuffer with test data
-	wb := NewWorkflowBuffer()
-
-	// Job 1: Regular steps
-	startTime1 := time.Now()
-	endTime1 := startTime1.Add(2 * time.Second)
-	wb.Jobs["job1"] = &JobBuffer{
-		JobID:     "job1",
-		JobName:   "Test Job 1",
-		StartTime: startTime1,
-		EndTime:   endTime1,
-		Success:   true,
-		Status:    "Completed",
-		StepResults: []StepResult{
-			{
-				Index:  0,
-				Name:   "Step 1",
-				Status: StatusSuccess,
-				RT:     "100ms",
-			},
-			{
-				Index:      1,
-				Name:       "Step 2",
-				Status:     StatusError,
-				TestOutput: "Test failed",
-			},
-		},
-	}
-
-	// Job 2: Repeat step
-	startTime2 := time.Now()
-	endTime2 := startTime2.Add(3 * time.Second)
-	wb.Jobs["job2"] = &JobBuffer{
-		JobID:     "job2",
-		JobName:   "Test Job 2",
-		StartTime: startTime2,
-		EndTime:   endTime2,
-		Success:   false,
-		Status:    "Failed",
-		StepResults: []StepResult{
-			{
-				Index:   0,
-				Name:    "Repeat Step",
-				Status:  StatusWarning,
-				HasTest: true,
-				RepeatCounter: &StepRepeatCounter{
-					SuccessCount: 3,
-					FailureCount: 2,
-					Name:         "Repeat Step",
-					LastResult:   false,
-				},
-			},
-		},
-	}
-
-	// Capture output
-	oldStdout := os.Stdout
-	r, w, _ := os.Pipe()
-	os.Stdout = w
-
-	// Call PrintReport
-	printer.PrintReport(wb)
-
-	// Restore stdout and get output
-	_ = w.Close()
-	os.Stdout = oldStdout
-	output, _ := io.ReadAll(r)
-	outputStr := string(output)
-
-	// Verify output contains job names and status (from PrintJobStatus)
-	if !strings.Contains(outputStr, "Test Job 1") {
-		t.Error("Output should contain 'Test Job 1'")
-	}
-	if !strings.Contains(outputStr, "Test Job 2") {
-		t.Error("Output should contain 'Test Job 2'")
-	}
-
-	// Verify job status output
-	if !strings.Contains(outputStr, "(Completed in") {
-		t.Error("Output should contain job completion status")
-	}
-	if !strings.Contains(outputStr, "(Failed in") {
-		t.Error("Output should contain job failure status")
-	}
-
-	// Verify step results are properly formatted
-	if !strings.Contains(outputStr, "Step 1") {
-		t.Error("Output should contain Step 1")
-	}
-	if !strings.Contains(outputStr, "Step 2") {
-		t.Error("Output should contain Step 2")
-	}
-	if !strings.Contains(outputStr, "Test failed") {
-		t.Error("Output should contain test failure message")
-	}
-	if !strings.Contains(outputStr, "(repeating 5 times)") {
-		t.Error("Output should contain repeat step information")
-	}
-
-	// Verify footer
-	if !strings.Contains(outputStr, "Total workflow time") {
-		t.Error("Output should contain total workflow time")
-	}
-}
-
-func TestPrinter_PrintReport_EmptyBuffer(t *testing.T) {
-	printer := NewPrinter(false, []string{})
-
-	// Test with nil buffer
-	printer.PrintReport(nil)
-
-	// Test with empty buffer
-	wb := NewWorkflowBuffer()
-	printer.PrintReport(wb)
-
-	// Should not panic
-}
 
 // Generate method tests
+func TestPrinter_generateHeader(t *testing.T) {
+	// Disable color output for consistent testing
+	color.NoColor = true
+	defer func() { color.NoColor = false }()
+
+	printer := NewPrinter(false, []string{})
+
+	tests := []struct {
+		name        string
+		title       string
+		description string
+		want        string
+	}{
+		{
+			name:        "empty name",
+			title:       "",
+			description: "Some description",
+			want:        "",
+		},
+		{
+			name:        "name only",
+			title:       "Test Workflow",
+			description: "",
+			want:        "Test Workflow\n\n",
+		},
+		{
+			name:        "name and description",
+			title:       "Test Workflow",
+			description: "This is a test workflow",
+			want:        "Test Workflow\nThis is a test workflow\n\n",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := printer.generateHeader(tt.title, tt.description)
+			if result != tt.want {
+				t.Errorf("generateHeader() = %q, want %q", result, tt.want)
+			}
+		})
+	}
+}
+
+func TestPrinter_generateError(t *testing.T) {
+	// Disable color output for consistent testing
+	color.NoColor = true
+	defer func() { color.NoColor = false }()
+
+	printer := NewPrinter(false, []string{})
+
+	tests := []struct {
+		name   string
+		format string
+		args   []interface{}
+		want   string
+	}{
+		{
+			name:   "simple error",
+			format: "Something went wrong",
+			args:   []interface{}{},
+			want:   "Error: Something went wrong\n",
+		},
+		{
+			name:   "formatted error",
+			format: "Failed to process %s with code %d",
+			args:   []interface{}{"file.txt", 404},
+			want:   "Error: Failed to process file.txt with code 404\n",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := printer.generateError(tt.format, tt.args...)
+			if result != tt.want {
+				t.Errorf("generateError() = %q, want %q", result, tt.want)
+			}
+		})
+	}
+}
+
+func TestPrinter_generateLogDebug(t *testing.T) {
+	printer := NewPrinter(false, []string{})
+
+	tests := []struct {
+		name   string
+		format string
+		args   []interface{}
+		want   string
+	}{
+		{
+			name:   "simple debug",
+			format: "Debug message",
+			args:   []interface{}{},
+			want:   "[DEBUG] Debug message\n",
+		},
+		{
+			name:   "formatted debug",
+			format: "Processing item %d of %d",
+			args:   []interface{}{5, 10},
+			want:   "[DEBUG] Processing item 5 of 10\n",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := printer.generateLogDebug(tt.format, tt.args...)
+			if result != tt.want {
+				t.Errorf("generateLogDebug() = %q, want %q", result, tt.want)
+			}
+		})
+	}
+}
+
+func TestPrinter_generateLogError(t *testing.T) {
+	// Disable color output for consistent testing
+	color.NoColor = true
+	defer func() { color.NoColor = false }()
+
+	printer := NewPrinter(false, []string{})
+
+	tests := []struct {
+		name   string
+		format string
+		args   []interface{}
+		want   string
+	}{
+		{
+			name:   "simple log error",
+			format: "Critical error occurred",
+			args:   []interface{}{},
+			want:   "[ERROR] Critical error occurred\n",
+		},
+		{
+			name:   "formatted log error",
+			format: "Database connection failed: %s",
+			args:   []interface{}{"timeout"},
+			want:   "[ERROR] Database connection failed: timeout\n",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := printer.generateLogError(tt.format, tt.args...)
+			if result != tt.want {
+				t.Errorf("generateLogError() = %q, want %q", result, tt.want)
+			}
+		})
+	}
+}
 func TestPrinter_generateJobStatus(t *testing.T) {
 	printer := NewPrinter(false, []string{})
 
@@ -507,12 +531,12 @@ func TestPrinter_generateReport(t *testing.T) {
 	printer := NewPrinter(false, []string{"job1", "job2"})
 
 	// Create test WorkflowBuffer
-	wb := NewWorkflowBuffer()
+	rs := NewResult()
 
 	// Add job1 - successful
 	startTime1 := time.Now()
 	endTime1 := startTime1.Add(1 * time.Second)
-	wb.Jobs["job1"] = &JobBuffer{
+	rs.Jobs["job1"] = &JobResult{
 		JobID:     "job1",
 		JobName:   "Successful Job",
 		StartTime: startTime1,
@@ -532,7 +556,7 @@ func TestPrinter_generateReport(t *testing.T) {
 	// Add job2 - failed
 	startTime2 := time.Now()
 	endTime2 := startTime2.Add(2 * time.Second)
-	wb.Jobs["job2"] = &JobBuffer{
+	rs.Jobs["job2"] = &JobResult{
 		JobID:     "job2",
 		JobName:   "Failed Job",
 		StartTime: startTime2,
@@ -548,7 +572,7 @@ func TestPrinter_generateReport(t *testing.T) {
 		},
 	}
 
-	result := printer.generateReport(wb)
+	result := printer.generateReport(rs)
 
 	// Verify the report contains expected elements
 	expectedContains := []string{
@@ -575,8 +599,8 @@ func TestPrinter_generateReport_EmptyBuffer(t *testing.T) {
 		t.Errorf("generateReport(nil) should return empty string, got %q", result)
 	}
 
-	wb := NewWorkflowBuffer()
-	result = printer.generateReport(wb)
+	rs := NewResult()
+	result = printer.generateReport(rs)
 
 	// Should contain at least the footer
 	if !strings.Contains(result, "Total workflow time: 0.00s") {
@@ -587,11 +611,11 @@ func TestPrinter_generateReport_EmptyBuffer(t *testing.T) {
 func TestPrinter_generateReport_WithRepeatStep(t *testing.T) {
 	printer := NewPrinter(false, []string{"job1"})
 
-	wb := NewWorkflowBuffer()
+	rs := NewResult()
 
 	startTime := time.Now()
 	endTime := startTime.Add(1 * time.Second)
-	wb.Jobs["job1"] = &JobBuffer{
+	rs.Jobs["job1"] = &JobResult{
 		JobID:     "job1",
 		JobName:   "Job with Repeat",
 		StartTime: startTime,
@@ -614,7 +638,7 @@ func TestPrinter_generateReport_WithRepeatStep(t *testing.T) {
 		},
 	}
 
-	result := printer.generateReport(wb)
+	result := printer.generateReport(rs)
 
 	expectedContains := []string{
 		"Job with Repeat",

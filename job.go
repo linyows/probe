@@ -4,31 +4,6 @@ import (
 	"fmt"
 )
 
-type JobContext struct {
-	Vars map[string]any   `expr:"vars"`
-	Logs []map[string]any `expr:"steps"`
-	Config
-	Failed bool
-	// Current job ID for this context
-	CurrentJobID string
-	// Repeat tracking
-	IsRepeating   bool
-	RepeatCurrent int
-	RepeatTotal   int
-	StepCounters  map[int]StepRepeatCounter // step index -> counter
-	// Print writer
-	Printer PrintWriter
-	// Workflow buffer for managing job-level output
-	WorkflowBuffer *WorkflowBuffer
-	// Job scheduler for managing job dependencies and execution
-	JobScheduler *JobScheduler
-	// Shared outputs across all jobs (accessible via expressions as "outputs")
-	Outputs *Outputs `expr:"outputs"`
-}
-
-func (j *JobContext) SetFailed() {
-	j.Failed = true
-}
 
 type Job struct {
 	Name     string   `yaml:"name" validate:"required"`

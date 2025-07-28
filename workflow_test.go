@@ -77,7 +77,7 @@ func TestWorkflowExecutor_DependencyManagement(t *testing.T) {
 			workflow := &Workflow{
 				Name:    "test-workflow",
 				Jobs:    tt.jobs,
-				printer: NewSilentPrinter(),
+				printer: NewPrinter(false, []string{}),
 			}
 
 			config := Config{Verbose: false}
@@ -111,7 +111,7 @@ func TestWorkflowExecutor_ParallelExecution(t *testing.T) {
 					Steps: []*Step{},
 				},
 			},
-			printer: NewSilentPrinter(),
+			printer: NewPrinter(false, []string{}),
 		}
 
 		config := Config{Verbose: false}
@@ -151,7 +151,7 @@ func TestWorkflowExecutor_SequentialWithDependencies(t *testing.T) {
 					Steps: []*Step{},
 				},
 			},
-			printer: NewSilentPrinter(),
+			printer: NewPrinter(false, []string{}),
 		}
 
 		config := Config{Verbose: false}
@@ -178,7 +178,7 @@ func TestWorkflowExecutor_BufferedOutput(t *testing.T) {
 					Steps: []*Step{},
 				},
 			},
-			printer: NewSilentPrinter(),
+			printer: NewPrinter(false, []string{}),
 		}
 
 		config := Config{Verbose: false}
@@ -207,7 +207,7 @@ func TestWorkflowExecutor_RepeatJobs(t *testing.T) {
 					},
 				},
 			},
-			printer: NewSilentPrinter(),
+			printer: NewPrinter(false, []string{}),
 		}
 
 		config := Config{Verbose: false}
@@ -256,7 +256,7 @@ func TestWorkflowExecutor_MixedScenarios(t *testing.T) {
 					Steps: []*Step{},
 				},
 			},
-			printer: NewSilentPrinter(),
+			printer: NewPrinter(false, []string{}),
 		}
 
 		config := Config{Verbose: false}
@@ -285,7 +285,7 @@ func TestWorkflowExecutor_ErrorHandling(t *testing.T) {
 					Steps: []*Step{},
 				},
 			},
-			printer: NewSilentPrinter(),
+			printer: NewPrinter(false, []string{}),
 		}
 
 		config := Config{Verbose: false}
@@ -308,12 +308,12 @@ func TestWorkflowExecutor_PrintDetailedResults(t *testing.T) {
 					Steps: []*Step{},
 				},
 			},
-			printer: NewSilentPrinter(),
+			printer: NewPrinter(false, []string{}),
 		}
 
 		// Create workflow buffer
-		workflowBuffer := NewWorkflowBuffer()
-		jobBuffer := &JobBuffer{
+		result := NewResult()
+		jobResult := &JobResult{
 			JobName:   "test-job",
 			JobID:     "test-job",
 			Status:    "Completed",
@@ -321,10 +321,10 @@ func TestWorkflowExecutor_PrintDetailedResults(t *testing.T) {
 			EndTime:   time.Now(),
 			Success:   true,
 		}
-		workflowBuffer.Jobs["test-job"] = jobBuffer
+		result.Jobs["test-job"] = jobResult
 
 		// This should not panic and should execute successfully
-		workflow.printer.PrintReport(workflowBuffer)
+		workflow.printer.PrintReport(result)
 
 		// If we get here without panic, the test passes
 	})
@@ -335,7 +335,7 @@ func TestParallelExecution_EdgeCases(t *testing.T) {
 		workflow := &Workflow{
 			Name:    "empty-workflow",
 			Jobs:    []Job{},
-			printer: NewSilentPrinter(),
+			printer: NewPrinter(false, []string{}),
 		}
 
 		config := Config{Verbose: false}
@@ -355,7 +355,7 @@ func TestParallelExecution_EdgeCases(t *testing.T) {
 					Steps: []*Step{},
 				},
 			},
-			printer: NewSilentPrinter(),
+			printer: NewPrinter(false, []string{}),
 		}
 
 		config := Config{Verbose: false}
@@ -379,7 +379,7 @@ func TestParallelExecution_EdgeCases(t *testing.T) {
 		workflow := &Workflow{
 			Name:    "many-jobs",
 			Jobs:    jobs,
-			printer: NewSilentPrinter(),
+			printer: NewPrinter(false, []string{}),
 		}
 
 		config := Config{Verbose: false}
@@ -409,7 +409,7 @@ func TestBufferedExecution_EdgeCases(t *testing.T) {
 					Steps: []*Step{},
 				},
 			},
-			printer: NewSilentPrinter(),
+			printer: NewPrinter(false, []string{}),
 		}
 
 		config := Config{Verbose: false}
@@ -439,7 +439,7 @@ func TestBufferedExecution_EdgeCases(t *testing.T) {
 					Steps: []*Step{},
 				},
 			},
-			printer: NewSilentPrinter(),
+			printer: NewPrinter(false, []string{}),
 		}
 
 		config := Config{Verbose: false}
@@ -465,7 +465,7 @@ func TestRepeatExecution_EdgeCases(t *testing.T) {
 					},
 				},
 			},
-			printer: NewSilentPrinter(),
+			printer: NewPrinter(false, []string{}),
 		}
 
 		config := Config{Verbose: false}
@@ -496,7 +496,7 @@ func TestRepeatExecution_EdgeCases(t *testing.T) {
 					},
 				},
 			},
-			printer: NewSilentPrinter(),
+			printer: NewPrinter(false, []string{}),
 		}
 
 		config := Config{Verbose: false}
@@ -528,7 +528,7 @@ func TestRepeatExecution_EdgeCases(t *testing.T) {
 					},
 				},
 			},
-			printer: NewSilentPrinter(),
+			printer: NewPrinter(false, []string{}),
 		}
 
 		config := Config{Verbose: false}
@@ -554,7 +554,7 @@ func TestExecutor_ConcurrencyEdgeCases(t *testing.T) {
 				{Name: "level2-b", Needs: []string{"level1-b", "level1-c"}, Steps: []*Step{}},
 				{Name: "final", Needs: []string{"level2-a", "level2-b"}, Steps: []*Step{}},
 			},
-			printer: NewSilentPrinter(),
+			printer: NewPrinter(false, []string{}),
 		}
 
 		config := Config{Verbose: false}
@@ -586,7 +586,7 @@ func TestExecutor_ConcurrencyEdgeCases(t *testing.T) {
 					Steps: []*Step{},
 				},
 			},
-			printer: NewSilentPrinter(),
+			printer: NewPrinter(false, []string{}),
 		}
 
 		config := Config{Verbose: false}
@@ -857,11 +857,11 @@ func TestStepRepeatDisplayConditions(t *testing.T) {
 
 // WorkflowBuffer tests
 func TestWorkflowBuffer_AddStepResult(t *testing.T) {
-	wb := NewWorkflowBuffer()
+	wb := NewResult()
 	jobID := "test-job"
 
 	// Add a job buffer first
-	wb.Jobs[jobID] = &JobBuffer{
+	wb.Jobs[jobID] = &JobResult{
 		JobID:       jobID,
 		JobName:     "Test Job",
 		StartTime:   time.Now(),
@@ -890,31 +890,31 @@ func TestWorkflowBuffer_AddStepResult(t *testing.T) {
 	wb.AddStepResult(jobID, stepResult2)
 
 	// Verify step results were added
-	jobBuffer, exists := wb.Jobs[jobID]
+	jobResult, exists := wb.Jobs[jobID]
 	if !exists {
 		t.Fatal("Job buffer should exist")
 	}
-	if len(jobBuffer.StepResults) != 2 {
-		t.Errorf("Expected 2 step results, got %d", len(jobBuffer.StepResults))
+	if len(jobResult.StepResults) != 2 {
+		t.Errorf("Expected 2 step results, got %d", len(jobResult.StepResults))
 	}
 
-	if jobBuffer.StepResults[0].Name != "Step 1" {
-		t.Errorf("Expected first step name 'Step 1', got '%s'", jobBuffer.StepResults[0].Name)
+	if jobResult.StepResults[0].Name != "Step 1" {
+		t.Errorf("Expected first step name 'Step 1', got '%s'", jobResult.StepResults[0].Name)
 	}
 
-	if jobBuffer.StepResults[1].Name != "Step 2" {
-		t.Errorf("Expected second step name 'Step 2', got '%s'", jobBuffer.StepResults[1].Name)
+	if jobResult.StepResults[1].Name != "Step 2" {
+		t.Errorf("Expected second step name 'Step 2', got '%s'", jobResult.StepResults[1].Name)
 	}
 
-	if jobBuffer.StepResults[1].RepeatCounter == nil {
+	if jobResult.StepResults[1].RepeatCounter == nil {
 		t.Error("Expected RepeatCounter to be set for second step")
-	} else if jobBuffer.StepResults[1].RepeatCounter.SuccessCount != 3 {
-		t.Errorf("Expected RepeatCounter.SuccessCount = 3, got %d", jobBuffer.StepResults[1].RepeatCounter.SuccessCount)
+	} else if jobResult.StepResults[1].RepeatCounter.SuccessCount != 3 {
+		t.Errorf("Expected RepeatCounter.SuccessCount = 3, got %d", jobResult.StepResults[1].RepeatCounter.SuccessCount)
 	}
 }
 
 func TestWorkflowBuffer_AddStepResult_NonExistentJob(t *testing.T) {
-	wb := NewWorkflowBuffer()
+	wb := NewResult()
 
 	stepResult := StepResult{
 		Index:  0,
@@ -932,11 +932,11 @@ func TestWorkflowBuffer_AddStepResult_NonExistentJob(t *testing.T) {
 }
 
 func TestWorkflowBuffer_ConcurrentAccess(t *testing.T) {
-	wb := NewWorkflowBuffer()
+	wb := NewResult()
 	jobID := "test-job"
 
 	// Add a job buffer first
-	wb.Jobs[jobID] = &JobBuffer{
+	wb.Jobs[jobID] = &JobResult{
 		JobID:       jobID,
 		JobName:     "Test Job",
 		StartTime:   time.Now(),
@@ -962,9 +962,9 @@ func TestWorkflowBuffer_ConcurrentAccess(t *testing.T) {
 	// Goroutine 2: Read job buffer
 	go func() {
 		for i := 0; i < 5; i++ {
-			jobBuffer := wb.Jobs[jobID]
-			if jobBuffer != nil {
-				_ = len(jobBuffer.StepResults)
+			jobResult := wb.Jobs[jobID]
+			if jobResult != nil {
+				_ = len(jobResult.StepResults)
 			}
 		}
 		done <- true
@@ -975,11 +975,11 @@ func TestWorkflowBuffer_ConcurrentAccess(t *testing.T) {
 	<-done
 
 	// Verify final state
-	jobBuffer, exists := wb.Jobs[jobID]
+	jobResult, exists := wb.Jobs[jobID]
 	if !exists {
 		t.Fatal("Job buffer should exist after concurrent operations")
 	}
-	if len(jobBuffer.StepResults) != 10 {
-		t.Errorf("Expected 10 step results after concurrent operations, got %d", len(jobBuffer.StepResults))
+	if len(jobResult.StepResults) != 10 {
+		t.Errorf("Expected 10 step results after concurrent operations, got %d", len(jobResult.StepResults))
 	}
 }
