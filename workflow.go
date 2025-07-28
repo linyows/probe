@@ -29,6 +29,7 @@ func (w *Workflow) Start(c Config) error {
 
 	// Print workflow header at the beginning
 	w.printer.PrintHeader(w.Name, w.Description)
+	w.printer.StartSpinner()
 
 	// Initialize shared outputs
 	if w.outputs == nil {
@@ -49,6 +50,8 @@ func (w *Workflow) Start(c Config) error {
 	if err != nil {
 		return err
 	}
+
+	w.printer.StopSpinner()
 
 	// Print workflow report using WorkflowBuffer data (replaces os.Pipe buffering)
 	w.printer.PrintReport(ctx.WorkflowBuffer)
@@ -163,7 +166,6 @@ func (w *Workflow) processRunnableJobs(runnableJobs []string, ctx JobContext) {
 		}(job, jobID)
 	}
 }
-
 
 func (w *Workflow) SetExitStatus(isErr bool) {
 	if isErr {

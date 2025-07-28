@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"regexp"
 	"strconv"
-	"strings"
 	"time"
 )
 
@@ -23,7 +22,6 @@ type StepRepeatCounter struct {
 	FailureCount int
 	Name         string
 	LastResult   bool
-	Output       strings.Builder
 }
 
 type Step struct {
@@ -73,6 +71,8 @@ func (st *Step) prepare(jCtx *JobContext) (string, bool) {
 	if st.Name == "" {
 		st.Name = "Unknown Step"
 	}
+
+	jCtx.Printer.AddSpinnerSuffix(st.Name)
 
 	// Handle wait before step execution
 	st.handleWait(jCtx)
@@ -330,8 +330,8 @@ func (st *Step) DoTest() (string, bool) {
 
 	if !boolOutput {
 		// 7 spaces
-		output := fmt.Sprintf("       request: %#v\n", st.ctx.Req)
-		output += fmt.Sprintf("       response: %#v\n", st.ctx.Res)
+		output := fmt.Sprintf("       %s %#v\n", colorInfo().Sprintf("request:"), st.ctx.Req)
+		output += fmt.Sprintf("       %s %#v\n", colorInfo().Sprintf("response:"), st.ctx.Res)
 		return output, false
 	}
 
@@ -382,7 +382,7 @@ func (st *Step) ShowRequestResponse(name string, jCtx *JobContext) {
 	jCtx.Printer.LogDebug("Response:")
 	st.printMapData(st.ctx.Res, jCtx)
 
-	jCtx.Printer.LogDebug("RT: %s", colorWarning().Sprintf("%s", st.ctx.RT))
+	jCtx.Printer.LogDebug("RT: %s", colorInfo().Sprintf("%s", st.ctx.RT))
 }
 
 // printMapData prints map data with proper formatting for nested structures
@@ -405,23 +405,44 @@ func (st *Step) printNestedMap(key string, nested map[string]any, jCtx *JobConte
 }
 
 // handleWait processes the wait field and sleeps if necessary
-func (st *Step) handleWait(jCtx *JobContext) string {
+func (st *Step) handleWait(jCtx *JobContext) {
 	if st.Wait == "" {
-		return ""
+		return
 	}
 
 	duration, err := st.parseWaitDuration(st.Wait)
 	if err != nil {
 		jCtx.Printer.PrintError("wait duration parsing error: %v", err)
-		return ""
+		return
 	}
 
 	if duration > 0 {
-		time.Sleep(duration)
-		return st.formatWaitTime(duration)
+		msg := colorWarning().Sprintf("(%s wait)", st.formatWaitTime(duration))
+		msg = fmt.Sprintf("%s %s", msg, st.Name)
+		sleepWithMessage(duration, msg, jCtx.Printer.AddSpinnerSuffix)
+	}
+}
+
+func sleepWithMessage(d time.Duration, m string, fn func(m string)) {
+	if d < time.Second {
+		time.Sleep(d)
+		return
 	}
 
-	return ""
+	ticker := time.NewTicker(1 * time.Second)
+	defer ticker.Stop()
+
+	timer := time.NewTimer(d)
+	defer timer.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			fn(m)
+		case <-timer.C:
+			return
+		}
+	}
 }
 
 // parseWaitDuration parses wait string to time.Duration
