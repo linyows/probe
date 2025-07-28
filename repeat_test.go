@@ -189,7 +189,7 @@ func TestRepeatFunctionality_Intervals(t *testing.T) {
 						},
 					},
 				},
-				printer: NewSilentPrinter(),
+				printer: NewPrinter(false, []string{}),
 			}
 
 			config := Config{Verbose: false}
@@ -261,7 +261,7 @@ func TestRepeatFunctionality_DifferentTimeUnits(t *testing.T) {
 						},
 					},
 				},
-				printer: NewSilentPrinter(),
+				printer: NewPrinter(false, []string{}),
 			}
 
 			config := Config{Verbose: false}
@@ -306,7 +306,7 @@ func TestRepeatFunctionality_ParallelVsSequential(t *testing.T) {
 					},
 				},
 			},
-			printer: NewSilentPrinter(),
+			printer: NewPrinter(false, []string{}),
 		}
 
 		config := Config{Verbose: false}
@@ -348,7 +348,7 @@ func TestRepeatFunctionality_ParallelVsSequential(t *testing.T) {
 					},
 				},
 			},
-			printer: NewSilentPrinter(),
+			printer: NewPrinter(false, []string{}),
 		}
 
 		config := Config{Verbose: false}
@@ -383,7 +383,7 @@ func TestRepeatFunctionality_EdgeCases(t *testing.T) {
 					},
 				},
 			},
-			printer: NewSilentPrinter(),
+			printer: NewPrinter(false, []string{}),
 		}
 
 		config := Config{Verbose: false}
@@ -408,7 +408,7 @@ func TestRepeatFunctionality_EdgeCases(t *testing.T) {
 					},
 				},
 			},
-			printer: NewSilentPrinter(),
+			printer: NewPrinter(false, []string{}),
 		}
 
 		config := Config{Verbose: false}
@@ -441,7 +441,7 @@ func TestRepeatFunctionality_EdgeCases(t *testing.T) {
 					},
 				},
 			},
-			printer: NewSilentPrinter(),
+			printer: NewPrinter(false, []string{}),
 		}
 
 		config := Config{Verbose: false}

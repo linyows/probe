@@ -17,7 +17,7 @@ type JobContext struct {
 	RepeatTotal   int
 	StepCounters  map[int]StepRepeatCounter // step index -> counter
 	// Print writer
-	Printer PrintWriter
+	Printer *Printer
 	// Result for managing job-level output
 	Result *Result
 	// Job scheduler for managing job dependencies and execution

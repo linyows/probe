@@ -90,27 +90,6 @@ func (rs *Result) AddStepResult(jobID string, stepResult StepResult) {
 	}
 }
 
-// PrintWriter defines the interface for different print implementations
-type PrintWriter interface {
-	// Workflow level output
-	PrintHeader(name, description string)
-
-	// Error output
-	PrintError(format string, args ...interface{})
-
-	// Verbose output
-	PrintVerbose(format string, args ...interface{})
-	PrintSeparator()
-
-	// Unified logging methods
-	LogDebug(format string, args ...interface{})
-	LogError(format string, args ...interface{})
-
-	PrintReport(rs *Result)
-	StartSpinner()
-	StopSpinner()
-	AddSpinnerSuffix(txt string)
-}
 
 // StatusType represents the status of execution
 type StatusType int
@@ -379,21 +358,38 @@ func (p *Printer) generateJobResultsFromStepResults(stepResults []StepResult) st
 	return output.String()
 }
 
+// generateHeader generates the workflow header string
+func (p *Printer) generateHeader(name, description string) string {
+	if name == "" {
+		return ""
+	}
+	
+	var output strings.Builder
+	bold := color.New(color.Bold)
+	output.WriteString(bold.Sprintf("%s\n", name))
+	if description != "" {
+		output.WriteString(colorDim().Sprintf("%s\n", description))
+	}
+	output.WriteString("\n")
+	return output.String()
+}
+
 // PrintHeader prints the workflow name and description
 func (p *Printer) PrintHeader(name, description string) {
-	if name != "" {
-		bold := color.New(color.Bold)
-		bold.Printf("%s\n", name)
-		if description != "" {
-			colorDim().Printf("%s\n", description)
-		}
-		fmt.Println("")
+	header := p.generateHeader(name, description)
+	if header != "" {
+		fmt.Print(header)
 	}
+}
+
+// generateError generates an error message string
+func (p *Printer) generateError(format string, args ...interface{}) string {
+	return fmt.Sprintf("%s: %s\n", colorError().Sprintf("Error"), fmt.Sprintf(format, args...))
 }
 
 // PrintError prints an error message
 func (p *Printer) PrintError(format string, args ...interface{}) {
-	fmt.Printf("%s: %s\n", colorError().Sprintf("Error"), fmt.Sprintf(format, args...))
+	fmt.Print(p.generateError(format, args...))
 }
 
 // PrintVerbose prints verbose output (only if verbose mode is enabled)
@@ -410,54 +406,25 @@ func (p *Printer) PrintSeparator() {
 	}
 }
 
+// generateLogDebug generates debug message string
+func (p *Printer) generateLogDebug(format string, args ...interface{}) string {
+	return fmt.Sprintf("[DEBUG] %s\n", fmt.Sprintf(format, args...))
+}
+
 // LogDebug prints debug messages (only in verbose mode)
 func (p *Printer) LogDebug(format string, args ...interface{}) {
 	if p.verbose {
-		fmt.Printf("[DEBUG] %s\n", fmt.Sprintf(format, args...))
+		fmt.Print(p.generateLogDebug(format, args...))
 	}
+}
+
+// generateLogError generates error log message string
+func (p *Printer) generateLogError(format string, args ...interface{}) string {
+	return fmt.Sprintf("%s\n", colorError().Sprintf("[ERROR] %s", fmt.Sprintf(format, args...)))
 }
 
 // LogError prints error messages to stderr
 func (p *Printer) LogError(format string, args ...interface{}) {
-	fmt.Fprintf(os.Stderr, "%s\n", colorError().Sprintf("[ERROR] %s", fmt.Sprintf(format, args...)))
+	fmt.Fprint(os.Stderr, p.generateLogError(format, args...))
 }
 
-// SilentPrinter is a no-op implementation of PrintWriter for testing
-type SilentPrinter struct{}
-
-// NewSilentPrinter creates a new silent print writer for testing
-func NewSilentPrinter() *SilentPrinter {
-	return &SilentPrinter{}
-}
-
-// PrintHeader does nothing in silent mode
-func (s *SilentPrinter) PrintHeader(name, description string) {}
-
-// AddSpinnerSuffix does nothing in silent mode
-func (s *SilentPrinter) AddSpinnerSuffix(txt string) {
-}
-
-// StartSpinner does nothing in silent mode
-func (s *SilentPrinter) StartSpinner() {
-}
-
-// StopSpinner does nothing in silent mode
-func (s *SilentPrinter) StopSpinner() {
-}
-
-// PrintError does nothing in silent mode
-func (s *SilentPrinter) PrintError(format string, args ...interface{}) {}
-
-// PrintVerbose does nothing in silent mode
-func (s *SilentPrinter) PrintVerbose(format string, args ...interface{}) {}
-
-// PrintSeparator does nothing in silent mode
-func (s *SilentPrinter) PrintSeparator() {}
-
-// LogDebug does nothing in silent mode
-func (s *SilentPrinter) LogDebug(format string, args ...interface{}) {}
-
-// LogError does nothing in silent mode
-func (s *SilentPrinter) LogError(format string, args ...interface{}) {}
-
-func (s *SilentPrinter) PrintReport(rs *Result) {}

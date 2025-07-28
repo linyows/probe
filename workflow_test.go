@@ -77,7 +77,7 @@ func TestWorkflowExecutor_DependencyManagement(t *testing.T) {
 			workflow := &Workflow{
 				Name:    "test-workflow",
 				Jobs:    tt.jobs,
-				printer: NewSilentPrinter(),
+				printer: NewPrinter(false, []string{}),
 			}
 
 			config := Config{Verbose: false}
@@ -111,7 +111,7 @@ func TestWorkflowExecutor_ParallelExecution(t *testing.T) {
 					Steps: []*Step{},
 				},
 			},
-			printer: NewSilentPrinter(),
+			printer: NewPrinter(false, []string{}),
 		}
 
 		config := Config{Verbose: false}
@@ -151,7 +151,7 @@ func TestWorkflowExecutor_SequentialWithDependencies(t *testing.T) {
 					Steps: []*Step{},
 				},
 			},
-			printer: NewSilentPrinter(),
+			printer: NewPrinter(false, []string{}),
 		}
 
 		config := Config{Verbose: false}
@@ -178,7 +178,7 @@ func TestWorkflowExecutor_BufferedOutput(t *testing.T) {
 					Steps: []*Step{},
 				},
 			},
-			printer: NewSilentPrinter(),
+			printer: NewPrinter(false, []string{}),
 		}
 
 		config := Config{Verbose: false}
@@ -207,7 +207,7 @@ func TestWorkflowExecutor_RepeatJobs(t *testing.T) {
 					},
 				},
 			},
-			printer: NewSilentPrinter(),
+			printer: NewPrinter(false, []string{}),
 		}
 
 		config := Config{Verbose: false}
@@ -256,7 +256,7 @@ func TestWorkflowExecutor_MixedScenarios(t *testing.T) {
 					Steps: []*Step{},
 				},
 			},
-			printer: NewSilentPrinter(),
+			printer: NewPrinter(false, []string{}),
 		}
 
 		config := Config{Verbose: false}
@@ -285,7 +285,7 @@ func TestWorkflowExecutor_ErrorHandling(t *testing.T) {
 					Steps: []*Step{},
 				},
 			},
-			printer: NewSilentPrinter(),
+			printer: NewPrinter(false, []string{}),
 		}
 
 		config := Config{Verbose: false}
@@ -308,7 +308,7 @@ func TestWorkflowExecutor_PrintDetailedResults(t *testing.T) {
 					Steps: []*Step{},
 				},
 			},
-			printer: NewSilentPrinter(),
+			printer: NewPrinter(false, []string{}),
 		}
 
 		// Create workflow buffer
@@ -335,7 +335,7 @@ func TestParallelExecution_EdgeCases(t *testing.T) {
 		workflow := &Workflow{
 			Name:    "empty-workflow",
 			Jobs:    []Job{},
-			printer: NewSilentPrinter(),
+			printer: NewPrinter(false, []string{}),
 		}
 
 		config := Config{Verbose: false}
@@ -355,7 +355,7 @@ func TestParallelExecution_EdgeCases(t *testing.T) {
 					Steps: []*Step{},
 				},
 			},
-			printer: NewSilentPrinter(),
+			printer: NewPrinter(false, []string{}),
 		}
 
 		config := Config{Verbose: false}
@@ -379,7 +379,7 @@ func TestParallelExecution_EdgeCases(t *testing.T) {
 		workflow := &Workflow{
 			Name:    "many-jobs",
 			Jobs:    jobs,
-			printer: NewSilentPrinter(),
+			printer: NewPrinter(false, []string{}),
 		}
 
 		config := Config{Verbose: false}
@@ -409,7 +409,7 @@ func TestBufferedExecution_EdgeCases(t *testing.T) {
 					Steps: []*Step{},
 				},
 			},
-			printer: NewSilentPrinter(),
+			printer: NewPrinter(false, []string{}),
 		}
 
 		config := Config{Verbose: false}
@@ -439,7 +439,7 @@ func TestBufferedExecution_EdgeCases(t *testing.T) {
 					Steps: []*Step{},
 				},
 			},
-			printer: NewSilentPrinter(),
+			printer: NewPrinter(false, []string{}),
 		}
 
 		config := Config{Verbose: false}
@@ -465,7 +465,7 @@ func TestRepeatExecution_EdgeCases(t *testing.T) {
 					},
 				},
 			},
-			printer: NewSilentPrinter(),
+			printer: NewPrinter(false, []string{}),
 		}
 
 		config := Config{Verbose: false}
@@ -496,7 +496,7 @@ func TestRepeatExecution_EdgeCases(t *testing.T) {
 					},
 				},
 			},
-			printer: NewSilentPrinter(),
+			printer: NewPrinter(false, []string{}),
 		}
 
 		config := Config{Verbose: false}
@@ -528,7 +528,7 @@ func TestRepeatExecution_EdgeCases(t *testing.T) {
 					},
 				},
 			},
-			printer: NewSilentPrinter(),
+			printer: NewPrinter(false, []string{}),
 		}
 
 		config := Config{Verbose: false}
@@ -554,7 +554,7 @@ func TestExecutor_ConcurrencyEdgeCases(t *testing.T) {
 				{Name: "level2-b", Needs: []string{"level1-b", "level1-c"}, Steps: []*Step{}},
 				{Name: "final", Needs: []string{"level2-a", "level2-b"}, Steps: []*Step{}},
 			},
-			printer: NewSilentPrinter(),
+			printer: NewPrinter(false, []string{}),
 		}
 
 		config := Config{Verbose: false}
@@ -586,7 +586,7 @@ func TestExecutor_ConcurrencyEdgeCases(t *testing.T) {
 					Steps: []*Step{},
 				},
 			},
-			printer: NewSilentPrinter(),
+			printer: NewPrinter(false, []string{}),
 		}
 
 		config := Config{Verbose: false}

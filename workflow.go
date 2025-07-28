@@ -13,7 +13,7 @@ type Workflow struct {
 	env         map[string]string
 	// Shared outputs across all jobs
 	outputs *Outputs
-	printer PrintWriter
+	printer *Printer
 }
 
 // Start executes the workflow with the given configuration

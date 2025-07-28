@@ -480,7 +480,7 @@ func TestStep_prepare(t *testing.T) {
 			}
 
 			jCtx := &JobContext{
-				Printer: NewSilentPrinter(), // Use silent printer to avoid output during tests
+				Printer: NewPrinter(false, []string{}), // Use silent printer to avoid output during tests
 			}
 
 			name, shouldContinue := step.prepare(jCtx)
@@ -583,7 +583,7 @@ func TestStep_handleActionError(t *testing.T) {
 	}
 
 	jCtx := &JobContext{
-		Printer: NewSilentPrinter(),
+		Printer: NewPrinter(false, []string{}),
 	}
 
 	originalErr := fmt.Errorf("test error")
@@ -680,7 +680,7 @@ func TestStep_handleVerboseMode(t *testing.T) {
 			}
 
 			jCtx := &JobContext{
-				Printer: NewSilentPrinter(),
+				Printer: NewPrinter(false, []string{}),
 				Failed:  false,
 			}
 
@@ -747,7 +747,7 @@ func TestStep_finalize(t *testing.T) {
 					Verbose: tt.verbose,
 				},
 				IsRepeating:  tt.isRepeating,
-				Printer:      NewSilentPrinter(),
+				Printer:      NewPrinter(false, []string{}),
 				StepCounters: make(map[int]StepRepeatCounter),
 			}
 
@@ -776,7 +776,7 @@ func TestStep_Do_Integration(t *testing.T) {
 		}
 
 		jobContext := JobContext{
-			Printer: NewSilentPrinter(),
+			Printer: NewPrinter(false, []string{}),
 		}
 
 		// Execute the step (should be skipped)
@@ -804,7 +804,7 @@ func TestStep_Do_Integration(t *testing.T) {
 
 		jobContext := JobContext{
 			Config:  Config{Verbose: false},
-			Printer: NewSilentPrinter(),
+			Printer: NewPrinter(false, []string{}),
 			Logs:    []map[string]any{},
 		}
 
