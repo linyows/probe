@@ -289,7 +289,7 @@ func TestPrinter_PrintReport(t *testing.T) {
 	printer.PrintReport(wb)
 
 	// Restore stdout and get output
-	w.Close()
+	_ = w.Close()
 	os.Stdout = oldStdout
 	output, _ := io.ReadAll(r)
 	outputStr := string(output)
@@ -385,7 +385,7 @@ func TestPrinter_generateJobStatus(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			var output strings.Builder
 			printer.generateJobStatus(tt.jobID, tt.jobName, tt.status, tt.duration, &output)
-			
+
 			result := output.String()
 			// Remove color codes for easier testing
 			if !strings.Contains(result, tt.jobName) {
@@ -405,10 +405,10 @@ func TestPrinter_generateJobResults(t *testing.T) {
 	printer := NewPrinter(false, []string{})
 
 	tests := []struct {
-		name   string
-		jobID  string
-		input  string
-		want   string
+		name  string
+		jobID string
+		input string
+		want  string
 	}{
 		{
 			name:  "empty input",
@@ -446,7 +446,7 @@ func TestPrinter_generateJobResults(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			var output strings.Builder
 			printer.generateJobResults(tt.jobID, tt.input, &output)
-			
+
 			result := output.String()
 			if result != tt.want {
 				t.Errorf("generateJobResults() = %q, want %q", result, tt.want)
@@ -492,7 +492,7 @@ func TestPrinter_generateFooter(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			var output strings.Builder
 			printer.generateFooter(tt.totalTime, tt.successCount, tt.totalJobs, &output)
-			
+
 			result := output.String()
 			for _, want := range tt.wantContains {
 				if !strings.Contains(result, want) {
@@ -508,7 +508,7 @@ func TestPrinter_generateReport(t *testing.T) {
 
 	// Create test WorkflowBuffer
 	wb := NewWorkflowBuffer()
-	
+
 	// Add job1 - successful
 	startTime1 := time.Now()
 	endTime1 := startTime1.Add(1 * time.Second)
@@ -577,7 +577,7 @@ func TestPrinter_generateReport_EmptyBuffer(t *testing.T) {
 
 	wb := NewWorkflowBuffer()
 	result = printer.generateReport(wb)
-	
+
 	// Should contain at least the footer
 	if !strings.Contains(result, "Total workflow time: 0.00s") {
 		t.Errorf("generateReport() with empty buffer should contain footer, got %q", result)
@@ -588,7 +588,7 @@ func TestPrinter_generateReport_WithRepeatStep(t *testing.T) {
 	printer := NewPrinter(false, []string{"job1"})
 
 	wb := NewWorkflowBuffer()
-	
+
 	startTime := time.Now()
 	endTime := startTime.Add(1 * time.Second)
 	wb.Jobs["job1"] = &JobBuffer{

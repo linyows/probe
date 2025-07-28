@@ -90,13 +90,10 @@ func (wb *WorkflowBuffer) AddStepResult(jobID string, stepResult StepResult) {
 	}
 }
 
-
-
 // PrintWriter defines the interface for different print implementations
 type PrintWriter interface {
 	// Workflow level output
 	PrintHeader(name, description string)
-
 
 	// Error output
 	PrintError(format string, args ...interface{})
@@ -179,7 +176,7 @@ func (p *Printer) AddSpinnerSuffix(txt string) {
 // printStepRepeatStart prints the start of a repeated step execution
 func (p *Printer) printStepRepeatStart(stepIdx int, stepName string, repeatCount int, output *strings.Builder) {
 	num := colorDim().Sprintf("%2d.", stepIdx)
-	output.WriteString(fmt.Sprintf("%s %s (repeating %d times)\n", num, stepName, repeatCount))
+	fmt.Fprintf(output, "%s %s (repeating %d times)\n", num, stepName, repeatCount)
 }
 
 // printStepRepeatResult prints the final result of a repeated step execution
@@ -196,17 +193,17 @@ func (p *Printer) printStepRepeatResult(counter *StepRepeatCounter, hasTest bool
 			}
 		}
 
-		output.WriteString(fmt.Sprintf("    %s %d/%d success (%.1f%%)\n",
+		fmt.Fprintf(output, "    %s %d/%d success (%.1f%%)\n",
 			statusIcon,
 			counter.SuccessCount,
 			totalCount,
-			successRate))
+			successRate)
 	} else {
 		totalCount := counter.SuccessCount + counter.FailureCount
-		output.WriteString(fmt.Sprintf("    %s %d/%d completed (no test)\n",
+		fmt.Fprintf(output, "    %s %d/%d completed (no test)\n",
 			colorInfo().Sprintf(IconWarning),
 			totalCount,
-			totalCount))
+			totalCount)
 	}
 }
 
@@ -243,7 +240,6 @@ func (p *Printer) generateJobStatus(jobID string, jobName string, status StatusT
 	output.WriteString(outputLine)
 }
 
-
 // generateJobResults generates buffered job results as string
 func (p *Printer) generateJobResults(jobID string, input string, output *strings.Builder) {
 	input = strings.TrimSpace(input)
@@ -252,9 +248,9 @@ func (p *Printer) generateJobResults(jobID string, input string, output *strings
 		for i, line := range lines {
 			if strings.TrimSpace(line) != "" {
 				if i == 0 {
-					output.WriteString(fmt.Sprintf("  ⎿ %s\n", line))
+					fmt.Fprintf(output, "  ⎿ %s\n", line)
 				} else {
-					output.WriteString(fmt.Sprintf("    %s\n", line))
+					fmt.Fprintf(output, "    %s\n", line)
 				}
 			}
 		}
@@ -263,22 +259,19 @@ func (p *Printer) generateJobResults(jobID string, input string, output *strings
 	output.WriteString("\n")
 }
 
-
 // generateFooter generates the workflow execution summary as string
 func (p *Printer) generateFooter(totalTime float64, successCount, totalJobs int, output *strings.Builder) {
 	if successCount == totalJobs {
-		output.WriteString(fmt.Sprintf("Total workflow time: %.2fs %s\n",
+		fmt.Fprintf(output, "Total workflow time: %.2fs %s\n",
 			totalTime,
-			colorSuccess().Sprintf(IconSuccess+"All jobs succeeded")))
+			colorSuccess().Sprintf(IconSuccess+"All jobs succeeded"))
 	} else {
 		failedCount := totalJobs - successCount
-		output.WriteString(fmt.Sprintf("Total workflow time: %.2fs %s\n",
+		fmt.Fprintf(output, "Total workflow time: %.2fs %s\n",
 			totalTime,
-			colorError().Sprintf(IconError+"%d job(s) failed", failedCount)))
+			colorError().Sprintf(IconError+"%d job(s) failed", failedCount))
 	}
 }
-
-
 
 // generateReport generates a complete workflow report string using WorkflowBuffer data
 func (p *Printer) generateReport(wb *WorkflowBuffer) string {
@@ -321,7 +314,7 @@ func (p *Printer) generateReport(wb *WorkflowBuffer) string {
 
 	// Generate workflow footer
 	p.generateFooter(totalTime.Seconds(), successCount, len(wb.Jobs), &output)
-	
+
 	return output.String()
 }
 
@@ -364,17 +357,17 @@ func (p *Printer) generateJobResultsFromStepResults(stepResults []StepResult) st
 
 			switch stepResult.Status {
 			case StatusSuccess:
-				output.WriteString(fmt.Sprintf("%s %s %s%s%s\n", num, colorSuccess().Sprintf(IconSuccess), waitPrefix, stepResult.Name, ps))
+				fmt.Fprintf(&output, "%s %s %s%s%s\n", num, colorSuccess().Sprintf(IconSuccess), waitPrefix, stepResult.Name, ps)
 			case StatusError:
 				if stepResult.TestOutput != "" {
-					output.WriteString(fmt.Sprintf("%s %s %s%s%s\n%s\n", num, colorError().Sprintf(IconError), waitPrefix, stepResult.Name, ps, stepResult.TestOutput))
+					fmt.Fprintf(&output, "%s %s %s%s%s\n%s\n", num, colorError().Sprintf(IconError), waitPrefix, stepResult.Name, ps, stepResult.TestOutput)
 				} else {
-					output.WriteString(fmt.Sprintf("%s %s %s%s%s\n", num, colorError().Sprintf(IconError), waitPrefix, stepResult.Name, ps))
+					fmt.Fprintf(&output, "%s %s %s%s%s\n", num, colorError().Sprintf(IconError), waitPrefix, stepResult.Name, ps)
 				}
 			case StatusWarning:
-				output.WriteString(fmt.Sprintf("%s %s %s%s%s\n", num, colorInfo().Sprintf(IconWarning), waitPrefix, stepResult.Name, ps))
+				fmt.Fprintf(&output, "%s %s %s%s%s\n", num, colorInfo().Sprintf(IconWarning), waitPrefix, stepResult.Name, ps)
 			case StatusSkipped:
-				output.WriteString(fmt.Sprintf("%s %s %s%s%s\n", num, colorInfo().Sprintf(IconSkip), waitPrefix, colorDim().Sprintf("%s", stepResult.Name), ps))
+				fmt.Fprintf(&output, "%s %s %s%s%s\n", num, colorInfo().Sprintf(IconSkip), waitPrefix, colorDim().Sprintf("%s", stepResult.Name), ps)
 			}
 
 			if stepResult.EchoOutput != "" {
@@ -385,7 +378,6 @@ func (p *Printer) generateJobResultsFromStepResults(stepResults []StepResult) st
 
 	return output.String()
 }
-
 
 // PrintHeader prints the workflow name and description
 func (p *Printer) PrintHeader(name, description string) {
@@ -398,12 +390,6 @@ func (p *Printer) PrintHeader(name, description string) {
 		fmt.Println("")
 	}
 }
-
-
-
-
-
-
 
 // PrintError prints an error message
 func (p *Printer) PrintError(format string, args ...interface{}) {
@@ -431,8 +417,6 @@ func (p *Printer) LogDebug(format string, args ...interface{}) {
 	}
 }
 
-
-
 // LogError prints error messages to stderr
 func (p *Printer) LogError(format string, args ...interface{}) {
 	fmt.Fprintf(os.Stderr, "%s\n", colorError().Sprintf("[ERROR] %s", fmt.Sprintf(format, args...)))
@@ -449,9 +433,6 @@ func NewSilentPrinter() *SilentPrinter {
 // PrintHeader does nothing in silent mode
 func (s *SilentPrinter) PrintHeader(name, description string) {}
 
-
-
-
 // AddSpinnerSuffix does nothing in silent mode
 func (s *SilentPrinter) AddSpinnerSuffix(txt string) {
 }
@@ -464,9 +445,6 @@ func (s *SilentPrinter) StartSpinner() {
 func (s *SilentPrinter) StopSpinner() {
 }
 
-
-
-
 // PrintError does nothing in silent mode
 func (s *SilentPrinter) PrintError(format string, args ...interface{}) {}
 
@@ -478,8 +456,6 @@ func (s *SilentPrinter) PrintSeparator() {}
 
 // LogDebug does nothing in silent mode
 func (s *SilentPrinter) LogDebug(format string, args ...interface{}) {}
-
-
 
 // LogError does nothing in silent mode
 func (s *SilentPrinter) LogError(format string, args ...interface{}) {}
