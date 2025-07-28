@@ -81,12 +81,12 @@ func NewWorkflowBuffer() *WorkflowBuffer {
 	}
 }
 
-// AddStepResult adds a StepResult to the specified job buffer
+// AddStepResult adds a StepResult to the specified job result
 func (wb *WorkflowBuffer) AddStepResult(jobID string, stepResult StepResult) {
-	if jb, exists := wb.Jobs[jobID]; exists {
-		jb.mutex.Lock()
-		defer jb.mutex.Unlock()
-		jb.StepResults = append(jb.StepResults, stepResult)
+	if jr, exists := wb.Jobs[jobID]; exists {
+		jr.mutex.Lock()
+		defer jr.mutex.Unlock()
+		jr.StepResults = append(jr.StepResults, stepResult)
 	}
 }
 
@@ -285,30 +285,30 @@ func (p *Printer) generateReport(wb *WorkflowBuffer) string {
 
 	// Generate step results and job summaries for each job in BufferIDs order
 	for _, jobID := range p.BufferIDs {
-		if jb, exists := wb.Jobs[jobID]; exists {
-			jb.mutex.Lock()
+		if jr, exists := wb.Jobs[jobID]; exists {
+			jr.mutex.Lock()
 
 			// Calculate job status and duration
-			duration := jb.EndTime.Sub(jb.StartTime)
+			duration := jr.EndTime.Sub(jr.StartTime)
 			totalTime += duration
 
 			status := StatusSuccess
-			if jb.Status == "Skipped" {
+			if jr.Status == "Skipped" {
 				status = StatusWarning
-			} else if !jb.Success {
+			} else if !jr.Success {
 				status = StatusError
 			} else {
 				successCount++
 			}
 
 			// Generate job status output
-			p.generateJobStatus(jb.JobID, jb.JobName, status, duration.Seconds(), &output)
+			p.generateJobStatus(jr.JobID, jr.JobName, status, duration.Seconds(), &output)
 
 			// Generate job results from StepResults
-			stepOutput := p.generateJobResultsFromStepResults(jb.StepResults)
-			p.generateJobResults(jb.JobID, stepOutput, &output)
+			stepOutput := p.generateJobResultsFromStepResults(jr.StepResults)
+			p.generateJobResults(jr.JobID, stepOutput, &output)
 
-			jb.mutex.Unlock()
+			jr.mutex.Unlock()
 		}
 	}
 

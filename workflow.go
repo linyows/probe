@@ -87,12 +87,12 @@ func (w *Workflow) setupWorkflowBuffer() *WorkflowBuffer {
 		if jobID == "" {
 			jobID = job.Name
 		}
-		jb := &JobResult{
+		jr := &JobResult{
 			JobName:   job.Name,
 			JobID:     jobID,
 			StartTime: time.Now(),
 		}
-		wb.Jobs[jobID] = jb
+		wb.Jobs[jobID] = jr
 	}
 
 	return wb
@@ -138,12 +138,12 @@ func (w *Workflow) handleNoRunnableJobs(ctx JobContext) error {
 // updateSkippedJobsOutput updates the output for jobs that were skipped due to failed dependencies
 func (w *Workflow) updateSkippedJobsOutput(skippedJobs []string, workflowBuffer *WorkflowBuffer) {
 	for _, jobID := range skippedJobs {
-		if jb, exists := workflowBuffer.Jobs[jobID]; exists {
-			jb.mutex.Lock()
-			jb.EndTime = jb.StartTime // Set end time same as start time (0 duration)
-			jb.Status = "Skipped"
-			jb.Success = false
-			jb.mutex.Unlock()
+		if jr, exists := workflowBuffer.Jobs[jobID]; exists {
+			jr.mutex.Lock()
+			jr.EndTime = jr.StartTime // Set end time same as start time (0 duration)
+			jr.Status = "Skipped"
+			jr.Success = false
+			jr.mutex.Unlock()
 		}
 	}
 }

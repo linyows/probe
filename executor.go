@@ -30,12 +30,12 @@ func (e *Executor) Execute(ctx JobContext) bool {
 	e.setJobID()
 	jobID := e.job.ID
 
-	jb := ctx.WorkflowBuffer.Jobs[jobID]
+	jr := ctx.WorkflowBuffer.Jobs[jobID]
 
-	jb.mutex.Lock()
-	jb.StartTime = time.Now()
-	jb.Status = "Running"
-	jb.mutex.Unlock()
+	jr.mutex.Lock()
+	jr.StartTime = time.Now()
+	jr.Status = "Running"
+	jr.mutex.Unlock()
 
 	// Use the existing buffered execution logic
 	return e.executeWithBuffering(ctx)
@@ -102,17 +102,17 @@ func (e *Executor) sleepBetweenRepeats(ctx JobContext) {
 // finalize updates the final job status and marks it as completed
 func (e *Executor) finalize(overallSuccess bool, ctx JobContext) {
 	jobID := e.job.ID
-	jb := ctx.WorkflowBuffer.Jobs[jobID]
-	jb.mutex.Lock()
-	duration := time.Since(jb.StartTime)
-	jb.EndTime = jb.StartTime.Add(duration)
-	jb.Success = overallSuccess
+	jr := ctx.WorkflowBuffer.Jobs[jobID]
+	jr.mutex.Lock()
+	duration := time.Since(jr.StartTime)
+	jr.EndTime = jr.StartTime.Add(duration)
+	jr.Success = overallSuccess
 	if overallSuccess {
-		jb.Status = "Completed"
+		jr.Status = "Completed"
 	} else {
-		jb.Status = "Failed"
+		jr.Status = "Failed"
 	}
-	jb.mutex.Unlock()
+	jr.mutex.Unlock()
 
 	// Mark job as completed
 	ctx.JobScheduler.SetJobStatus(jobID, JobCompleted, overallSuccess)

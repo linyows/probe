@@ -313,7 +313,7 @@ func TestWorkflowExecutor_PrintDetailedResults(t *testing.T) {
 
 		// Create workflow buffer
 		workflowBuffer := NewWorkflowBuffer()
-		jobBuffer := &JobResult{
+		jobResult := &JobResult{
 			JobName:   "test-job",
 			JobID:     "test-job",
 			Status:    "Completed",
@@ -321,7 +321,7 @@ func TestWorkflowExecutor_PrintDetailedResults(t *testing.T) {
 			EndTime:   time.Now(),
 			Success:   true,
 		}
-		workflowBuffer.Jobs["test-job"] = jobBuffer
+		workflowBuffer.Jobs["test-job"] = jobResult
 
 		// This should not panic and should execute successfully
 		workflow.printer.PrintReport(workflowBuffer)
@@ -890,26 +890,26 @@ func TestWorkflowBuffer_AddStepResult(t *testing.T) {
 	wb.AddStepResult(jobID, stepResult2)
 
 	// Verify step results were added
-	jobBuffer, exists := wb.Jobs[jobID]
+	jobResult, exists := wb.Jobs[jobID]
 	if !exists {
 		t.Fatal("Job buffer should exist")
 	}
-	if len(jobBuffer.StepResults) != 2 {
-		t.Errorf("Expected 2 step results, got %d", len(jobBuffer.StepResults))
+	if len(jobResult.StepResults) != 2 {
+		t.Errorf("Expected 2 step results, got %d", len(jobResult.StepResults))
 	}
 
-	if jobBuffer.StepResults[0].Name != "Step 1" {
-		t.Errorf("Expected first step name 'Step 1', got '%s'", jobBuffer.StepResults[0].Name)
+	if jobResult.StepResults[0].Name != "Step 1" {
+		t.Errorf("Expected first step name 'Step 1', got '%s'", jobResult.StepResults[0].Name)
 	}
 
-	if jobBuffer.StepResults[1].Name != "Step 2" {
-		t.Errorf("Expected second step name 'Step 2', got '%s'", jobBuffer.StepResults[1].Name)
+	if jobResult.StepResults[1].Name != "Step 2" {
+		t.Errorf("Expected second step name 'Step 2', got '%s'", jobResult.StepResults[1].Name)
 	}
 
-	if jobBuffer.StepResults[1].RepeatCounter == nil {
+	if jobResult.StepResults[1].RepeatCounter == nil {
 		t.Error("Expected RepeatCounter to be set for second step")
-	} else if jobBuffer.StepResults[1].RepeatCounter.SuccessCount != 3 {
-		t.Errorf("Expected RepeatCounter.SuccessCount = 3, got %d", jobBuffer.StepResults[1].RepeatCounter.SuccessCount)
+	} else if jobResult.StepResults[1].RepeatCounter.SuccessCount != 3 {
+		t.Errorf("Expected RepeatCounter.SuccessCount = 3, got %d", jobResult.StepResults[1].RepeatCounter.SuccessCount)
 	}
 }
 
@@ -962,9 +962,9 @@ func TestWorkflowBuffer_ConcurrentAccess(t *testing.T) {
 	// Goroutine 2: Read job buffer
 	go func() {
 		for i := 0; i < 5; i++ {
-			jobBuffer := wb.Jobs[jobID]
-			if jobBuffer != nil {
-				_ = len(jobBuffer.StepResults)
+			jobResult := wb.Jobs[jobID]
+			if jobResult != nil {
+				_ = len(jobResult.StepResults)
 			}
 		}
 		done <- true
@@ -975,11 +975,11 @@ func TestWorkflowBuffer_ConcurrentAccess(t *testing.T) {
 	<-done
 
 	// Verify final state
-	jobBuffer, exists := wb.Jobs[jobID]
+	jobResult, exists := wb.Jobs[jobID]
 	if !exists {
 		t.Fatal("Job buffer should exist after concurrent operations")
 	}
-	if len(jobBuffer.StepResults) != 10 {
-		t.Errorf("Expected 10 step results after concurrent operations, got %d", len(jobBuffer.StepResults))
+	if len(jobResult.StepResults) != 10 {
+		t.Errorf("Expected 10 step results after concurrent operations, got %d", len(jobResult.StepResults))
 	}
 }

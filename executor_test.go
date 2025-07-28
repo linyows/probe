@@ -37,11 +37,11 @@ func TestExecutor_AppendRepeatStepResults(t *testing.T) {
 
 	// Create WorkflowBuffer with JobResult
 	workflowBuffer := NewWorkflowBuffer()
-	jobBuffer := &JobResult{
+	jobResult := &JobResult{
 		JobName: job.Name,
 		JobID:   "test-job",
 	}
-	workflowBuffer.Jobs["test-job"] = jobBuffer
+	workflowBuffer.Jobs["test-job"] = jobResult
 
 	// Create test context with step counters
 	ctx := JobContext{
@@ -62,20 +62,20 @@ func TestExecutor_AppendRepeatStepResults(t *testing.T) {
 	executor.appendRepeatStepResults(&ctx)
 
 	// Check if step results were added to WorkflowBuffer
-	jobBuffer, exists := workflowBuffer.Jobs["test-job"]
+	jobResult, exists := workflowBuffer.Jobs["test-job"]
 	if !exists {
 		t.Fatal("Job buffer should exist after appendRepeatStepResults")
 	}
-	if len(jobBuffer.StepResults) == 0 {
+	if len(jobResult.StepResults) == 0 {
 		t.Error("appendRepeatStepResults should add StepResults to WorkflowBuffer")
 	}
 
 	// Should have created a StepResult with RepeatCounter
-	if len(jobBuffer.StepResults) != 1 {
-		t.Errorf("Expected 1 step result, got %d", len(jobBuffer.StepResults))
+	if len(jobResult.StepResults) != 1 {
+		t.Errorf("Expected 1 step result, got %d", len(jobResult.StepResults))
 	}
 
-	stepResult := jobBuffer.StepResults[0]
+	stepResult := jobResult.StepResults[0]
 	if stepResult.RepeatCounter == nil {
 		t.Error("StepResult should have RepeatCounter")
 	}
