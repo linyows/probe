@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/briandowns/spinner"
 	"github.com/fatih/color"
 )
 
@@ -29,6 +30,10 @@ func colorWarning() *color.Color {
 // colorDim returns a *color.Color for subdued text
 func colorDim() *color.Color {
 	return color.New(color.FgHiBlack)
+}
+
+func colorNotice() *color.Color {
+	return color.New(color.FgYellow)
 }
 
 // Icon constants
@@ -129,6 +134,9 @@ type PrintWriter interface {
 	LogError(format string, args ...interface{})
 
 	PrintReport(wb *WorkflowBuffer)
+	StartSpinner()
+	StopSpinner()
+	AddSpinnerSuffix(txt string)
 }
 
 // StatusType represents the status of execution
@@ -159,6 +167,7 @@ type Printer struct {
 	verbose   bool
 	Buffer    map[string]*strings.Builder
 	BufferIDs []string // Order preservation
+	spinner   *spinner.Spinner
 }
 
 // NewPrinter creates a new console print writer
@@ -170,11 +179,25 @@ func NewPrinter(verbose bool, bufferIDs []string) *Printer {
 		buffer[id] = &strings.Builder{}
 	}
 
+	s := spinner.New(spinner.CharSets[9], 100*time.Millisecond)
 	return &Printer{
 		verbose:   verbose,
 		Buffer:    buffer,
 		BufferIDs: bufferIDs, // Store order information
+		spinner:   s,
 	}
+}
+
+func (p *Printer) StartSpinner() {
+	p.spinner.Start()
+}
+
+func (p *Printer) StopSpinner() {
+	p.spinner.Stop()
+}
+
+func (p *Printer) AddSpinnerSuffix(txt string) {
+	p.spinner.Suffix = fmt.Sprintf(" %s...", txt)
 }
 
 // PrintReport prints a complete workflow report using WorkflowBuffer data
@@ -508,6 +531,18 @@ func (s *SilentPrinter) PrintStepRepeatStart(jobID string, stepIdx int, stepName
 
 // PrintStepRepeatResult does nothing in silent mode
 func (s *SilentPrinter) PrintStepRepeatResult(jobID string, stepIdx int, counter StepRepeatCounter, hasTest bool) {
+}
+
+// AddSpinnerSuffix does nothing in silent mode
+func (s *SilentPrinter) AddSpinnerSuffix(txt string) {
+}
+
+// StartSpinner does nothing in silent mode
+func (s *SilentPrinter) StartSpinner() {
+}
+
+// StopSpinner does nothing in silent mode
+func (s *SilentPrinter) StopSpinner() {
 }
 
 // PrintJobStatus does nothing in silent mode

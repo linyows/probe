@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"regexp"
 	"strconv"
-	"strings"
 	"time"
 )
 
@@ -73,6 +72,8 @@ func (st *Step) prepare(jCtx *JobContext) (string, bool) {
 	if st.Name == "" {
 		st.Name = "Unknown Step"
 	}
+
+	jCtx.Printer.AddSpinnerSuffix(st.Name)
 
 	// Handle wait before step execution
 	st.handleWait(jCtx)
@@ -405,23 +406,46 @@ func (st *Step) printNestedMap(key string, nested map[string]any, jCtx *JobConte
 }
 
 // handleWait processes the wait field and sleeps if necessary
-func (st *Step) handleWait(jCtx *JobContext) string {
+func (st *Step) handleWait(jCtx *JobContext) {
 	if st.Wait == "" {
-		return ""
+		return
 	}
 
 	duration, err := st.parseWaitDuration(st.Wait)
 	if err != nil {
 		jCtx.Printer.PrintError("wait duration parsing error: %v", err)
-		return ""
+		return
 	}
 
 	if duration > 0 {
-		time.Sleep(duration)
-		return st.formatWaitTime(duration)
+		msg := colorNotice().Sprintf("(%s wait)", st.formatWaitTime(duration))
+		msg = fmt.Sprintf("%s %s", msg, st.Name)
+		sleepWithMessage(duration, msg, jCtx.Printer.AddSpinnerSuffix)
 	}
 
-	return ""
+	return
+}
+
+func sleepWithMessage(d time.Duration, m string, fn func(m string)) {
+	if d < time.Second {
+		time.Sleep(d)
+		return
+	}
+
+	ticker := time.NewTicker(1 * time.Second)
+	defer ticker.Stop()
+
+	timer := time.NewTimer(d)
+	defer timer.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			fn(m)
+		case <-timer.C:
+			return
+		}
+	}
 }
 
 // parseWaitDuration parses wait string to time.Duration
