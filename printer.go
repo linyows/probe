@@ -210,8 +210,8 @@ func (p *Printer) printStepRepeatResult(counter *StepRepeatCounter, hasTest bool
 	}
 }
 
-// printJobStatus prints the result of a job execution
-func (p *Printer) printJobStatus(jobID string, jobName string, status StatusType, duration float64) {
+// generateJobStatus generates the result of a job execution as string
+func (p *Printer) generateJobStatus(jobID string, jobName string, status StatusType, duration float64, output *strings.Builder) {
 	statusColor := colorSuccess()
 	statusIcon := IconCircle
 
@@ -235,61 +235,62 @@ func (p *Printer) printJobStatus(jobID string, jobName string, status StatusType
 	dt := colorDim().Sprintf("(%s in %.2fs)",
 		statusStr,
 		duration)
-	output := fmt.Sprintf("%s%s %s\n",
+	outputLine := fmt.Sprintf("%s%s %s\n",
 		statusColor.Sprint(statusIcon),
 		jobName,
 		dt)
 
-	fmt.Print(output)
+	output.WriteString(outputLine)
 }
 
-// printJobResults prints buffered job results
-func (p *Printer) printJobResults(jobID string, output string) {
-	txt := ""
 
-	output = strings.TrimSpace(output)
-	if output != "" {
-		lines := strings.Split(output, "\n")
+// generateJobResults generates buffered job results as string
+func (p *Printer) generateJobResults(jobID string, input string, output *strings.Builder) {
+	input = strings.TrimSpace(input)
+	if input != "" {
+		lines := strings.Split(input, "\n")
 		for i, line := range lines {
 			if strings.TrimSpace(line) != "" {
 				if i == 0 {
-					txt += fmt.Sprintf("  ⎿ %s\n", line)
+					output.WriteString(fmt.Sprintf("  ⎿ %s\n", line))
 				} else {
-					txt += fmt.Sprintf("    %s\n", line)
+					output.WriteString(fmt.Sprintf("    %s\n", line))
 				}
 			}
 		}
 	}
 
-	txt += "\n"
-	fmt.Print(txt)
+	output.WriteString("\n")
 }
 
-// printFooter prints the workflow execution summary
-func (p *Printer) printFooter(totalTime float64, successCount, totalJobs int) {
+
+// generateFooter generates the workflow execution summary as string
+func (p *Printer) generateFooter(totalTime float64, successCount, totalJobs int, output *strings.Builder) {
 	if successCount == totalJobs {
-		fmt.Printf("Total workflow time: %.2fs %s\n",
+		output.WriteString(fmt.Sprintf("Total workflow time: %.2fs %s\n",
 			totalTime,
-			colorSuccess().Sprintf(IconSuccess+"All jobs succeeded"))
+			colorSuccess().Sprintf(IconSuccess+"All jobs succeeded")))
 	} else {
 		failedCount := totalJobs - successCount
-		fmt.Printf("Total workflow time: %.2fs %s\n",
+		output.WriteString(fmt.Sprintf("Total workflow time: %.2fs %s\n",
 			totalTime,
-			colorError().Sprintf(IconError+"%d job(s) failed", failedCount))
+			colorError().Sprintf(IconError+"%d job(s) failed", failedCount)))
 	}
 }
 
 
-// PrintReport prints a complete workflow report using WorkflowBuffer data
-func (p *Printer) PrintReport(wb *WorkflowBuffer) {
+
+// generateReport generates a complete workflow report string using WorkflowBuffer data
+func (p *Printer) generateReport(wb *WorkflowBuffer) string {
 	if wb == nil {
-		return
+		return ""
 	}
 
+	var output strings.Builder
 	totalTime := time.Duration(0)
 	successCount := 0
 
-	// Print step results and job summaries for each job in BufferIDs order
+	// Generate step results and job summaries for each job in BufferIDs order
 	for _, jobID := range p.BufferIDs {
 		if jb, exists := wb.Jobs[jobID]; exists {
 			jb.mutex.Lock()
@@ -307,19 +308,29 @@ func (p *Printer) PrintReport(wb *WorkflowBuffer) {
 				successCount++
 			}
 
-			// Print job status
-			p.printJobStatus(jb.JobID, jb.JobName, status, duration.Seconds())
+			// Generate job status output
+			p.generateJobStatus(jb.JobID, jb.JobName, status, duration.Seconds(), &output)
 
-			// Generate and print job results from StepResults instead of using os.Pipe buffer
+			// Generate job results from StepResults
 			stepOutput := p.generateJobResultsFromStepResults(jb.StepResults)
-			p.printJobResults(jb.JobID, stepOutput)
+			p.generateJobResults(jb.JobID, stepOutput, &output)
 
 			jb.mutex.Unlock()
 		}
 	}
 
-	// Print workflow footer
-	p.printFooter(totalTime.Seconds(), successCount, len(wb.Jobs))
+	// Generate workflow footer
+	p.generateFooter(totalTime.Seconds(), successCount, len(wb.Jobs), &output)
+	
+	return output.String()
+}
+
+// PrintReport prints a complete workflow report using WorkflowBuffer data
+func (p *Printer) PrintReport(wb *WorkflowBuffer) {
+	reportOutput := p.generateReport(wb)
+	if reportOutput != "" {
+		fmt.Print(reportOutput)
+	}
 }
 
 // generateJobResultsFromStepResults creates job output string from StepResults
