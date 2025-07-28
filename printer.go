@@ -105,7 +105,6 @@ type PrintWriter interface {
 	PrintJobName(name string)
 
 	// Step level output
-	PrintStepResult(jobID string, step StepResult)
 	PrintStepRepeatStart(jobID string, stepIdx int, stepName string, repeatCount int)
 	PrintStepRepeatResult(jobID string, stepIdx int, counter StepRepeatCounter, hasTest bool)
 
@@ -129,7 +128,6 @@ type PrintWriter interface {
 	LogWarn(format string, args ...interface{})
 	LogError(format string, args ...interface{})
 
-	PrintBuffer()
 	PrintReport(wb *WorkflowBuffer)
 }
 
@@ -160,7 +158,7 @@ type StepResult struct {
 type Printer struct {
 	verbose   bool
 	Buffer    map[string]*strings.Builder
-	BufferIDs []string // Order preservation for PrintBuffer
+	BufferIDs []string // Order preservation
 	mutex     sync.RWMutex
 }
 
@@ -180,34 +178,6 @@ func NewPrinter(verbose bool, bufferIDs []string) *Printer {
 	}
 }
 
-// appendToBuffer appends content to a specific job ID's buffer
-func (p *Printer) appendToBuffer(jobID string, content string) {
-	p.mutex.Lock()
-	defer p.mutex.Unlock()
-
-	if buffer, exists := p.Buffer[jobID]; exists {
-		buffer.WriteString(content)
-	} else {
-		// Create new buffer if it doesn't exist
-		buffer := &strings.Builder{}
-		buffer.WriteString(content)
-		p.Buffer[jobID] = buffer
-	}
-}
-
-
-func (p *Printer) PrintBuffer() {
-	p.mutex.RLock()
-	defer p.mutex.RUnlock()
-
-	// Print buffers in the order specified by BufferIDs (YAML order)
-	for _, jobID := range p.BufferIDs {
-		if builder, exists := p.Buffer[jobID]; exists {
-			fmt.Print(builder.String())
-		}
-	}
-}
-
 // PrintReport prints a complete workflow report using WorkflowBuffer data
 func (p *Printer) PrintReport(wb *WorkflowBuffer) {
 	if wb == nil {
@@ -221,7 +191,6 @@ func (p *Printer) PrintReport(wb *WorkflowBuffer) {
 	for _, jobID := range p.BufferIDs {
 		if jb, exists := wb.Jobs[jobID]; exists {
 			jb.mutex.Lock()
-
 
 			// Calculate job status and duration
 			duration := jb.EndTime.Sub(jb.StartTime)
@@ -238,7 +207,7 @@ func (p *Printer) PrintReport(wb *WorkflowBuffer) {
 
 			// Print job status
 			p.PrintJobStatus(jb.JobID, jb.JobName, status, duration.Seconds())
-			
+
 			// Generate and print job results from StepResults instead of using os.Pipe buffer
 			stepOutput := p.generateJobResultsFromStepResults(jb.StepResults)
 			p.PrintJobResults(jb.JobID, stepOutput)
@@ -268,7 +237,7 @@ func (p *Printer) generateJobResultsFromStepResults(stepResults []StepResult) st
 			if strings.HasSuffix(stepName, " (SKIPPED)") {
 				stepName = strings.TrimSuffix(stepName, " (SKIPPED)")
 			}
-			
+
 			num := colorDim().Sprintf("%2d.", stepResult.Index)
 			output.WriteString(fmt.Sprintf("%s %s (repeating %d times)\n", num, stepName, totalCount))
 
@@ -376,50 +345,12 @@ func (p *Printer) PrintJobName(name string) {
 	fmt.Printf("%s\n", name)
 }
 
-// PrintStepResult prints the result of a single step execution
-func (p *Printer) PrintStepResult(jobID string, step StepResult) {
-	num := colorDim().Sprintf("%2d.", step.Index)
-
-	// Add wait time indicator if present
-	waitPrefix := ""
-	if step.WaitTime != "" {
-		waitPrefix = colorDim().Sprintf("%s%s → ", IconWait, step.WaitTime)
-	}
-
-	// Add response time suffix if present
-	ps := ""
-	if step.RT != "" {
-		ps = colorDim().Sprintf(" (%s)", step.RT)
-	}
-
-	var output string
-
-	switch step.Status {
-	case StatusSuccess:
-		output = fmt.Sprintf("%s %s %s%s%s\n", num, colorSuccess().Sprintf(IconSuccess), waitPrefix, step.Name, ps)
-	case StatusError:
-		output = fmt.Sprintf("%s %s %s%s%s\n"+step.TestOutput+"\n", num, colorError().Sprintf(IconError), waitPrefix, step.Name, ps)
-	case StatusWarning:
-		output = fmt.Sprintf("%s %s %s%s%s\n", num, colorWarning().Sprintf(IconWarning), waitPrefix, step.Name, ps)
-	case StatusSkipped:
-		output = fmt.Sprintf("%s %s %s%s%s\n", num, colorWarning().Sprintf(IconSkip), waitPrefix, colorDim().Sprintf("%s", step.Name), ps)
-	}
-
-	if step.EchoOutput != "" {
-		output += step.EchoOutput
-	}
-
-	fmt.Print(output)
-	//p.appendToBuffer(jobID, output)
-}
-
 // PrintStepRepeatStart prints the start of a repeated step execution
 func (p *Printer) PrintStepRepeatStart(jobID string, stepIdx int, stepName string, repeatCount int) {
 	num := colorDim().Sprintf("%2d.", stepIdx)
 	output := fmt.Sprintf("%s %s (repeating %d times)\n", num, stepName, repeatCount)
 
 	fmt.Print(output)
-	//p.appendToBuffer(jobID, output)
 }
 
 // PrintStepRepeatResult prints the final result of a repeated step execution
@@ -452,7 +383,6 @@ func (p *Printer) PrintStepRepeatResult(jobID string, stepIdx int, counter StepR
 	}
 
 	fmt.Print(output)
-	//p.appendToBuffer(jobID, output)
 }
 
 // PrintJobStatus prints the result of a job execution
@@ -486,7 +416,6 @@ func (p *Printer) PrintJobStatus(jobID string, jobName string, status StatusType
 		dt)
 
 	fmt.Print(output)
-	p.appendToBuffer(jobID, output)
 }
 
 // PrintJobResults prints buffered job results
@@ -509,7 +438,6 @@ func (p *Printer) PrintJobResults(jobID string, output string) {
 
 	txt += "\n"
 	fmt.Print(txt)
-	p.appendToBuffer(jobID, txt)
 }
 
 // PrintFooter prints the workflow execution summary
@@ -581,9 +509,6 @@ func (s *SilentPrinter) PrintHeader(name, description string) {}
 // PrintJobName does nothing in silent mode
 func (s *SilentPrinter) PrintJobName(name string) {}
 
-// PrintStepResult does nothing in silent mode
-func (s *SilentPrinter) PrintStepResult(jobID string, step StepResult) {}
-
 // PrintStepRepeatStart does nothing in silent mode
 func (s *SilentPrinter) PrintStepRepeatStart(jobID string, stepIdx int, stepName string, repeatCount int) {
 }
@@ -622,7 +547,5 @@ func (s *SilentPrinter) LogWarn(format string, args ...interface{}) {}
 
 // LogError does nothing in silent mode
 func (s *SilentPrinter) LogError(format string, args ...interface{}) {}
-
-func (s *SilentPrinter) PrintBuffer() {}
 
 func (s *SilentPrinter) PrintReport(wb *WorkflowBuffer) {}

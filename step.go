@@ -156,7 +156,6 @@ func (st *Step) finalize(name string, actionResult map[string]any, jCtx *JobCont
 	// Standard execution: save outputs and create result
 	st.saveOutputs(jCtx)
 	stepResult := st.createStepResult(name, rt, okrt, jCtx, nil)
-	jCtx.Printer.PrintStepResult(jCtx.CurrentJobID, stepResult)
 
 	// Add step result to workflow buffer
 	if jCtx.WorkflowBuffer != nil {
@@ -268,21 +267,11 @@ func (st *Step) handleRepeatExecution(jCtx *JobContext, name, rt string, okrt bo
 	jCtx.StepCounters[st.idx] = counter
 
 	// Display on first execution and final execution only
-	totalCount := counter.SuccessCount + counter.FailureCount
-	isFirstExecution := totalCount == 1
 	isFinalExecution := jCtx.RepeatCurrent == jCtx.RepeatTotal
 
-
-	if isFirstExecution {
-		jCtx.Printer.PrintStepRepeatStart(jCtx.CurrentJobID, st.idx, name, jCtx.RepeatTotal)
-	}
-
 	if isFinalExecution {
-		jCtx.Printer.PrintStepRepeatResult(jCtx.CurrentJobID, st.idx, counter, hasTest)
-
 		// Create StepResult with repeat counter for final execution
 		stepResult := st.createStepResult(name, rt, okrt, jCtx, &counter)
-
 
 		// Add step result to workflow buffer
 		if jCtx.WorkflowBuffer != nil {
@@ -517,7 +506,6 @@ func (st *Step) handleSkip(name string, jCtx *JobContext) {
 
 	// Create step result for skipped step
 	stepResult := st.createSkippedStepResult(name, jCtx, nil)
-	jCtx.Printer.PrintStepResult(jCtx.CurrentJobID, stepResult)
 
 	// Add step result to workflow buffer
 	if jCtx.WorkflowBuffer != nil {
@@ -543,18 +531,9 @@ func (st *Step) handleSkipRepeatExecution(jCtx *JobContext, name string) {
 	jCtx.StepCounters[st.idx] = counter
 
 	// Display on first execution and final execution only
-	totalCount := counter.SuccessCount + counter.FailureCount
-	isFirstExecution := totalCount == 1
 	isFinalExecution := jCtx.RepeatCurrent == jCtx.RepeatTotal
 
-	if isFirstExecution {
-		jCtx.Printer.PrintStepRepeatStart(jCtx.CurrentJobID, st.idx, name+" (SKIPPED)", jCtx.RepeatTotal)
-	}
-
 	if isFinalExecution {
-		jCtx.Printer.PrintStepRepeatResult(jCtx.CurrentJobID, st.idx, counter, false) // hasTest = false for skipped
-
-		// Create StepResult with repeat counter for final execution of skipped step
 		stepResult := st.createSkippedStepResult(name, jCtx, &counter)
 
 		// Add step result to workflow buffer
