@@ -330,8 +330,8 @@ func (st *Step) DoTest() (string, bool) {
 
 	if !boolOutput {
 		// 7 spaces
-		output := fmt.Sprintf("       request: %#v\n", st.ctx.Req)
-		output += fmt.Sprintf("       response: %#v\n", st.ctx.Res)
+		output := fmt.Sprintf("       %s %#v\n", colorInfo().Sprintf("request:"), st.ctx.Req)
+		output += fmt.Sprintf("       %s %#v\n", colorInfo().Sprintf("response:"), st.ctx.Res)
 		return output, false
 	}
 
