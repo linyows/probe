@@ -513,7 +513,7 @@ func TestNewCustomFunctions(t *testing.T) {
 					t.Errorf("unexpected error: %v", err)
 					return
 				}
-				
+
 				// Check result is integer and in valid range
 				if val, ok := result.(int); ok {
 					if tt.input == "random_int(100)" || tt.input == "random_int(100.0)" {
@@ -598,13 +598,13 @@ func TestNewCustomFunctions(t *testing.T) {
 					t.Errorf("unexpected error: %v", err)
 					return
 				}
-				
+
 				// Check result is string with correct length
 				if str, ok := result.(string); ok {
 					if len(str) != tt.length {
 						t.Errorf("random_str(%d) returned string of length %d, expected %d", tt.length, len(str), tt.length)
 					}
-					
+
 					// Check charset (alphanumeric)
 					matched, err := regexp.MatchString("^[a-zA-Z0-9]+$", str)
 					if err != nil {
@@ -648,7 +648,7 @@ func TestNewCustomFunctions(t *testing.T) {
 				beforeCall := time.Now().Unix()
 				result, err := expr.Eval(tt.input, env)
 				afterCall := time.Now().Unix()
-				
+
 				if tt.expectErr {
 					if err == nil {
 						t.Errorf("expected error but got none")
@@ -659,7 +659,7 @@ func TestNewCustomFunctions(t *testing.T) {
 					t.Errorf("unexpected error: %v", err)
 					return
 				}
-				
+
 				// Check result is int64 and reasonable timestamp
 				if val, ok := result.(int64); ok {
 					if val < beforeCall || val > afterCall {
@@ -702,12 +702,12 @@ func TestNewCustomFunctions(t *testing.T) {
 					t.Errorf("unexpected error: %v", err)
 					return
 				}
-				
+
 				// Basic validation that template was processed
 				if result == tt.template {
 					t.Errorf("template was not processed: %s", result)
 				}
-				
+
 				// Check that placeholders were replaced
 				if regexp.MustCompile(`\{[^}]+\}`).MatchString(result) {
 					t.Errorf("template still contains unreplaced placeholders: %s", result)

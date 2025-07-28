@@ -194,15 +194,15 @@ func (p *Probe) setDefaults(data, defaults map[string]any) {
 
 // validateIDs checks for duplicate job IDs and step IDs across the workflow
 func (p *Probe) validateIDs() error {
-	jobIDs := make(map[string]int) // jobID -> jobIndex
+	jobIDs := make(map[string]int)           // jobID -> jobIndex
 	globalStepIDs := make(map[string]string) // stepID -> "job[index].step[index]"
 
 	for jobIdx, job := range p.workflow.Jobs {
 		// Check for duplicate job IDs
 		if job.ID != "" {
 			if existingIdx, exists := jobIDs[job.ID]; exists {
-				return NewConfigurationError("duplicate_job_id", 
-					fmt.Sprintf("duplicate job ID '%s' found in job %d (already used in job %d)", 
+				return NewConfigurationError("duplicate_job_id",
+					fmt.Sprintf("duplicate job ID '%s' found in job %d (already used in job %d)",
 						job.ID, jobIdx, existingIdx), nil)
 			}
 			jobIDs[job.ID] = jobIdx
@@ -229,7 +229,7 @@ func (p *Probe) validateIDs() error {
 func (p *Probe) initializeEmptyIDs() {
 	for jobIdx := range p.workflow.Jobs {
 		job := &p.workflow.Jobs[jobIdx]
-		
+
 		// Initialize empty job ID with index number
 		if job.ID == "" {
 			job.ID = fmt.Sprintf("job_%d", jobIdx)

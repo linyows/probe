@@ -43,7 +43,7 @@ type Job struct {
 func (j *Job) Start(ctx JobContext) error {
 	// Set current job ID in context (already set by Executor.setJobID())
 	ctx.CurrentJobID = j.ID
-	
+
 	j.ctx = &ctx
 	expr := &Expr{}
 

@@ -157,7 +157,7 @@ func TestProbe_validateIDs(t *testing.T) {
 					t.Errorf("expected error but got none")
 					return
 				}
-				
+
 				if probeErr, ok := err.(*ProbeError); ok {
 					if probeErr.Operation != tt.errorType {
 						t.Errorf("expected error operation %s, got %s", tt.errorType, probeErr.Operation)
@@ -176,10 +176,10 @@ func TestProbe_validateIDs(t *testing.T) {
 
 func TestProbe_initializeEmptyIDs(t *testing.T) {
 	tests := []struct {
-		name             string
-		workflow         Workflow
-		expectedJobIDs   []string
-		expectedStepIDs  [][]string // stepIDs per job
+		name            string
+		workflow        Workflow
+		expectedJobIDs  []string
+		expectedStepIDs [][]string // stepIDs per job
 	}{
 		{
 			name: "initialize all empty IDs",
@@ -285,7 +285,7 @@ func TestProbe_initializeEmptyIDs(t *testing.T) {
 						continue
 					}
 					if job.Steps[stepIdx].ID != expectedStepID {
-						t.Errorf("job %d, step %d: expected ID %s, got %s", 
+						t.Errorf("job %d, step %d: expected ID %s, got %s",
 							jobIdx, stepIdx, expectedStepID, job.Steps[stepIdx].ID)
 					}
 				}
@@ -357,17 +357,17 @@ func TestProbe_validateAndInitializeIDs_Integration(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			p := &Probe{workflow: tt.workflow}
-			
+
 			// Run validation
 			err := p.validateIDs()
-			
+
 			if tt.expectValidationErr {
 				if err == nil {
 					t.Errorf("expected validation error but got none")
 				}
 				return // Don't test initialization if validation fails
 			}
-			
+
 			if err != nil {
 				t.Errorf("unexpected validation error: %v", err)
 				return
@@ -387,7 +387,7 @@ func TestProbe_validateAndInitializeIDs_Integration(t *testing.T) {
 				job := p.workflow.Jobs[jobIdx]
 				for stepIdx, expectedStepID := range expectedStepIDs {
 					if job.Steps[stepIdx].ID != expectedStepID {
-						t.Errorf("job %d, step %d: expected ID %s, got %s", 
+						t.Errorf("job %d, step %d: expected ID %s, got %s",
 							jobIdx, stepIdx, expectedStepID, job.Steps[stepIdx].ID)
 					}
 				}

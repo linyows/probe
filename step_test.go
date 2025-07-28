@@ -301,7 +301,7 @@ func TestStep_createSkippedStepResult(t *testing.T) {
 	jCtx := &JobContext{}
 	name := "Test Step"
 
-	result := step.createSkippedStepResult(name, jCtx)
+	result := step.createSkippedStepResult(name, jCtx, nil)
 
 	if result.Index != 1 {
 		t.Errorf("Index = %v, want %v", result.Index, 1)
@@ -317,6 +317,71 @@ func TestStep_createSkippedStepResult(t *testing.T) {
 	}
 	if result.HasTest != false {
 		t.Errorf("HasTest = %v, want %v", result.HasTest, false)
+	}
+	if result.RepeatCounter != nil {
+		t.Errorf("RepeatCounter should be nil for non-repeat step, got %v", result.RepeatCounter)
+	}
+}
+
+func TestStep_createSkippedStepResult_WithRepeatCounter(t *testing.T) {
+	step := &Step{
+		idx:  1,
+		Wait: "2s",
+	}
+	jCtx := &JobContext{}
+	name := "Test Step"
+	counter := &StepRepeatCounter{
+		SuccessCount: 5,
+		FailureCount: 2,
+		Name:         "Test Counter",
+		LastResult:   true,
+	}
+
+	result := step.createSkippedStepResult(name, jCtx, counter)
+
+	if result.RepeatCounter == nil {
+		t.Error("RepeatCounter should not be nil when provided")
+	}
+	if result.RepeatCounter != counter {
+		t.Error("RepeatCounter should be the same instance that was passed")
+	}
+	if result.RepeatCounter.SuccessCount != 5 {
+		t.Errorf("RepeatCounter.SuccessCount = %v, want %v", result.RepeatCounter.SuccessCount, 5)
+	}
+}
+
+func TestStep_createStepResult_WithRepeatCounter(t *testing.T) {
+	step := &Step{
+		idx:  1,
+		Test: "res.status == 200",
+		Echo: "Hello World",
+		Wait: "1s",
+	}
+	jCtx := &JobContext{
+		Config: Config{RT: true},
+	}
+	name := "Test Step"
+	rt := "250ms"
+	counter := &StepRepeatCounter{
+		SuccessCount: 3,
+		FailureCount: 1,
+		Name:         "Test Counter",
+		LastResult:   true,
+	}
+
+	result := step.createStepResult(name, rt, true, jCtx, counter)
+
+	if result.RepeatCounter == nil {
+		t.Error("RepeatCounter should not be nil when provided")
+	}
+	if result.RepeatCounter != counter {
+		t.Error("RepeatCounter should be the same instance that was passed")
+	}
+	if result.RepeatCounter.SuccessCount != 3 {
+		t.Errorf("RepeatCounter.SuccessCount = %v, want %v", result.RepeatCounter.SuccessCount, 3)
+	}
+	if result.RT != "250ms" {
+		t.Errorf("RT = %v, want %v", result.RT, "250ms")
 	}
 }
 
@@ -430,7 +495,7 @@ func TestStep_executeAction(t *testing.T) {
 		// This test only verifies that the executeAction method exists with the correct signature.
 		// We cannot test actual execution due to plugin system complexity and timeouts.
 		// Instead, we verify the method signature by reflection or compilation.
-		
+
 		step := &Step{
 			Uses: "test-action",
 			With: map[string]any{},
@@ -439,10 +504,10 @@ func TestStep_executeAction(t *testing.T) {
 
 		// Verify method signature exists (this will compile successfully if signature is correct)
 		var methodFunc func(string, *JobContext) (map[string]any, error) = step.executeAction
-		
+
 		// We don't call the method to avoid plugin system timeout
 		_ = methodFunc
-		
+
 		t.Logf("executeAction() method signature verified successfully")
 	})
 }
@@ -544,13 +609,13 @@ func TestStep_handleActionError(t *testing.T) {
 
 func TestStep_handleVerboseMode(t *testing.T) {
 	tests := []struct {
-		name     string
-		req      map[string]any
-		res      map[string]any
-		okreq    bool
-		okres    bool
-		testExpr string
-		echo     string
+		name         string
+		req          map[string]any
+		res          map[string]any
+		okreq        bool
+		okres        bool
+		testExpr     string
+		echo         string
 		expectFailed bool
 	}{
 		{
@@ -625,11 +690,11 @@ func TestStep_handleVerboseMode(t *testing.T) {
 
 func TestStep_finalize(t *testing.T) {
 	tests := []struct {
-		name          string
-		verbose       bool
-		isRepeating   bool
-		actionResult  map[string]any
-		expectCalled  string // "verbose", "repeat", or "standard"
+		name         string
+		verbose      bool
+		isRepeating  bool
+		actionResult map[string]any
+		expectCalled string // "verbose", "repeat", or "standard"
 	}{
 		{
 			name:        "verbose mode",
@@ -700,7 +765,7 @@ func TestStep_Do_Integration(t *testing.T) {
 			SkipIf: "true",
 			expr:   &Expr{},
 		}
-		
+
 		step.ctx = StepContext{
 			Vars: map[string]any{},
 		}
@@ -727,7 +792,7 @@ func TestStep_Do_Integration(t *testing.T) {
 			SkipIf: "true",       // Always skip to avoid plugin execution
 			expr:   &Expr{},
 		}
-		
+
 		step.ctx = StepContext{
 			Vars: map[string]any{},
 		}
@@ -747,12 +812,12 @@ func TestStep_Do_Integration(t *testing.T) {
 		}()
 
 		step.Do(&jobContext)
-		
+
 		// Verify the step was handled correctly (should be skipped)
 		if jobContext.Failed {
 			t.Errorf("Do() with skip condition should not fail the job")
 		}
-		
+
 		t.Logf("Do() method executed successfully with refactored structure (skipped execution)")
 	})
 }
