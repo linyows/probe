@@ -66,8 +66,7 @@ type JobBuffer struct {
 
 // WorkflowBuffer manages output for multiple jobs
 type WorkflowBuffer struct {
-	Jobs  map[string]*JobBuffer
-	mutex sync.RWMutex //nolint:unused // Reserved for future concurrent access
+	Jobs map[string]*JobBuffer
 }
 
 // NewWorkflowBuffer creates a new WorkflowBuffer instance
