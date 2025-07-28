@@ -61,7 +61,6 @@ const (
 type JobBuffer struct {
 	JobName     string
 	JobID       string
-	Buffer      strings.Builder
 	Status      string
 	StartTime   time.Time
 	EndTime     time.Time

@@ -231,12 +231,9 @@ func TestPrinter_PrintReport(t *testing.T) {
 	// Job 1: Regular steps
 	startTime1 := time.Now()
 	endTime1 := startTime1.Add(2 * time.Second)
-	job1Buffer := strings.Builder{}
-	job1Buffer.WriteString("Step 1 output\nStep 2 output\n")
 	wb.Jobs["job1"] = &JobBuffer{
 		JobID:     "job1",
 		JobName:   "Test Job 1",
-		Buffer:    job1Buffer,
 		StartTime: startTime1,
 		EndTime:   endTime1,
 		Success:   true,

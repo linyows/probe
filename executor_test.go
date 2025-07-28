@@ -1,7 +1,6 @@
 package probe
 
 import (
-	"strings"
 	"testing"
 )
 
@@ -41,7 +40,6 @@ func TestExecutor_AppendRepeatStepResults(t *testing.T) {
 	jobBuffer := &JobBuffer{
 		JobName: job.Name,
 		JobID:   "test-job",
-		Buffer:  strings.Builder{},
 	}
 	workflowBuffer.Jobs["test-job"] = jobBuffer
 
