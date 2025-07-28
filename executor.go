@@ -1,11 +1,8 @@
 package probe
 
 import (
-	"io"
-	"os"
 	"time"
 )
-
 
 // Executor handles job execution with buffered output
 type Executor struct {
@@ -32,7 +29,7 @@ func (e *Executor) setJobID() {
 func (e *Executor) Execute(ctx JobContext) bool {
 	e.setJobID()
 	jobID := e.job.ID
-	
+
 	jb := ctx.WorkflowBuffer.Jobs[jobID]
 
 	jb.mutex.Lock()
@@ -72,36 +69,14 @@ func (e *Executor) setupContext(ctx JobContext) JobContext {
 // executeJobRepeatLoop handles the main execution loop with repeat logic
 func (e *Executor) executeJobRepeatLoop(ctx JobContext) bool {
 	jobID := e.job.ID
-	jb := ctx.WorkflowBuffer.Jobs[jobID]
 	overallSuccess := true
 
 	for ctx.JobScheduler.ShouldRepeatJob(jobID) {
 		current, _ := ctx.JobScheduler.GetRepeatInfo(jobID)
 		ctx.RepeatCurrent = current
 
-		// Serialize stdout redirection to prevent race conditions
-		ctx.WorkflowBuffer.outputMutex.Lock()
-
-		// Capture output by redirecting stdout temporarily
-		originalStdout := os.Stdout
-		r, wr, _ := os.Pipe()
-		os.Stdout = wr
-
 		// Execute single run
 		err := e.job.Start(ctx)
-
-		// Restore stdout and capture output
-		wr.Close()
-		os.Stdout = originalStdout
-
-		ctx.WorkflowBuffer.outputMutex.Unlock()
-
-		capturedOutput, _ := io.ReadAll(r)
-
-		// Add captured output to buffer
-		jb.mutex.Lock()
-		jb.Buffer.Write(capturedOutput)
-		jb.mutex.Unlock()
 
 		if err != nil {
 			overallSuccess = false
@@ -114,7 +89,6 @@ func (e *Executor) executeJobRepeatLoop(ctx JobContext) bool {
 
 	return overallSuccess
 }
-
 
 // sleepBetweenRepeats handles the interval sleep between job repetitions
 func (e *Executor) sleepBetweenRepeats(ctx JobContext) {
@@ -147,28 +121,39 @@ func (e *Executor) finalize(overallSuccess bool, ctx JobContext) {
 // appendRepeatStepResults appends the final results of repeat step executions to buffer
 func (e *Executor) appendRepeatStepResults(ctx *JobContext) {
 	jobID := e.job.ID
-	jb := ctx.WorkflowBuffer.Jobs[jobID]
-	
-	// Capture the step outputs output to buffer instead of printing directly
-	originalStdout := os.Stdout
-	r, wr, _ := os.Pipe()
-	os.Stdout = wr
 
+	// Create StepResults for repeat steps and add them to WorkflowBuffer
 	for i, step := range e.job.Steps {
 		if counter, exists := ctx.StepCounters[i]; exists {
 			hasTest := step.Test != ""
-			ctx.Printer.PrintStepRepeatResult(jobID, i, counter, hasTest)
+			
+			// Determine status based on repeat counter results
+			var status StatusType
+			if hasTest {
+				if counter.FailureCount == 0 {
+					status = StatusSuccess
+				} else if counter.SuccessCount == 0 {
+					status = StatusError
+				} else {
+					status = StatusWarning
+				}
+			} else {
+				status = StatusWarning // No test, so warning status
+			}
+
+			// Create StepResult with repeat counter
+			stepResult := StepResult{
+				Index:         i,
+				Name:          step.Name,
+				Status:        status,
+				HasTest:       hasTest,
+				RepeatCounter: &counter,
+			}
+			
+			// Add step result to workflow buffer
+			if ctx.WorkflowBuffer != nil {
+				ctx.WorkflowBuffer.AddStepResult(jobID, stepResult)
+			}
 		}
 	}
-
-	// Restore stdout and capture the step outputs
-	wr.Close()
-	os.Stdout = originalStdout
-
-	capturedOutput, _ := io.ReadAll(r)
-
-	// Add captured step outputs to job buffer
-	jb.mutex.Lock()
-	jb.Buffer.Write(capturedOutput)
-	jb.mutex.Unlock()
 }

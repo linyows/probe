@@ -50,11 +50,9 @@ func (w *Workflow) Start(c Config) error {
 		return err
 	}
 
-	w.printResults(ctx.WorkflowBuffer)
+	// Print workflow report using WorkflowBuffer data (replaces os.Pipe buffering)
+	w.printer.PrintReport(ctx.WorkflowBuffer)
 
-	//fmt.Println("---------------------------------------")
-	//w.printer.PrintBuffer()
-	//fmt.Println("---------------------------------------")
 	return nil
 }
 
@@ -166,43 +164,6 @@ func (w *Workflow) processRunnableJobs(runnableJobs []string, ctx JobContext) {
 	}
 }
 
-// printResults prints the final detailed results
-func (w *Workflow) printResults(wb *WorkflowBuffer) {
-	totalTime := time.Duration(0)
-	successCount := 0
-
-	// Process jobs in original order
-	for _, job := range w.Jobs {
-		jobID := job.ID
-		if jobID == "" {
-			jobID = job.Name
-		}
-		jb, exists := wb.Jobs[jobID]
-		if !exists {
-			continue
-		}
-
-		jb.mutex.Lock()
-		duration := jb.EndTime.Sub(jb.StartTime)
-		totalTime += duration
-
-		status := StatusSuccess
-		if jb.Status == "Skipped" {
-			status = StatusWarning
-		} else if !jb.Success {
-			status = StatusError
-		} else {
-			successCount++
-		}
-
-		w.printer.PrintJobStatus(jb.JobID, jb.JobName, status, duration.Seconds())
-		w.printer.PrintJobResults(jb.JobID, jb.Buffer.String())
-
-		jb.mutex.Unlock()
-	}
-
-	w.printer.PrintFooter(totalTime.Seconds(), successCount, len(wb.Jobs))
-}
 
 func (w *Workflow) SetExitStatus(isErr bool) {
 	if isErr {
