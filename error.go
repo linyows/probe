@@ -1,7 +1,6 @@
 package probe
 
 import (
-	"errors"
 	"fmt"
 	"strings"
 )
@@ -81,9 +80,6 @@ func (e *ValidationError) AddMessage(s string) {
 }
 
 // Convenience functions for creating specific error types
-func NewValidationError(operation, message string, cause error) *ProbeError {
-	return NewProbeError(ErrorTypeValidation, operation, message, cause)
-}
 
 func NewExecutionError(operation, message string, cause error) *ProbeError {
 	return NewProbeError(ErrorTypeExecution, operation, message, cause)
@@ -93,9 +89,6 @@ func NewConfigurationError(operation, message string, cause error) *ProbeError {
 	return NewProbeError(ErrorTypeConfiguration, operation, message, cause)
 }
 
-func NewNetworkError(operation, message string, cause error) *ProbeError {
-	return NewProbeError(ErrorTypeNetwork, operation, message, cause)
-}
 
 func NewFileError(operation, message string, cause error) *ProbeError {
 	return NewProbeError(ErrorTypeFile, operation, message, cause)
@@ -105,15 +98,4 @@ func NewActionError(operation, message string, cause error) *ProbeError {
 	return NewProbeError(ErrorTypeAction, operation, message, cause)
 }
 
-func NewDependencyError(operation, message string, cause error) *ProbeError {
-	return NewProbeError(ErrorTypeDependency, operation, message, cause)
-}
 
-// IsErrorType checks if an error is of a specific type
-func IsErrorType(err error, errorType ErrorType) bool {
-	var probeErr *ProbeError
-	if errors.As(err, &probeErr) {
-		return probeErr.Type == errorType
-	}
-	return false
-}

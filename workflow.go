@@ -1,51 +1,8 @@
 package probe
 
 import (
-	"sync"
+	"time"
 )
-
-// Outputs manages step outputs across the entire workflow
-type Outputs struct {
-	data map[string]map[string]any  // stepID -> outputName -> value
-	mu   sync.RWMutex
-}
-
-// NewOutputs creates a new Outputs instance
-func NewOutputs() *Outputs {
-	return &Outputs{
-		data: make(map[string]map[string]any),
-	}
-}
-
-// Set stores outputs for a step
-func (o *Outputs) Set(stepID string, outputs map[string]any) {
-	o.mu.Lock()
-	defer o.mu.Unlock()
-	o.data[stepID] = outputs
-}
-
-// Get retrieves outputs for a step
-func (o *Outputs) Get(stepID string) (map[string]any, bool) {
-	o.mu.RLock()
-	defer o.mu.RUnlock()
-	outputs, exists := o.data[stepID]
-	return outputs, exists
-}
-
-// GetAll returns all outputs (safe copy for expression evaluation)
-func (o *Outputs) GetAll() map[string]map[string]any {
-	o.mu.RLock()
-	defer o.mu.RUnlock()
-	copy := make(map[string]map[string]any)
-	for k, v := range o.data {
-		copyOutputs := make(map[string]any)
-		for rk, rv := range v {
-			copyOutputs[rk] = rv
-		}
-		copy[k] = copyOutputs
-	}
-	return copy
-}
 
 type Workflow struct {
 	Name        string         `yaml:"name" validate:"required"`
@@ -55,8 +12,158 @@ type Workflow struct {
 	exitStatus  int
 	env         map[string]string
 	// Shared outputs across all jobs
-	sharedOutputs *Outputs
+	outputs *Outputs
+	printer PrintWriter
 }
+
+// Start executes the workflow with the given configuration
+func (w *Workflow) Start(c Config) error {
+	if w.printer == nil {
+		// Collect all job IDs for buffer initialization
+		jobIDs := make([]string, len(w.Jobs))
+		for i, job := range w.Jobs {
+			jobIDs[i] = job.ID
+		}
+		w.printer = NewPrinter(c.Verbose, jobIDs)
+	}
+
+	// Print workflow header at the beginning
+	w.printer.PrintHeader(w.Name, w.Description)
+
+	// Initialize shared outputs
+	if w.outputs == nil {
+		w.outputs = NewOutputs()
+	}
+
+	vars, err := w.evalVars()
+	if err != nil {
+		return err
+	}
+
+	ctx, err := w.newJobContext(c, vars)
+	if err != nil {
+		return err
+	}
+
+	err = w.startJobsWithDependencies(ctx)
+	if err != nil {
+		return err
+	}
+
+	// Print workflow report using WorkflowBuffer data (replaces os.Pipe buffering)
+	w.printer.PrintReport(ctx.WorkflowBuffer)
+
+	return nil
+}
+
+// initJobScheduler creates and sets up the job scheduler with dependencies
+func (w *Workflow) initJobScheduler() (*JobScheduler, error) {
+	scheduler := NewJobScheduler()
+
+	// Add all jobs to scheduler
+	for i := range w.Jobs {
+		if err := scheduler.AddJob(&w.Jobs[i]); err != nil {
+			return nil, err
+		}
+	}
+
+	// Validate dependencies
+	if err := scheduler.ValidateDependencies(); err != nil {
+		return nil, err
+	}
+
+	return scheduler, nil
+}
+
+// setupWorkflowBuffer creates workflow buffer for buffering
+func (w *Workflow) setupWorkflowBuffer() *WorkflowBuffer {
+	wb := NewWorkflowBuffer()
+	// Initialize job outputs
+	for _, job := range w.Jobs {
+		jobID := job.ID
+		if jobID == "" {
+			jobID = job.Name
+		}
+		jb := &JobBuffer{
+			JobName:   job.Name,
+			JobID:     jobID,
+			StartTime: time.Now(),
+		}
+		wb.Jobs[jobID] = jb
+	}
+
+	return wb
+}
+
+// startJobsWithDependencies runs the main job execution loop with dependency management
+func (w *Workflow) startJobsWithDependencies(ctx JobContext) error {
+
+	for !ctx.JobScheduler.AllJobsCompleted() {
+		runnableJobs := ctx.JobScheduler.GetRunnableJobs()
+
+		if len(runnableJobs) == 0 {
+			if err := w.handleNoRunnableJobs(ctx); err != nil {
+				return err
+			}
+			continue
+		}
+
+		w.processRunnableJobs(runnableJobs, ctx)
+		ctx.JobScheduler.wg.Wait()
+	}
+
+	return nil
+}
+
+// handleNoRunnableJobs handles the case when no jobs can be run (failed dependencies or deadlock)
+func (w *Workflow) handleNoRunnableJobs(ctx JobContext) error {
+	skippedJobs := ctx.JobScheduler.MarkJobsWithFailedDependencies()
+
+	// Update skipped jobs in workflow printer
+	if ctx.WorkflowBuffer != nil {
+		w.updateSkippedJobsOutput(skippedJobs, ctx.WorkflowBuffer)
+	}
+
+	if len(skippedJobs) == 0 {
+		// If no jobs were skipped, we might have a deadlock
+		time.Sleep(100 * time.Millisecond)
+	}
+
+	return nil
+}
+
+// updateSkippedJobsOutput updates the output for jobs that were skipped due to failed dependencies
+func (w *Workflow) updateSkippedJobsOutput(skippedJobs []string, workflowBuffer *WorkflowBuffer) {
+	for _, jobID := range skippedJobs {
+		if jb, exists := workflowBuffer.Jobs[jobID]; exists {
+			jb.mutex.Lock()
+			jb.EndTime = jb.StartTime // Set end time same as start time (0 duration)
+			jb.Status = "Skipped"
+			jb.Success = false
+			jb.mutex.Unlock()
+		}
+	}
+}
+
+// processRunnableJobs starts execution of all currently runnable jobs
+func (w *Workflow) processRunnableJobs(runnableJobs []string, ctx JobContext) {
+	for _, jobID := range runnableJobs {
+		job := ctx.JobScheduler.jobs[jobID]
+		ctx.JobScheduler.SetJobStatus(jobID, JobRunning, false)
+		ctx.JobScheduler.wg.Add(1)
+
+		go func(j *Job, id string) {
+			defer ctx.JobScheduler.wg.Done()
+
+			executor := NewExecutor(w, j)
+			success := executor.Execute(ctx)
+			if !success {
+				w.SetExitStatus(true)
+			}
+		}(job, jobID)
+	}
+}
+
 
 func (w *Workflow) SetExitStatus(isErr bool) {
 	if isErr {
@@ -91,12 +198,21 @@ func (w *Workflow) evalVars() (map[string]any, error) {
 	return vars, nil
 }
 
-func (w *Workflow) newJobContext(c Config, vars map[string]any) JobContext {
-	return JobContext{
-		Vars:          vars,
-		Logs:          []map[string]any{},
-		Config:        c,
-		Printer:        c.Printer,
-		Outputs: w.sharedOutputs,
+func (w *Workflow) newJobContext(c Config, vars map[string]any) (JobContext, error) {
+	wb := w.setupWorkflowBuffer()
+
+	scheduler, err := w.initJobScheduler()
+	if err != nil {
+		return JobContext{}, err
 	}
+
+	return JobContext{
+		Vars:           vars,
+		Logs:           []map[string]any{},
+		Config:         c,
+		Printer:        w.printer,
+		WorkflowBuffer: wb,
+		JobScheduler:   scheduler,
+		Outputs:        w.outputs,
+	}, nil
 }

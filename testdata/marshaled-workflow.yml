@@ -1,8 +1,10 @@
 name: Send queue congestion experiment
 jobs:
 - name: Normal sender
+  id: job_0
   steps:
   - name: ""
+    id: step_0
     uses: bulkmail
     with:
       addr: localhost:5871
@@ -22,8 +24,10 @@ jobs:
     interval: 10
   defaults: null
 - name: Bulk mails sender
+  id: job_1
   steps:
   - name: ""
+    id: step_0
     uses: bulkmail
     with:
       addr: localhost:5872
@@ -43,8 +47,10 @@ jobs:
     interval: 10
   defaults: null
 - name: Throttled mail sender
+  id: job_2
   steps:
   - name: ""
+    id: step_0
     uses: bulkmail
     with:
       addr: localhost:5873

@@ -27,17 +27,17 @@ type StepRepeatCounter struct {
 }
 
 type Step struct {
-	Name    string             `yaml:"name"`
-	ID      string             `yaml:"id,omitempty"`
-	Uses    string             `yaml:"uses" validate:"required"`
-	With    map[string]any     `yaml:"with"`
-	Test    string             `yaml:"test"`
-	Echo    string             `yaml:"echo"`
-	Vars    map[string]any     `yaml:"vars"`
-	Iter    []map[string]any   `yaml:"iter"`
-	Wait    string             `yaml:"wait,omitempty"`
-	SkipIf  string             `yaml:"skipif,omitempty"`
-	Outputs map[string]string  `yaml:"outputs,omitempty"`
+	Name    string            `yaml:"name"`
+	ID      string            `yaml:"id,omitempty"`
+	Uses    string            `yaml:"uses" validate:"required"`
+	With    map[string]any    `yaml:"with"`
+	Test    string            `yaml:"test"`
+	Echo    string            `yaml:"echo"`
+	Vars    map[string]any    `yaml:"vars"`
+	Iter    []map[string]any  `yaml:"iter"`
+	Wait    string            `yaml:"wait,omitempty"`
+	SkipIf  string            `yaml:"skipif,omitempty"`
+	Outputs map[string]string `yaml:"outputs,omitempty"`
 	err     error
 	ctx     StepContext
 	idx     int
@@ -45,40 +45,81 @@ type Step struct {
 }
 
 func (st *Step) Do(jCtx *JobContext) {
+
+	// 1. Preparation phase: validation, wait, skip check
+	name, shouldContinue := st.prepare(jCtx)
+	if !shouldContinue {
+		return
+	}
+
+	// 2. Action execution phase
+	actionResult, err := st.executeAction(name, jCtx)
+	if err != nil {
+		st.handleActionError(err, name, jCtx)
+		return
+	}
+
+	// 3. Result processing phase
+	st.processActionResult(actionResult, jCtx)
+
+	// 4. Finalization phase: test, echo, output save, result creation
+	st.finalize(name, actionResult, jCtx)
+}
+
+// prepare handles step preparation: validation, wait, and skip check
+// Returns (stepName, shouldContinue)
+func (st *Step) prepare(jCtx *JobContext) (string, bool) {
+	// Set default name if empty
 	if st.Name == "" {
 		st.Name = "Unknown Step"
 	}
-	
+
 	// Handle wait before step execution
 	st.handleWait(jCtx)
+
+	// Evaluate step name
 	name, err := st.expr.EvalTemplate(st.Name, st.ctx)
 	if err != nil {
 		jCtx.Printer.PrintError("step name evaluation error: %v", err)
-		return
+		return "", false
 	}
 
 	// Check if step should be skipped
 	if st.shouldSkip(jCtx) {
 		st.handleSkip(name, jCtx)
-		return
+		return name, false
 	}
 
+	return name, true
+}
+
+// executeAction executes the step action and returns the result
+func (st *Step) executeAction(name string, jCtx *JobContext) (map[string]any, error) {
 	expW := st.expr.EvalTemplateMap(st.With, st.ctx)
 	ret, err := RunActions(st.Uses, []string{}, expW, jCtx.Config.Verbose)
 	if err != nil {
-		actionErr := NewActionError("step_execute", "action execution failed", err).
-			WithContext("step_name", name).
-			WithContext("action_type", st.Uses)
-		st.err = actionErr
-		jCtx.Printer.PrintError("Action execution failed: %v", actionErr)
-		jCtx.SetFailed()
-		return
+		return nil, err
 	}
+	return ret, nil
+}
 
-	// parse json and sets
-	req, okreq := ret["req"].(map[string]any)
-	res, okres := ret["res"].(map[string]any)
-	rt, okrt := ret["rt"].(string)
+// handleActionError handles action execution errors
+func (st *Step) handleActionError(err error, name string, jCtx *JobContext) {
+	actionErr := NewActionError("step_execute", "action execution failed", err).
+		WithContext("step_name", name).
+		WithContext("action_type", st.Uses)
+	st.err = actionErr
+	jCtx.Printer.PrintError("Action execution failed: %v", actionErr)
+	jCtx.SetFailed()
+}
+
+// processActionResult processes the action result and updates context
+func (st *Step) processActionResult(actionResult map[string]any, jCtx *JobContext) {
+	// Parse and process JSON response
+	req, _ := actionResult["req"].(map[string]any)
+	res, okres := actionResult["res"].(map[string]any)
+	rt, _ := actionResult["rt"].(string)
+
 	if okres {
 		body, okbody := res["body"].(string)
 		if okbody && isJSON(body) {
@@ -87,30 +128,22 @@ func (st *Step) Do(jCtx *JobContext) {
 		}
 	}
 
-	// set log and logs
-	jCtx.Logs = append(jCtx.Logs, ret)
+	// Update logs and context
+	jCtx.Logs = append(jCtx.Logs, actionResult)
 	st.updateCtx(jCtx.Logs, req, res, rt)
+}
 
+// finalize handles the final phase: test, echo, output save, and result creation
+func (st *Step) finalize(name string, actionResult map[string]any, jCtx *JobContext) {
+
+	// Extract commonly used values
+	req, okreq := actionResult["req"].(map[string]any)
+	res, okres := actionResult["res"].(map[string]any)
+	rt, okrt := actionResult["rt"].(string)
+
+	// Handle verbose mode
 	if jCtx.Config.Verbose {
-		if !okreq || !okres {
-			jCtx.Printer.PrintVerbose("sorry, request or response is nil")
-			jCtx.SetFailed()
-			return
-		}
-		st.ShowRequestResponse(name, jCtx)
-		if st.Test != "" {
-			if ok := st.DoTestWithSequentialPrint(jCtx); !ok {
-				jCtx.SetFailed()
-			}
-		}
-		if st.Echo != "" {
-			st.DoEchoWithSequentialPrint(jCtx)
-		}
-		
-		// Save step outputs even in verbose mode
-		st.saveOutputs(jCtx)
-		
-		jCtx.Printer.PrintSeparator()
+		st.handleVerboseMode(name, req, res, okreq, okres, jCtx)
 		return
 	}
 
@@ -120,22 +153,51 @@ func (st *Step) Do(jCtx *JobContext) {
 		return
 	}
 
-	// Save step outputs if defined
+	// Standard execution: save outputs and create result
+	st.saveOutputs(jCtx)
+	stepResult := st.createStepResult(name, rt, okrt, jCtx, nil)
+
+	// Add step result to workflow buffer
+	if jCtx.WorkflowBuffer != nil {
+		jCtx.WorkflowBuffer.AddStepResult(jCtx.CurrentJobID, stepResult)
+	}
+}
+
+// handleVerboseMode handles verbose execution mode
+func (st *Step) handleVerboseMode(name string, req, res map[string]any, okreq, okres bool, jCtx *JobContext) {
+	if !okreq || !okres {
+		jCtx.Printer.PrintVerbose("sorry, request or response is nil")
+		jCtx.SetFailed()
+		return
+	}
+
+	st.ShowRequestResponse(name, jCtx)
+
+	if st.Test != "" {
+		if ok := st.DoTestWithSequentialPrint(jCtx); !ok {
+			jCtx.SetFailed()
+		}
+	}
+
+	if st.Echo != "" {
+		st.DoEchoWithSequentialPrint(jCtx)
+	}
+
+	// Save step outputs even in verbose mode
 	st.saveOutputs(jCtx)
 
-	// Create step result for output
-	stepResult := st.createStepResult(name, rt, okrt, jCtx)
-	jCtx.Printer.PrintStepResult(stepResult)
+	jCtx.Printer.PrintSeparator()
 }
 
 // createStepResult creates a StepResult from step execution
-func (st *Step) createStepResult(name, rt string, okrt bool, jCtx *JobContext) StepResult {
+func (st *Step) createStepResult(name, rt string, okrt bool, jCtx *JobContext, repeatCounter *StepRepeatCounter) StepResult {
 	result := StepResult{
-		Index:   st.idx,
-		Name:    name,
-		HasTest: st.Test != "",
-		RT:      "",
-		WaitTime: st.getWaitTimeForDisplay(),
+		Index:         st.idx,
+		Name:          name,
+		HasTest:       st.Test != "",
+		RT:            "",
+		WaitTime:      st.getWaitTimeForDisplay(),
+		RepeatCounter: repeatCounter,
 	}
 
 	if jCtx.Config.RT && okrt && rt != "" {
@@ -172,6 +234,7 @@ func (st *Step) getEchoOutput() string {
 }
 
 func (st *Step) handleRepeatExecution(jCtx *JobContext, name, rt string, okrt bool) {
+
 	// Initialize counter if first execution
 	counter, exists := jCtx.StepCounters[st.idx]
 	if !exists {
@@ -204,16 +267,16 @@ func (st *Step) handleRepeatExecution(jCtx *JobContext, name, rt string, okrt bo
 	jCtx.StepCounters[st.idx] = counter
 
 	// Display on first execution and final execution only
-	totalCount := counter.SuccessCount + counter.FailureCount
-	isFirstExecution := totalCount == 1
 	isFinalExecution := jCtx.RepeatCurrent == jCtx.RepeatTotal
 
-	if isFirstExecution {
-		jCtx.Printer.PrintStepRepeatStart(st.idx, name, jCtx.RepeatTotal)
-	}
-	
 	if isFinalExecution {
-		jCtx.Printer.PrintStepRepeatResult(st.idx, counter, hasTest)
+		// Create StepResult with repeat counter for final execution
+		stepResult := st.createStepResult(name, rt, okrt, jCtx, &counter)
+
+		// Add step result to workflow buffer
+		if jCtx.WorkflowBuffer != nil {
+			jCtx.WorkflowBuffer.AddStepResult(jCtx.CurrentJobID, stepResult)
+		}
 	}
 
 	// Handle echo output
@@ -290,13 +353,13 @@ func (st *Step) SetCtx(j JobContext, override map[string]any) {
 	if override != nil {
 		vers = MergeMaps(vers, override)
 	}
-	
+
 	// Use outputs from the unified Outputs structure
 	var outputs map[string]map[string]any
 	if j.Outputs != nil {
 		outputs = j.Outputs.GetAll()
 	}
-	
+
 	st.ctx = StepContext{
 		Vars:    vers,
 		Logs:    j.Logs,
@@ -315,10 +378,10 @@ func (st *Step) ShowRequestResponse(name string, jCtx *JobContext) {
 	jCtx.Printer.LogDebug("--- Step %d: %s", st.idx, name)
 	jCtx.Printer.LogDebug("Request:")
 	st.printMapData(st.ctx.Req, jCtx)
-	
+
 	jCtx.Printer.LogDebug("Response:")
 	st.printMapData(st.ctx.Res, jCtx)
-	
+
 	jCtx.Printer.LogDebug("RT: %s", colorWarning().Sprintf("%s", st.ctx.RT))
 }
 
@@ -442,8 +505,12 @@ func (st *Step) handleSkip(name string, jCtx *JobContext) {
 	}
 
 	// Create step result for skipped step
-	stepResult := st.createSkippedStepResult(name, jCtx)
-	jCtx.Printer.PrintStepResult(stepResult)
+	stepResult := st.createSkippedStepResult(name, jCtx, nil)
+
+	// Add step result to workflow buffer
+	if jCtx.WorkflowBuffer != nil {
+		jCtx.WorkflowBuffer.AddStepResult(jCtx.CurrentJobID, stepResult)
+	}
 }
 
 // handleSkipRepeatExecution handles skipped step in repeat mode
@@ -464,28 +531,28 @@ func (st *Step) handleSkipRepeatExecution(jCtx *JobContext, name string) {
 	jCtx.StepCounters[st.idx] = counter
 
 	// Display on first execution and final execution only
-	totalCount := counter.SuccessCount + counter.FailureCount
-	isFirstExecution := totalCount == 1
 	isFinalExecution := jCtx.RepeatCurrent == jCtx.RepeatTotal
 
-	if isFirstExecution {
-		jCtx.Printer.PrintStepRepeatStart(st.idx, name+" (SKIPPED)", jCtx.RepeatTotal)
-	}
-	
 	if isFinalExecution {
-		jCtx.Printer.PrintStepRepeatResult(st.idx, counter, false) // hasTest = false for skipped
+		stepResult := st.createSkippedStepResult(name, jCtx, &counter)
+
+		// Add step result to workflow buffer
+		if jCtx.WorkflowBuffer != nil {
+			jCtx.WorkflowBuffer.AddStepResult(jCtx.CurrentJobID, stepResult)
+		}
 	}
 }
 
 // createSkippedStepResult creates a StepResult for a skipped step
-func (st *Step) createSkippedStepResult(name string, jCtx *JobContext) StepResult {
+func (st *Step) createSkippedStepResult(name string, jCtx *JobContext, repeatCounter *StepRepeatCounter) StepResult {
 	return StepResult{
-		Index:    st.idx,
-		Name:     name + " (SKIPPED)",
-		Status:   StatusSkipped,
-		RT:       "",
-		WaitTime: st.getWaitTimeForDisplay(),
-		HasTest:  false,
+		Index:         st.idx,
+		Name:          name + " (SKIPPED)",
+		Status:        StatusSkipped,
+		RT:            "",
+		WaitTime:      st.getWaitTimeForDisplay(),
+		HasTest:       false,
+		RepeatCounter: repeatCounter,
 	}
 }
 

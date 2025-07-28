@@ -174,7 +174,7 @@ func (c *Client) Auth(a smtp.Auth) error {
 		}
 		if err != nil {
 			_, _, _ = c.cmd(501, "*") // Ignore error
-			_ = c.Quit()        // Ignore error on cleanup
+			_ = c.Quit()              // Ignore error on cleanup
 			break
 		}
 		if resp == nil {

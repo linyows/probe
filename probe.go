@@ -22,7 +22,6 @@ type Config struct {
 	Log     io.Writer
 	Verbose bool
 	RT      bool
-	Printer PrintWriter
 }
 
 func New(path string, v bool) *Probe {
@@ -32,20 +31,6 @@ func New(path string, v bool) *Probe {
 			Log:     os.Stdout,
 			Verbose: v,
 			RT:      false,
-			Printer:  NewPrinter(v),
-		},
-	}
-}
-
-// NewWithPrinter creates a new Probe with a custom PrintWriter (useful for testing)
-func NewWithPrinter(path string, v bool, printer PrintWriter) *Probe {
-	return &Probe{
-		FilePath: path,
-		Config: Config{
-			Log:     os.Stdout,
-			Verbose: v,
-			RT:      false,
-			Printer:  printer,
 		},
 	}
 }
@@ -83,6 +68,13 @@ func (p *Probe) Load() error {
 
 	p.setDefaultsToSteps()
 
+	// Additional validation and ID initialization
+	if err := p.validateIDs(); err != nil {
+		return err
+	}
+
+	p.initializeEmptyIDs()
+
 	return nil
 }
 
@@ -95,7 +87,7 @@ func (p *Probe) readYamlFiles(paths []string) (string, error) {
 			return "", err
 		}
 		y.Write(data)
-		
+
 		// Add newline between files to prevent concatenation issues
 		if i < len(paths)-1 && len(data) > 0 && data[len(data)-1] != '\n' {
 			y.WriteByte('\n')
@@ -195,6 +187,58 @@ func (p *Probe) setDefaults(data, defaults map[string]any) {
 			if nestedData, ok := data[key].(map[string]any); ok {
 				// Recursively set default values
 				p.setDefaults(nestedData, nestedDefault)
+			}
+		}
+	}
+}
+
+// validateIDs checks for duplicate job IDs and step IDs across the workflow
+func (p *Probe) validateIDs() error {
+	jobIDs := make(map[string]int)           // jobID -> jobIndex
+	globalStepIDs := make(map[string]string) // stepID -> "job[index].step[index]"
+
+	for jobIdx, job := range p.workflow.Jobs {
+		// Check for duplicate job IDs
+		if job.ID != "" {
+			if existingIdx, exists := jobIDs[job.ID]; exists {
+				return NewConfigurationError("duplicate_job_id",
+					fmt.Sprintf("duplicate job ID '%s' found in job %d (already used in job %d)",
+						job.ID, jobIdx, existingIdx), nil)
+			}
+			jobIDs[job.ID] = jobIdx
+		}
+
+		// Check for duplicate step IDs across all jobs
+		for stepIdx, step := range job.Steps {
+			if step.ID != "" {
+				stepLocation := fmt.Sprintf("job[%d].step[%d]", jobIdx, stepIdx)
+				if existingLocation, exists := globalStepIDs[step.ID]; exists {
+					return NewConfigurationError("duplicate_step_id",
+						fmt.Sprintf("duplicate step ID '%s' found in %s (already used in %s)",
+							step.ID, stepLocation, existingLocation), nil)
+				}
+				globalStepIDs[step.ID] = stepLocation
+			}
+		}
+	}
+
+	return nil
+}
+
+// initializeEmptyIDs initializes empty job IDs and step IDs with index numbers
+func (p *Probe) initializeEmptyIDs() {
+	for jobIdx := range p.workflow.Jobs {
+		job := &p.workflow.Jobs[jobIdx]
+
+		// Initialize empty job ID with index number
+		if job.ID == "" {
+			job.ID = fmt.Sprintf("job_%d", jobIdx)
+		}
+
+		// Initialize empty step IDs with index numbers
+		for stepIdx, step := range job.Steps {
+			if step.ID == "" {
+				step.ID = fmt.Sprintf("step_%d", stepIdx)
 			}
 		}
 	}

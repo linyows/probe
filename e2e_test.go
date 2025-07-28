@@ -17,7 +17,7 @@ func TestEndToEndExitCodes(t *testing.T) {
 			expectedCode: 0,
 		},
 		{
-			name:         "failure workflow with hello action returns exit code 1", 
+			name:         "failure workflow with hello action returns exit code 1",
 			workflowPath: "testdata/failure-hello.yml",
 			expectedCode: 1,
 		},

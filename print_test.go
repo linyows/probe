@@ -26,7 +26,7 @@ func TestColorFunctions(t *testing.T) {
 			expected: "success",
 		},
 		{
-			name:     "colorError", 
+			name:     "colorError",
 			colorFn:  colorError,
 			text:     "error",
 			expected: "error",
@@ -34,7 +34,7 @@ func TestColorFunctions(t *testing.T) {
 		{
 			name:     "colorWarning",
 			colorFn:  colorWarning,
-			text:     "warning", 
+			text:     "warning",
 			expected: "warning",
 		},
 	}
@@ -60,13 +60,13 @@ func TestColorFunctions(t *testing.T) {
 func TestColorSuccess_RGB(t *testing.T) {
 	// Test that colorSuccess returns the correct RGB color
 	c := colorSuccess()
-	
+
 	// The color should contain RGB values for 0,175,0
 	// We can't directly test RGB values, but we can test the function returns a valid color
 	if c == nil {
 		t.Error("colorSuccess() should return a non-nil *color.Color")
 	}
-	
+
 	// Test that it can format text
 	result := c.Sprintf("test")
 	if !strings.Contains(result, "test") {
@@ -77,10 +77,10 @@ func TestColorSuccess_RGB(t *testing.T) {
 func TestRepeatNoTestDisplay(t *testing.T) {
 	// Test the "no test" display format
 	totalCount := 1000
-	
-	actual := colorWarning().Sprintf("⏺") + " " + 
+
+	actual := colorWarning().Sprintf("⏺") + " " +
 		colorWarning().Sprintf("%d/%d completed (no test)", totalCount, totalCount)
-	
+
 	// Check that the format contains expected parts
 	if !strings.Contains(actual, "1000/1000 completed (no test)") {
 		t.Errorf("Expected format to contain '1000/1000 completed (no test)', got %s", actual)
@@ -89,19 +89,76 @@ func TestRepeatNoTestDisplay(t *testing.T) {
 
 // Printer interface tests
 func TestNewPrinter(t *testing.T) {
-	printer := NewPrinter(false)
+	printer := NewPrinter(false, []string{})
 	if printer == nil {
 		t.Error("NewPrinter() should return a non-nil Printer")
 		return
 	}
-	
+
 	if printer.verbose {
 		t.Error("NewPrinter(false) should set verbose to false")
 	}
-	
-	verbosePrinter := NewPrinter(true)
+
+	verbosePrinter := NewPrinter(true, []string{})
 	if !verbosePrinter.verbose {
 		t.Error("NewPrinter(true) should set verbose to true")
+	}
+}
+
+func TestNewPrinter_BufferInitialization(t *testing.T) {
+	tests := []struct {
+		name      string
+		bufferIDs []string
+	}{
+		{
+			name:      "empty buffer IDs",
+			bufferIDs: []string{},
+		},
+		{
+			name:      "single buffer ID",
+			bufferIDs: []string{"job1"},
+		},
+		{
+			name:      "multiple buffer IDs",
+			bufferIDs: []string{"job1", "job2", "job3"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			printer := NewPrinter(false, tt.bufferIDs)
+
+			if printer.Buffer == nil {
+				t.Error("Buffer should not be nil")
+				return
+			}
+
+			// Check BufferIDs are stored correctly
+			if len(printer.BufferIDs) != len(tt.bufferIDs) {
+				t.Errorf("Expected %d BufferIDs, got %d", len(tt.bufferIDs), len(printer.BufferIDs))
+			}
+
+			for i, expectedID := range tt.bufferIDs {
+				if i >= len(printer.BufferIDs) || printer.BufferIDs[i] != expectedID {
+					t.Errorf("BufferIDs[%d]: expected '%s', got '%s'", i, expectedID, printer.BufferIDs[i])
+				}
+			}
+
+			// Check that all provided IDs have initialized buffers
+			for _, id := range tt.bufferIDs {
+				if _, exists := printer.Buffer[id]; !exists {
+					t.Errorf("Buffer for ID '%s' should be initialized", id)
+				}
+				if printer.Buffer[id] == nil {
+					t.Errorf("Buffer for ID '%s' should not be nil", id)
+				}
+			}
+
+			// Check that buffer count matches expected
+			if len(printer.Buffer) != len(tt.bufferIDs) {
+				t.Errorf("Expected %d buffers, got %d", len(tt.bufferIDs), len(printer.Buffer))
+			}
+		})
 	}
 }
 
@@ -139,15 +196,15 @@ func TestStepResult(t *testing.T) {
 	if result.Index != 1 {
 		t.Errorf("Expected Index to be 1, got %d", result.Index)
 	}
-	
+
 	if result.Name != "Test Step" {
 		t.Errorf("Expected Name to be 'Test Step', got %s", result.Name)
 	}
-	
+
 	if result.Status != StatusSuccess {
 		t.Errorf("Expected Status to be StatusSuccess, got %d", result.Status)
 	}
-	
+
 	if !result.HasTest {
 		t.Error("Expected HasTest to be true")
 	}
