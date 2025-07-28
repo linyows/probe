@@ -159,7 +159,6 @@ type Printer struct {
 	verbose   bool
 	Buffer    map[string]*strings.Builder
 	BufferIDs []string // Order preservation
-	mutex     sync.RWMutex
 }
 
 // NewPrinter creates a new console print writer
@@ -233,10 +232,7 @@ func (p *Printer) generateJobResultsFromStepResults(stepResults []StepResult) st
 		if stepResult.RepeatCounter != nil {
 			// Generate repeat step start output
 			totalCount := stepResult.RepeatCounter.SuccessCount + stepResult.RepeatCounter.FailureCount
-			stepName := stepResult.Name
-			if strings.HasSuffix(stepName, " (SKIPPED)") {
-				stepName = strings.TrimSuffix(stepName, " (SKIPPED)")
-			}
+			stepName := strings.TrimSuffix(stepResult.Name, " (SKIPPED)")
 
 			num := colorDim().Sprintf("%2d.", stepResult.Index)
 			output.WriteString(fmt.Sprintf("%s %s (repeating %d times)\n", num, stepName, totalCount))
@@ -315,10 +311,7 @@ func (p *Printer) printRepeatStepFromResult(jobID string, stepResult StepResult)
 	hasTest := stepResult.HasTest
 
 	// For repeat steps, we need to extract the base name (remove SKIPPED suffix if present)
-	stepName := stepResult.Name
-	if strings.HasSuffix(stepName, " (SKIPPED)") {
-		stepName = strings.TrimSuffix(stepName, " (SKIPPED)")
-	}
+	stepName := strings.TrimSuffix(stepResult.Name, " (SKIPPED)")
 
 	// Print repeat start - use total count from counter
 	totalCount := counter.SuccessCount + counter.FailureCount
