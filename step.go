@@ -27,17 +27,17 @@ type StepRepeatCounter struct {
 }
 
 type Step struct {
-	Name    string             `yaml:"name"`
-	ID      string             `yaml:"id,omitempty"`
-	Uses    string             `yaml:"uses" validate:"required"`
-	With    map[string]any     `yaml:"with"`
-	Test    string             `yaml:"test"`
-	Echo    string             `yaml:"echo"`
-	Vars    map[string]any     `yaml:"vars"`
-	Iter    []map[string]any   `yaml:"iter"`
-	Wait    string             `yaml:"wait,omitempty"`
-	SkipIf  string             `yaml:"skipif,omitempty"`
-	Outputs map[string]string  `yaml:"outputs,omitempty"`
+	Name    string            `yaml:"name"`
+	ID      string            `yaml:"id,omitempty"`
+	Uses    string            `yaml:"uses" validate:"required"`
+	With    map[string]any    `yaml:"with"`
+	Test    string            `yaml:"test"`
+	Echo    string            `yaml:"echo"`
+	Vars    map[string]any    `yaml:"vars"`
+	Iter    []map[string]any  `yaml:"iter"`
+	Wait    string            `yaml:"wait,omitempty"`
+	SkipIf  string            `yaml:"skipif,omitempty"`
+	Outputs map[string]string `yaml:"outputs,omitempty"`
 	err     error
 	ctx     StepContext
 	idx     int
@@ -45,6 +45,7 @@ type Step struct {
 }
 
 func (st *Step) Do(jCtx *JobContext) {
+
 	// 1. Preparation phase: validation, wait, skip check
 	name, shouldContinue := st.prepare(jCtx)
 	if !shouldContinue {
@@ -134,6 +135,7 @@ func (st *Step) processActionResult(actionResult map[string]any, jCtx *JobContex
 
 // finalize handles the final phase: test, echo, output save, and result creation
 func (st *Step) finalize(name string, actionResult map[string]any, jCtx *JobContext) {
+
 	// Extract commonly used values
 	req, okreq := actionResult["req"].(map[string]any)
 	res, okres := actionResult["res"].(map[string]any)
@@ -153,8 +155,13 @@ func (st *Step) finalize(name string, actionResult map[string]any, jCtx *JobCont
 
 	// Standard execution: save outputs and create result
 	st.saveOutputs(jCtx)
-	stepResult := st.createStepResult(name, rt, okrt, jCtx)
+	stepResult := st.createStepResult(name, rt, okrt, jCtx, nil)
 	jCtx.Printer.PrintStepResult(jCtx.CurrentJobID, stepResult)
+
+	// Add step result to workflow buffer
+	if jCtx.WorkflowBuffer != nil {
+		jCtx.WorkflowBuffer.AddStepResult(jCtx.CurrentJobID, stepResult)
+	}
 }
 
 // handleVerboseMode handles verbose execution mode
@@ -164,33 +171,34 @@ func (st *Step) handleVerboseMode(name string, req, res map[string]any, okreq, o
 		jCtx.SetFailed()
 		return
 	}
-	
+
 	st.ShowRequestResponse(name, jCtx)
-	
+
 	if st.Test != "" {
 		if ok := st.DoTestWithSequentialPrint(jCtx); !ok {
 			jCtx.SetFailed()
 		}
 	}
-	
+
 	if st.Echo != "" {
 		st.DoEchoWithSequentialPrint(jCtx)
 	}
-	
+
 	// Save step outputs even in verbose mode
 	st.saveOutputs(jCtx)
-	
+
 	jCtx.Printer.PrintSeparator()
 }
 
 // createStepResult creates a StepResult from step execution
-func (st *Step) createStepResult(name, rt string, okrt bool, jCtx *JobContext) StepResult {
+func (st *Step) createStepResult(name, rt string, okrt bool, jCtx *JobContext, repeatCounter *StepRepeatCounter) StepResult {
 	result := StepResult{
-		Index:   st.idx,
-		Name:    name,
-		HasTest: st.Test != "",
-		RT:      "",
-		WaitTime: st.getWaitTimeForDisplay(),
+		Index:         st.idx,
+		Name:          name,
+		HasTest:       st.Test != "",
+		RT:            "",
+		WaitTime:      st.getWaitTimeForDisplay(),
+		RepeatCounter: repeatCounter,
 	}
 
 	if jCtx.Config.RT && okrt && rt != "" {
@@ -227,6 +235,7 @@ func (st *Step) getEchoOutput() string {
 }
 
 func (st *Step) handleRepeatExecution(jCtx *JobContext, name, rt string, okrt bool) {
+
 	// Initialize counter if first execution
 	counter, exists := jCtx.StepCounters[st.idx]
 	if !exists {
@@ -263,12 +272,22 @@ func (st *Step) handleRepeatExecution(jCtx *JobContext, name, rt string, okrt bo
 	isFirstExecution := totalCount == 1
 	isFinalExecution := jCtx.RepeatCurrent == jCtx.RepeatTotal
 
+
 	if isFirstExecution {
 		jCtx.Printer.PrintStepRepeatStart(jCtx.CurrentJobID, st.idx, name, jCtx.RepeatTotal)
 	}
 
 	if isFinalExecution {
 		jCtx.Printer.PrintStepRepeatResult(jCtx.CurrentJobID, st.idx, counter, hasTest)
+
+		// Create StepResult with repeat counter for final execution
+		stepResult := st.createStepResult(name, rt, okrt, jCtx, &counter)
+
+
+		// Add step result to workflow buffer
+		if jCtx.WorkflowBuffer != nil {
+			jCtx.WorkflowBuffer.AddStepResult(jCtx.CurrentJobID, stepResult)
+		}
 	}
 
 	// Handle echo output
@@ -497,8 +516,13 @@ func (st *Step) handleSkip(name string, jCtx *JobContext) {
 	}
 
 	// Create step result for skipped step
-	stepResult := st.createSkippedStepResult(name, jCtx)
+	stepResult := st.createSkippedStepResult(name, jCtx, nil)
 	jCtx.Printer.PrintStepResult(jCtx.CurrentJobID, stepResult)
+
+	// Add step result to workflow buffer
+	if jCtx.WorkflowBuffer != nil {
+		jCtx.WorkflowBuffer.AddStepResult(jCtx.CurrentJobID, stepResult)
+	}
 }
 
 // handleSkipRepeatExecution handles skipped step in repeat mode
@@ -529,18 +553,27 @@ func (st *Step) handleSkipRepeatExecution(jCtx *JobContext, name string) {
 
 	if isFinalExecution {
 		jCtx.Printer.PrintStepRepeatResult(jCtx.CurrentJobID, st.idx, counter, false) // hasTest = false for skipped
+
+		// Create StepResult with repeat counter for final execution of skipped step
+		stepResult := st.createSkippedStepResult(name, jCtx, &counter)
+
+		// Add step result to workflow buffer
+		if jCtx.WorkflowBuffer != nil {
+			jCtx.WorkflowBuffer.AddStepResult(jCtx.CurrentJobID, stepResult)
+		}
 	}
 }
 
 // createSkippedStepResult creates a StepResult for a skipped step
-func (st *Step) createSkippedStepResult(name string, jCtx *JobContext) StepResult {
+func (st *Step) createSkippedStepResult(name string, jCtx *JobContext, repeatCounter *StepRepeatCounter) StepResult {
 	return StepResult{
-		Index:    st.idx,
-		Name:     name + " (SKIPPED)",
-		Status:   StatusSkipped,
-		RT:       "",
-		WaitTime: st.getWaitTimeForDisplay(),
-		HasTest:  false,
+		Index:         st.idx,
+		Name:          name + " (SKIPPED)",
+		Status:        StatusSkipped,
+		RT:            "",
+		WaitTime:      st.getWaitTimeForDisplay(),
+		HasTest:       false,
+		RepeatCounter: repeatCounter,
 	}
 }
 
