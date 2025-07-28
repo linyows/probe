@@ -66,9 +66,8 @@ type JobBuffer struct {
 
 // WorkflowBuffer manages output for multiple jobs
 type WorkflowBuffer struct {
-	Jobs        map[string]*JobBuffer
-	mutex       sync.RWMutex //nolint:unused // Reserved for future concurrent access
-	outputMutex sync.Mutex   // Protects stdout redirection
+	Jobs  map[string]*JobBuffer
+	mutex sync.RWMutex //nolint:unused // Reserved for future concurrent access
 }
 
 // NewWorkflowBuffer creates a new WorkflowBuffer instance
@@ -197,17 +196,6 @@ func (p *Printer) appendToBuffer(jobID string, content string) {
 	}
 }
 
-// getFromBuffer returns the content of the buffer for a specific job ID
-func (p *Printer) getFromBuffer(jobID string) string {
-	p.mutex.RLock()
-	defer p.mutex.RUnlock()
-
-	if buffer, exists := p.Buffer[jobID]; exists {
-		return buffer.String()
-	}
-
-	return ""
-}
 
 func (p *Printer) PrintBuffer() {
 	p.mutex.RLock()
