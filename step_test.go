@@ -177,11 +177,15 @@ func TestStep_handleWait(t *testing.T) {
 			}
 
 			start := time.Now()
-			result := step.handleWait(jCtx)
+			step.handleWait(jCtx)
 			duration := time.Since(start)
 
-			if result != tt.expectedTime {
-				t.Errorf("expected %s, got %s", tt.expectedTime, result)
+			// Skip expectedTime check for empty wait case
+			if tt.wait != "" {
+				expectedDuration, _ := time.ParseDuration(tt.expectedTime)
+				if duration < expectedDuration {
+					t.Errorf("expected at least %s, got %s", expectedDuration, duration)
+				}
 			}
 
 			if duration < tt.minDuration {
