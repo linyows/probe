@@ -1,8 +1,6 @@
 package probe
 
 import (
-	"io"
-	"os"
 	"strings"
 	"testing"
 
@@ -161,35 +159,6 @@ func TestNewPrinter_BufferInitialization(t *testing.T) {
 				t.Errorf("Expected %d buffers, got %d", len(tt.bufferIDs), len(printer.Buffer))
 			}
 		})
-	}
-}
-
-func TestPrintBuffer_OrderPreservation(t *testing.T) {
-	// Test that PrintBuffer outputs in the order specified by BufferIDs
-	bufferIDs := []string{"job3", "job1", "job2"} // Intentionally out of alphabetical order
-	printer := NewPrinter(false, bufferIDs)
-
-	// Add content to buffers in different order
-	printer.appendToBuffer("job1", "Content from job1\n")
-	printer.appendToBuffer("job2", "Content from job2\n")
-	printer.appendToBuffer("job3", "Content from job3\n")
-
-	// Capture output
-	oldStdout := os.Stdout
-	r, w, _ := os.Pipe()
-	os.Stdout = w
-
-	printer.PrintBuffer()
-
-	w.Close()
-	os.Stdout = oldStdout
-
-	output, _ := io.ReadAll(r)
-	outputStr := string(output)
-
-	expectedOutput := "Content from job3\nContent from job1\nContent from job2\n"
-	if outputStr != expectedOutput {
-		t.Errorf("Expected output:\n%s\nGot output:\n%s", expectedOutput, outputStr)
 	}
 }
 

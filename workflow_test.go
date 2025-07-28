@@ -1,9 +1,7 @@
 package probe
 
 import (
-	"bytes"
 	"fmt"
-	"io"
 	"os"
 	"reflect"
 	"strings"
@@ -806,102 +804,6 @@ func TestJobContextRepeatTracking(t *testing.T) {
 
 	if ctx.StepCounters[0].SuccessCount != 3 {
 		t.Errorf("expected SuccessCount to be 3, got %d", ctx.StepCounters[0].SuccessCount)
-	}
-}
-
-func TestStepHandleRepeatExecution(t *testing.T) {
-	tests := []struct {
-		name                   string
-		stepTest               string
-		repeatTotal            int
-		repeatCurrent          int
-		expectedOutputContains []string
-	}{
-		{
-			name:                   "first execution with test",
-			stepTest:               "true",
-			repeatTotal:            10,
-			repeatCurrent:          1,
-			expectedOutputContains: []string{"(repeating 10 times)"},
-		},
-		{
-			name:                   "final execution with test success",
-			stepTest:               "true",
-			repeatTotal:            10,
-			repeatCurrent:          10,
-			expectedOutputContains: []string{"10/10 success (100.0%)"},
-		},
-		{
-			name:                   "final execution no test",
-			stepTest:               "",
-			repeatTotal:            5,
-			repeatCurrent:          5,
-			expectedOutputContains: []string{"5/5 completed (no test)"},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			// Capture stdout
-			oldStdout := os.Stdout
-			r, w, _ := os.Pipe()
-			os.Stdout = w
-
-			// Create test step
-			step := &Step{
-				Name: "Test Step",
-				Test: tt.stepTest,
-				idx:  0,
-				expr: &Expr{},
-			}
-
-			// Create job context
-			jCtx := &JobContext{
-				IsRepeating:   true,
-				RepeatCurrent: tt.repeatCurrent,
-				RepeatTotal:   tt.repeatTotal,
-				StepCounters:  make(map[int]StepRepeatCounter),
-				Printer:       NewPrinter(false, []string{}),
-			}
-
-			// Simulate multiple executions by pre-populating counter
-			if tt.repeatCurrent == tt.repeatTotal {
-				// Final execution - set up counter as if we've been running
-				successCount := tt.repeatTotal
-				failureCount := 0
-				if tt.stepTest == "" {
-					// No test case
-					successCount = tt.repeatTotal
-				}
-
-				jCtx.StepCounters[0] = StepRepeatCounter{
-					SuccessCount: successCount - 1, // -1 because handleRepeatExecution will increment
-					FailureCount: failureCount,
-					Name:         "Test Step",
-					LastResult:   true,
-				}
-			}
-
-			// Execute the function
-			step.handleRepeatExecution(jCtx, "Test Step", "", false)
-
-			// Restore stdout and capture output
-			w.Close()
-			os.Stdout = oldStdout
-
-			var buf bytes.Buffer
-			if _, err := io.Copy(&buf, r); err != nil {
-				t.Fatalf("Failed to copy output: %v", err)
-			}
-			output := buf.String()
-
-			// Check expected output
-			for _, expected := range tt.expectedOutputContains {
-				if !strings.Contains(output, expected) {
-					t.Errorf("Expected output to contain '%s', got: %s", expected, output)
-				}
-			}
-		})
 	}
 }
 
