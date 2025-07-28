@@ -7,14 +7,6 @@ import (
 	"time"
 )
 
-type StepContext struct {
-	Vars    map[string]any            `expr:"vars"`
-	Logs    []map[string]any          `expr:"steps"`
-	Res     map[string]any            `expr:"res"`
-	Req     map[string]any            `expr:"req"`
-	RT      string                    `expr:"rt"`
-	Outputs map[string]map[string]any `expr:"outputs"`
-}
 
 
 type Step struct {
