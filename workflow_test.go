@@ -312,7 +312,7 @@ func TestWorkflowExecutor_PrintDetailedResults(t *testing.T) {
 		}
 
 		// Create workflow buffer
-		workflowBuffer := NewWorkflowBuffer()
+		result := NewResult()
 		jobResult := &JobResult{
 			JobName:   "test-job",
 			JobID:     "test-job",
@@ -321,10 +321,10 @@ func TestWorkflowExecutor_PrintDetailedResults(t *testing.T) {
 			EndTime:   time.Now(),
 			Success:   true,
 		}
-		workflowBuffer.Jobs["test-job"] = jobResult
+		result.Jobs["test-job"] = jobResult
 
 		// This should not panic and should execute successfully
-		workflow.printer.PrintReport(workflowBuffer)
+		workflow.printer.PrintReport(result)
 
 		// If we get here without panic, the test passes
 	})
@@ -857,7 +857,7 @@ func TestStepRepeatDisplayConditions(t *testing.T) {
 
 // WorkflowBuffer tests
 func TestWorkflowBuffer_AddStepResult(t *testing.T) {
-	wb := NewWorkflowBuffer()
+	wb := NewResult()
 	jobID := "test-job"
 
 	// Add a job buffer first
@@ -914,7 +914,7 @@ func TestWorkflowBuffer_AddStepResult(t *testing.T) {
 }
 
 func TestWorkflowBuffer_AddStepResult_NonExistentJob(t *testing.T) {
-	wb := NewWorkflowBuffer()
+	wb := NewResult()
 
 	stepResult := StepResult{
 		Index:  0,
@@ -932,7 +932,7 @@ func TestWorkflowBuffer_AddStepResult_NonExistentJob(t *testing.T) {
 }
 
 func TestWorkflowBuffer_ConcurrentAccess(t *testing.T) {
-	wb := NewWorkflowBuffer()
+	wb := NewResult()
 	jobID := "test-job"
 
 	// Add a job buffer first

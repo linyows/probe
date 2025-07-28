@@ -36,12 +36,12 @@ func TestExecutor_AppendRepeatStepResults(t *testing.T) {
 	executor := NewExecutor(workflow, job)
 
 	// Create WorkflowBuffer with JobResult
-	workflowBuffer := NewWorkflowBuffer()
+	result := NewResult()
 	jobResult := &JobResult{
 		JobName: job.Name,
 		JobID:   "test-job",
 	}
-	workflowBuffer.Jobs["test-job"] = jobResult
+	result.Jobs["test-job"] = jobResult
 
 	// Create test context with step counters
 	ctx := JobContext{
@@ -55,14 +55,14 @@ func TestExecutor_AppendRepeatStepResults(t *testing.T) {
 		},
 		Config:         Config{Verbose: false},
 		Printer:        NewPrinter(false, []string{}),
-		WorkflowBuffer: workflowBuffer,
+		Result: result,
 	}
 
 	// Call the method
 	executor.appendRepeatStepResults(&ctx)
 
 	// Check if step results were added to WorkflowBuffer
-	jobResult, exists := workflowBuffer.Jobs["test-job"]
+	jobResult, exists := result.Jobs["test-job"]
 	if !exists {
 		t.Fatal("Job buffer should exist after appendRepeatStepResults")
 	}

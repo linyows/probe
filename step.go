@@ -158,8 +158,8 @@ func (st *Step) finalize(name string, actionResult map[string]any, jCtx *JobCont
 	stepResult := st.createStepResult(name, rt, okrt, jCtx, nil)
 
 	// Add step result to workflow buffer
-	if jCtx.WorkflowBuffer != nil {
-		jCtx.WorkflowBuffer.AddStepResult(jCtx.CurrentJobID, stepResult)
+	if jCtx.Result != nil {
+		jCtx.Result.AddStepResult(jCtx.CurrentJobID, stepResult)
 	}
 }
 
@@ -274,8 +274,8 @@ func (st *Step) handleRepeatExecution(jCtx *JobContext, name, rt string, okrt bo
 		stepResult := st.createStepResult(name, rt, okrt, jCtx, &counter)
 
 		// Add step result to workflow buffer
-		if jCtx.WorkflowBuffer != nil {
-			jCtx.WorkflowBuffer.AddStepResult(jCtx.CurrentJobID, stepResult)
+		if jCtx.Result != nil {
+			jCtx.Result.AddStepResult(jCtx.CurrentJobID, stepResult)
 		}
 	}
 
@@ -529,8 +529,8 @@ func (st *Step) handleSkip(name string, jCtx *JobContext) {
 	stepResult := st.createSkippedStepResult(name, jCtx, nil)
 
 	// Add step result to workflow buffer
-	if jCtx.WorkflowBuffer != nil {
-		jCtx.WorkflowBuffer.AddStepResult(jCtx.CurrentJobID, stepResult)
+	if jCtx.Result != nil {
+		jCtx.Result.AddStepResult(jCtx.CurrentJobID, stepResult)
 	}
 }
 
@@ -558,8 +558,8 @@ func (st *Step) handleSkipRepeatExecution(jCtx *JobContext, name string) {
 		stepResult := st.createSkippedStepResult(name, jCtx, &counter)
 
 		// Add step result to workflow buffer
-		if jCtx.WorkflowBuffer != nil {
-			jCtx.WorkflowBuffer.AddStepResult(jCtx.CurrentJobID, stepResult)
+		if jCtx.Result != nil {
+			jCtx.Result.AddStepResult(jCtx.CurrentJobID, stepResult)
 		}
 	}
 }

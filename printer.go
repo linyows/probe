@@ -69,21 +69,21 @@ type JobResult struct {
 	mutex       sync.Mutex
 }
 
-// WorkflowBuffer manages execution results for multiple jobs
-type WorkflowBuffer struct {
+// Result manages execution results for multiple jobs
+type Result struct {
 	Jobs map[string]*JobResult
 }
 
-// NewWorkflowBuffer creates a new WorkflowBuffer instance
-func NewWorkflowBuffer() *WorkflowBuffer {
-	return &WorkflowBuffer{
+// NewResult creates a new Result instance
+func NewResult() *Result {
+	return &Result{
 		Jobs: make(map[string]*JobResult),
 	}
 }
 
 // AddStepResult adds a StepResult to the specified job result
-func (wb *WorkflowBuffer) AddStepResult(jobID string, stepResult StepResult) {
-	if jr, exists := wb.Jobs[jobID]; exists {
+func (rs *Result) AddStepResult(jobID string, stepResult StepResult) {
+	if jr, exists := rs.Jobs[jobID]; exists {
 		jr.mutex.Lock()
 		defer jr.mutex.Unlock()
 		jr.StepResults = append(jr.StepResults, stepResult)
@@ -106,7 +106,7 @@ type PrintWriter interface {
 	LogDebug(format string, args ...interface{})
 	LogError(format string, args ...interface{})
 
-	PrintReport(wb *WorkflowBuffer)
+	PrintReport(rs *Result)
 	StartSpinner()
 	StopSpinner()
 	AddSpinnerSuffix(txt string)
@@ -273,9 +273,9 @@ func (p *Printer) generateFooter(totalTime float64, successCount, totalJobs int,
 	}
 }
 
-// generateReport generates a complete workflow report string using WorkflowBuffer data
-func (p *Printer) generateReport(wb *WorkflowBuffer) string {
-	if wb == nil {
+// generateReport generates a complete workflow report string using Result data
+func (p *Printer) generateReport(rs *Result) string {
+	if rs == nil {
 		return ""
 	}
 
@@ -285,7 +285,7 @@ func (p *Printer) generateReport(wb *WorkflowBuffer) string {
 
 	// Generate step results and job summaries for each job in BufferIDs order
 	for _, jobID := range p.BufferIDs {
-		if jr, exists := wb.Jobs[jobID]; exists {
+		if jr, exists := rs.Jobs[jobID]; exists {
 			jr.mutex.Lock()
 
 			// Calculate job status and duration
@@ -313,14 +313,14 @@ func (p *Printer) generateReport(wb *WorkflowBuffer) string {
 	}
 
 	// Generate workflow footer
-	p.generateFooter(totalTime.Seconds(), successCount, len(wb.Jobs), &output)
+	p.generateFooter(totalTime.Seconds(), successCount, len(rs.Jobs), &output)
 
 	return output.String()
 }
 
-// PrintReport prints a complete workflow report using WorkflowBuffer data
-func (p *Printer) PrintReport(wb *WorkflowBuffer) {
-	reportOutput := p.generateReport(wb)
+// PrintReport prints a complete workflow report using Result data
+func (p *Printer) PrintReport(rs *Result) {
+	reportOutput := p.generateReport(rs)
 	if reportOutput != "" {
 		fmt.Print(reportOutput)
 	}
@@ -460,4 +460,4 @@ func (s *SilentPrinter) LogDebug(format string, args ...interface{}) {}
 // LogError does nothing in silent mode
 func (s *SilentPrinter) LogError(format string, args ...interface{}) {}
 
-func (s *SilentPrinter) PrintReport(wb *WorkflowBuffer) {}
+func (s *SilentPrinter) PrintReport(rs *Result) {}

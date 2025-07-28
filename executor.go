@@ -30,7 +30,7 @@ func (e *Executor) Execute(ctx JobContext) bool {
 	e.setJobID()
 	jobID := e.job.ID
 
-	jr := ctx.WorkflowBuffer.Jobs[jobID]
+	jr := ctx.Result.Jobs[jobID]
 
 	jr.mutex.Lock()
 	jr.StartTime = time.Now()
@@ -102,7 +102,7 @@ func (e *Executor) sleepBetweenRepeats(ctx JobContext) {
 // finalize updates the final job status and marks it as completed
 func (e *Executor) finalize(overallSuccess bool, ctx JobContext) {
 	jobID := e.job.ID
-	jr := ctx.WorkflowBuffer.Jobs[jobID]
+	jr := ctx.Result.Jobs[jobID]
 	jr.mutex.Lock()
 	duration := time.Since(jr.StartTime)
 	jr.EndTime = jr.StartTime.Add(duration)
@@ -122,7 +122,7 @@ func (e *Executor) finalize(overallSuccess bool, ctx JobContext) {
 func (e *Executor) appendRepeatStepResults(ctx *JobContext) {
 	jobID := e.job.ID
 
-	// Create StepResults for repeat steps and add them to WorkflowBuffer
+	// Create StepResults for repeat steps and add them to Result
 	for i, step := range e.job.Steps {
 		if counter, exists := ctx.StepCounters[i]; exists {
 			hasTest := step.Test != ""
@@ -151,8 +151,8 @@ func (e *Executor) appendRepeatStepResults(ctx *JobContext) {
 			}
 			
 			// Add step result to workflow buffer
-			if ctx.WorkflowBuffer != nil {
-				ctx.WorkflowBuffer.AddStepResult(jobID, stepResult)
+			if ctx.Result != nil {
+				ctx.Result.AddStepResult(jobID, stepResult)
 			}
 		}
 	}

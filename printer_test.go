@@ -226,12 +226,12 @@ func TestPrinter_PrintReport(t *testing.T) {
 	printer := NewPrinter(false, jobIDs)
 
 	// Create WorkflowBuffer with test data
-	wb := NewWorkflowBuffer()
+	rs := NewResult()
 
 	// Job 1: Regular steps
 	startTime1 := time.Now()
 	endTime1 := startTime1.Add(2 * time.Second)
-	wb.Jobs["job1"] = &JobResult{
+	rs.Jobs["job1"] = &JobResult{
 		JobID:     "job1",
 		JobName:   "Test Job 1",
 		StartTime: startTime1,
@@ -257,7 +257,7 @@ func TestPrinter_PrintReport(t *testing.T) {
 	// Job 2: Repeat step
 	startTime2 := time.Now()
 	endTime2 := startTime2.Add(3 * time.Second)
-	wb.Jobs["job2"] = &JobResult{
+	rs.Jobs["job2"] = &JobResult{
 		JobID:     "job2",
 		JobName:   "Test Job 2",
 		StartTime: startTime2,
@@ -286,7 +286,7 @@ func TestPrinter_PrintReport(t *testing.T) {
 	os.Stdout = w
 
 	// Call PrintReport
-	printer.PrintReport(wb)
+	printer.PrintReport(rs)
 
 	// Restore stdout and get output
 	_ = w.Close()
@@ -337,8 +337,8 @@ func TestPrinter_PrintReport_EmptyBuffer(t *testing.T) {
 	printer.PrintReport(nil)
 
 	// Test with empty buffer
-	wb := NewWorkflowBuffer()
-	printer.PrintReport(wb)
+	rs := NewResult()
+	printer.PrintReport(rs)
 
 	// Should not panic
 }
@@ -507,12 +507,12 @@ func TestPrinter_generateReport(t *testing.T) {
 	printer := NewPrinter(false, []string{"job1", "job2"})
 
 	// Create test WorkflowBuffer
-	wb := NewWorkflowBuffer()
+	rs := NewResult()
 
 	// Add job1 - successful
 	startTime1 := time.Now()
 	endTime1 := startTime1.Add(1 * time.Second)
-	wb.Jobs["job1"] = &JobResult{
+	rs.Jobs["job1"] = &JobResult{
 		JobID:     "job1",
 		JobName:   "Successful Job",
 		StartTime: startTime1,
@@ -532,7 +532,7 @@ func TestPrinter_generateReport(t *testing.T) {
 	// Add job2 - failed
 	startTime2 := time.Now()
 	endTime2 := startTime2.Add(2 * time.Second)
-	wb.Jobs["job2"] = &JobResult{
+	rs.Jobs["job2"] = &JobResult{
 		JobID:     "job2",
 		JobName:   "Failed Job",
 		StartTime: startTime2,
@@ -548,7 +548,7 @@ func TestPrinter_generateReport(t *testing.T) {
 		},
 	}
 
-	result := printer.generateReport(wb)
+	result := printer.generateReport(rs)
 
 	// Verify the report contains expected elements
 	expectedContains := []string{
@@ -575,8 +575,8 @@ func TestPrinter_generateReport_EmptyBuffer(t *testing.T) {
 		t.Errorf("generateReport(nil) should return empty string, got %q", result)
 	}
 
-	wb := NewWorkflowBuffer()
-	result = printer.generateReport(wb)
+	rs := NewResult()
+	result = printer.generateReport(rs)
 
 	// Should contain at least the footer
 	if !strings.Contains(result, "Total workflow time: 0.00s") {
@@ -587,11 +587,11 @@ func TestPrinter_generateReport_EmptyBuffer(t *testing.T) {
 func TestPrinter_generateReport_WithRepeatStep(t *testing.T) {
 	printer := NewPrinter(false, []string{"job1"})
 
-	wb := NewWorkflowBuffer()
+	rs := NewResult()
 
 	startTime := time.Now()
 	endTime := startTime.Add(1 * time.Second)
-	wb.Jobs["job1"] = &JobResult{
+	rs.Jobs["job1"] = &JobResult{
 		JobID:     "job1",
 		JobName:   "Job with Repeat",
 		StartTime: startTime,
@@ -614,7 +614,7 @@ func TestPrinter_generateReport_WithRepeatStep(t *testing.T) {
 		},
 	}
 
-	result := printer.generateReport(wb)
+	result := printer.generateReport(rs)
 
 	expectedContains := []string{
 		"Job with Repeat",
