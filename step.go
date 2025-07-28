@@ -22,7 +22,6 @@ type StepRepeatCounter struct {
 	FailureCount int
 	Name         string
 	LastResult   bool
-	Output       strings.Builder
 }
 
 type Step struct {
