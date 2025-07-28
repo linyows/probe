@@ -40,6 +40,12 @@ func TestColorFunctions(t *testing.T) {
 			text:     "info",
 			expected: "info",
 		},
+		{
+			name:     "colorWarning",
+			colorFn:  colorWarning,
+			text:     "warning",
+			expected: "warning",
+		},
 	}
 
 	for _, tt := range tests {

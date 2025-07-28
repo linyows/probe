@@ -29,7 +29,7 @@ type Expr struct{}
 
 // getTruncationMessage returns a colored truncation message
 func getTruncationMessage() string {
-	return "... [" + colorNotice().Sprintf("⚠︎ probe truncated") + "]"
+	return "... [" + colorWarning().Sprintf("⚠︎ probe truncated") + "]"
 }
 
 func (e *Expr) Options(env any) []ex.Option {

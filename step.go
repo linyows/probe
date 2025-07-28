@@ -417,7 +417,7 @@ func (st *Step) handleWait(jCtx *JobContext) {
 	}
 
 	if duration > 0 {
-		msg := colorNotice().Sprintf("(%s wait)", st.formatWaitTime(duration))
+		msg := colorWarning().Sprintf("(%s wait)", st.formatWaitTime(duration))
 		msg = fmt.Sprintf("%s %s", msg, st.Name)
 		sleepWithMessage(duration, msg, jCtx.Printer.AddSpinnerSuffix)
 	}

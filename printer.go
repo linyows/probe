@@ -32,7 +32,8 @@ func colorDim() *color.Color {
 	return color.New(color.FgHiBlack)
 }
 
-func colorNotice() *color.Color {
+// colorWarning returns a *color.Color for warnings (yellow)
+func colorWarning() *color.Color {
 	return color.New(color.FgYellow)
 }
 
