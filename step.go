@@ -16,13 +16,6 @@ type StepContext struct {
 	Outputs map[string]map[string]any `expr:"outputs"`
 }
 
-// StepRepeatCounter tracks the execution results of repeated steps
-type StepRepeatCounter struct {
-	SuccessCount int
-	FailureCount int
-	Name         string
-	LastResult   bool
-}
 
 type Step struct {
 	Name    string            `yaml:"name"`
