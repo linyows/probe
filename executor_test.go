@@ -63,15 +63,28 @@ func TestExecutor_AppendRepeatStepResults(t *testing.T) {
 	// Call the method
 	executor.appendRepeatStepResults(&ctx)
 
-	// Check if output was captured
-	output := jobBuffer.Buffer.String()
-	if len(output) == 0 {
-		t.Error("appendRepeatStepResults should generate output")
+	// Check if step results were added to WorkflowBuffer
+	stepResults := workflowBuffer.GetStepResults("test-job")
+	if len(stepResults) == 0 {
+		t.Error("appendRepeatStepResults should add StepResults to WorkflowBuffer")
 	}
 
-	// Should contain step outputs (success ratio or similar indicator)
-	if !strings.Contains(output, "success") {
-		t.Errorf("Output should contain success indicator, got: %s", output)
+	// Should have created a StepResult with RepeatCounter
+	if len(stepResults) != 1 {
+		t.Errorf("Expected 1 step result, got %d", len(stepResults))
+	}
+
+	stepResult := stepResults[0]
+	if stepResult.RepeatCounter == nil {
+		t.Error("StepResult should have RepeatCounter")
+	}
+
+	if stepResult.RepeatCounter.SuccessCount != 3 {
+		t.Errorf("Expected SuccessCount=3, got %d", stepResult.RepeatCounter.SuccessCount)
+	}
+
+	if stepResult.RepeatCounter.FailureCount != 1 {
+		t.Errorf("Expected FailureCount=1, got %d", stepResult.RepeatCounter.FailureCount)
 	}
 }
 

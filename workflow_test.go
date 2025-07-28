@@ -328,7 +328,7 @@ func TestWorkflowExecutor_PrintDetailedResults(t *testing.T) {
 		workflowBuffer.Jobs["test-job"] = jobBuffer
 
 		// This should not panic and should execute successfully
-		workflow.printResults(workflowBuffer)
+		workflow.printer.PrintReport(workflowBuffer)
 
 		// If we get here without panic, the test passes
 	})
