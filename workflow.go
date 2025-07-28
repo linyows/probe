@@ -87,7 +87,7 @@ func (w *Workflow) setupWorkflowBuffer() *WorkflowBuffer {
 		if jobID == "" {
 			jobID = job.Name
 		}
-		jb := &JobBuffer{
+		jb := &JobResult{
 			JobName:   job.Name,
 			JobID:     jobID,
 			StartTime: time.Now(),

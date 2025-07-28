@@ -35,9 +35,9 @@ func TestExecutor_AppendRepeatStepResults(t *testing.T) {
 	}
 	executor := NewExecutor(workflow, job)
 
-	// Create WorkflowBuffer with JobBuffer
+	// Create WorkflowBuffer with JobResult
 	workflowBuffer := NewWorkflowBuffer()
-	jobBuffer := &JobBuffer{
+	jobBuffer := &JobResult{
 		JobName: job.Name,
 		JobID:   "test-job",
 	}

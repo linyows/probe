@@ -231,7 +231,7 @@ func TestPrinter_PrintReport(t *testing.T) {
 	// Job 1: Regular steps
 	startTime1 := time.Now()
 	endTime1 := startTime1.Add(2 * time.Second)
-	wb.Jobs["job1"] = &JobBuffer{
+	wb.Jobs["job1"] = &JobResult{
 		JobID:     "job1",
 		JobName:   "Test Job 1",
 		StartTime: startTime1,
@@ -257,7 +257,7 @@ func TestPrinter_PrintReport(t *testing.T) {
 	// Job 2: Repeat step
 	startTime2 := time.Now()
 	endTime2 := startTime2.Add(3 * time.Second)
-	wb.Jobs["job2"] = &JobBuffer{
+	wb.Jobs["job2"] = &JobResult{
 		JobID:     "job2",
 		JobName:   "Test Job 2",
 		StartTime: startTime2,
@@ -512,7 +512,7 @@ func TestPrinter_generateReport(t *testing.T) {
 	// Add job1 - successful
 	startTime1 := time.Now()
 	endTime1 := startTime1.Add(1 * time.Second)
-	wb.Jobs["job1"] = &JobBuffer{
+	wb.Jobs["job1"] = &JobResult{
 		JobID:     "job1",
 		JobName:   "Successful Job",
 		StartTime: startTime1,
@@ -532,7 +532,7 @@ func TestPrinter_generateReport(t *testing.T) {
 	// Add job2 - failed
 	startTime2 := time.Now()
 	endTime2 := startTime2.Add(2 * time.Second)
-	wb.Jobs["job2"] = &JobBuffer{
+	wb.Jobs["job2"] = &JobResult{
 		JobID:     "job2",
 		JobName:   "Failed Job",
 		StartTime: startTime2,
@@ -591,7 +591,7 @@ func TestPrinter_generateReport_WithRepeatStep(t *testing.T) {
 
 	startTime := time.Now()
 	endTime := startTime.Add(1 * time.Second)
-	wb.Jobs["job1"] = &JobBuffer{
+	wb.Jobs["job1"] = &JobResult{
 		JobID:     "job1",
 		JobName:   "Job with Repeat",
 		StartTime: startTime,

@@ -313,7 +313,7 @@ func TestWorkflowExecutor_PrintDetailedResults(t *testing.T) {
 
 		// Create workflow buffer
 		workflowBuffer := NewWorkflowBuffer()
-		jobBuffer := &JobBuffer{
+		jobBuffer := &JobResult{
 			JobName:   "test-job",
 			JobID:     "test-job",
 			Status:    "Completed",
@@ -861,7 +861,7 @@ func TestWorkflowBuffer_AddStepResult(t *testing.T) {
 	jobID := "test-job"
 
 	// Add a job buffer first
-	wb.Jobs[jobID] = &JobBuffer{
+	wb.Jobs[jobID] = &JobResult{
 		JobID:       jobID,
 		JobName:     "Test Job",
 		StartTime:   time.Now(),
@@ -936,7 +936,7 @@ func TestWorkflowBuffer_ConcurrentAccess(t *testing.T) {
 	jobID := "test-job"
 
 	// Add a job buffer first
-	wb.Jobs[jobID] = &JobBuffer{
+	wb.Jobs[jobID] = &JobResult{
 		JobID:       jobID,
 		JobName:     "Test Job",
 		StartTime:   time.Now(),

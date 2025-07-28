@@ -57,8 +57,8 @@ const (
 	LogLevelError
 )
 
-// JobBuffer stores buffered output for a job
-type JobBuffer struct {
+// JobResult stores execution results for a job
+type JobResult struct {
 	JobName     string
 	JobID       string
 	Status      string
@@ -69,15 +69,15 @@ type JobBuffer struct {
 	mutex       sync.Mutex
 }
 
-// WorkflowBuffer manages output for multiple jobs
+// WorkflowBuffer manages execution results for multiple jobs
 type WorkflowBuffer struct {
-	Jobs map[string]*JobBuffer
+	Jobs map[string]*JobResult
 }
 
 // NewWorkflowBuffer creates a new WorkflowBuffer instance
 func NewWorkflowBuffer() *WorkflowBuffer {
 	return &WorkflowBuffer{
-		Jobs: make(map[string]*JobBuffer),
+		Jobs: make(map[string]*JobResult),
 	}
 }
 
