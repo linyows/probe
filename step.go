@@ -382,7 +382,7 @@ func (st *Step) ShowRequestResponse(name string, jCtx *JobContext) {
 	jCtx.Printer.LogDebug("Response:")
 	st.printMapData(st.ctx.Res, jCtx)
 
-	jCtx.Printer.LogDebug("RT: %s", colorWarning().Sprintf("%s", st.ctx.RT))
+	jCtx.Printer.LogDebug("RT: %s", colorInfo().Sprintf("%s", st.ctx.RT))
 }
 
 // printMapData prints map data with proper formatting for nested structures

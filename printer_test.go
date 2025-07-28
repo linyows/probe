@@ -35,10 +35,10 @@ func TestColorFunctions(t *testing.T) {
 			expected: "error",
 		},
 		{
-			name:     "colorWarning",
-			colorFn:  colorWarning,
-			text:     "warning",
-			expected: "warning",
+			name:     "colorInfo",
+			colorFn:  colorInfo,
+			text:     "info",
+			expected: "info",
 		},
 	}
 
@@ -81,8 +81,8 @@ func TestRepeatNoTestDisplay(t *testing.T) {
 	// Test the "no test" display format
 	totalCount := 1000
 
-	actual := colorWarning().Sprintf("⏺") + " " +
-		colorWarning().Sprintf("%d/%d completed (no test)", totalCount, totalCount)
+	actual := colorInfo().Sprintf("⏺") + " " +
+		colorInfo().Sprintf("%d/%d completed (no test)", totalCount, totalCount)
 
 	// Check that the format contains expected parts
 	if !strings.Contains(actual, "1000/1000 completed (no test)") {

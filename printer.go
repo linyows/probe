@@ -22,8 +22,8 @@ func colorError() *color.Color {
 	return color.New(color.FgRed)
 }
 
-// colorWarning returns a *color.Color for warnings (blue)
-func colorWarning() *color.Color {
+// colorInfo returns a *color.Color for info messages (blue)
+func colorInfo() *color.Color {
 	return color.New(color.FgBlue)
 }
 
@@ -192,7 +192,7 @@ func (p *Printer) printStepRepeatResult(counter *StepRepeatCounter, hasTest bool
 			if counter.SuccessCount == 0 {
 				statusIcon = colorError().Sprintf(IconError)
 			} else {
-				statusIcon = colorWarning().Sprintf(IconWarning)
+				statusIcon = colorInfo().Sprintf(IconWarning)
 			}
 		}
 
@@ -204,7 +204,7 @@ func (p *Printer) printStepRepeatResult(counter *StepRepeatCounter, hasTest bool
 	} else {
 		totalCount := counter.SuccessCount + counter.FailureCount
 		output.WriteString(fmt.Sprintf("    %s %d/%d completed (no test)\n",
-			colorWarning().Sprintf(IconWarning),
+			colorInfo().Sprintf(IconWarning),
 			totalCount,
 			totalCount))
 	}
@@ -219,7 +219,7 @@ func (p *Printer) generateJobStatus(jobID string, jobName string, status StatusT
 	case StatusError:
 		statusColor = colorError()
 	case StatusWarning:
-		statusColor = colorWarning()
+		statusColor = colorInfo()
 	}
 
 	statusStr := ""
@@ -372,9 +372,9 @@ func (p *Printer) generateJobResultsFromStepResults(stepResults []StepResult) st
 					output.WriteString(fmt.Sprintf("%s %s %s%s%s\n", num, colorError().Sprintf(IconError), waitPrefix, stepResult.Name, ps))
 				}
 			case StatusWarning:
-				output.WriteString(fmt.Sprintf("%s %s %s%s%s\n", num, colorWarning().Sprintf(IconWarning), waitPrefix, stepResult.Name, ps))
+				output.WriteString(fmt.Sprintf("%s %s %s%s%s\n", num, colorInfo().Sprintf(IconWarning), waitPrefix, stepResult.Name, ps))
 			case StatusSkipped:
-				output.WriteString(fmt.Sprintf("%s %s %s%s%s\n", num, colorWarning().Sprintf(IconSkip), waitPrefix, colorDim().Sprintf("%s", stepResult.Name), ps))
+				output.WriteString(fmt.Sprintf("%s %s %s%s%s\n", num, colorInfo().Sprintf(IconSkip), waitPrefix, colorDim().Sprintf("%s", stepResult.Name), ps))
 			}
 
 			if stepResult.EchoOutput != "" {
