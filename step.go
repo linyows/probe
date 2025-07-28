@@ -421,8 +421,6 @@ func (st *Step) handleWait(jCtx *JobContext) {
 		msg = fmt.Sprintf("%s %s", msg, st.Name)
 		sleepWithMessage(duration, msg, jCtx.Printer.AddSpinnerSuffix)
 	}
-
-	return
 }
 
 func sleepWithMessage(d time.Duration, m string, fn func(m string)) {
