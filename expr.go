@@ -13,10 +13,10 @@ import (
 )
 
 var (
-	// Regular expression to find `{ ... }` patterns
-	templateRegexp = regexp.MustCompile(`\{([^{}]+)\}`)
-	templateStart  = "{"
-	templateEnd    = "}"
+	// Regular expression to find `{{ ... }}` patterns
+	templateRegexp = regexp.MustCompile(`\{\{([^{}]+)\}\}`)
+	templateStart  = "{{"
+	templateEnd    = "}}"
 
 	// Security: Maximum expression length and evaluation timeout
 	maxExpressionLength = 1000000
@@ -377,8 +377,13 @@ func (e *Expr) EvalTemplate(input string, env any) (string, error) {
 			return match
 		}
 
-		// Extract the expression inside `{ ... }`
-		expression := strings.TrimSpace(string(match[1 : len(match)-1]))
+		// Extract the expression inside `{{ ... }}` using submatch
+		submatch := re.FindStringSubmatch(string(match))
+		if len(submatch) < 2 {
+			evalError = fmt.Errorf("invalid template expression: %s", string(match))
+			return []byte(fmt.Sprintf("[TemplateError: invalid expression]"))
+		}
+		expression := strings.TrimSpace(submatch[1])
 
 		// Security: Validate individual expression
 		if err := e.validateExpression(expression); err != nil {
