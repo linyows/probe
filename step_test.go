@@ -950,8 +950,9 @@ func TestStep_getEchoOutput(t *testing.T) {
 				ctx:  tt.context,
 				expr: &Expr{},
 			}
+			printer := NewPrinter(false, []string{})
 
-			result := step.getEchoOutput()
+			result := step.getEchoOutput(printer)
 
 			if result != tt.expected {
 				t.Errorf("getEchoOutput() = %q, want %q", result, tt.expected)
@@ -966,8 +967,9 @@ func TestStep_getEchoOutput_Error(t *testing.T) {
 		ctx:  StepContext{},
 		expr: &Expr{},
 	}
+	printer := NewPrinter(false, []string{})
 
-	result := step.getEchoOutput()
+	result := step.getEchoOutput(printer)
 
 	// Should contain error indication when template evaluation fails
 	if !strings.Contains(result, "CompileError") && !strings.Contains(result, "RuntimeError") && !strings.Contains(result, "Echo\nerror:") {

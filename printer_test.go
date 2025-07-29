@@ -1,6 +1,7 @@
 package probe
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -831,5 +832,382 @@ func TestMaxStringLength(t *testing.T) {
 	expectedValue := 1000000
 	if MaxStringLength != expectedValue {
 		t.Errorf("MaxStringLength = %d, expected %d", MaxStringLength, expectedValue)
+	}
+}
+
+// Tests for new Step Output Formatting Functions
+
+func TestPrinter_generateEchoOutput(t *testing.T) {
+	// Disable color output for consistent testing
+	color.NoColor = true
+	defer func() { color.NoColor = false }()
+
+	printer := NewPrinter(false, []string{})
+
+	tests := []struct {
+		name     string
+		content  string
+		err      error
+		expected string
+	}{
+		{
+			name:     "single line content",
+			content:  "Hello World",
+			err:      nil,
+			expected: "       Hello World\n",
+		},
+		{
+			name:     "multi-line content with explicit newlines",
+			content:  "Line 1\nLine 2\nLine 3",
+			err:      nil,
+			expected: "       Line 1\n       Line 2\n       Line 3\n",
+		},
+		{
+			name:     "complex multiline with indentation",
+			content:  "Header\n  Indented\n    More indented\nBack to left",
+			err:      nil,
+			expected: "       Header\n         Indented\n           More indented\n       Back to left\n",
+		},
+		{
+			name:     "empty line handling",
+			content:  "Line 1\n\nLine 3",
+			err:      nil,
+			expected: "       Line 1\n       \n       Line 3\n",
+		},
+		{
+			name:     "error case",
+			content:  "",
+			err:      fmt.Errorf("template error"),
+			expected: "Echo\nerror: &errors.errorString{s:\"template error\"}\n",
+		},
+		{
+			name:     "empty content",
+			content:  "",
+			err:      nil,
+			expected: "       \n",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := printer.generateEchoOutput(tt.content, tt.err)
+			if result != tt.expected {
+				t.Errorf("generateEchoOutput() = %q, want %q", result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestPrinter_generateTestFailure(t *testing.T) {
+	// Disable color output for consistent testing
+	color.NoColor = true
+	defer func() { color.NoColor = false }()
+
+	printer := NewPrinter(false, []string{})
+
+	tests := []struct {
+		name     string
+		testExpr string
+		result   interface{}
+		req      map[string]any
+		res      map[string]any
+		expected string
+	}{
+		{
+			name:     "simple test failure",
+			testExpr: "res.status == 200",
+			result:   false,
+			req:      map[string]any{"method": "GET", "url": "http://example.com"},
+			res:      map[string]any{"status": 404, "body": "Not Found"},
+			expected: "       request: map[string]interface {}{\"method\":\"GET\", \"url\":\"http://example.com\"}\n       response: map[string]interface {}{\"body\":\"Not Found\", \"status\":404}\n",
+		},
+		{
+			name:     "empty maps",
+			testExpr: "true",
+			result:   false,
+			req:      map[string]any{},
+			res:      map[string]any{},
+			expected: "       request: map[string]interface {}{}\n       response: map[string]interface {}{}\n",
+		},
+		{
+			name:     "nil maps",
+			testExpr: "false",
+			result:   false,
+			req:      nil,
+			res:      nil,
+			expected: "       request: map[string]interface {}(nil)\n       response: map[string]interface {}(nil)\n",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := printer.generateTestFailure(tt.testExpr, tt.result, tt.req, tt.res)
+			if result != tt.expected {
+				t.Errorf("generateTestFailure() = %q, want %q", result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestPrinter_generateTestError(t *testing.T) {
+	printer := NewPrinter(false, []string{})
+
+	tests := []struct {
+		name     string
+		err      error
+		expected string
+	}{
+		{
+			name:     "simple error",
+			err:      fmt.Errorf("compilation error"),
+			expected: "Test\nerror: &errors.errorString{s:\"compilation error\"}\n",
+		},
+		{
+			name:     "complex error message",
+			err:      fmt.Errorf("invalid expression: res.status == \"200\""),
+			expected: "Test\nerror: &errors.errorString{s:\"invalid expression: res.status == \\\"200\\\"\"}\n",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := printer.generateTestError(tt.err)
+			if result != tt.expected {
+				t.Errorf("generateTestError() = %q, want %q", result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestPrinter_generateTestTypeMismatch(t *testing.T) {
+	printer := NewPrinter(false, []string{})
+
+	tests := []struct {
+		name     string
+		testExpr string
+		result   interface{}
+		expected string
+	}{
+		{
+			name:     "string result instead of bool",
+			testExpr: "res.status",
+			result:   "200",
+			expected: "Test: `res.status` = 200\n",
+		},
+		{
+			name:     "number result instead of bool",
+			testExpr: "res.code",
+			result:   404,
+			expected: "Test: `res.code` = 404\n",
+		},
+		{
+			name:     "map result instead of bool",
+			testExpr: "res.body",
+			result:   map[string]any{"error": "not found"},
+			expected: "Test: `res.body` = map[error:not found]\n",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := printer.generateTestTypeMismatch(tt.testExpr, tt.result)
+			if result != tt.expected {
+				t.Errorf("generateTestTypeMismatch() = %q, want %q", result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestPrinter_PrintTestResult(t *testing.T) {
+	// Disable color output for consistent testing
+	color.NoColor = true
+	defer func() { color.NoColor = false }()
+
+	tests := []struct {
+		name      string
+		success   bool
+		testExpr  string
+		context   interface{}
+		verbose   bool
+		expectLog bool
+	}{
+		{
+			name:      "successful test in verbose mode",
+			success:   true,
+			testExpr:  "res.status == 200",
+			context:   map[string]any{"status": 200},
+			verbose:   true,
+			expectLog: true,
+		},
+		{
+			name:      "failed test in verbose mode",
+			success:   false,
+			testExpr:  "res.status == 200",
+			context:   map[string]any{"status": 404},
+			verbose:   true,
+			expectLog: true,
+		},
+		{
+			name:      "test in non-verbose mode",
+			success:   true,
+			testExpr:  "res.status == 200",
+			context:   map[string]any{"status": 200},
+			verbose:   false,
+			expectLog: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			printer := NewPrinter(tt.verbose, []string{})
+			
+			// This method prints debug output, we mainly test it doesn't panic
+			// and the method signature is correct
+			printer.PrintTestResult(tt.success, tt.testExpr, tt.context)
+			
+			// Test passes if no panic occurs
+		})
+	}
+}
+
+func TestPrinter_PrintEchoContent(t *testing.T) {
+	tests := []struct {
+		name    string
+		content string
+		verbose bool
+	}{
+		{
+			name:    "single line in verbose mode",
+			content: "Hello World",
+			verbose: true,
+		},
+		{
+			name:    "multi-line in verbose mode",
+			content: "Line 1\nLine 2\nLine 3",
+			verbose: true,
+		},
+		{
+			name:    "content in non-verbose mode",
+			content: "Hello World",
+			verbose: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			printer := NewPrinter(tt.verbose, []string{})
+			
+			// This method prints debug output, we mainly test it doesn't panic
+			printer.PrintEchoContent(tt.content)
+			
+			// Test passes if no panic occurs
+		})
+	}
+}
+
+func TestPrinter_PrintRequestResponse(t *testing.T) {
+	// Disable color output for consistent testing
+	color.NoColor = true
+	defer func() { color.NoColor = false }()
+
+	tests := []struct {
+		name     string
+		stepIdx  int
+		stepName string
+		req      map[string]any
+		res      map[string]any
+		rt       string
+		verbose  bool
+	}{
+		{
+			name:     "simple request response in verbose mode",
+			stepIdx:  1,
+			stepName: "Test Step",
+			req:      map[string]any{"method": "GET", "url": "http://example.com"},
+			res:      map[string]any{"status": 200, "body": "OK"},
+			rt:       "123ms",
+			verbose:  true,
+		},
+		{
+			name:     "nested data in verbose mode",
+			stepIdx:  2,
+			stepName: "Complex Step",
+			req:      map[string]any{"headers": map[string]any{"Accept": "application/json"}},
+			res:      map[string]any{"data": map[string]any{"id": 123, "name": "test"}},
+			rt:       "456ms",
+			verbose:  true,
+		},
+		{
+			name:     "request response in non-verbose mode",
+			stepIdx:  1,
+			stepName: "Test Step",
+			req:      map[string]any{"method": "GET"},
+			res:      map[string]any{"status": 200},
+			rt:       "100ms",
+			verbose:  false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			printer := NewPrinter(tt.verbose, []string{})
+			
+			// This method prints debug output, we mainly test it doesn't panic
+			printer.PrintRequestResponse(tt.stepIdx, tt.stepName, tt.req, tt.res, tt.rt)
+			
+			// Test passes if no panic occurs
+		})
+	}
+}
+
+func TestPrinter_PrintMapData(t *testing.T) {
+	tests := []struct {
+		name    string
+		data    map[string]any
+		verbose bool
+	}{
+		{
+			name: "simple map data",
+			data: map[string]any{
+				"key1": "value1",
+				"key2": 123,
+				"key3": true,
+			},
+			verbose: true,
+		},
+		{
+			name: "nested map data",
+			data: map[string]any{
+				"simple": "value",
+				"nested": map[string]any{
+					"inner1": "value1",
+					"inner2": 456,
+				},
+			},
+			verbose: true,
+		},
+		{
+			name:    "empty map",
+			data:    map[string]any{},
+			verbose: true,
+		},
+		{
+			name: "non-verbose mode",
+			data: map[string]any{
+				"key": "value",
+			},
+			verbose: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			printer := NewPrinter(tt.verbose, []string{})
+			
+			// This method prints debug output, we mainly test it doesn't panic
+			printer.PrintMapData(tt.data)
+			
+			// Test passes if no panic occurs
+		})
 	}
 }
