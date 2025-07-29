@@ -266,7 +266,10 @@ func TestNewCmd_InvalidFlags(t *testing.T) {
 	// Close write end and read from pipe
 	w.Close()
 	var buf bytes.Buffer
-	buf.ReadFrom(r)
+	_, err := buf.ReadFrom(r)
+	if err != nil {
+		t.Fatalf("Failed to read from pipe: %v", err)
+	}
 	output := buf.String()
 
 	// Should return nil for invalid flags
@@ -335,7 +338,10 @@ func TestCmd_start(t *testing.T) {
 			// Close write end and read stderr
 			w.Close()
 			var stderrBuf bytes.Buffer
-			stderrBuf.ReadFrom(r)
+			_, err := stderrBuf.ReadFrom(r)
+			if err != nil {
+				t.Fatalf("Failed to read stderr: %v", err)
+			}
 			stderrOutput := stderrBuf.String()
 
 			// Restore
