@@ -157,12 +157,12 @@ steps:
   with:
     get: /profile
     headers:
-      authorization: "Bearer {outputs.login.token}"
+      authorization: "Bearer {{outputs.login.token}}"
   test: res.code == 200
 ```
 
 ### Variables and Expressions
-Use `{expression}` syntax for dynamic values:
+Use `{{expression}}` syntax for dynamic values:
 
 ```yaml
 vars:
@@ -173,8 +173,8 @@ steps:
 - name: Get User
   uses: http
   with:
-    url: "{vars.api_url}"
-    get: "/users/{vars.user_id}"
+    url: "{{vars.api_url}}"
+    get: "/users/{{vars.user_id}}"
   test: res.body.id == vars.user_id
 ```
 
@@ -211,7 +211,7 @@ Share data between steps and jobs:
   with:
     get: /protected
     headers:
-      authorization: "Bearer {outputs.auth.token}"
+      authorization: "Bearer {{outputs.auth.token}}"
 ```
 
 ### Iteration
@@ -223,8 +223,8 @@ Execute steps with different variable sets:
   with:
     post: /users
     body:
-      name: "{vars.name}"
-      role: "{vars.role}"
+      name: "{{vars.name}}"
+      role: "{{vars.role}}"
   test: res.code == 201
   iter:
   - {name: "Alice", role: "admin"}
@@ -317,15 +317,15 @@ Advanced Examples
 name: User API Test
 vars:
   base_url: https://api.example.com
-  admin_token: "{env.ADMIN_TOKEN}"
+  admin_token: "{{env.ADMIN_TOKEN}}"
 
 jobs:
 - name: User CRUD Operations
   defaults:
     http:
-      url: "{vars.base_url}"
+      url: "{{vars.base_url}}"
       headers:
-        authorization: "Bearer {vars.admin_token}"
+        authorization: "Bearer {{vars.admin_token}}"
         content-type: application/json
 
   steps:
@@ -344,7 +344,7 @@ jobs:
   - name: Get User
     uses: http
     with:
-      get: "/users/{outputs.create.user_id}"
+      get: "/users/{{outputs.create.user_id}}"
     test: |
       res.code == 200 &&
       res.body.name == "Test User"
@@ -352,7 +352,7 @@ jobs:
   - name: Update User
     uses: http
     with:
-      put: "/users/{outputs.create.user_id}"
+      put: "/users/{{outputs.create.user_id}}"
       body:
         name: Updated User
     test: res.code == 200
@@ -360,7 +360,7 @@ jobs:
   - name: Delete User
     uses: http
     with:
-      delete: "/users/{outputs.create.user_id}"
+      delete: "/users/{{outputs.create.user_id}}"
     test: res.code == 204
 ```
 
@@ -470,7 +470,7 @@ Troubleshooting
 ### Common Issues
 
 **Expression Evaluation Errors**
-- Check syntax: `{expression}` not `{{expression}}`
+- Check syntax: `{{expression}}` not `{expression}`
 - Verify variable names and paths
 - Use quotes around string values
 
