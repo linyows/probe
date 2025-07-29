@@ -1,14 +1,14 @@
 name: REST API Example
 vars:
-  token: "{TOKEN ?? 'secret'}"
-  url: "{URL ?? 'https://httpbin.org'}"
+  token: "{{TOKEN ?? 'secret'}}"
+  url: "{{URL ?? 'https://httpbin.org'}}"
 jobs:
-- name: "Request to {vars.url}"
+- name: "Request to {{vars.url}}"
   defaults:
     http:
-      url: "{vars.url}"
+      url: "{{vars.url}}"
       headers:
-        authorization: "Bearer {vars.token}"
+        authorization: "Bearer {{vars.token}}"
         content-type: application/json
         accept: application/json
   steps:
@@ -34,7 +34,7 @@ jobs:
     with:
       put: /put
       body:
-        ip: "{steps[0].res.body.origin}"
+        ip: "{{steps[0].res.body.origin}}"
     test: |
       res.code == 200 &&
       res.body.json.ip == steps[0].res.body.origin
