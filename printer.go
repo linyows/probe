@@ -442,7 +442,7 @@ func (p *Printer) generateTestError(err error) string {
 
 // generateTestTypeMismatch formats test type mismatch error output
 func (p *Printer) generateTestTypeMismatch(testExpr string, result interface{}) string {
-	return fmt.Sprintf("Test: `%s` = %s\n", testExpr, result)
+	return fmt.Sprintf("Test: `%s` = %v\n", testExpr, result)
 }
 
 // PrintTestResult prints test result in verbose mode
