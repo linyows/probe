@@ -2,6 +2,7 @@ package probe
 
 import (
 	"fmt"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -887,5 +888,97 @@ func TestSleepWithMessage(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestStep_getEchoOutput(t *testing.T) {
+	tests := []struct {
+		name         string
+		echo         string
+		context      StepContext
+		expected     string
+		expectError  bool
+	}{
+		{
+			name:        "single line echo",
+			echo:        "Hello World",
+			context:     StepContext{},
+			expected:    "       Hello World\n",
+			expectError: false,
+		},
+		{
+			name:        "multi-line echo with explicit newlines",
+			echo:        "Line 1\nLine 2\nLine 3",
+			context:     StepContext{},
+			expected:    "       Line 1\n       Line 2\n       Line 3\n",
+			expectError: false,
+		},
+		{
+			name:        "complex multiline with indentation",
+			echo:        "Header\n  Indented\n    More indented\nBack to left",
+			context:     StepContext{},
+			expected:    "       Header\n         Indented\n           More indented\n       Back to left\n",
+			expectError: false,
+		},
+		{
+			name:        "empty line handling",
+			echo:        "Line 1\n\nLine 3",
+			context:     StepContext{},
+			expected:    "       Line 1\n       \n       Line 3\n",
+			expectError: false,
+		},
+		{
+			name:        "template expression",
+			echo:        "Status: {{vars.status}}",
+			context:     StepContext{Vars: map[string]any{"status": "OK"}},
+			expected:    "       Status: OK\n",
+			expectError: false,
+		},
+		{
+			name:        "multiline template expression",
+			echo:        "Status: {{vars.status}}\nCode: {{vars.code}}",
+			context:     StepContext{Vars: map[string]any{"status": "OK", "code": "200"}},
+			expected:    "       Status: OK\n       Code: 200\n",
+			expectError: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			step := &Step{
+				Echo: tt.echo,
+				ctx:  tt.context,
+				expr: &Expr{},
+			}
+
+			result := step.getEchoOutput()
+
+			if result != tt.expected {
+				t.Errorf("getEchoOutput() = %q, want %q", result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestStep_getEchoOutput_Error(t *testing.T) {
+	step := &Step{
+		Echo: "{{invalid_expression + }}", // Invalid syntax that will cause template error
+		ctx:  StepContext{},
+		expr: &Expr{},
+	}
+
+	result := step.getEchoOutput()
+
+	// Should contain error indication when template evaluation fails
+	if !strings.Contains(result, "CompileError") && !strings.Contains(result, "RuntimeError") && !strings.Contains(result, "Echo\nerror:") {
+		t.Errorf("getEchoOutput() with invalid expression should return error message, got %q", result)
+	}
+	
+	// Verify indentation is applied even to error messages
+	lines := strings.Split(strings.TrimSuffix(result, "\n"), "\n")
+	for _, line := range lines {
+		if !strings.HasPrefix(line, "       ") {
+			t.Errorf("getEchoOutput() should indent all lines including errors, line without indent: %q", line)
+		}
 	}
 }

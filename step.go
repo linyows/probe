@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"regexp"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -213,7 +214,17 @@ func (st *Step) getEchoOutput() string {
 	if err != nil {
 		return fmt.Sprintf("Echo\nerror: %#v\n", err)
 	}
-	return fmt.Sprintf("       %s\n", exprOut)
+	
+	// Add indent to all lines, including after user-specified newlines
+	indent := "       "
+	lines := strings.Split(exprOut, "\n")
+	indentedLines := make([]string, len(lines))
+	
+	for i, line := range lines {
+		indentedLines[i] = indent + line
+	}
+	
+	return strings.Join(indentedLines, "\n") + "\n"
 }
 
 func (st *Step) handleRepeatExecution(jCtx *JobContext, name, rt string, okrt bool) {
@@ -326,8 +337,13 @@ func (st *Step) DoEcho(jCtx *JobContext) {
 	if err != nil {
 		jCtx.Printer.LogError("Echo evaluation failed: %#v", err)
 	} else {
-		// 7 spaces
-		jCtx.Printer.LogDebug("       %s", exprOut)
+		// Add indent to all lines, including after user-specified newlines
+		indent := "       "
+		lines := strings.Split(exprOut, "\n")
+		
+		for _, line := range lines {
+			jCtx.Printer.LogDebug("%s%s", indent, line)
+		}
 	}
 }
 
