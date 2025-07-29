@@ -632,8 +632,8 @@ func TestEvalVars(t *testing.T) {
 			wf: &Workflow{
 				Name: "Test",
 				Vars: map[string]any{
-					"host":  "{HOST ?? 'http://localhost:3000'}",
-					"token": "{TOKEN}",
+					"host":  "{{HOST ?? 'http://localhost:3000'}}",
+					"token": "{{TOKEN}}",
 				},
 				env: map[string]string{
 					"TOKEN": "secrets",
@@ -650,8 +650,8 @@ func TestEvalVars(t *testing.T) {
 			wf: &Workflow{
 				Name: "Test",
 				Vars: map[string]any{
-					"host":  "{HOST}",
-					"token": "{TOKEN}",
+					"host":  "{{HOST}}",
+					"token": "{{TOKEN}}",
 				},
 				env: map[string]string{
 					"TOKEN": "secrets",
