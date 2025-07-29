@@ -406,3 +406,94 @@ func (p *Printer) generateLogError(format string, args ...interface{}) string {
 func (p *Printer) LogError(format string, args ...interface{}) {
 	fmt.Fprint(os.Stderr, p.generateLogError(format, args...))
 }
+
+// Step Output Formatting Functions
+// These functions handle output formatting with proper separation of concerns
+
+// generateEchoOutput formats echo output with proper indentation
+func (p *Printer) generateEchoOutput(content string, err error) string {
+	if err != nil {
+		return fmt.Sprintf("Echo\nerror: %#v\n", err)
+	}
+	
+	// Add indent to all lines, including after user-specified newlines
+	indent := "       "
+	lines := strings.Split(content, "\n")
+	indentedLines := make([]string, len(lines))
+	
+	for i, line := range lines {
+		indentedLines[i] = indent + line
+	}
+	
+	return strings.Join(indentedLines, "\n") + "\n"
+}
+
+// generateTestFailure formats test failure output with request/response info
+func (p *Printer) generateTestFailure(testExpr string, result interface{}, req, res map[string]any) string {
+	output := fmt.Sprintf("       %s %#v\n", colorInfo().Sprintf("request:"), req)
+	output += fmt.Sprintf("       %s %#v\n", colorInfo().Sprintf("response:"), res)
+	return output
+}
+
+// generateTestError formats test evaluation error output
+func (p *Printer) generateTestError(err error) string {
+	return fmt.Sprintf("Test\nerror: %#v\n", err)
+}
+
+// generateTestTypeMismatch formats test type mismatch error output
+func (p *Printer) generateTestTypeMismatch(testExpr string, result interface{}) string {
+	return fmt.Sprintf("Test: `%s` = %s\n", testExpr, result)
+}
+
+// PrintTestResult prints test result in verbose mode
+func (p *Printer) PrintTestResult(success bool, testExpr string, context interface{}) {
+	var resultStr string
+	if success {
+		resultStr = colorSuccess().Sprintf("Success")
+	} else {
+		resultStr = colorError().Sprintf("Failure")
+	}
+	p.LogDebug("Test: %s (input: %s, env: %#v)", resultStr, testExpr, context)
+}
+
+// PrintEchoContent prints echo content with proper indentation in verbose mode
+func (p *Printer) PrintEchoContent(content string) {
+	// Add indent to all lines, including after user-specified newlines
+	indent := "       "
+	lines := strings.Split(content, "\n")
+	
+	for _, line := range lines {
+		p.LogDebug("%s%s", indent, line)
+	}
+}
+
+// PrintRequestResponse prints request and response data with proper formatting
+func (p *Printer) PrintRequestResponse(stepIdx int, stepName string, req, res map[string]any, rt string) {
+	p.LogDebug("%s", colorWarning().Sprintf("--- Step %d: %s", stepIdx, stepName))
+	p.LogDebug("Request:")
+	p.PrintMapData(req)
+
+	p.LogDebug("Response:")
+	p.PrintMapData(res)
+
+	p.LogDebug("RT: %s", colorInfo().Sprintf("%s", rt))
+}
+
+// PrintMapData prints map data with proper formatting for nested structures
+func (p *Printer) PrintMapData(data map[string]any) {
+	for k, v := range data {
+		if nested, ok := v.(map[string]any); ok {
+			p.printNestedMap(k, nested)
+		} else {
+			p.LogDebug("  %s: %#v", k, v)
+		}
+	}
+}
+
+// printNestedMap prints nested map data with indentation
+func (p *Printer) printNestedMap(key string, nested map[string]any) {
+	p.LogDebug("  %s:", key)
+	for kk, vv := range nested {
+		p.LogDebug("    %s: %#v", kk, vv)
+	}
+}
