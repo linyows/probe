@@ -1,0 +1,33 @@
+name: Echo Multiline Test
+description: Test echo output with user-specified newlines and indentation
+
+jobs:
+- name: Test Echo Multiline
+  steps:
+  - name: Single line echo
+    uses: http
+    with:
+      url: https://httpbin.org/get
+      method: GET
+    echo: "Single line output"
+
+  - name: Multi-line echo with explicit newlines
+    uses: http
+    with:
+      url: https://httpbin.org/get
+      method: GET
+    echo: "Line 1\nLine 2\nLine 3"
+
+  - name: Complex multiline echo
+    uses: http
+    with:
+      url: https://httpbin.org/get
+      method: GET
+    echo: "Header line\n  Indented content\n    More indented\nBack to left\n\nEmpty line above"
+
+  - name: Echo with template expressions
+    uses: http
+    with:
+      url: https://httpbin.org/get
+      method: GET
+    echo: "Response URL: {{res.body.url}}\nStatus: {{res.code}}\nMultiline template result"

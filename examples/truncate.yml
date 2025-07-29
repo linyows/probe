@@ -1,0 +1,20 @@
+name: Truncate Strings Test
+
+jobs:
+- name: Display truncated text
+  defaults:
+    http:
+      url: https://httpbin.org
+      headers:
+        content-type: application/json
+        accept: application/json
+  steps:
+  - name: Post long content
+    uses: http
+    with:
+      post: /post
+      body:
+        content: "{{random_str(2000)}}"
+    test: |
+      res.code == 200
+    echo: "Response body: {{res.body}}"

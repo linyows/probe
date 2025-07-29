@@ -10,8 +10,8 @@ import (
 
 func TestEvalTemplateMap(t *testing.T) {
 	exprs := map[string]any{
-		"url":           "{env.URL}",
-		"authorization": "Bearer {env.TOKEN}",
+		"url":           "{{env.URL}}",
+		"authorization": "Bearer {{env.TOKEN}}",
 	}
 	env := map[string]any{
 		"env": map[string]any{
@@ -39,7 +39,7 @@ func TestEvalTemplate(t *testing.T) {
 	}{
 		{
 			name: "only variable",
-			str:  "{env.URL}",
+			str:  "{{env.URL}}",
 			env: map[string]any{
 				"env": map[string]any{
 					"URL": "https://example.com",
@@ -49,7 +49,7 @@ func TestEvalTemplate(t *testing.T) {
 		},
 		{
 			name: "expr twice",
-			str:  "Hi, { name }. My name is { service }.",
+			str:  "Hi, {{ name }}. My name is {{ service }}.",
 			env: map[string]any{
 				"name":    "Bob",
 				"service": "Alice",
@@ -58,7 +58,7 @@ func TestEvalTemplate(t *testing.T) {
 		},
 		{
 			name: "use nil coalescing operator",
-			str:  "{env.URL ?? 'http://localhost'}",
+			str:  "{{env.URL ?? 'http://localhost'}}",
 			env: map[string]any{
 				"env": map[string]any{},
 			},
@@ -66,7 +66,7 @@ func TestEvalTemplate(t *testing.T) {
 		},
 		{
 			name: "use ternary operator",
-			str:  "{env.URL == 'localhost' ? 'http://localhost:3000' : env.URL}",
+			str:  "{{env.URL == 'localhost' ? 'http://localhost:3000' : env.URL}}",
 			env: map[string]any{
 				"env": map[string]any{
 					"URL": "localhost",
@@ -160,7 +160,7 @@ func TestEvalOrEvalTemplate(t *testing.T) {
 		},
 		{
 			name:  "template with variable",
-			input: "Hello {name}!",
+			input: "Hello {{name}}!",
 			env: map[string]any{
 				"name": "World",
 			},
@@ -372,7 +372,7 @@ func TestValueSanitization(t *testing.T) {
 			t.Errorf("truncated string should contain truncation marker")
 		}
 		// Check that the original long part was truncated to maxStringLength
-		truncationMsg := getTruncationMessage()
+		truncationMsg := GetTruncationMessage()
 		originalContent := strings.Replace(resultStr, truncationMsg, "", 1)
 		if len(originalContent) > 1000000 {
 			t.Errorf("string content should be truncated to %d chars, got %d", 1000000, len(originalContent))
@@ -406,7 +406,7 @@ func TestErrorHandling(t *testing.T) {
 
 	t.Run("handles template evaluation errors", func(t *testing.T) {
 		expr := &Expr{}
-		result, err := expr.EvalTemplate("{invalid syntax $$}", map[string]any{})
+		result, err := expr.EvalTemplate("{{invalid syntax $$}}", map[string]any{})
 
 		if err == nil && !strings.Contains(result, "CompileError") {
 			t.Errorf("expected compilation error in template")
@@ -417,7 +417,7 @@ func TestErrorHandling(t *testing.T) {
 		expr := &Expr{}
 		inputMap := map[string]any{
 			"valid":   "simple string",
-			"invalid": "{invalid syntax $$}",
+			"invalid": "{{invalid syntax $$}}",
 		}
 
 		result := expr.EvalTemplateMap(inputMap, map[string]any{})
@@ -426,7 +426,7 @@ func TestErrorHandling(t *testing.T) {
 			t.Errorf("valid expression should work")
 		}
 		// The actual error message may vary, just check it's not the original invalid template
-		if result["invalid"] == "{invalid syntax $$}" {
+		if result["invalid"] == "{{invalid syntax $$}}" {
 			t.Errorf("invalid expression should be processed and not return original template")
 		}
 	})
@@ -679,19 +679,19 @@ func TestNewCustomFunctions(t *testing.T) {
 		}{
 			{
 				name:     "random_int in template",
-				template: "User ID: {random_int(9999)}",
+				template: "User ID: {{random_int(9999)}}",
 			},
 			{
 				name:     "random_str in template",
-				template: "Session: {random_str(16)}",
+				template: "Session: {{random_str(16)}}",
 			},
 			{
 				name:     "unixtime in template",
-				template: "Timestamp: {unixtime()}",
+				template: "Timestamp: {{unixtime()}}",
 			},
 			{
 				name:     "multiple functions in template",
-				template: "ID: {random_int(1000)}, Token: {random_str(8)}, Time: {unixtime()}",
+				template: "ID: {{random_int(1000)}}, Token: {{random_str(8)}}, Time: {{unixtime()}}",
 			},
 		}
 

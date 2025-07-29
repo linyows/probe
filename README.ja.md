@@ -157,12 +157,12 @@ steps:
   with:
     get: /profile
     headers:
-      authorization: "Bearer {outputs.login.token}"
+      authorization: "Bearer {{outputs.login.token}}"
   test: res.code == 200
 ```
 
 ### 変数と式
-動的な値には`{expression}`構文を使用してください：
+動的な値には`{{expression}}`構文を使用してください：
 
 ```yaml
 vars:
@@ -173,8 +173,8 @@ steps:
 - name: ユーザー取得
   uses: http
   with:
-    url: "{vars.api_url}"
-    get: "/users/{vars.user_id}"
+    url: "{{vars.api_url}}"
+    get: "/users/{{vars.user_id}}"
   test: res.body.id == vars.user_id
 ```
 
@@ -213,7 +213,7 @@ test: |
   with:
     get: /protected
     headers:
-      authorization: "Bearer {outputs.auth.token}"
+      authorization: "Bearer {{outputs.auth.token}}"
 ```
 
 イテレーション
@@ -227,8 +227,8 @@ test: |
   with:
     post: /users
     body:
-      name: "{vars.name}"
-      role: "{vars.role}"
+      name: "{{vars.name}}"
+      role: "{{vars.role}}"
   test: res.code == 201
   iter:
   - {name: "Alice", role: "admin"}
@@ -327,15 +327,15 @@ test: |
 name: ユーザーAPI テスト
 vars:
   base_url: https://api.example.com
-  admin_token: "{env.ADMIN_TOKEN}"
+  admin_token: "{{env.ADMIN_TOKEN}}"
 
 jobs:
 - name: ユーザーCRUD操作
   defaults:
     http:
-      url: "{vars.base_url}"
+      url: "{{vars.base_url}}"
       headers:
-        authorization: "Bearer {vars.admin_token}"
+        authorization: "Bearer {{vars.admin_token}}"
         content-type: application/json
 
   steps:
@@ -354,7 +354,7 @@ jobs:
   - name: ユーザー取得
     uses: http
     with:
-      get: "/users/{outputs.create.user_id}"
+      get: "/users/{{outputs.create.user_id}}"
     test: |
       res.code == 200 &&
       res.body.name == "テストユーザー"
@@ -362,7 +362,7 @@ jobs:
   - name: ユーザー更新
     uses: http
     with:
-      put: "/users/{outputs.create.user_id}"
+      put: "/users/{{outputs.create.user_id}}"
       body:
         name: 更新されたユーザー
     test: res.code == 200
@@ -370,7 +370,7 @@ jobs:
   - name: ユーザー削除
     uses: http
     with:
-      delete: "/users/{outputs.create.user_id}"
+      delete: "/users/{{outputs.create.user_id}}"
     test: res.code == 204
 ```
 
@@ -480,7 +480,7 @@ jobs:
 ### よくある問題
 
 **式評価エラー**
-- 構文をチェック: `{expression}` 、 `{{expression}}`ではない
+- 構文をチェック: `{{expression}}` 、 `{expression}`ではない
 - 変数名とパスを確認
 - 文字列値は引用符で囲む
 

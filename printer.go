@@ -36,6 +36,37 @@ func colorWarning() *color.Color {
 	return color.New(color.FgYellow)
 }
 
+// String truncation utilities
+
+const (
+	// MaxLogStringLength is the maximum length for log output to prevent log bloat
+	MaxLogStringLength = 200
+	// MaxStringLength is the maximum length for general string processing
+	MaxStringLength = 1000000
+)
+
+// GetTruncationMessage returns a colored truncation message
+func GetTruncationMessage() string {
+	return "... [" + colorWarning().Sprintf("⚠︎ probe truncated") + "]"
+}
+
+// TruncateString truncates a string if it exceeds the maximum length
+func TruncateString(s string, maxLen int) string {
+	if len(s) <= maxLen {
+		return s
+	}
+	return s[:maxLen] + GetTruncationMessage()
+}
+
+// TruncateMapStringString truncates long values in map[string]string for logging
+func TruncateMapStringString(params map[string]string, maxLen int) map[string]string {
+	truncated := make(map[string]string)
+	for key, value := range params {
+		truncated[key] = TruncateString(value, maxLen)
+	}
+	return truncated
+}
+
 // Icon constants
 const (
 	IconSuccess = "✔︎ "
@@ -55,7 +86,6 @@ const (
 	LogLevelWarn
 	LogLevelError
 )
-
 
 // Printer implements PrintWriter for console print
 type Printer struct {
@@ -84,15 +114,21 @@ func NewPrinter(verbose bool, bufferIDs []string) *Printer {
 }
 
 func (p *Printer) StartSpinner() {
-	p.spinner.Start()
+	if !p.verbose {
+		p.spinner.Start()
+	}
 }
 
 func (p *Printer) StopSpinner() {
-	p.spinner.Stop()
+	if !p.verbose {
+		p.spinner.Stop()
+	}
 }
 
 func (p *Printer) AddSpinnerSuffix(txt string) {
-	p.spinner.Suffix = fmt.Sprintf(" %s...", txt)
+	if !p.verbose {
+		p.spinner.Suffix = fmt.Sprintf(" %s...", txt)
+	}
 }
 
 // printStepRepeatStart prints the start of a repeated step execution
@@ -306,7 +342,7 @@ func (p *Printer) generateHeader(name, description string) string {
 	if name == "" {
 		return ""
 	}
-	
+
 	var output strings.Builder
 	bold := color.New(color.Bold)
 	output.WriteString(bold.Sprintf("%s\n", name))
@@ -370,4 +406,3 @@ func (p *Printer) generateLogError(format string, args ...interface{}) string {
 func (p *Printer) LogError(format string, args ...interface{}) {
 	fmt.Fprint(os.Stderr, p.generateLogError(format, args...))
 }
-

@@ -33,14 +33,21 @@ type Action struct {
 }
 
 func (a *Action) Run(args []string, with map[string]string) (map[string]string, error) {
-	a.log.Debug("received request parameters", "params", with)
+	// Use default truncate length, can be overridden by caller
+	truncateLength := probe.MaxLogStringLength
+
+	// Truncate long parameters for logging to prevent log bloat
+	truncatedParams := probe.TruncateMapStringString(with, truncateLength)
+	a.log.Debug("received request parameters", "params", truncatedParams)
 
 	if err := updateMap(with); err != nil {
 		a.log.Error("failed to update request parameters", "error", err)
 		return map[string]string{}, err
 	}
 
-	a.log.Debug("updated request parameters", "params", with)
+	// Truncate again after processing
+	truncatedUpdatedParams := probe.TruncateMapStringString(with, truncateLength)
+	a.log.Debug("updated request parameters", "params", truncatedUpdatedParams)
 
 	before := http.WithBefore(func(req *hp.Request) {
 		a.log.Debug("http request prepared", "request", req)
@@ -53,7 +60,9 @@ func (a *Action) Run(args []string, with map[string]string) (map[string]string, 
 	if err != nil {
 		a.log.Error("http request failed", "error", err)
 	} else {
-		a.log.Debug("http request completed successfully", "result", ret)
+		// Truncate result for logging to prevent log bloat
+		truncatedResult := probe.TruncateMapStringString(ret, truncateLength)
+		a.log.Debug("http request completed successfully", "result", truncatedResult)
 	}
 
 	return ret, err
