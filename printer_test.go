@@ -722,6 +722,10 @@ func TestTruncateString(t *testing.T) {
 }
 
 func TestTruncateMapStringString(t *testing.T) {
+	// Disable color output for consistent testing
+	color.NoColor = true
+	defer func() { color.NoColor = false }()
+
 	tests := []struct {
 		name     string
 		input    map[string]string
@@ -810,8 +814,8 @@ func TestMaxLogStringLength(t *testing.T) {
 		t.Errorf("MaxLogStringLength should be positive, got %d", MaxLogStringLength)
 	}
 
-	// Test that it has a reasonable value (expected to be 1000)
-	expectedValue := 1000
+	// Test that it has a reasonable value (expected to be 200)
+	expectedValue := 200
 	if MaxLogStringLength != expectedValue {
 		t.Errorf("MaxLogStringLength = %d, expected %d", MaxLogStringLength, expectedValue)
 	}
