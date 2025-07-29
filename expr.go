@@ -381,7 +381,7 @@ func (e *Expr) EvalTemplate(input string, env any) (string, error) {
 		submatch := re.FindStringSubmatch(string(match))
 		if len(submatch) < 2 {
 			evalError = fmt.Errorf("invalid template expression: %s", string(match))
-			return []byte(fmt.Sprintf("[TemplateError: invalid expression]"))
+			return []byte("[TemplateError: invalid expression]")
 		}
 		expression := strings.TrimSpace(submatch[1])
 

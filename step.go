@@ -403,7 +403,7 @@ func (st *Step) updateCtx(logs []map[string]any, req, res map[string]any, rt str
 }
 
 func (st *Step) ShowRequestResponse(name string, jCtx *JobContext) {
-	jCtx.Printer.LogDebug(colorWarning().Sprintf("--- Step %d: %s", st.idx, name))
+	jCtx.Printer.LogDebug("%s", colorWarning().Sprintf("--- Step %d: %s", st.idx, name))
 	jCtx.Printer.LogDebug("Request:")
 	st.printMapData(st.ctx.Req, jCtx)
 
@@ -541,7 +541,7 @@ func (st *Step) shouldSkip(jCtx *JobContext) bool {
 // handleSkip handles the skipped step logic
 func (st *Step) handleSkip(name string, jCtx *JobContext) {
 	if jCtx.Config.Verbose {
-		jCtx.Printer.LogDebug(colorWarning().Sprintf("--- Step %d: %s (SKIPPED)", st.idx, name))
+		jCtx.Printer.LogDebug("%s", colorWarning().Sprintf("--- Step %d: %s (SKIPPED)", st.idx, name))
 		jCtx.Printer.LogDebug("Skip condition: %s", st.SkipIf)
 		jCtx.Printer.PrintSeparator()
 		return
