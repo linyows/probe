@@ -6,6 +6,6 @@ jobs:
   - name: Failure Step
     uses: http
     with:
-      url: "{env.TEST_SERVER_URL ? env.TEST_SERVER_URL : \"https://httpbin.org\"}"
+      url: "{{env.TEST_SERVER_URL ? env.TEST_SERVER_URL : \"https://httpbin.org\"}}"
       get: /status/404
     test: res.code == 200
