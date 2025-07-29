@@ -332,15 +332,44 @@ func (st *Step) DoEcho(jCtx *JobContext) {
 }
 
 func (st *Step) SetCtx(j JobContext, override map[string]any) {
-	vers := MergeMaps(j.Vars, st.Vars)
-	if override != nil {
-		vers = MergeMaps(vers, override)
-	}
-
 	// Use outputs from the unified Outputs structure
 	var outputs map[string]map[string]any
 	if j.Outputs != nil {
 		outputs = j.Outputs.GetAll()
+	}
+
+	// Create context for step vars evaluation
+	evalCtx := StepContext{
+		Vars:    j.Vars,
+		Logs:    j.Logs,
+		Outputs: outputs,
+	}
+
+	// Evaluate step-level vars with access to outputs
+	evaluatedStepVars := make(map[string]any)
+	if len(st.Vars) > 0 {
+		expr := &Expr{}
+		for k, v := range st.Vars {
+			if mapV, ok := v.(map[string]any); ok {
+				evaluatedStepVars[k] = expr.EvalTemplateMap(mapV, evalCtx)
+			} else if strV, ok2 := v.(string); ok2 {
+				output, err := expr.EvalTemplate(strV, evalCtx)
+				if err != nil {
+					// If evaluation fails, keep original value
+					evaluatedStepVars[k] = v
+				} else {
+					evaluatedStepVars[k] = output
+				}
+			} else {
+				evaluatedStepVars[k] = v
+			}
+		}
+	}
+
+	// Merge workflow vars with evaluated step vars
+	vers := MergeMaps(j.Vars, evaluatedStepVars)
+	if override != nil {
+		vers = MergeMaps(vers, override)
 	}
 
 	st.ctx = StepContext{
