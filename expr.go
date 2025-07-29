@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math/rand/v2"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -27,10 +28,6 @@ var (
 
 type Expr struct{}
 
-// getTruncationMessage returns a colored truncation message
-func getTruncationMessage() string {
-	return "... [" + colorWarning().Sprintf("⚠︎ probe truncated") + "]"
-}
 
 func (e *Expr) Options(env any) []ex.Option {
 	// Security: Create a safe environment for expression evaluation
@@ -140,6 +137,23 @@ func (e *Expr) Options(env any) []ex.Option {
 				return time.Now().Unix(), nil
 			},
 		),
+		ex.Function(
+			"parse_float",
+			func(params ...any) (any, error) {
+				if len(params) != 1 {
+					return nil, fmt.Errorf("parse_float requires exactly 1 parameter")
+				}
+				s, ok := params[0].(string)
+				if !ok {
+					return nil, fmt.Errorf("parse_float parameter must be a string")
+				}
+				f, err := strconv.ParseFloat(s, 64)
+				if err != nil {
+					return nil, fmt.Errorf("parse_float error: %w", err)
+				}
+				return f, nil
+			},
+		),
 	}
 }
 
@@ -218,7 +232,7 @@ func (e *Expr) sanitizeValue(value any) any {
 	case string:
 		// Security: Limit string length to prevent memory exhaustion
 		if len(v) > maxStringLength {
-			return v[:maxStringLength] + getTruncationMessage()
+			return v[:maxStringLength] + GetTruncationMessage()
 		}
 		return v
 	case map[string]any:
@@ -387,7 +401,7 @@ func (e *Expr) EvalTemplate(input string, env any) (string, error) {
 		// Convert the output to string with size limit
 		outputStr := fmt.Sprintf("%v", output)
 		if len(outputStr) > maxStringLength {
-			outputStr = outputStr[:maxStringLength] + getTruncationMessage()
+			outputStr = outputStr[:maxStringLength] + GetTruncationMessage()
 		}
 
 		return []byte(outputStr)

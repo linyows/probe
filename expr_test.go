@@ -372,7 +372,7 @@ func TestValueSanitization(t *testing.T) {
 			t.Errorf("truncated string should contain truncation marker")
 		}
 		// Check that the original long part was truncated to maxStringLength
-		truncationMsg := getTruncationMessage()
+		truncationMsg := GetTruncationMessage()
 		originalContent := strings.Replace(resultStr, truncationMsg, "", 1)
 		if len(originalContent) > 1000000 {
 			t.Errorf("string content should be truncated to %d chars, got %d", 1000000, len(originalContent))

@@ -7,8 +7,6 @@ import (
 	"time"
 )
 
-
-
 type Step struct {
 	Name    string            `yaml:"name"`
 	ID      string            `yaml:"id,omitempty"`
@@ -211,7 +209,7 @@ func (st *Step) createStepResult(name, rt string, okrt bool, jCtx *JobContext, r
 
 // getEchoOutput returns the echo output as string
 func (st *Step) getEchoOutput() string {
-	exprOut, err := st.expr.Eval(st.Echo, st.ctx)
+	exprOut, err := st.expr.EvalTemplate(st.Echo, st.ctx)
 	if err != nil {
 		return fmt.Sprintf("Echo\nerror: %#v\n", err)
 	}
@@ -294,7 +292,7 @@ func (st *Step) DoTestWithSequentialPrint(jCtx *JobContext) bool {
 }
 
 func (st *Step) DoEchoWithSequentialPrint(jCtx *JobContext) {
-	exprOut, err := st.expr.Eval(st.Echo, st.ctx)
+	exprOut, err := st.expr.EvalTemplate(st.Echo, st.ctx)
 	if err != nil {
 		jCtx.Printer.LogError("Echo Error: %#v (input: %s)", err, st.Echo)
 	} else {
@@ -324,7 +322,7 @@ func (st *Step) DoTest() (string, bool) {
 }
 
 func (st *Step) DoEcho(jCtx *JobContext) {
-	exprOut, err := st.expr.Eval(st.Echo, st.ctx)
+	exprOut, err := st.expr.EvalTemplate(st.Echo, st.ctx)
 	if err != nil {
 		jCtx.Printer.LogError("Echo evaluation failed: %#v", err)
 	} else {
@@ -360,7 +358,7 @@ func (st *Step) updateCtx(logs []map[string]any, req, res map[string]any, rt str
 }
 
 func (st *Step) ShowRequestResponse(name string, jCtx *JobContext) {
-	jCtx.Printer.LogDebug("--- Step %d: %s", st.idx, name)
+	jCtx.Printer.LogDebug(colorWarning().Sprintf("--- Step %d: %s", st.idx, name))
 	jCtx.Printer.LogDebug("Request:")
 	st.printMapData(st.ctx.Req, jCtx)
 
@@ -498,7 +496,7 @@ func (st *Step) shouldSkip(jCtx *JobContext) bool {
 // handleSkip handles the skipped step logic
 func (st *Step) handleSkip(name string, jCtx *JobContext) {
 	if jCtx.Config.Verbose {
-		jCtx.Printer.LogDebug("--- Step %d: %s (SKIPPED)", st.idx, name)
+		jCtx.Printer.LogDebug(colorWarning().Sprintf("--- Step %d: %s (SKIPPED)", st.idx, name))
 		jCtx.Printer.LogDebug("Skip condition: %s", st.SkipIf)
 		jCtx.Printer.PrintSeparator()
 		return

@@ -217,7 +217,6 @@ func TestStepResult(t *testing.T) {
 	}
 }
 
-
 // Generate method tests
 func TestPrinter_generateHeader(t *testing.T) {
 	// Disable color output for consistent testing
@@ -652,5 +651,181 @@ func TestPrinter_generateReport_WithRepeatStep(t *testing.T) {
 		if !strings.Contains(result, expected) {
 			t.Errorf("generateReport() should contain %q, got:\n%s", expected, result)
 		}
+	}
+}
+
+// Truncate function tests
+func TestGetTruncationMessage(t *testing.T) {
+	// Disable color output for consistent testing
+	color.NoColor = true
+	defer func() { color.NoColor = false }()
+
+	result := GetTruncationMessage()
+	expected := "... [⚠︎ probe truncated]"
+
+	if result != expected {
+		t.Errorf("GetTruncationMessage() = %q, want %q", result, expected)
+	}
+}
+
+func TestTruncateString(t *testing.T) {
+	// Disable color output for consistent testing
+	color.NoColor = true
+	defer func() { color.NoColor = false }()
+
+	tests := []struct {
+		name     string
+		input    string
+		maxLen   int
+		expected string
+	}{
+		{
+			name:     "short string",
+			input:    "hello",
+			maxLen:   10,
+			expected: "hello",
+		},
+		{
+			name:     "exact length",
+			input:    "hello",
+			maxLen:   5,
+			expected: "hello",
+		},
+		{
+			name:     "long string",
+			input:    "this is a very long string that exceeds the limit",
+			maxLen:   10,
+			expected: "this is a ... [⚠︎ probe truncated]",
+		},
+		{
+			name:     "empty string",
+			input:    "",
+			maxLen:   5,
+			expected: "",
+		},
+		{
+			name:     "zero max length",
+			input:    "hello",
+			maxLen:   0,
+			expected: "... [⚠︎ probe truncated]",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := TruncateString(tt.input, tt.maxLen)
+			if result != tt.expected {
+				t.Errorf("TruncateString(%q, %d) = %q, want %q", tt.input, tt.maxLen, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestTruncateMapStringString(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    map[string]string
+		maxLen   int
+		expected map[string]string
+	}{
+		{
+			name: "short values",
+			input: map[string]string{
+				"key1": "value1",
+				"key2": "value2",
+			},
+			maxLen: 10,
+			expected: map[string]string{
+				"key1": "value1",
+				"key2": "value2",
+			},
+		},
+		{
+			name: "mixed length values",
+			input: map[string]string{
+				"short": "abc",
+				"long":  "this is a very long string that will be truncated",
+			},
+			maxLen: 10,
+			expected: map[string]string{
+				"short": "abc",
+				"long":  "this is a ... [⚠︎ probe truncated]",
+			},
+		},
+		{
+			name: "all long values",
+			input: map[string]string{
+				"url":  "https://example.com/very/long/path/that/exceeds/the/limit",
+				"body": "this is a very long request body that contains lots of data",
+			},
+			maxLen: 15,
+			expected: map[string]string{
+				"url":  "https://example... [⚠︎ probe truncated]",
+				"body": "this is a very ... [⚠︎ probe truncated]",
+			},
+		},
+		{
+			name:     "empty map",
+			input:    map[string]string{},
+			maxLen:   10,
+			expected: map[string]string{},
+		},
+		{
+			name: "zero max length",
+			input: map[string]string{
+				"key": "value",
+			},
+			maxLen: 0,
+			expected: map[string]string{
+				"key": "... [⚠︎ probe truncated]",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := TruncateMapStringString(tt.input, tt.maxLen)
+
+			if len(result) != len(tt.expected) {
+				t.Errorf("TruncateMapStringString() returned map with %d keys, expected %d", len(result), len(tt.expected))
+			}
+
+			for key, expectedValue := range tt.expected {
+				actualValue, exists := result[key]
+				if !exists {
+					t.Errorf("TruncateMapStringString() missing key %q", key)
+					continue
+				}
+				if actualValue != expectedValue {
+					t.Errorf("TruncateMapStringString() key %q = %q, want %q", key, actualValue, expectedValue)
+				}
+			}
+		})
+	}
+}
+
+func TestMaxLogStringLength(t *testing.T) {
+	// Test that the constant is properly defined
+	if MaxLogStringLength <= 0 {
+		t.Errorf("MaxLogStringLength should be positive, got %d", MaxLogStringLength)
+	}
+
+	// Test that it has a reasonable value (expected to be 1000)
+	expectedValue := 1000
+	if MaxLogStringLength != expectedValue {
+		t.Errorf("MaxLogStringLength = %d, expected %d", MaxLogStringLength, expectedValue)
+	}
+}
+
+func TestMaxStringLength(t *testing.T) {
+	// Test that the constant is properly defined
+	if MaxStringLength <= 0 {
+		t.Errorf("MaxStringLength should be positive, got %d", MaxStringLength)
+	}
+
+	// Test that it has a reasonable value (expected to be 1000000)
+	expectedValue := 1000000
+	if MaxStringLength != expectedValue {
+		t.Errorf("MaxStringLength = %d, expected %d", MaxStringLength, expectedValue)
 	}
 }
