@@ -264,7 +264,7 @@ func TestNewCmd_InvalidFlags(t *testing.T) {
 	cmd := newCmd(args)
 
 	// Close write end and read from pipe
-	w.Close()
+	_ = w.Close()
 	var buf bytes.Buffer
 	_, err := buf.ReadFrom(r)
 	if err != nil {
@@ -336,7 +336,7 @@ func TestCmd_start(t *testing.T) {
 			exitCode := tt.cmd.start()
 
 			// Close write end and read stderr
-			w.Close()
+			_ = w.Close()
 			var stderrBuf bytes.Buffer
 			_, err := stderrBuf.ReadFrom(r)
 			if err != nil {
@@ -413,7 +413,7 @@ func TestRunBuiltinActions(t *testing.T) {
 			// runBuiltinActions(tt.actionName) // Commented out to avoid starting servers
 
 			// Instead, just verify the function signature and that it compiles
-			var _ func(string) = runBuiltinActions
+			var _ = runBuiltinActions
 		})
 	}
 }
