@@ -108,7 +108,9 @@ https://github.com/linyows/probe (ver: %s, rev: %s)
 Usage: probe [options] <workflow-file>
 
 Arguments:
-  workflow-file    Path to YAML workflow file
+  workflow-file    Path to YAML workflow file(s). Multiple files can be 
+                   specified with comma-separated paths (e.g., "base.yml,override.yml")
+                   to merge configurations.
 
 Options:`
 
