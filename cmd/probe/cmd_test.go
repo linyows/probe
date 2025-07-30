@@ -10,7 +10,7 @@ import (
 
 func TestCmd_isValid(t *testing.T) {
 	c := &Cmd{
-		validFlags: []string{"help", "rt", "verbose"},
+		validFlags: []string{"help", "rt", "verbose", "v"},
 	}
 
 	tests := []struct {
@@ -46,6 +46,11 @@ func TestCmd_isValid(t *testing.T) {
 		{
 			name:     "valid rt flag",
 			flag:     "--rt",
+			expected: true,
+		},
+		{
+			name:     "valid v flag (shorthand)",
+			flag:     "-v",
 			expected: true,
 		},
 	}
@@ -163,6 +168,15 @@ func TestNewCmd(t *testing.T) {
 			expectVerbose:  true,
 			expectRT:       true,
 		},
+		{
+			name:           "v shorthand flag with workflow argument",
+			args:           []string{"probe", "-v", "test.yml"},
+			expectNil:      false,
+			expectHelp:     false,
+			expectWorkflow: "test.yml",
+			expectVerbose:  true,
+			expectRT:       false,
+		},
 		// Note: Builtin command tests are commented out because they try to start actual servers
 		// In a real test environment, these would need to be mocked or tested differently
 		// {
@@ -221,7 +235,7 @@ func TestNewCmd(t *testing.T) {
 			}
 
 			// Check validFlags
-			expectedFlags := []string{"help", "rt", "verbose"}
+			expectedFlags := []string{"help", "rt", "verbose", "v"}
 			if len(cmd.validFlags) != len(expectedFlags) {
 				t.Errorf("newCmd(%v) validFlags length = %d, want %d", tt.args, len(cmd.validFlags), len(expectedFlags))
 			}

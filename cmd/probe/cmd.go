@@ -42,7 +42,7 @@ func newCmd(args []string) *Cmd {
 	}
 
 	c := Cmd{
-		validFlags: []string{"help", "rt", "verbose"},
+		validFlags: []string{"help", "rt", "verbose", "v"},
 		ver:        version,
 		rev:        commit,
 	}
@@ -52,6 +52,7 @@ func newCmd(args []string) *Cmd {
 	//flag.BoolVar(&c.Lint, "lint", false, "Check the syntax in workflow")
 	flag.BoolVar(&c.RT, "rt", false, "Show response time")
 	flag.BoolVar(&c.Verbose, "verbose", false, "Show verbose log")
+	flag.BoolVar(&c.Verbose, "v", false, "Show verbose log (shorthand)")
 
 	for _, arg := range args[1:] {
 		if strings.HasPrefix(arg, "-") && !c.isValid(arg) {
