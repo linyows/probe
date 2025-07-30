@@ -115,9 +115,18 @@ Options:`
 	blue := color.New(color.FgBlue)
 	grey := color.New(color.FgHiBlack)
 
-	blue.Fprintln(flag.CommandLine.Output(), strings.TrimLeft(logo, "\n"))
-	grey.Fprintf(flag.CommandLine.Output(), strings.TrimLeft(desc, "\n"), c.ver, c.rev)
-	fmt.Fprintln(flag.CommandLine.Output(), head)
+	_, err := blue.Fprintln(flag.CommandLine.Output(), strings.TrimLeft(logo, "\n"))
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "[ERROR] %v\n", err)
+	}
+	_, err = grey.Fprintf(flag.CommandLine.Output(), strings.TrimLeft(desc, "\n"), c.ver, c.rev)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "[ERROR] %v\n", err)
+	}
+	_, err = fmt.Fprintln(flag.CommandLine.Output(), head)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "[ERROR] %v\n", err)
+	}
 	flag.PrintDefaults()
 }
 
