@@ -476,7 +476,7 @@ func TestCmd_printVersion(t *testing.T) {
 	// Restore stdout
 	os.Stdout = originalStdout
 
-	expectedOutput := "probe version 1.0.0 (commit: abc123)\n"
+	expectedOutput := "Probe Version 1.0.0 (commit: abc123)\n"
 	if output != expectedOutput {
 		t.Errorf("printVersion() output = %q, want %q", output, expectedOutput)
 	}
