@@ -42,12 +42,11 @@ func newCmd(args []string) *Cmd {
 	}
 
 	c := Cmd{
-		validFlags: []string{"help", "workflow", "rt", "verbose"},
+		validFlags: []string{"help", "rt", "verbose"},
 		ver:        version,
 		rev:        commit,
 	}
 
-	flag.StringVar(&c.WorkflowPath, "workflow", "", "Specify yaml-path of workflow")
 	flag.BoolVar(&c.Help, "help", false, "Show command usage")
 	//flag.BoolVar(&c.Init, "init", false, "Export a workflow template as yaml file")
 	//flag.BoolVar(&c.Lint, "lint", false, "Check the syntax in workflow")
@@ -63,6 +62,12 @@ func newCmd(args []string) *Cmd {
 	}
 
 	flag.Parse()
+	
+	// Set WorkflowPath from first non-flag argument
+	if flag.NArg() > 0 {
+		c.WorkflowPath = flag.Arg(0)
+	}
+	
 	return &c
 }
 
@@ -91,7 +96,10 @@ func (c *Cmd) usage() {
 Probe - A YAML-based workflow automation tool.
 https://github.com/linyows/probe (ver: %s, rev: %s)
 
-Usage: probe [options]
+Usage: probe [options] <workflow-file>
+
+Arguments:
+  workflow-file    Path to YAML workflow file
 
 Options:
 `

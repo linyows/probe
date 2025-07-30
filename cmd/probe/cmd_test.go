@@ -10,7 +10,7 @@ import (
 
 func TestCmd_isValid(t *testing.T) {
 	c := &Cmd{
-		validFlags: []string{"help", "workflow", "rt", "verbose"},
+		validFlags: []string{"help", "rt", "verbose"},
 	}
 
 	tests := []struct {
@@ -26,16 +26,6 @@ func TestCmd_isValid(t *testing.T) {
 		{
 			name:     "valid long flag",
 			flag:     "--help",
-			expected: true,
-		},
-		{
-			name:     "valid flag with value",
-			flag:     "--workflow=test.yml",
-			expected: true,
-		},
-		{
-			name:     "valid short flag with value",
-			flag:     "-workflow=test.yml",
 			expected: true,
 		},
 		{
@@ -94,7 +84,7 @@ func TestCmd_usage(t *testing.T) {
 		"https://github.com/linyows/probe",
 		"test-version",
 		"test-commit",
-		"Usage: probe [options]",
+		"Usage: probe [options] <workflow-file>",
 		"Options:",
 	}
 
@@ -138,8 +128,8 @@ func TestNewCmd(t *testing.T) {
 			expectRT:       false,
 		},
 		{
-			name:           "workflow flag",
-			args:           []string{"probe", "--workflow=test.yml"},
+			name:           "workflow argument",
+			args:           []string{"probe", "test.yml"},
 			expectNil:      false,
 			expectHelp:     false,
 			expectWorkflow: "test.yml",
@@ -165,8 +155,8 @@ func TestNewCmd(t *testing.T) {
 			expectRT:       true,
 		},
 		{
-			name:           "multiple flags",
-			args:           []string{"probe", "--workflow=test.yml", "--verbose", "--rt"},
+			name:           "multiple flags with workflow argument",
+			args:           []string{"probe", "--verbose", "--rt", "test.yml"},
 			expectNil:      false,
 			expectHelp:     false,
 			expectWorkflow: "test.yml",
@@ -231,7 +221,7 @@ func TestNewCmd(t *testing.T) {
 			}
 
 			// Check validFlags
-			expectedFlags := []string{"help", "workflow", "rt", "verbose"}
+			expectedFlags := []string{"help", "rt", "verbose"}
 			if len(cmd.validFlags) != len(expectedFlags) {
 				t.Errorf("newCmd(%v) validFlags length = %d, want %d", tt.args, len(cmd.validFlags), len(expectedFlags))
 			}

@@ -25,7 +25,7 @@ func TestEndToEndExitCodes(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cmd := exec.Command("go", "run", "./cmd/probe", "--workflow", tt.workflowPath)
+			cmd := exec.Command("go", "run", "./cmd/probe", tt.workflowPath)
 			output, err := cmd.CombinedOutput()
 			t.Logf("Command output: %s", string(output))
 
