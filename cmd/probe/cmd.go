@@ -6,6 +6,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/fatih/color"
 	"github.com/linyows/probe"
 	"github.com/linyows/probe/actions/hello"
 	http "github.com/linyows/probe/actions/http"
@@ -66,12 +67,12 @@ func newCmd(args []string) *Cmd {
 	}
 
 	flag.Parse()
-	
+
 	// Set WorkflowPath from first non-flag argument
 	if flag.NArg() > 0 {
 		c.WorkflowPath = flag.Arg(0)
 	}
-	
+
 	return &c
 }
 
@@ -90,25 +91,33 @@ func (c *Cmd) isValid(flag string) bool {
 }
 
 func (c *Cmd) usage() {
-	h := `
+	logo := `
  __  __  __  __  __
 |  ||  ||  ||  || _|
 |  ||  /| |||  /|  |
 | | |  \| |||  \| _|
 |_| |_\_|__||__||__|
+`
 
+	desc := `
 Probe - A YAML-based workflow automation tool.
 https://github.com/linyows/probe (ver: %s, rev: %s)
+`
 
+	head := `
 Usage: probe [options] <workflow-file>
 
 Arguments:
   workflow-file    Path to YAML workflow file
 
-Options:
-`
-	h = strings.TrimPrefix(h, "\n")
-	fmt.Fprintf(flag.CommandLine.Output(), h, c.ver, c.rev)
+Options:`
+
+	blue := color.New(color.FgBlue)
+	grey := color.New(color.FgHiBlack)
+
+	blue.Fprintln(flag.CommandLine.Output(), strings.TrimLeft(logo, "\n"))
+	grey.Fprintf(flag.CommandLine.Output(), strings.TrimLeft(desc, "\n"), c.ver, c.rev)
+	fmt.Fprintln(flag.CommandLine.Output(), head)
 	flag.PrintDefaults()
 }
 
@@ -139,5 +148,5 @@ func (c *Cmd) start() int {
 }
 
 func (c *Cmd) printVersion() {
-	fmt.Printf("probe version %s (commit: %s)\n", c.ver, c.rev)
+	fmt.Printf("Probe Version %s (commit: %s)\n", c.ver, c.rev)
 }

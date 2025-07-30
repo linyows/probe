@@ -109,7 +109,7 @@ func TestCmd_usage(t *testing.T) {
 		}
 	}
 
-	// Check ASCII art is present
+	// Check ASCII art is present (note: colors may not be in output during testing)
 	if !strings.Contains(output, "__  __  __  __  __") {
 		t.Errorf("usage() output should contain ASCII art")
 	}
