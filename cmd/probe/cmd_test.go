@@ -10,7 +10,7 @@ import (
 
 func TestCmd_isValid(t *testing.T) {
 	c := &Cmd{
-		validFlags: []string{"help", "workflow", "rt", "verbose"},
+		validFlags: []string{"help", "h", "version", "rt", "verbose", "v"},
 	}
 
 	tests := []struct {
@@ -26,16 +26,6 @@ func TestCmd_isValid(t *testing.T) {
 		{
 			name:     "valid long flag",
 			flag:     "--help",
-			expected: true,
-		},
-		{
-			name:     "valid flag with value",
-			flag:     "--workflow=test.yml",
-			expected: true,
-		},
-		{
-			name:     "valid short flag with value",
-			flag:     "-workflow=test.yml",
 			expected: true,
 		},
 		{
@@ -56,6 +46,21 @@ func TestCmd_isValid(t *testing.T) {
 		{
 			name:     "valid rt flag",
 			flag:     "--rt",
+			expected: true,
+		},
+		{
+			name:     "valid v flag (shorthand)",
+			flag:     "-v",
+			expected: true,
+		},
+		{
+			name:     "valid h flag (shorthand)",
+			flag:     "-h",
+			expected: true,
+		},
+		{
+			name:     "valid version flag",
+			flag:     "--version",
 			expected: true,
 		},
 	}
@@ -94,7 +99,7 @@ func TestCmd_usage(t *testing.T) {
 		"https://github.com/linyows/probe",
 		"test-version",
 		"test-commit",
-		"Usage: probe [options]",
+		"Usage: probe [options] <workflow-file>",
 		"Options:",
 	}
 
@@ -104,7 +109,7 @@ func TestCmd_usage(t *testing.T) {
 		}
 	}
 
-	// Check ASCII art is present
+	// Check ASCII art is present (note: colors may not be in output during testing)
 	if !strings.Contains(output, "__  __  __  __  __") {
 		t.Errorf("usage() output should contain ASCII art")
 	}
@@ -138,8 +143,8 @@ func TestNewCmd(t *testing.T) {
 			expectRT:       false,
 		},
 		{
-			name:           "workflow flag",
-			args:           []string{"probe", "--workflow=test.yml"},
+			name:           "workflow argument",
+			args:           []string{"probe", "test.yml"},
 			expectNil:      false,
 			expectHelp:     false,
 			expectWorkflow: "test.yml",
@@ -165,13 +170,31 @@ func TestNewCmd(t *testing.T) {
 			expectRT:       true,
 		},
 		{
-			name:           "multiple flags",
-			args:           []string{"probe", "--workflow=test.yml", "--verbose", "--rt"},
+			name:           "multiple flags with workflow argument",
+			args:           []string{"probe", "--verbose", "--rt", "test.yml"},
 			expectNil:      false,
 			expectHelp:     false,
 			expectWorkflow: "test.yml",
 			expectVerbose:  true,
 			expectRT:       true,
+		},
+		{
+			name:           "v shorthand flag with workflow argument",
+			args:           []string{"probe", "-v", "test.yml"},
+			expectNil:      false,
+			expectHelp:     false,
+			expectWorkflow: "test.yml",
+			expectVerbose:  true,
+			expectRT:       false,
+		},
+		{
+			name:           "h shorthand flag",
+			args:           []string{"probe", "-h"},
+			expectNil:      false,
+			expectHelp:     true,
+			expectWorkflow: "",
+			expectVerbose:  false,
+			expectRT:       false,
 		},
 		// Note: Builtin command tests are commented out because they try to start actual servers
 		// In a real test environment, these would need to be mocked or tested differently
@@ -231,7 +254,7 @@ func TestNewCmd(t *testing.T) {
 			}
 
 			// Check validFlags
-			expectedFlags := []string{"help", "workflow", "rt", "verbose"}
+			expectedFlags := []string{"help", "h", "version", "rt", "verbose", "v"}
 			if len(cmd.validFlags) != len(expectedFlags) {
 				t.Errorf("newCmd(%v) validFlags length = %d, want %d", tt.args, len(cmd.validFlags), len(expectedFlags))
 			}
@@ -319,6 +342,16 @@ func TestCmd_start(t *testing.T) {
 			expectedExit: 1,
 			expectsError: true,
 		},
+		{
+			name: "version command",
+			cmd: &Cmd{
+				Version: true,
+				ver:     "test-version",
+				rev:     "test-commit",
+			},
+			expectedExit: 1, // version command returns 1
+			checkOutput:  false,
+		},
 	}
 
 	for _, tt := range tests {
@@ -360,7 +393,7 @@ func TestCmd_start(t *testing.T) {
 				t.Errorf("Help command should produce help output")
 			}
 
-			if tt.cmd.WorkflowPath == "" && !tt.cmd.Help {
+			if tt.cmd.WorkflowPath == "" && !tt.cmd.Help && !tt.cmd.Version {
 				if !strings.Contains(stderrOutput, "workflow is required") {
 					t.Errorf("Missing workflow should produce 'workflow is required' error, got: %s", stderrOutput)
 				}
@@ -415,5 +448,36 @@ func TestRunBuiltinActions(t *testing.T) {
 			// Instead, just verify the function signature and that it compiles
 			var _ = runBuiltinActions
 		})
+	}
+}
+
+func TestCmd_printVersion(t *testing.T) {
+	// Capture stdout
+	var buf bytes.Buffer
+	originalStdout := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	c := &Cmd{
+		ver: "1.0.0",
+		rev: "abc123",
+	}
+
+	c.printVersion()
+
+	// Close write end and read from pipe
+	_ = w.Close()
+	_, err := buf.ReadFrom(r)
+	if err != nil {
+		t.Fatalf("Failed to read from pipe: %v", err)
+	}
+	output := buf.String()
+
+	// Restore stdout
+	os.Stdout = originalStdout
+
+	expectedOutput := "Probe Version 1.0.0 (commit: abc123)\n"
+	if output != expectedOutput {
+		t.Errorf("printVersion() output = %q, want %q", output, expectedOutput)
 	}
 }

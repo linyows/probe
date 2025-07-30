@@ -6,6 +6,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/fatih/color"
 	"github.com/linyows/probe"
 	"github.com/linyows/probe/actions/hello"
 	http "github.com/linyows/probe/actions/http"
@@ -17,6 +18,7 @@ type Cmd struct {
 	Init         bool
 	Lint         bool
 	Help         bool
+	Version      bool
 	Verbose      bool
 	RT           bool
 	validFlags   []string
@@ -42,17 +44,19 @@ func newCmd(args []string) *Cmd {
 	}
 
 	c := Cmd{
-		validFlags: []string{"help", "workflow", "rt", "verbose"},
+		validFlags: []string{"help", "h", "version", "rt", "verbose", "v"},
 		ver:        version,
 		rev:        commit,
 	}
 
-	flag.StringVar(&c.WorkflowPath, "workflow", "", "Specify yaml-path of workflow")
 	flag.BoolVar(&c.Help, "help", false, "Show command usage")
+	flag.BoolVar(&c.Help, "h", false, "Show command usage (shorthand)")
+	flag.BoolVar(&c.Version, "version", false, "Show version information")
 	//flag.BoolVar(&c.Init, "init", false, "Export a workflow template as yaml file")
 	//flag.BoolVar(&c.Lint, "lint", false, "Check the syntax in workflow")
 	flag.BoolVar(&c.RT, "rt", false, "Show response time")
 	flag.BoolVar(&c.Verbose, "verbose", false, "Show verbose log")
+	flag.BoolVar(&c.Verbose, "v", false, "Show verbose log (shorthand)")
 
 	for _, arg := range args[1:] {
 		if strings.HasPrefix(arg, "-") && !c.isValid(arg) {
@@ -63,6 +67,12 @@ func newCmd(args []string) *Cmd {
 	}
 
 	flag.Parse()
+
+	// Set WorkflowPath from first non-flag argument
+	if flag.NArg() > 0 {
+		c.WorkflowPath = flag.Arg(0)
+	}
+
 	return &c
 }
 
@@ -81,22 +91,42 @@ func (c *Cmd) isValid(flag string) bool {
 }
 
 func (c *Cmd) usage() {
-	h := `
+	logo := `
  __  __  __  __  __
 |  ||  ||  ||  || _|
 |  ||  /| |||  /|  |
 | | |  \| |||  \| _|
 |_| |_\_|__||__||__|
+`
 
+	desc := `
 Probe - A YAML-based workflow automation tool.
 https://github.com/linyows/probe (ver: %s, rev: %s)
-
-Usage: probe [options]
-
-Options:
 `
-	h = strings.TrimPrefix(h, "\n")
-	fmt.Fprintf(flag.CommandLine.Output(), h, c.ver, c.rev)
+
+	head := `
+Usage: probe [options] <workflow-file>
+
+Arguments:
+  workflow-file    Path to YAML workflow file
+
+Options:`
+
+	blue := color.New(color.FgBlue)
+	grey := color.New(color.FgHiBlack)
+
+	_, err := blue.Fprintln(flag.CommandLine.Output(), strings.TrimLeft(logo, "\n"))
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "[ERROR] %v\n", err)
+	}
+	_, err = grey.Fprintf(flag.CommandLine.Output(), strings.TrimLeft(desc, "\n"), c.ver, c.rev)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "[ERROR] %v\n", err)
+	}
+	_, err = fmt.Fprintln(flag.CommandLine.Output(), head)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "[ERROR] %v\n", err)
+	}
 	flag.PrintDefaults()
 }
 
@@ -104,6 +134,8 @@ func (c *Cmd) start() int {
 	switch {
 	case c.Help:
 		c.usage()
+	case c.Version:
+		c.printVersion()
 	//case c.Lint:
 	//case c.Init:
 	case c.WorkflowPath == "":
@@ -122,4 +154,8 @@ func (c *Cmd) start() int {
 	}
 
 	return 1
+}
+
+func (c *Cmd) printVersion() {
+	fmt.Printf("Probe Version %s (commit: %s)\n", c.ver, c.rev)
 }
