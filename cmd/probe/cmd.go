@@ -17,6 +17,7 @@ type Cmd struct {
 	Init         bool
 	Lint         bool
 	Help         bool
+	Version      bool
 	Verbose      bool
 	RT           bool
 	validFlags   []string
@@ -42,12 +43,14 @@ func newCmd(args []string) *Cmd {
 	}
 
 	c := Cmd{
-		validFlags: []string{"help", "rt", "verbose", "v"},
+		validFlags: []string{"help", "h", "version", "rt", "verbose", "v"},
 		ver:        version,
 		rev:        commit,
 	}
 
 	flag.BoolVar(&c.Help, "help", false, "Show command usage")
+	flag.BoolVar(&c.Help, "h", false, "Show command usage (shorthand)")
+	flag.BoolVar(&c.Version, "version", false, "Show version information")
 	//flag.BoolVar(&c.Init, "init", false, "Export a workflow template as yaml file")
 	//flag.BoolVar(&c.Lint, "lint", false, "Check the syntax in workflow")
 	flag.BoolVar(&c.RT, "rt", false, "Show response time")
@@ -113,6 +116,8 @@ func (c *Cmd) start() int {
 	switch {
 	case c.Help:
 		c.usage()
+	case c.Version:
+		c.printVersion()
 	//case c.Lint:
 	//case c.Init:
 	case c.WorkflowPath == "":
@@ -131,4 +136,8 @@ func (c *Cmd) start() int {
 	}
 
 	return 1
+}
+
+func (c *Cmd) printVersion() {
+	fmt.Printf("probe version %s (commit: %s)\n", c.ver, c.rev)
 }

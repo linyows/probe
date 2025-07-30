@@ -10,7 +10,7 @@ import (
 
 func TestCmd_isValid(t *testing.T) {
 	c := &Cmd{
-		validFlags: []string{"help", "rt", "verbose", "v"},
+		validFlags: []string{"help", "h", "version", "rt", "verbose", "v"},
 	}
 
 	tests := []struct {
@@ -51,6 +51,16 @@ func TestCmd_isValid(t *testing.T) {
 		{
 			name:     "valid v flag (shorthand)",
 			flag:     "-v",
+			expected: true,
+		},
+		{
+			name:     "valid h flag (shorthand)",
+			flag:     "-h",
+			expected: true,
+		},
+		{
+			name:     "valid version flag",
+			flag:     "--version",
 			expected: true,
 		},
 	}
@@ -177,6 +187,15 @@ func TestNewCmd(t *testing.T) {
 			expectVerbose:  true,
 			expectRT:       false,
 		},
+		{
+			name:           "h shorthand flag",
+			args:           []string{"probe", "-h"},
+			expectNil:      false,
+			expectHelp:     true,
+			expectWorkflow: "",
+			expectVerbose:  false,
+			expectRT:       false,
+		},
 		// Note: Builtin command tests are commented out because they try to start actual servers
 		// In a real test environment, these would need to be mocked or tested differently
 		// {
@@ -235,7 +254,7 @@ func TestNewCmd(t *testing.T) {
 			}
 
 			// Check validFlags
-			expectedFlags := []string{"help", "rt", "verbose", "v"}
+			expectedFlags := []string{"help", "h", "version", "rt", "verbose", "v"}
 			if len(cmd.validFlags) != len(expectedFlags) {
 				t.Errorf("newCmd(%v) validFlags length = %d, want %d", tt.args, len(cmd.validFlags), len(expectedFlags))
 			}
@@ -323,6 +342,16 @@ func TestCmd_start(t *testing.T) {
 			expectedExit: 1,
 			expectsError: true,
 		},
+		{
+			name: "version command",
+			cmd: &Cmd{
+				Version: true,
+				ver:     "test-version",
+				rev:     "test-commit",
+			},
+			expectedExit: 1, // version command returns 1
+			checkOutput:  false,
+		},
 	}
 
 	for _, tt := range tests {
@@ -364,7 +393,7 @@ func TestCmd_start(t *testing.T) {
 				t.Errorf("Help command should produce help output")
 			}
 
-			if tt.cmd.WorkflowPath == "" && !tt.cmd.Help {
+			if tt.cmd.WorkflowPath == "" && !tt.cmd.Help && !tt.cmd.Version {
 				if !strings.Contains(stderrOutput, "workflow is required") {
 					t.Errorf("Missing workflow should produce 'workflow is required' error, got: %s", stderrOutput)
 				}
@@ -419,5 +448,36 @@ func TestRunBuiltinActions(t *testing.T) {
 			// Instead, just verify the function signature and that it compiles
 			var _ = runBuiltinActions
 		})
+	}
+}
+
+func TestCmd_printVersion(t *testing.T) {
+	// Capture stdout
+	var buf bytes.Buffer
+	originalStdout := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	c := &Cmd{
+		ver: "1.0.0",
+		rev: "abc123",
+	}
+
+	c.printVersion()
+
+	// Close write end and read from pipe
+	_ = w.Close()
+	_, err := buf.ReadFrom(r)
+	if err != nil {
+		t.Fatalf("Failed to read from pipe: %v", err)
+	}
+	output := buf.String()
+
+	// Restore stdout
+	os.Stdout = originalStdout
+
+	expectedOutput := "probe version 1.0.0 (commit: abc123)\n"
+	if output != expectedOutput {
+		t.Errorf("printVersion() output = %q, want %q", output, expectedOutput)
 	}
 }
