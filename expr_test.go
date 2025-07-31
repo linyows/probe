@@ -779,4 +779,224 @@ func TestNewCustomFunctionsEdgeCases(t *testing.T) {
 			}
 		}
 	})
+
+	t.Run("encode_base64", func(t *testing.T) {
+		tests := []struct {
+			name      string
+			input     string
+			expectErr bool
+			expected  string
+		}{
+			{
+				name:      "valid encode_base64 with simple string",
+				input:     "encode_base64('hello')",
+				expectErr: false,
+				expected:  "aGVsbG8=",
+			},
+			{
+				name:      "valid encode_base64 with empty string",
+				input:     "encode_base64('')",
+				expectErr: false,
+				expected:  "",
+			},
+			{
+				name:      "valid encode_base64 with special characters",
+				input:     "encode_base64('Hello, World!')",
+				expectErr: false,
+				expected:  "SGVsbG8sIFdvcmxkIQ==",
+			},
+			{
+				name:      "invalid encode_base64 with no params",
+				input:     "encode_base64()",
+				expectErr: true,
+			},
+			{
+				name:      "invalid encode_base64 with multiple params",
+				input:     "encode_base64('hello', 'world')",
+				expectErr: true,
+			},
+			{
+				name:      "invalid encode_base64 with non-string param",
+				input:     "encode_base64(123)",
+				expectErr: true,
+			},
+		}
+
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				result, err := expr.Eval(tt.input, env)
+				if tt.expectErr {
+					if err == nil {
+						t.Errorf("expected error but got none")
+					}
+					return
+				}
+				if err != nil {
+					t.Errorf("unexpected error: %v", err)
+					return
+				}
+
+				if str, ok := result.(string); ok {
+					if str != tt.expected {
+						t.Errorf("encode_base64 returned %s, expected %s", str, tt.expected)
+					}
+				} else {
+					t.Errorf("expected string result, got %T", result)
+				}
+			})
+		}
+	})
+
+	t.Run("decode_base64", func(t *testing.T) {
+		tests := []struct {
+			name      string
+			input     string
+			expectErr bool
+			expected  string
+		}{
+			{
+				name:      "valid decode_base64 with simple string",
+				input:     "decode_base64('aGVsbG8=')",
+				expectErr: false,
+				expected:  "hello",
+			},
+			{
+				name:      "valid decode_base64 with empty string",
+				input:     "decode_base64('')",
+				expectErr: false,
+				expected:  "",
+			},
+			{
+				name:      "valid decode_base64 with special characters",
+				input:     "decode_base64('SGVsbG8sIFdvcmxkIQ==')",
+				expectErr: false,
+				expected:  "Hello, World!",
+			},
+			{
+				name:      "invalid decode_base64 with invalid base64",
+				input:     "decode_base64('invalid!')",
+				expectErr: true,
+			},
+			{
+				name:      "invalid decode_base64 with no params",
+				input:     "decode_base64()",
+				expectErr: true,
+			},
+			{
+				name:      "invalid decode_base64 with multiple params",
+				input:     "decode_base64('aGVsbG8=', 'extra')",
+				expectErr: true,
+			},
+			{
+				name:      "invalid decode_base64 with non-string param",
+				input:     "decode_base64(123)",
+				expectErr: true,
+			},
+		}
+
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				result, err := expr.Eval(tt.input, env)
+				if tt.expectErr {
+					if err == nil {
+						t.Errorf("expected error but got none")
+					}
+					return
+				}
+				if err != nil {
+					t.Errorf("unexpected error: %v", err)
+					return
+				}
+
+				if str, ok := result.(string); ok {
+					if str != tt.expected {
+						t.Errorf("decode_base64 returned %s, expected %s", str, tt.expected)
+					}
+				} else {
+					t.Errorf("expected string result, got %T", result)
+				}
+			})
+		}
+	})
+
+	t.Run("base64 encode-decode round trip", func(t *testing.T) {
+		testStrings := []string{
+			"hello world",
+			"Hello, World!",
+			"user:password",
+			"Special chars: !@#$%^&*()",
+			"Unicode: こんにちは",
+			"",
+		}
+
+		for _, original := range testStrings {
+			t.Run("round trip: "+original, func(t *testing.T) {
+				// First encode
+				encodeResult, err := expr.Eval("encode_base64('"+original+"')", env)
+				if err != nil {
+					t.Errorf("encode error: %v", err)
+					return
+				}
+
+				encoded, ok := encodeResult.(string)
+				if !ok {
+					t.Errorf("encode result is not string: %T", encodeResult)
+					return
+				}
+
+				// Then decode
+				decodeResult, err := expr.Eval("decode_base64('"+encoded+"')", env)
+				if err != nil {
+					t.Errorf("decode error: %v", err)
+					return
+				}
+
+				decoded, ok := decodeResult.(string)
+				if !ok {
+					t.Errorf("decode result is not string: %T", decodeResult)
+					return
+				}
+
+				if decoded != original {
+					t.Errorf("round trip failed: original=%s, decoded=%s", original, decoded)
+				}
+			})
+		}
+	})
+
+	t.Run("base64 functions in templates", func(t *testing.T) {
+		tests := []struct {
+			name     string
+			template string
+			env      map[string]any
+			expected string
+		}{
+			{
+				name:     "encode_base64 in template",
+				template: "Authorization: Basic {{encode_base64('user:pass')}}",
+				env:      map[string]any{},
+				expected: "Authorization: Basic dXNlcjpwYXNz",
+			},
+			{
+				name:     "decode_base64 in template",
+				template: "Decoded: {{decode_base64('aGVsbG8=')}}",
+				env:      map[string]any{},
+				expected: "Decoded: hello",
+			},
+		}
+
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				result, err := expr.EvalTemplate(tt.template, tt.env)
+				if err != nil {
+					t.Errorf("unexpected error: %v", err)
+					return
+				}
+
+				if result != tt.expected {
+					t.Errorf("template result: got %s, expected %s", result, tt.expected)
+				}
+			})
+		}
+	})
 }
