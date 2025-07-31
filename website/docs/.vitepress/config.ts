@@ -8,7 +8,8 @@ export default defineConfig({
   themeConfig: {
     // https://vitepress.dev/reference/default-theme-config
     nav: [
-      { text: 'Home', link: '/' },
+      { text: 'Quickstart', link: '/get-quickstart/quickstart' },
+      { text: 'Reference', link: '/reference/yaml-configuration' },
       { text: 'External',
         items: [
           { text: 'Github Release', link: 'https://github.com/linyows/probe/releases' },
@@ -17,7 +18,6 @@ export default defineConfig({
         ],
       },
     ],
-
     sidebar: [
       {
         text: 'Get Started',
@@ -71,15 +71,7 @@ export default defineConfig({
           { text: 'YAML Configuration', link: '/reference/yaml-configuration' }
         ]
       },
-      {
-        text: 'Examples',
-        items: [
-          { text: 'Markdown Examples', link: '/markdown-examples' },
-          { text: 'Runtime API Examples', link: '/api-examples' }
-        ]
-      }
     ],
-
     socialLinks: [
       { icon: 'github', link: 'https://github.com/linyows/probe' }
     ]
