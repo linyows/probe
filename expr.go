@@ -1,6 +1,7 @@
 package probe
 
 import (
+	"encoding/base64"
 	"fmt"
 	"math/rand/v2"
 	"regexp"
@@ -152,6 +153,42 @@ func (e *Expr) Options(env any) []ex.Option {
 					return nil, fmt.Errorf("parse_float error: %w", err)
 				}
 				return f, nil
+			},
+		),
+		ex.Function(
+			"encode_base64",
+			func(params ...any) (any, error) {
+				if len(params) != 1 {
+					return nil, fmt.Errorf("encode_base64 requires exactly 1 parameter")
+				}
+				s, ok := params[0].(string)
+				if !ok {
+					return nil, fmt.Errorf("encode_base64 parameter must be a string")
+				}
+				if len(s) > maxStringLength {
+					return nil, fmt.Errorf("encode_base64 parameter exceeds maximum length (%d chars)", maxStringLength)
+				}
+				return base64.StdEncoding.EncodeToString([]byte(s)), nil
+			},
+		),
+		ex.Function(
+			"decode_base64",
+			func(params ...any) (any, error) {
+				if len(params) != 1 {
+					return nil, fmt.Errorf("decode_base64 requires exactly 1 parameter")
+				}
+				s, ok := params[0].(string)
+				if !ok {
+					return nil, fmt.Errorf("decode_base64 parameter must be a string")
+				}
+				if len(s) > maxStringLength {
+					return nil, fmt.Errorf("decode_base64 parameter exceeds maximum length (%d chars)", maxStringLength)
+				}
+				decoded, err := base64.StdEncoding.DecodeString(s)
+				if err != nil {
+					return nil, fmt.Errorf("decode_base64 error: %w", err)
+				}
+				return string(decoded), nil
 			},
 		),
 	}
