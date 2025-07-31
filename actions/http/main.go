@@ -1,13 +1,11 @@
 package http
 
 import (
-	"encoding/json"
 	"errors"
 	hp "net/http"
 	"net/url"
 	"os"
 	"path"
-	"strconv"
 	"strings"
 
 	"github.com/hashicorp/go-hclog"
@@ -93,7 +91,7 @@ func updateMap(data map[string]string) error {
 	}
 	v, exists := data["headers__content-type"]
 	if exists && v == "application/json" {
-		if err = convertBodyToJson(data); err != nil {
+		if err = http.ConvertBodyToJson(data); err != nil {
 			return err
 		}
 	} else {
@@ -137,33 +135,6 @@ func replaceMethodAndURL(data map[string]string) error {
 	return nil
 }
 
-func convertBodyToJson(data map[string]string) error {
-	values := map[string]any{}
-
-	for key, value := range data {
-		if strings.HasPrefix(key, "body__") {
-			newKey := strings.TrimPrefix(key, "body__")
-			// If it is a numeric string, set the type to number
-			num, err := strconv.Atoi(value)
-			if err == nil {
-				values[newKey] = num
-			} else {
-				values[newKey] = value
-			}
-			delete(data, key)
-		}
-	}
-
-	if len(values) > 0 {
-		j, err := json.Marshal(values)
-		if err != nil {
-			return err
-		}
-		data["body"] = string(j)
-	}
-
-	return nil
-}
 
 func convertBodyToTextWithContentType(data map[string]string) error {
 	values := url.Values{}

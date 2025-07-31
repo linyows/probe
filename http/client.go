@@ -2,6 +2,7 @@ package http
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -182,4 +183,60 @@ func WithAfter(f func(res *hp.Response)) Option {
 	return func(c *Callback) {
 		c.after = f
 	}
+}
+
+// ConvertBodyToJson converts flat body data to properly nested JSON structure
+func ConvertBodyToJson(data map[string]string) error {
+	bodyData := map[string]string{}
+
+	// Extract all body__ prefixed keys
+	for key, value := range data {
+		if strings.HasPrefix(key, "body__") {
+			newKey := strings.TrimPrefix(key, "body__")
+			bodyData[newKey] = value
+			delete(data, key)
+		}
+	}
+
+	if len(bodyData) > 0 {
+		// Use UnflattenInterface to restore nested structure from flat keys
+		unflattenedData := probe.UnflattenInterface(bodyData)
+		
+		// Convert numeric strings to numbers for better JSON representation
+		convertedData := ConvertNumericStrings(unflattenedData)
+		
+		j, err := json.Marshal(convertedData)
+		if err != nil {
+			return err
+		}
+		data["body"] = string(j)
+	}
+
+	return nil
+}
+
+// ConvertNumericStrings recursively converts numeric strings to numbers in nested structures
+func ConvertNumericStrings(data map[string]any) map[string]any {
+	result := make(map[string]any)
+	
+	for key, value := range data {
+		switch v := value.(type) {
+		case string:
+			// Try to convert numeric strings to numbers
+			if num, err := strconv.Atoi(v); err == nil {
+				result[key] = num
+			} else if floatNum, err := strconv.ParseFloat(v, 64); err == nil {
+				result[key] = floatNum
+			} else {
+				result[key] = v
+			}
+		case map[string]any:
+			// Recursively process nested maps
+			result[key] = ConvertNumericStrings(v)
+		default:
+			result[key] = v
+		}
+	}
+	
+	return result
 }
