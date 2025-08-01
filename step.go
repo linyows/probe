@@ -47,7 +47,7 @@ func (st *Step) Do(jCtx *JobContext) {
 	st.finalize(name, actionResult, jCtx)
 }
 
-// prepare handles step preparation: validation, wait, and skip check
+// prepare handles step preparation: validation, skip check, and wait
 // Returns (stepName, shouldContinue)
 func (st *Step) prepare(jCtx *JobContext) (string, bool) {
 	// Set default name if empty
@@ -57,9 +57,6 @@ func (st *Step) prepare(jCtx *JobContext) (string, bool) {
 
 	jCtx.Printer.AddSpinnerSuffix(st.Name)
 
-	// Handle wait before step execution
-	st.handleWait(jCtx)
-
 	// Evaluate step name
 	name, err := st.expr.EvalTemplate(st.Name, st.ctx)
 	if err != nil {
@@ -67,11 +64,14 @@ func (st *Step) prepare(jCtx *JobContext) (string, bool) {
 		return "", false
 	}
 
-	// Check if step should be skipped
+	// Check if step should be skipped BEFORE waiting
 	if st.shouldSkip(jCtx) {
 		st.handleSkip(name, jCtx)
 		return name, false
 	}
+
+	// Handle wait only if step is not skipped
+	st.handleWait(jCtx)
 
 	return name, true
 }
