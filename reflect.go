@@ -279,7 +279,7 @@ func flattenIf(input any, prefix string) map[string]string {
 	return res
 }
 
-// Recursively convert a map[string]string to a map[string]any
+// Recursively convert a map[string]string to a map[string]any with array conversion and numeric conversion
 func UnflattenInterface(flatMap map[string]string) map[string]any {
 	result := make(map[string]any)
 
@@ -288,8 +288,127 @@ func UnflattenInterface(flatMap map[string]string) map[string]any {
 		nestMap(result, keys, value)
 	}
 
+	// Check if the root result should be converted to an array
+	if shouldConvertToArray(result) {
+		// Return a wrapper map containing the array since this function returns map[string]any
+		arrayResult := convertMapToArrayWithNumericConversion(result)
+		return map[string]any{"__array_root": arrayResult}
+	}
+
+	return convertMapsToArraysAndNumericStrings(result)
+}
+
+// convertMapsToArraysAndNumericStrings combines array conversion and numeric string conversion
+func convertMapsToArraysAndNumericStrings(input map[string]any) map[string]any {
+	result := make(map[string]any)
+	
+	for key, value := range input {
+		switch v := value.(type) {
+		case string:
+			// Try to convert numeric strings to numbers
+			if num, err := strconv.Atoi(v); err == nil {
+				result[key] = num
+			} else if floatNum, err := strconv.ParseFloat(v, 64); err == nil {
+				result[key] = floatNum
+			} else {
+				result[key] = v
+			}
+		case map[string]any:
+			// Check if this nested map should be converted to an array
+			if shouldConvertToArray(v) {
+				result[key] = convertMapToArrayWithNumericConversion(v)
+			} else {
+				// Recursively process nested maps
+				result[key] = convertMapsToArraysAndNumericStrings(v)
+			}
+		default:
+			result[key] = v
+		}
+	}
+	
 	return result
 }
+
+// convertMapToArrayWithNumericConversion converts a map with numeric keys to an array with numeric conversion
+func convertMapToArrayWithNumericConversion(m map[string]any) []any {
+	result := make([]any, len(m))
+	
+	for key, value := range m {
+		index, _ := strconv.Atoi(key)
+		switch v := value.(type) {
+		case string:
+			// Try to convert numeric strings to numbers
+			if num, err := strconv.Atoi(v); err == nil {
+				result[index] = num
+			} else if floatNum, err := strconv.ParseFloat(v, 64); err == nil {
+				result[index] = floatNum
+			} else {
+				result[index] = v
+			}
+		case map[string]any:
+			// Recursively process nested structures
+			if shouldConvertToArray(v) {
+				result[index] = convertMapToArrayWithNumericConversion(v)
+			} else {
+				result[index] = convertMapsToArraysAndNumericStrings(v)
+			}
+		default:
+			result[index] = value
+		}
+	}
+	
+	return result
+}
+
+
+// shouldConvertToArray checks if a map should be converted to an array
+func shouldConvertToArray(m map[string]any) bool {
+	if len(m) == 0 {
+		return false
+	}
+	
+	// Check if all keys are numeric and form a complete sequence from 0 to len-1
+	keys := make([]string, 0, len(m))
+	for key := range m {
+		keys = append(keys, key)
+	}
+	
+	return isNumericSequence(keys)
+}
+
+// isNumericSequence checks if the keys form a numeric sequence starting from 0
+func isNumericSequence(keys []string) bool {
+	if len(keys) == 0 {
+		return false
+	}
+	
+	// Convert all keys to integers and check if they form a sequence
+	nums := make([]int, len(keys))
+	for i, key := range keys {
+		num, err := strconv.Atoi(key)
+		if err != nil {
+			return false
+		}
+		nums[i] = num
+	}
+	
+	// Check if it's a complete sequence from 0 to len-1
+	for i := 0; i < len(nums); i++ {
+		found := false
+		for _, num := range nums {
+			if num == i {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return false
+		}
+	}
+	
+	return true
+}
+
 
 // A helper to set values for nested keys
 func nestMap(m map[string]any, keys []string, value string) {

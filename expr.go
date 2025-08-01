@@ -29,7 +29,6 @@ var (
 
 type Expr struct{}
 
-
 func (e *Expr) Options(env any) []ex.Option {
 	// Security: Create a safe environment for expression evaluation
 	safeEnv := e.createSafeEnvironment(env)
@@ -479,8 +478,46 @@ func (e *Expr) EvalTemplateMap(input map[string]any, env any) map[string]any {
 		case map[string]any:
 			results[key] = e.EvalTemplateMap(v, env)
 
+		case []any:
+			results[key] = e.evalTemplateArray(v, env)
+
 		default:
 			results[key] = v
+		}
+	}
+
+	return results
+}
+
+// evalTemplateArray evaluates templates in array elements
+func (e *Expr) evalTemplateArray(input []any, env any) []any {
+	results := make([]any, len(input))
+
+	for i, val := range input {
+		// Security: Limit the number of processed elements to prevent DoS
+		if i > 1000 {
+			results = append(results, "_truncated: Array processing truncated due to size limits")
+			break
+		}
+
+		switch v := val.(type) {
+		case string:
+			output, err := e.EvalTemplate(v, env)
+			if err != nil {
+				// Security: Don't expose internal errors, use sanitized error
+				results[i] = "[EvaluationError]"
+				continue
+			}
+			results[i] = output
+
+		case map[string]any:
+			results[i] = e.EvalTemplateMap(v, env)
+
+		case []any:
+			results[i] = e.evalTemplateArray(v, env)
+
+		default:
+			results[i] = v
 		}
 	}
 
