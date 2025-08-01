@@ -147,13 +147,6 @@ func HeaderToStringValue(data map[string]any) map[string]any {
 }
 
 func Request(data map[string]string, opts ...Option) (map[string]string, error) {
-	// Debug: Check if expressions are already expanded
-	for key, value := range data {
-		if strings.Contains(value, "{{") && strings.Contains(value, "}}") {
-			fmt.Printf("DEBUG: Found unexpanded expression in %s: %s\n", key, value)
-		}
-	}
-
 	m := HeaderToStringValue(probe.UnflattenInterface(data))
 	r := NewReq()
 
