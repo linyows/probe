@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"github.com/jarcoal/httpmock"
-	"github.com/linyows/probe"
 )
 
 func TestNewReq(t *testing.T) {
@@ -199,63 +198,6 @@ func TestConvertBodyToJson(t *testing.T) {
 	}
 }
 
-func TestConvertNumericStringsAndArrays(t *testing.T) {
-	tests := []struct {
-		name     string
-		input    map[string]any
-		expected any
-	}{
-		{
-			name: "convert map to array",
-			input: map[string]any{
-				"0": map[string]any{"foo": "1", "bar": "2"},
-				"1": map[string]any{"name": "test"},
-			},
-			expected: []any{
-				map[string]any{"foo": 1, "bar": 2},
-				map[string]any{"name": "test"},
-			},
-		},
-		{
-			name: "nested arrays",
-			input: map[string]any{
-				"0": map[string]any{
-					"items": map[string]any{"0": "item1", "1": "item2"},
-				},
-			},
-			expected: []any{
-				map[string]any{
-					"items": []any{"item1", "item2"},
-				},
-			},
-		},
-		{
-			name: "regular map (no conversion)",
-			input: map[string]any{
-				"name": "test",
-				"age":  "25",
-			},
-			expected: map[string]any{
-				"name": "test",
-				"age":  25,
-			},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := probe.ConvertNumericStringsAndArrays(tt.input)
-
-			// Convert to JSON for easy comparison
-			expectedJSON, _ := json.Marshal(tt.expected)
-			actualJSON, _ := json.Marshal(result)
-
-			if string(expectedJSON) != string(actualJSON) {
-				t.Errorf("ConvertNumericStringsAndArrays() JSON mismatch:\nGot JSON:      %s\nExpected JSON: %s\nGot struct:    %v\nExpected struct: %v", string(actualJSON), string(expectedJSON), result, tt.expected)
-			}
-		})
-	}
-}
 
 func TestConvertNumericStrings(t *testing.T) {
 	tests := []struct {

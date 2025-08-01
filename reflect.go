@@ -279,7 +279,7 @@ func flattenIf(input any, prefix string) map[string]string {
 	return res
 }
 
-// Recursively convert a map[string]string to a map[string]any
+// Recursively convert a map[string]string to a map[string]any with array conversion and numeric conversion
 func UnflattenInterface(flatMap map[string]string) map[string]any {
 	result := make(map[string]any)
 
@@ -288,41 +288,21 @@ func UnflattenInterface(flatMap map[string]string) map[string]any {
 		nestMap(result, keys, value)
 	}
 
-	return convertMapsToArraysRecursively(result)
+	// Check if the root result should be converted to an array
+	if shouldConvertToArray(result) {
+		// Return a wrapper map containing the array since this function returns map[string]any
+		arrayResult := convertMapToArrayWithNumericConversion(result)
+		return map[string]any{"__array_root": arrayResult}
+	}
+
+	return convertMapsToArraysAndNumericStrings(result)
 }
 
-// convertMapsToArraysRecursively converts maps with numeric sequential keys to arrays
-func convertMapsToArraysRecursively(input map[string]any) map[string]any {
+// convertMapsToArraysAndNumericStrings combines array conversion and numeric string conversion
+func convertMapsToArraysAndNumericStrings(input map[string]any) map[string]any {
 	result := make(map[string]any)
 	
 	for key, value := range input {
-		switch v := value.(type) {
-		case map[string]any:
-			// Check if this map should be converted to an array
-			if shouldConvertToArray(v) {
-				result[key] = convertMapToArray(v)
-			} else {
-				// Recursively process nested maps
-				result[key] = convertMapsToArraysRecursively(v)
-			}
-		default:
-			result[key] = value
-		}
-	}
-	
-	return result
-}
-
-// ConvertNumericStringsAndArrays recursively converts numeric strings to numbers and maps with numeric keys to arrays
-func ConvertNumericStringsAndArrays(data map[string]any) any {
-	// Check if this map should be converted to an array
-	if shouldConvertToArray(data) {
-		return convertMapToArray(data)
-	}
-	
-	result := make(map[string]any)
-	
-	for key, value := range data {
 		switch v := value.(type) {
 		case string:
 			// Try to convert numeric strings to numbers
@@ -334,8 +314,13 @@ func ConvertNumericStringsAndArrays(data map[string]any) any {
 				result[key] = v
 			}
 		case map[string]any:
-			// Recursively process nested maps
-			result[key] = ConvertNumericStringsAndArrays(v)
+			// Check if this nested map should be converted to an array
+			if shouldConvertToArray(v) {
+				result[key] = convertMapToArrayWithNumericConversion(v)
+			} else {
+				// Recursively process nested maps
+				result[key] = convertMapsToArraysAndNumericStrings(v)
+			}
 		default:
 			result[key] = v
 		}
@@ -343,6 +328,38 @@ func ConvertNumericStringsAndArrays(data map[string]any) any {
 	
 	return result
 }
+
+// convertMapToArrayWithNumericConversion converts a map with numeric keys to an array with numeric conversion
+func convertMapToArrayWithNumericConversion(m map[string]any) []any {
+	result := make([]any, len(m))
+	
+	for key, value := range m {
+		index, _ := strconv.Atoi(key)
+		switch v := value.(type) {
+		case string:
+			// Try to convert numeric strings to numbers
+			if num, err := strconv.Atoi(v); err == nil {
+				result[index] = num
+			} else if floatNum, err := strconv.ParseFloat(v, 64); err == nil {
+				result[index] = floatNum
+			} else {
+				result[index] = v
+			}
+		case map[string]any:
+			// Recursively process nested structures
+			if shouldConvertToArray(v) {
+				result[index] = convertMapToArrayWithNumericConversion(v)
+			} else {
+				result[index] = convertMapsToArraysAndNumericStrings(v)
+			}
+		default:
+			result[index] = value
+		}
+	}
+	
+	return result
+}
+
 
 // shouldConvertToArray checks if a map should be converted to an array
 func shouldConvertToArray(m map[string]any) bool {
@@ -392,22 +409,9 @@ func isNumericSequence(keys []string) bool {
 	return true
 }
 
-// convertMapToArray converts a map with numeric keys to an array
+// convertMapToArray converts a map with numeric keys to an array (kept for backward compatibility)
 func convertMapToArray(m map[string]any) []any {
-	result := make([]any, len(m))
-	
-	for key, value := range m {
-		index, _ := strconv.Atoi(key)
-		switch v := value.(type) {
-		case map[string]any:
-			// Use ConvertNumericStringsAndArrays to handle both arrays and numeric conversion
-			result[index] = ConvertNumericStringsAndArrays(v)
-		default:
-			result[index] = value
-		}
-	}
-	
-	return result
+	return convertMapToArrayWithNumericConversion(m)
 }
 
 // A helper to set values for nested keys

@@ -200,13 +200,16 @@ func ConvertBodyToJson(data map[string]string) error {
 
 	if len(bodyData) > 0 {
 		// Note: Expression expansion should already be done by this point
-		// Just restore nested structure from flat keys and convert to arrays
+		// UnflattenInterface now handles both array conversion and numeric conversion
 		unflattenedData := probe.UnflattenInterface(bodyData)
 
-		// Convert numeric strings to numbers and maps with numeric keys to arrays
-		convertedData := probe.ConvertNumericStringsAndArrays(unflattenedData)
+		// Check if the result is a root array (indicated by __array_root key)
+		var dataToMarshal any = unflattenedData
+		if arrayRoot, ok := unflattenedData["__array_root"]; ok {
+			dataToMarshal = arrayRoot
+		}
 
-		j, err := json.Marshal(convertedData)
+		j, err := json.Marshal(dataToMarshal)
 		if err != nil {
 			return err
 		}
