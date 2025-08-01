@@ -409,10 +409,6 @@ func isNumericSequence(keys []string) bool {
 	return true
 }
 
-// convertMapToArray converts a map with numeric keys to an array (kept for backward compatibility)
-func convertMapToArray(m map[string]any) []any {
-	return convertMapToArrayWithNumericConversion(m)
-}
 
 // A helper to set values for nested keys
 func nestMap(m map[string]any, keys []string, value string) {
