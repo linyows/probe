@@ -77,13 +77,35 @@ func TestConvertBodyToJson(t *testing.T) {
 			hasBody:  true,
 		},
 		{
+			name: "array structure",
+			input: map[string]string{
+				"body__0__foo": "1",
+				"body__0__bar": "2",
+				"body__0__baz": "3",
+				"method":       "POST",
+			},
+			expected: `[{"bar":2,"baz":3,"foo":1}]`,
+			hasBody:  true,
+		},
+		{
+			name: "multiple array items",
+			input: map[string]string{
+				"body__0__name": "item1",
+				"body__1__name": "item2",
+				"body__2__name": "item3",
+				"method":        "POST",
+			},
+			expected: `[{"name":"item1"},{"name":"item2"},{"name":"item3"}]`,
+			hasBody:  true,
+		},
+		{
 			name: "deeply nested structure",
 			input: map[string]string{
 				"body__user__profile__name":    "John",
 				"body__user__profile__age":     "30",
 				"body__user__settings__theme":  "dark",
 				"body__user__settings__notify": "true",
-				"method": "POST",
+				"method":                       "POST",
 			},
 			expected: `{"user":{"profile":{"age":30,"name":"John"},"settings":{"notify":"true","theme":"dark"}}}`,
 			hasBody:  true,
@@ -143,12 +165,12 @@ func TestConvertBodyToJson(t *testing.T) {
 
 				// Parse both JSON strings to compare structure, not formatting
 				var expectedJSON, actualJSON interface{}
-				
+
 				if err := json.Unmarshal([]byte(tt.expected), &expectedJSON); err != nil {
 					t.Errorf("failed to parse expected JSON: %v", err)
 					return
 				}
-				
+
 				if err := json.Unmarshal([]byte(body), &actualJSON); err != nil {
 					t.Errorf("failed to parse actual JSON: %v", err)
 					return
@@ -156,7 +178,7 @@ func TestConvertBodyToJson(t *testing.T) {
 
 				expectedBytes, _ := json.Marshal(expectedJSON)
 				actualBytes, _ := json.Marshal(actualJSON)
-				
+
 				if string(expectedBytes) != string(actualBytes) {
 					t.Errorf("ConvertBodyToJson() body = %v, want %v", body, tt.expected)
 				}
@@ -171,6 +193,64 @@ func TestConvertBodyToJson(t *testing.T) {
 				if _, exists := data["body"]; exists {
 					t.Errorf("expected no body key when hasBody is false")
 				}
+			}
+		})
+	}
+}
+
+func TestConvertNumericStringsAndArrays(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    map[string]any
+		expected any
+	}{
+		{
+			name: "convert map to array",
+			input: map[string]any{
+				"0": map[string]any{"foo": "1", "bar": "2"},
+				"1": map[string]any{"name": "test"},
+			},
+			expected: []any{
+				map[string]any{"foo": 1, "bar": 2},
+				map[string]any{"name": "test"},
+			},
+		},
+		{
+			name: "nested arrays",
+			input: map[string]any{
+				"0": map[string]any{
+					"items": map[string]any{"0": "item1", "1": "item2"},
+				},
+			},
+			expected: []any{
+				map[string]any{
+					"items": []any{"item1", "item2"},
+				},
+			},
+		},
+		{
+			name: "regular map (no conversion)",
+			input: map[string]any{
+				"name": "test",
+				"age":  "25",
+			},
+			expected: map[string]any{
+				"name": "test",
+				"age":  25,
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := ConvertNumericStringsAndArrays(tt.input)
+
+			// Convert to JSON for easy comparison
+			expectedJSON, _ := json.Marshal(tt.expected)
+			actualJSON, _ := json.Marshal(result)
+
+			if string(expectedJSON) != string(actualJSON) {
+				t.Errorf("ConvertNumericStringsAndArrays() = %v, want %v", result, tt.expected)
 			}
 		})
 	}
@@ -251,11 +331,11 @@ func TestConvertNumericStrings(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := ConvertNumericStrings(tt.input)
-			
+
 			// Convert to JSON for easy comparison
 			expectedJSON, _ := json.Marshal(tt.expected)
 			actualJSON, _ := json.Marshal(result)
-			
+
 			if string(expectedJSON) != string(actualJSON) {
 				t.Errorf("ConvertNumericStrings() = %v, want %v", result, tt.expected)
 			}
