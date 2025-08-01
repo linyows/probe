@@ -59,6 +59,40 @@ func TestUpdateMapWithNestedBody(t *testing.T) {
 				"headers__content-type": "application/x-www-form-urlencoded",
 			},
 		},
+		{
+			name: "array body with application/json content-type",
+			input: map[string]string{
+				"method":                     "POST",
+				"url":                        "http://example.com",
+				"headers__content-type":      "application/json",
+				"body__0__foo":               "1",
+				"body__0__bar":               "2",
+				"body__0__baz":               "3",
+			},
+			expected: map[string]string{
+				"method":                "POST",
+				"url":                   "http://example.com", 
+				"headers__content-type": "application/json",
+				"body":                  `[{"bar":2,"baz":3,"foo":1}]`,
+			},
+		},
+		{
+			name: "multiple array items with application/json content-type",
+			input: map[string]string{
+				"method":                "POST",
+				"url":                   "http://example.com",
+				"headers__content-type": "application/json",
+				"body__0__name":         "item1",
+				"body__1__name":         "item2",
+				"body__2__name":         "item3",
+			},
+			expected: map[string]string{
+				"method":                "POST",
+				"url":                   "http://example.com",
+				"headers__content-type": "application/json",
+				"body":                  `[{"name":"item1"},{"name":"item2"},{"name":"item3"}]`,
+			},
+		},
 	}
 
 	for _, tt := range tests {

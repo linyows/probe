@@ -77,6 +77,28 @@ func TestConvertBodyToJson(t *testing.T) {
 			hasBody:  true,
 		},
 		{
+			name: "array structure",
+			input: map[string]string{
+				"body__0__foo": "1",
+				"body__0__bar": "2",
+				"body__0__baz": "3",
+				"method":       "POST",
+			},
+			expected: `[{"bar":2,"baz":3,"foo":1}]`,
+			hasBody:  true,
+		},
+		{
+			name: "multiple array items",
+			input: map[string]string{
+				"body__0__name": "item1",
+				"body__1__name": "item2",
+				"body__2__name": "item3",
+				"method":        "POST",
+			},
+			expected: `[{"name":"item1"},{"name":"item2"},{"name":"item3"}]`,
+			hasBody:  true,
+		},
+		{
 			name: "deeply nested structure",
 			input: map[string]string{
 				"body__user__profile__name":    "John",
@@ -171,6 +193,66 @@ func TestConvertBodyToJson(t *testing.T) {
 				if _, exists := data["body"]; exists {
 					t.Errorf("expected no body key when hasBody is false")
 				}
+			}
+		})
+	}
+}
+
+func TestConvertNumericStringsInArray(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    []any
+		expected []any
+	}{
+		{
+			name: "convert integers in array",
+			input: []any{
+				map[string]any{"age": "25", "name": "test"},
+				map[string]any{"age": "30", "name": "test2"},
+			},
+			expected: []any{
+				map[string]any{"age": 25, "name": "test"},
+				map[string]any{"age": 30, "name": "test2"},
+			},
+		},
+		{
+			name: "nested arrays",
+			input: []any{
+				[]any{"1", "2", "3"},
+				[]any{"4", "5", "6"},
+			},
+			expected: []any{
+				[]any{1, 2, 3},
+				[]any{4, 5, 6},
+			},
+		},
+		{
+			name: "mixed types in array",
+			input: []any{
+				"text",
+				"123",
+				"45.67",
+				map[string]any{"count": "99"},
+			},
+			expected: []any{
+				"text",
+				123,
+				45.67,
+				map[string]any{"count": 99},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := ConvertNumericStringsInArray(tt.input)
+			
+			// Convert to JSON for easy comparison
+			expectedJSON, _ := json.Marshal(tt.expected)
+			actualJSON, _ := json.Marshal(result)
+			
+			if string(expectedJSON) != string(actualJSON) {
+				t.Errorf("ConvertNumericStringsInArray() = %v, want %v", result, tt.expected)
 			}
 		})
 	}

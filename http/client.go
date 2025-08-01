@@ -185,7 +185,7 @@ func WithAfter(f func(res *hp.Response)) Option {
 	}
 }
 
-// ConvertBodyToJson converts flat body data to properly nested JSON structure
+// ConvertBodyToJson converts flat body data to properly nested JSON structure with array support
 func ConvertBodyToJson(data map[string]string) error {
 	bodyData := map[string]string{}
 
@@ -199,11 +199,18 @@ func ConvertBodyToJson(data map[string]string) error {
 	}
 
 	if len(bodyData) > 0 {
-		// Use UnflattenInterface to restore nested structure from flat keys
-		unflattenedData := probe.UnflattenInterface(bodyData)
+		// Use UnflattenInterfaceToAny to restore nested structure with array support
+		unflattenedData := probe.UnflattenInterfaceToAny(bodyData)
 		
 		// Convert numeric strings to numbers for better JSON representation
-		convertedData := ConvertNumericStrings(unflattenedData)
+		var convertedData any
+		if mapData, ok := unflattenedData.(map[string]any); ok {
+			convertedData = ConvertNumericStrings(mapData)
+		} else if arrData, ok := unflattenedData.([]any); ok {
+			convertedData = ConvertNumericStringsInArray(arrData)
+		} else {
+			convertedData = unflattenedData
+		}
 		
 		j, err := json.Marshal(convertedData)
 		if err != nil {
@@ -233,8 +240,40 @@ func ConvertNumericStrings(data map[string]any) map[string]any {
 		case map[string]any:
 			// Recursively process nested maps
 			result[key] = ConvertNumericStrings(v)
+		case []any:
+			// Recursively process arrays
+			result[key] = ConvertNumericStringsInArray(v)
 		default:
 			result[key] = v
+		}
+	}
+	
+	return result
+}
+
+// ConvertNumericStringsInArray recursively converts numeric strings to numbers in arrays
+func ConvertNumericStringsInArray(data []any) []any {
+	result := make([]any, len(data))
+	
+	for i, value := range data {
+		switch v := value.(type) {
+		case string:
+			// Try to convert numeric strings to numbers
+			if num, err := strconv.Atoi(v); err == nil {
+				result[i] = num
+			} else if floatNum, err := strconv.ParseFloat(v, 64); err == nil {
+				result[i] = floatNum
+			} else {
+				result[i] = v
+			}
+		case map[string]any:
+			// Recursively process nested maps
+			result[i] = ConvertNumericStrings(v)
+		case []any:
+			// Recursively process nested arrays
+			result[i] = ConvertNumericStringsInArray(v)
+		default:
+			result[i] = v
 		}
 	}
 	

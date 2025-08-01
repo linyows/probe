@@ -279,20 +279,37 @@ func flattenIf(input any, prefix string) map[string]string {
 	return res
 }
 
-// Recursively convert a map[string]string to a map[string]any
+// Recursively convert a map[string]string to a map[string]any with array detection
 func UnflattenInterface(flatMap map[string]string) map[string]any {
 	result := make(map[string]any)
 
 	for key, value := range flatMap {
 		keys := strings.Split(key, flatkey)
-		nestMap(result, keys, value)
+		nestMapWithArrayDetection(result, keys, value)
 	}
 
-	return result
+	return convertMapsToArraysRecursively(result)
 }
 
-// A helper to set values for nested keys
-func nestMap(m map[string]any, keys []string, value string) {
+// UnflattenInterfaceToAny converts a flat map to any type, allowing for root-level arrays
+func UnflattenInterfaceToAny(flatMap map[string]string) any {
+	result := make(map[string]any)
+
+	for key, value := range flatMap {
+		keys := strings.Split(key, flatkey)
+		nestMapWithArrayDetection(result, keys, value)
+	}
+
+	// Check if the root level should be an array
+	if shouldConvertToArray(result) {
+		return convertMapToArray(result)
+	}
+
+	return convertMapsToArraysRecursively(result)
+}
+
+// A helper to set values for nested keys with array detection
+func nestMapWithArrayDetection(m map[string]any, keys []string, value string) {
 	if len(keys) == 1 {
 		// when it is the last key, set the value
 		if intValue, err := strconv.Atoi(value); err == nil {
@@ -305,9 +322,108 @@ func nestMap(m map[string]any, keys []string, value string) {
 		if _, exists := m[keys[0]]; !exists {
 			m[keys[0]] = make(map[string]any)
 		}
+		
 		// recursively set the next nested map
-		nestMap(m[keys[0]].(map[string]any), keys[1:], value)
+		if nestedMap, ok := m[keys[0]].(map[string]any); ok {
+			nestMapWithArrayDetection(nestedMap, keys[1:], value)
+		}
 	}
+}
+
+// A helper to set values for nested keys (legacy version for backward compatibility)
+func nestMap(m map[string]any, keys []string, value string) {
+	nestMapWithArrayDetection(m, keys, value)
+}
+
+// convertMapsToArraysRecursively converts maps with numeric sequential keys to arrays
+func convertMapsToArraysRecursively(input map[string]any) map[string]any {
+	result := make(map[string]any)
+	
+	for key, value := range input {
+		switch v := value.(type) {
+		case map[string]any:
+			// Check if this map should be converted to an array
+			if shouldConvertToArray(v) {
+				result[key] = convertMapToArray(v)
+			} else {
+				// Recursively process nested maps
+				result[key] = convertMapsToArraysRecursively(v)
+			}
+		default:
+			result[key] = value
+		}
+	}
+	
+	return result
+}
+
+// shouldConvertToArray checks if a map should be converted to an array
+func shouldConvertToArray(m map[string]any) bool {
+	if len(m) == 0 {
+		return false
+	}
+	
+	// Check if all keys are numeric and form a complete sequence from 0 to len-1
+	keys := make([]string, 0, len(m))
+	for key := range m {
+		keys = append(keys, key)
+	}
+	
+	return isNumericSequence(keys)
+}
+
+// isNumericSequence checks if the keys form a numeric sequence starting from 0
+func isNumericSequence(keys []string) bool {
+	if len(keys) == 0 {
+		return false
+	}
+	
+	// Convert all keys to integers and check if they form a sequence
+	nums := make([]int, len(keys))
+	for i, key := range keys {
+		num, err := strconv.Atoi(key)
+		if err != nil {
+			return false
+		}
+		nums[i] = num
+	}
+	
+	// Check if it's a complete sequence from 0 to len-1
+	for i := 0; i < len(nums); i++ {
+		found := false
+		for _, num := range nums {
+			if num == i {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return false
+		}
+	}
+	
+	return true
+}
+
+// convertMapToArray converts a map with numeric keys to an array
+func convertMapToArray(m map[string]any) []any {
+	result := make([]any, len(m))
+	
+	for key, value := range m {
+		index, _ := strconv.Atoi(key)
+		switch v := value.(type) {
+		case map[string]any:
+			if shouldConvertToArray(v) {
+				result[index] = convertMapToArray(v)
+			} else {
+				result[index] = convertMapsToArraysRecursively(v)
+			}
+		default:
+			result[index] = value
+		}
+	}
+	
+	return result
 }
 
 func mustMarshalJSON(st string) map[string]any {
