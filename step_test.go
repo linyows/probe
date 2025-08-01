@@ -201,6 +201,75 @@ func TestStep_handleWait(t *testing.T) {
 	}
 }
 
+func TestStep_SkipIfWithWaitTiming(t *testing.T) {
+	tests := []struct {
+		name           string
+		wait           string
+		skipif         string
+		expectSkip     bool
+		maxDuration    time.Duration
+		minDuration    time.Duration
+	}{
+		{
+			name:        "skipped step with wait should not wait",
+			wait:        "1s",
+			skipif:      "true",
+			expectSkip:  true,
+			maxDuration: 50 * time.Millisecond, // Should be very fast since no wait
+			minDuration: 0,
+		},
+		{
+			name:        "non-skipped step with wait should wait",
+			wait:        "100ms",
+			skipif:      "false",
+			expectSkip:  false,
+			maxDuration: 200 * time.Millisecond, // Allow some overhead
+			minDuration: 80 * time.Millisecond,  // Should wait at least this long
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			step := &Step{
+				Name:   "Test Step",
+				Uses:   "hello",
+				Wait:   tt.wait,
+				SkipIf: tt.skipif,
+				expr:   &Expr{},
+			}
+
+			jCtx := &JobContext{
+				Printer: NewPrinter(false, []string{}), // Silent printer
+				Config:  Config{},
+			}
+
+			start := time.Now()
+			name, shouldContinue := step.prepare(jCtx)
+			duration := time.Since(start)
+
+			// Check skip behavior
+			if tt.expectSkip && shouldContinue {
+				t.Errorf("Expected step to be skipped (shouldContinue=false), got shouldContinue=%v", shouldContinue)
+			}
+			if !tt.expectSkip && !shouldContinue {
+				t.Errorf("Expected step to continue (shouldContinue=true), got shouldContinue=%v", shouldContinue)
+			}
+
+			// Check timing
+			if duration > tt.maxDuration {
+				t.Errorf("Expected duration <= %v, got %v", tt.maxDuration, duration)
+			}
+			if duration < tt.minDuration {
+				t.Errorf("Expected duration >= %v, got %v", tt.minDuration, duration)
+			}
+
+			if name != "Test Step" {
+				t.Errorf("Expected step name 'Test Step', got %v", name)
+			}
+		})
+	}
+}
+
 func TestStep_shouldSkip(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -458,6 +527,15 @@ func TestStep_prepare(t *testing.T) {
 			skipCondition:  map[string]any{"env": "prod"},
 			expectName:     "Conditional Step",
 			expectContinue: true,
+			expectError:    false,
+		},
+		{
+			name:           "skipped step with wait should not wait",
+			stepName:       "Skipped Wait Step",
+			wait:           "2s",
+			skipif:         "true",
+			expectName:     "Skipped Wait Step",
+			expectContinue: false,
 			expectError:    false,
 		},
 	}
