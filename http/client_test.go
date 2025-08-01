@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/jarcoal/httpmock"
+	"github.com/linyows/probe"
 )
 
 func TestNewReq(t *testing.T) {
@@ -243,14 +244,14 @@ func TestConvertNumericStringsAndArrays(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := ConvertNumericStringsAndArrays(tt.input)
+			result := probe.ConvertNumericStringsAndArrays(tt.input)
 
 			// Convert to JSON for easy comparison
 			expectedJSON, _ := json.Marshal(tt.expected)
 			actualJSON, _ := json.Marshal(result)
 
 			if string(expectedJSON) != string(actualJSON) {
-				t.Errorf("ConvertNumericStringsAndArrays() = %v, want %v", result, tt.expected)
+				t.Errorf("ConvertNumericStringsAndArrays() JSON mismatch:\nGot JSON:      %s\nExpected JSON: %s\nGot struct:    %v\nExpected struct: %v", string(actualJSON), string(expectedJSON), result, tt.expected)
 			}
 		})
 	}
