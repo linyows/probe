@@ -91,7 +91,7 @@ func updateMap(data map[string]string) error {
 	}
 	v, exists := data["headers__content-type"]
 	if exists && v == "application/json" {
-		if err = http.ConvertBodyToJson(data); err != nil {
+		if err = probe.ConvertBodyToJson(data); err != nil {
 			return err
 		}
 	} else {
