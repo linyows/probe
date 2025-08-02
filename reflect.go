@@ -482,6 +482,10 @@ func EnvMap() map[string]string {
 
 // AnyToString attempts to convert any type to a string.
 func AnyToString(value any) (string, bool) {
+	if value == nil {
+		return "nil", true
+	}
+	
 	switch v := value.(type) {
 	case string:
 		return v, true
