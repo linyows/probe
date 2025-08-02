@@ -8,16 +8,22 @@ import (
 	"strings"
 )
 
+const (
+	tagMap        = "map"
+	tagValidate   = "validate"
+	labelRequired = "required"
+)
 
 // MergeStringMaps merges two string maps, where values from 'over' override values from 'base'.
 // Only string values from 'over' are included; non-string values are ignored.
 //
 // Example:
-//   base := map[string]string{"a": "1", "b": "2"}
-//   over := map[string]any{"b": "overridden", "c": "3", "d": 123}
-//   result := MergeStringMaps(base, over)
-//   // result: map[string]string{"a": "1", "b": "overridden", "c": "3"}
-//   // Note: "d": 123 is ignored because it's not a string
+//
+//	base := map[string]string{"a": "1", "b": "2"}
+//	over := map[string]any{"b": "overridden", "c": "3", "d": 123}
+//	result := MergeStringMaps(base, over)
+//	// result: map[string]string{"a": "1", "b": "overridden", "c": "3"}
+//	// Note: "d": 123 is ignored because it's not a string
 func MergeStringMaps(base map[string]string, over map[string]any) map[string]string {
 	res := make(map[string]string)
 
@@ -39,20 +45,21 @@ func MergeStringMaps(base map[string]string, over map[string]any) map[string]str
 // Nested maps are merged recursively, preserving data from both maps.
 //
 // Example:
-//   base := map[string]any{
-//     "a": 1,
-//     "nested": map[string]any{"x": 1, "y": 2},
-//   }
-//   over := map[string]any{
-//     "nested": map[string]any{"y": 3, "z": 4},
-//     "c": 5,
-//   }
-//   result := MergeMaps(base, over)
-//   // result: map[string]any{
-//   //   "a": 1,
-//   //   "nested": map[string]any{"x": 1, "y": 3, "z": 4},
-//   //   "c": 5,
-//   // }
+//
+//	base := map[string]any{
+//	  "a": 1,
+//	  "nested": map[string]any{"x": 1, "y": 2},
+//	}
+//	over := map[string]any{
+//	  "nested": map[string]any{"y": 3, "z": 4},
+//	  "c": 5,
+//	}
+//	result := MergeMaps(base, over)
+//	// result: map[string]any{
+//	//   "a": 1,
+//	//   "nested": map[string]any{"x": 1, "y": 3, "z": 4},
+//	//   "c": 5,
+//	// }
 func MergeMaps(base, over map[string]any) map[string]any {
 	merged := make(map[string]any)
 
@@ -84,21 +91,22 @@ func MergeMaps(base, over map[string]any) map[string]any {
 // Supports nested structs, []byte fields, and map[string]string fields.
 //
 // Example:
-//   type User struct {
-//     Name     string            `map:"name" validate:"required"`
-//     Age      int               `map:"age"`
-//     Metadata map[string]string `map:"metadata"`
-//   }
-//   
-//   params := map[string]any{
-//     "name": "John",
-//     "age": 30,
-//     "metadata": map[string]any{"role": "admin", "dept": "IT"},
-//   }
-//   
-//   var user User
-//   err := MapToStructByTags(params, &user)
-//   // user.Name = "John", user.Age = 30, user.Metadata = {"role": "admin", "dept": "IT"}
+//
+//	type User struct {
+//	  Name     string            `map:"name" validate:"required"`
+//	  Age      int               `map:"age"`
+//	  Metadata map[string]string `map:"metadata"`
+//	}
+//
+//	params := map[string]any{
+//	  "name": "John",
+//	  "age": 30,
+//	  "metadata": map[string]any{"role": "admin", "dept": "IT"},
+//	}
+//
+//	var user User
+//	err := MapToStructByTags(params, &user)
+//	// user.Name = "John", user.Age = 30, user.Metadata = {"role": "admin", "dept": "IT"}
 func MapToStructByTags(params map[string]any, dest any) error {
 
 	val := reflect.ValueOf(dest).Elem()
@@ -173,24 +181,25 @@ func MapToStructByTags(params map[string]any, dest any) error {
 // This is the inverse operation of MapToStructByTags.
 //
 // Example:
-//   type User struct {
-//     Name     string            `map:"name"`
-//     Age      int               `map:"age"`
-//     Metadata map[string]string `map:"metadata"`
-//   }
-//   
-//   user := User{
-//     Name: "John",
-//     Age: 30,
-//     Metadata: map[string]string{"role": "admin", "dept": "IT"},
-//   }
-//   
-//   result, err := StructToMapByTags(user)
-//   // result: map[string]any{
-//   //   "name": "John",
-//   //   "age": 30,
-//   //   "metadata": map[string]string{"role": "admin", "dept": "IT"},
-//   // }
+//
+//	type User struct {
+//	  Name     string            `map:"name"`
+//	  Age      int               `map:"age"`
+//	  Metadata map[string]string `map:"metadata"`
+//	}
+//
+//	user := User{
+//	  Name: "John",
+//	  Age: 30,
+//	  Metadata: map[string]string{"role": "admin", "dept": "IT"},
+//	}
+//
+//	result, err := StructToMapByTags(user)
+//	// result: map[string]any{
+//	//   "name": "John",
+//	//   "age": 30,
+//	//   "metadata": map[string]string{"role": "admin", "dept": "IT"},
+//	// }
 func StructToMapByTags(src any) (map[string]any, error) {
 	result := make(map[string]any)
 
@@ -244,15 +253,16 @@ func StructToMapByTags(src any) (map[string]any, error) {
 // Supports string and int fields with validation. Used for legacy action parameter assignment.
 //
 // Example:
-//   type Config struct {
-//     Name    string `map:"name" validate:"required"`
-//     Timeout int    `map:"timeout"`
-//   }
-//   
-//   params := ActionsParams{"name": "test", "timeout": "30"}
-//   var config Config
-//   err := AssignStruct(params, &config)
-//   // config.Name = "test", config.Timeout = 30
+//
+//	type Config struct {
+//	  Name    string `map:"name" validate:"required"`
+//	  Timeout int    `map:"timeout"`
+//	}
+//
+//	params := ActionsParams{"name": "test", "timeout": "30"}
+//	var config Config
+//	err := AssignStruct(params, &config)
+//	// config.Name = "test", config.Timeout = 30
 func AssignStruct(pa ActionsParams, st any) error {
 	v := reflect.ValueOf(st).Elem()
 	t := v.Type()
@@ -302,9 +312,10 @@ func AssignStruct(pa ActionsParams, st any) error {
 // This is a simple type conversion utility function.
 //
 // Example:
-//   input := map[string]string{"name": "John", "age": "30"}
-//   result := StrmapToAnymap(input)
-//   // result: map[string]any{"name": "John", "age": "30"}
+//
+//	input := map[string]string{"name": "John", "age": "30"}
+//	result := StrmapToAnymap(input)
+//	// result: map[string]any{"name": "John", "age": "30"}
 func StrmapToAnymap(strmap map[string]string) map[string]any {
 	anymap := make(map[string]any)
 	for k, v := range strmap {
@@ -317,20 +328,21 @@ func StrmapToAnymap(strmap map[string]string) map[string]any {
 // This function ensures all header values are strings, converting numbers and other types as needed.
 //
 // Example:
-//   data := map[string]any{
-//     "headers": map[string]any{
-//       "Content-Length": 1024,
-//       "X-Rate-Limit": 100.5,
-//       "Authorization": "Bearer token",
-//     },
-//   }
-//   
-//   result := HeaderToStringValue(data)
-//   // result["headers"] = map[string]any{
-//   //   "Content-Length": "1024",
-//   //   "X-Rate-Limit": "100.5", 
-//   //   "Authorization": "Bearer token",
-//   // }
+//
+//	data := map[string]any{
+//	  "headers": map[string]any{
+//	    "Content-Length": 1024,
+//	    "X-Rate-Limit": 100.5,
+//	    "Authorization": "Bearer token",
+//	  },
+//	}
+//
+//	result := HeaderToStringValue(data)
+//	// result["headers"] = map[string]any{
+//	//   "Content-Length": "1024",
+//	//   "X-Rate-Limit": "100.5",
+//	//   "Authorization": "Bearer token",
+//	// }
 func HeaderToStringValue(data map[string]any) map[string]any {
 	v, exists := data["headers"]
 	if !exists {
@@ -364,16 +376,17 @@ func HeaderToStringValue(data map[string]any) map[string]any {
 // Returns the string representation and a boolean indicating success.
 //
 // Example:
-//   str, ok := AnyToString(42)        // "42", true
-//   str, ok := AnyToString(3.14)      // "3.14", true  
-//   str, ok := AnyToString("hello")   // "hello", true
-//   str, ok := AnyToString(nil)       // "nil", true
-//   str, ok := AnyToString([]int{1})  // "", false
+//
+//	str, ok := AnyToString(42)        // "42", true
+//	str, ok := AnyToString(3.14)      // "3.14", true
+//	str, ok := AnyToString("hello")   // "hello", true
+//	str, ok := AnyToString(nil)       // "nil", true
+//	str, ok := AnyToString([]int{1})  // "", false
 func AnyToString(value any) (string, bool) {
 	if value == nil {
 		return "nil", true
 	}
-	
+
 	switch v := value.(type) {
 	case string:
 		return v, true
@@ -401,9 +414,10 @@ func AnyToString(value any) (string, bool) {
 // Each environment variable is parsed from "KEY=VALUE" format.
 //
 // Example:
-//   env := EnvMap()
-//   // env contains all environment variables like:
-//   // {"PATH": "/usr/bin:/bin", "HOME": "/home/user", "USER": "username", ...}
+//
+//	env := EnvMap()
+//	// env contains all environment variables like:
+//	// {"PATH": "/usr/bin:/bin", "HOME": "/home/user", "USER": "username", ...}
 func EnvMap() map[string]string {
 	env := make(map[string]string)
 	for _, v := range os.Environ() {
@@ -419,9 +433,10 @@ func EnvMap() map[string]string {
 // Each part separated by the character has its first letter capitalized.
 //
 // Example:
-//   TitleCase("content-type", "-")     // "Content-Type"
-//   TitleCase("user_name", "_")        // "User_Name"
-//   TitleCase("hello-world-test", "-") // "Hello-World-Test"
+//
+//	TitleCase("content-type", "-")     // "Content-Type"
+//	TitleCase("user_name", "_")        // "User_Name"
+//	TitleCase("hello-world-test", "-") // "Hello-World-Test"
 func TitleCase(st string, char string) string {
 	parts := strings.Split(st, char)
 	for i, part := range parts {

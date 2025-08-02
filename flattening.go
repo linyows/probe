@@ -8,26 +8,30 @@ import (
 	"strings"
 )
 
+const (
+	flatkey = "__"
+)
 
 // FlattenInterface recursively flattens a nested data structure into a flat map[string]string.
 // Nested keys are separated by "__" (double underscore). Arrays and slices use numeric indices.
 //
 // Example:
-//   input := map[string]any{
-//     "user": map[string]any{
-//       "name": "John",
-//       "tags": []string{"admin", "user"},
-//     },
-//     "count": 42,
-//   }
-//   
-//   result := FlattenInterface(input)
-//   // result: map[string]string{
-//   //   "user__name": "John",
-//   //   "user__tags__0": "admin",
-//   //   "user__tags__1": "user",
-//   //   "count": "42",
-//   // }
+//
+//	input := map[string]any{
+//	  "user": map[string]any{
+//	    "name": "John",
+//	    "tags": []string{"admin", "user"},
+//	  },
+//	  "count": 42,
+//	}
+//
+//	result := FlattenInterface(input)
+//	// result: map[string]string{
+//	//   "user__name": "John",
+//	//   "user__tags__0": "admin",
+//	//   "user__tags__1": "user",
+//	//   "count": "42",
+//	// }
 func FlattenInterface(i any) map[string]string {
 	return flattenIf(i, "")
 }
@@ -89,23 +93,24 @@ func flattenIf(input any, prefix string) map[string]string {
 // - Nested structures using "__" separator
 //
 // Example:
-//   flatMap := map[string]string{
-//     "user__name": "John",
-//     "user__tags__0": "admin", 
-//     "user__tags__1": "user",
-//     "count": "42",
-//     "price": "19.99",
-//   }
-//   
-//   result := UnflattenInterface(flatMap)
-//   // result: map[string]any{
-//   //   "user": map[string]any{
-//   //     "name": "John",
-//   //     "tags": []any{"admin", "user"},
-//   //   },
-//   //   "count": 42,
-//   //   "price": 19.99,
-//   // }
+//
+//	flatMap := map[string]string{
+//	  "user__name": "John",
+//	  "user__tags__0": "admin",
+//	  "user__tags__1": "user",
+//	  "count": "42",
+//	  "price": "19.99",
+//	}
+//
+//	result := UnflattenInterface(flatMap)
+//	// result: map[string]any{
+//	//   "user": map[string]any{
+//	//     "name": "John",
+//	//     "tags": []any{"admin", "user"},
+//	//   },
+//	//   "count": 42,
+//	//   "price": 19.99,
+//	// }
 //
 // Special case: If the root level forms an array, returns {"__array_root": []any{...}}
 func UnflattenInterface(flatMap map[string]string) map[string]any {
@@ -134,7 +139,7 @@ func UnflattenInterface(flatMap map[string]string) map[string]any {
 // 2. Converts numeric strings to actual numbers (int or float64)
 func convertMapsToArraysAndNumericStrings(input map[string]any) map[string]any {
 	result := make(map[string]any)
-	
+
 	for key, value := range input {
 		switch v := value.(type) {
 		case string:
@@ -158,7 +163,7 @@ func convertMapsToArraysAndNumericStrings(input map[string]any) map[string]any {
 			result[key] = v
 		}
 	}
-	
+
 	return result
 }
 
@@ -166,21 +171,22 @@ func convertMapsToArraysAndNumericStrings(input map[string]any) map[string]any {
 // Also applies numeric string conversion to array elements recursively.
 //
 // Example:
-//   input := map[string]any{
-//     "0": map[string]any{"name": "item1", "count": "5"},
-//     "1": map[string]any{"0": "nested1", "1": "nested2"},
-//     "2": "42",
-//   }
-//   
-//   result := convertMapToArrayWithNumericConversion(input)
-//   // result: []any{
-//   //   map[string]any{"name": "item1", "count": 5},
-//   //   []any{"nested1", "nested2"},
-//   //   42,
-//   // }
+//
+//	input := map[string]any{
+//	  "0": map[string]any{"name": "item1", "count": "5"},
+//	  "1": map[string]any{"0": "nested1", "1": "nested2"},
+//	  "2": "42",
+//	}
+//
+//	result := convertMapToArrayWithNumericConversion(input)
+//	// result: []any{
+//	//   map[string]any{"name": "item1", "count": 5},
+//	//   []any{"nested1", "nested2"},
+//	//   42,
+//	// }
 func convertMapToArrayWithNumericConversion(m map[string]any) []any {
 	result := make([]any, len(m))
-	
+
 	for key, value := range m {
 		index, _ := strconv.Atoi(key)
 		switch v := value.(type) {
@@ -204,7 +210,7 @@ func convertMapToArrayWithNumericConversion(m map[string]any) []any {
 			result[index] = value
 		}
 	}
-	
+
 	return result
 }
 
@@ -212,20 +218,21 @@ func convertMapToArrayWithNumericConversion(m map[string]any) []any {
 // Returns true if all keys are numeric strings forming a complete sequence from 0 to len-1.
 //
 // Example:
-//   shouldConvertToArray(map[string]any{"0": "a", "1": "b", "2": "c"}) // true
-//   shouldConvertToArray(map[string]any{"0": "a", "2": "c"})           // false (missing 1)
-//   shouldConvertToArray(map[string]any{"a": "a", "b": "b"})           // false (non-numeric keys)
+//
+//	shouldConvertToArray(map[string]any{"0": "a", "1": "b", "2": "c"}) // true
+//	shouldConvertToArray(map[string]any{"0": "a", "2": "c"})           // false (missing 1)
+//	shouldConvertToArray(map[string]any{"a": "a", "b": "b"})           // false (non-numeric keys)
 func shouldConvertToArray(m map[string]any) bool {
 	if len(m) == 0 {
 		return false
 	}
-	
+
 	// Check if all keys are numeric and form a complete sequence from 0 to len-1
 	keys := make([]string, 0, len(m))
 	for key := range m {
 		keys = append(keys, key)
 	}
-	
+
 	return isNumericSequence(keys)
 }
 
@@ -233,15 +240,16 @@ func shouldConvertToArray(m map[string]any) bool {
 // Used by shouldConvertToArray to validate array conversion eligibility.
 //
 // Example:
-//   isNumericSequence([]string{"0", "1", "2"})    // true
-//   isNumericSequence([]string{"2", "0", "1"})    // true (order doesn't matter)
-//   isNumericSequence([]string{"0", "2", "3"})    // false (missing 1)
-//   isNumericSequence([]string{"a", "b", "c"})    // false (non-numeric)
+//
+//	isNumericSequence([]string{"0", "1", "2"})    // true
+//	isNumericSequence([]string{"2", "0", "1"})    // true (order doesn't matter)
+//	isNumericSequence([]string{"0", "2", "3"})    // false (missing 1)
+//	isNumericSequence([]string{"a", "b", "c"})    // false (non-numeric)
 func isNumericSequence(keys []string) bool {
 	if len(keys) == 0 {
 		return false
 	}
-	
+
 	// Convert all keys to integers and check if they form a sequence
 	nums := make([]int, len(keys))
 	for i, key := range keys {
@@ -251,7 +259,7 @@ func isNumericSequence(keys []string) bool {
 		}
 		nums[i] = num
 	}
-	
+
 	// Check if it's a complete sequence from 0 to len-1
 	for i := 0; i < len(nums); i++ {
 		found := false
@@ -265,7 +273,7 @@ func isNumericSequence(keys []string) bool {
 			return false
 		}
 	}
-	
+
 	return true
 }
 
@@ -273,9 +281,10 @@ func isNumericSequence(keys []string) bool {
 // Creates nested map structure based on key path and converts numeric strings to integers.
 //
 // Example:
-//   m := make(map[string]any)
-//   nestMap(m, []string{"user", "profile", "age"}, "30")
-//   // m becomes: {"user": {"profile": {"age": 30}}}
+//
+//	m := make(map[string]any)
+//	nestMap(m, []string{"user", "profile", "age"}, "30")
+//	// m becomes: {"user": {"profile": {"age": 30}}}
 func nestMap(m map[string]any, keys []string, value string) {
 	if len(keys) == 1 {
 		// when it is the last key, set the value
@@ -298,26 +307,27 @@ func nestMap(m map[string]any, keys []string, value string) {
 // This function processes maps and converts string values that represent numbers to actual numeric types.
 //
 // Example:
-//   input := map[string]any{
-//     "count": "42",
-//     "price": "19.99", 
-//     "name": "product",
-//     "nested": map[string]any{
-//       "quantity": "10",
-//       "available": "true",
-//     },
-//   }
-//   
-//   result := ConvertNumericStrings(input)
-//   // result: map[string]any{
-//   //   "count": 42,
-//   //   "price": 19.99,
-//   //   "name": "product",
-//   //   "nested": map[string]any{
-//   //     "quantity": 10,
-//   //     "available": "true", // non-numeric strings remain unchanged
-//   //   },
-//   // }
+//
+//	input := map[string]any{
+//	  "count": "42",
+//	  "price": "19.99",
+//	  "name": "product",
+//	  "nested": map[string]any{
+//	    "quantity": "10",
+//	    "available": "true",
+//	  },
+//	}
+//
+//	result := ConvertNumericStrings(input)
+//	// result: map[string]any{
+//	//   "count": 42,
+//	//   "price": 19.99,
+//	//   "name": "product",
+//	//   "nested": map[string]any{
+//	//     "quantity": 10,
+//	//     "available": "true", // non-numeric strings remain unchanged
+//	//   },
+//	// }
 func ConvertNumericStrings(data map[string]any) map[string]any {
 	result := make(map[string]any)
 
@@ -348,19 +358,20 @@ func ConvertNumericStrings(data map[string]any) map[string]any {
 // Supports both object and array structures based on key patterns.
 //
 // Example:
-//   data := map[string]string{
-//     "method": "POST",
-//     "body__name": "John",
-//     "body__tags__0": "admin",
-//     "body__tags__1": "user",
-//   }
-//   
-//   err := ConvertBodyToJson(data)
-//   // data becomes:
-//   // {
-//   //   "method": "POST",
-//   //   "body": `{"name":"John","tags":["admin","user"]}`,
-//   // }
+//
+//	data := map[string]string{
+//	  "method": "POST",
+//	  "body__name": "John",
+//	  "body__tags__0": "admin",
+//	  "body__tags__1": "user",
+//	}
+//
+//	err := ConvertBodyToJson(data)
+//	// data becomes:
+//	// {
+//	//   "method": "POST",
+//	//   "body": `{"name":"John","tags":["admin","user"]}`,
+//	// }
 func ConvertBodyToJson(data map[string]string) error {
 	bodyData := map[string]string{}
 

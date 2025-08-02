@@ -19,7 +19,6 @@ type TestEmbedStruct struct {
 	Name string `map:"name"`
 }
 
-
 func TestMapToStructByTags(t *testing.T) {
 	got := TestStruct{
 		String: "hello, world!",
@@ -89,21 +88,21 @@ func TestMergeStringMaps(t *testing.T) {
 		expected map[string]string
 	}{
 		{
-			name: "merge string values",
-			base: map[string]string{"a": "1", "b": "2"},
-			over: map[string]any{"b": "overridden", "c": "3"},
+			name:     "merge string values",
+			base:     map[string]string{"a": "1", "b": "2"},
+			over:     map[string]any{"b": "overridden", "c": "3"},
 			expected: map[string]string{"a": "1", "b": "overridden", "c": "3"},
 		},
 		{
-			name: "ignore non-string values",
-			base: map[string]string{"a": "1"},
-			over: map[string]any{"a": "overridden", "b": 123, "c": true},
+			name:     "ignore non-string values",
+			base:     map[string]string{"a": "1"},
+			over:     map[string]any{"a": "overridden", "b": 123, "c": true},
 			expected: map[string]string{"a": "overridden"},
 		},
 		{
-			name: "empty base map",
-			base: map[string]string{},
-			over: map[string]any{"a": "1", "b": "2"},
+			name:     "empty base map",
+			base:     map[string]string{},
+			over:     map[string]any{"a": "1", "b": "2"},
 			expected: map[string]string{"a": "1", "b": "2"},
 		},
 	}
@@ -126,31 +125,31 @@ func TestMergeMaps(t *testing.T) {
 		expected map[string]any
 	}{
 		{
-			name: "simple merge",
-			base: map[string]any{"a": 1, "b": 2},
-			over: map[string]any{"b": 3, "c": 4},
+			name:     "simple merge",
+			base:     map[string]any{"a": 1, "b": 2},
+			over:     map[string]any{"b": 3, "c": 4},
 			expected: map[string]any{"a": 1, "b": 3, "c": 4},
 		},
 		{
 			name: "recursive merge nested maps",
 			base: map[string]any{
-				"a": 1,
+				"a":      1,
 				"nested": map[string]any{"x": 1, "y": 2},
 			},
 			over: map[string]any{
 				"nested": map[string]any{"y": 3, "z": 4},
-				"c": 5,
+				"c":      5,
 			},
 			expected: map[string]any{
-				"a": 1,
+				"a":      1,
 				"nested": map[string]any{"x": 1, "y": 3, "z": 4},
-				"c": 5,
+				"c":      5,
 			},
 		},
 		{
-			name: "overwrite with non-map value",
-			base: map[string]any{"a": map[string]any{"x": 1}},
-			over: map[string]any{"a": "string"},
+			name:     "overwrite with non-map value",
+			base:     map[string]any{"a": map[string]any{"x": 1}},
+			over:     map[string]any{"a": "string"},
 			expected: map[string]any{"a": "string"},
 		},
 	}
@@ -167,22 +166,22 @@ func TestMergeMaps(t *testing.T) {
 
 func TestStructToMapByTags(t *testing.T) {
 	input := TestStruct{
-		String:   "test",
-		Number:   42,
-		Bool:     true,
-		Bytes:    []byte("bytes"),
-		Required: "required",
-		MapStrStr: map[string]string{"key": "value"},
+		String:      "test",
+		Number:      42,
+		Bool:        true,
+		Bytes:       []byte("bytes"),
+		Required:    "required",
+		MapStrStr:   map[string]string{"key": "value"},
 		EmbedStruct: TestEmbedStruct{Name: "embedded"},
 	}
 
 	expected := map[string]any{
-		"string":   "test",
-		"number":   42,
-		"bool":     true,
-		"bytes":    "bytes",
-		"required": "required",
-		"map_str_str": map[string]string{"key": "value"},
+		"string":       "test",
+		"number":       42,
+		"bool":         true,
+		"bytes":        "bytes",
+		"required":     "required",
+		"map_str_str":  map[string]string{"key": "value"},
 		"embed_struct": map[string]any{"name": "embedded"},
 	}
 
