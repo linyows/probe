@@ -3,13 +3,13 @@
 layout: home
 
 hero:
-  name: "Probe"
-  text: "YAMLベースのワークフロー自動化ツール。"
+  name: Probe
+  text: YAMLベースのワークフロー自動化ツール。
   tagline: Probeは、実験・テスト・監視・自動化タスクなど、様々な宣言的ワークフローのために設計されています。ワークフローは、プラグインベースのアクションを使用して実行され、高い柔軟性と拡張性を提供します。
   actions:
     - theme: brand
       text: いますぐ始める
-      link: /get-started/installation
+      link: /guide/get-started
     - theme: alt
       text: GitHubを見る
       link: https://github.com/linyows/probe

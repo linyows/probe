@@ -9,7 +9,66 @@ export default defineConfig({
   },
   locales: {
     root: { label: 'English' },
-    ja: { label: '日本語' },
+    ja: {
+      label: '日本語',
+      themeConfig: {
+        sidebar: [
+          {
+            text: 'はじめましょう',
+            items: [
+              { text: 'Probeは何ですか？', link: '/ja/guide/what-is-probe' },
+              { text: 'インストール', link: '/ja/guide/installation' },
+              { text: 'Probeを理解する', link: '/ja/guide/understanding-probe' },
+              { text: 'CLIの基本', link: '/ja/guide/cli-basics' },
+              { text: 'クイックスタート', link: '/ja/guide/quickstart' },
+              { text: '最初のワークフロー', link: '/ja/guide/your-first-workflow' }
+            ]
+          },
+          {
+            text: 'Concepts',
+            items: [
+              { text: 'Workflows', link: '/concepts/workflows' },
+              { text: 'Jobs and Steps', link: '/concepts/jobs-and-steps' },
+              { text: 'Actions', link: '/concepts/actions' },
+              { text: 'Data Flow', link: '/concepts/data-flow' },
+              { text: 'Expressions and Templates', link: '/concepts/expressions-and-templates' },
+              { text: 'File Merging', link: '/concepts/file-merging' },
+              { text: 'Execution Model', link: '/concepts/execution-model' },
+              { text: 'Testing and Assertions', link: '/concepts/testing-and-assertions' },
+              { text: 'Error Handling', link: '/concepts/error-handling' }
+            ]
+          },
+          {
+            text: 'How-tos',
+            items: [
+              { text: 'API Testing', link: '/how-tos/api-testing' },
+              { text: 'Environment Management', link: '/how-tos/environment-management' },
+              { text: 'Error Handling Strategies', link: '/how-tos/error-handling-strategies' },
+              { text: 'Monitoring Workflows', link: '/how-tos/monitoring-workflows' },
+              { text: 'Performance Testing', link: '/how-tos/performance-testing' }
+            ]
+          },
+          {
+            text: 'Tutorials',
+            items: [
+              { text: 'API Testing Pipeline', link: '/tutorials/api-testing-pipeline' },
+              { text: 'First Monitoring System', link: '/tutorials/first-monitoring-system' },
+              { text: 'Multi-Environment Testing', link: '/tutorials/multi-environment-testing' }
+            ]
+          },
+          {
+            text: 'Reference',
+            items: [
+              { text: 'CLI Reference', link: '/reference/cli-reference' },
+              { text: 'Actions Reference', link: '/reference/actions-reference' },
+              { text: 'Built-in Functions', link: '/reference/built-in-functions' },
+              { text: 'Environment Variables', link: '/reference/environment-variables' },
+              { text: 'YAML Configuration', link: '/reference/yaml-configuration' }
+            ]
+          },
+        ],
+      },
+    },
   },
   ignoreDeadLinks: true,
   themeConfig: {
