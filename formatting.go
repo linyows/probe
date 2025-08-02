@@ -13,21 +13,6 @@ const (
 	labelRequired = "required"
 )
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 // mustMarshalJSON attempts to unmarshal a JSON string into map[string]any.
 // If unmarshaling fails, returns a map with an error message instead of panicking.
 //
@@ -66,10 +51,3 @@ func isJSON(st string) bool {
 
 	return (fChar == '{' && lChar == '}') || (fChar == '[' && lChar == ']')
 }
-
-
-
-
-
-
-

@@ -4,33 +4,6 @@ import (
 	"testing"
 )
 
-type TestStruct struct {
-	String      string            `map:"string"`
-	Number      int               `map:"number"`
-	Bool        bool              `map:"bool"`
-	Bytes       []byte            `map:"bytes"`
-	Required    string            `map:"required" validate:"required"`
-	MapStrStr   map[string]string `map:"map_str_str"`
-	EmbedStruct TestEmbedStruct   `map:"embed_struct"`
-}
-
-type TestEmbedStruct struct {
-	Name string `map:"name"`
-}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 func TestIsJSON(t *testing.T) {
 	tests := []struct {
 		name     string
