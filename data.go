@@ -709,3 +709,150 @@ func AnyToString(value any) (string, bool) {
 		return "", false
 	}
 }
+
+// HeaderToStringValue converts header values to strings for HTTP processing.
+// This function ensures all header values are strings, converting numbers and other types as needed.
+//
+// Example:
+//   data := map[string]any{
+//     "headers": map[string]any{
+//       "Content-Length": 1024,
+//       "X-Rate-Limit": 100.5,
+//       "Authorization": "Bearer token",
+//     },
+//   }
+//   
+//   result := HeaderToStringValue(data)
+//   // result["headers"] = map[string]any{
+//   //   "Content-Length": "1024",
+//   //   "X-Rate-Limit": "100.5", 
+//   //   "Authorization": "Bearer token",
+//   // }
+func HeaderToStringValue(data map[string]any) map[string]any {
+	v, exists := data["headers"]
+	if !exists {
+		return data
+	}
+
+	newHeaders := make(map[string]any)
+	if headers, ok := v.(map[string]any); ok {
+		for key, value := range headers {
+			switch v := value.(type) {
+			case string:
+				newHeaders[key] = v
+			case int:
+				newHeaders[key] = strconv.Itoa(v)
+			case float64:
+				newHeaders[key] = strconv.FormatFloat(v, 'f', -1, 64)
+			default:
+				newHeaders[key] = fmt.Sprintf("%v", v)
+			}
+		}
+	}
+
+	if len(newHeaders) > 0 {
+		data["headers"] = newHeaders
+	}
+
+	return data
+}
+
+// ConvertBodyToJson converts flat body data to properly nested JSON structure.
+// This function processes body__ prefixed keys and converts them to a JSON string.
+// Supports both object and array structures based on key patterns.
+//
+// Example:
+//   data := map[string]string{
+//     "method": "POST",
+//     "body__name": "John",
+//     "body__tags__0": "admin",
+//     "body__tags__1": "user",
+//   }
+//   
+//   err := ConvertBodyToJson(data)
+//   // data becomes:
+//   // {
+//   //   "method": "POST",
+//   //   "body": `{"name":"John","tags":["admin","user"]}`,
+//   // }
+func ConvertBodyToJson(data map[string]string) error {
+	bodyData := map[string]string{}
+
+	// Extract all body__ prefixed keys
+	for key, value := range data {
+		if strings.HasPrefix(key, "body__") {
+			newKey := strings.TrimPrefix(key, "body__")
+			bodyData[newKey] = value
+			delete(data, key)
+		}
+	}
+
+	if len(bodyData) > 0 {
+		// Note: Expression expansion should already be done by this point
+		// UnflattenInterface now handles both array conversion and numeric conversion
+		unflattenedData := UnflattenInterface(bodyData)
+
+		// Check if the result is a root array (indicated by __array_root key)
+		var dataToMarshal any = unflattenedData
+		if arrayRoot, ok := unflattenedData["__array_root"]; ok {
+			dataToMarshal = arrayRoot
+		}
+
+		j, err := json.Marshal(dataToMarshal)
+		if err != nil {
+			return err
+		}
+		data["body"] = string(j)
+	}
+
+	return nil
+}
+
+// ConvertNumericStrings recursively converts numeric strings to numbers in nested structures.
+// This function processes maps and converts string values that represent numbers to actual numeric types.
+//
+// Example:
+//   input := map[string]any{
+//     "count": "42",
+//     "price": "19.99", 
+//     "name": "product",
+//     "nested": map[string]any{
+//       "quantity": "10",
+//       "available": "true",
+//     },
+//   }
+//   
+//   result := ConvertNumericStrings(input)
+//   // result: map[string]any{
+//   //   "count": 42,
+//   //   "price": 19.99,
+//   //   "name": "product",
+//   //   "nested": map[string]any{
+//   //     "quantity": 10,
+//   //     "available": "true", // non-numeric strings remain unchanged
+//   //   },
+//   // }
+func ConvertNumericStrings(data map[string]any) map[string]any {
+	result := make(map[string]any)
+
+	for key, value := range data {
+		switch v := value.(type) {
+		case string:
+			// Try to convert numeric strings to numbers
+			if num, err := strconv.Atoi(v); err == nil {
+				result[key] = num
+			} else if floatNum, err := strconv.ParseFloat(v, 64); err == nil {
+				result[key] = floatNum
+			} else {
+				result[key] = v
+			}
+		case map[string]any:
+			// Recursively process nested maps
+			result[key] = ConvertNumericStrings(v)
+		default:
+			result[key] = v
+		}
+	}
+
+	return result
+}

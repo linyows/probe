@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/jarcoal/httpmock"
+	"github.com/linyows/probe"
 )
 
 func TestNewReq(t *testing.T) {
@@ -150,7 +151,7 @@ func TestConvertBodyToJson(t *testing.T) {
 				data[k] = v
 			}
 
-			err := ConvertBodyToJson(data)
+			err := probe.ConvertBodyToJson(data)
 			if err != nil {
 				t.Errorf("ConvertBodyToJson() error = %v", err)
 				return
@@ -273,7 +274,7 @@ func TestConvertNumericStrings(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := ConvertNumericStrings(tt.input)
+			result := probe.ConvertNumericStrings(tt.input)
 
 			// Convert to JSON for easy comparison
 			expectedJSON, _ := json.Marshal(tt.expected)
