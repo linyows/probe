@@ -16,7 +16,15 @@ const (
 	labelRequired = "required"
 )
 
-// merge string maps
+// MergeStringMaps merges two string maps, where values from 'over' override values from 'base'.
+// Only string values from 'over' are included; non-string values are ignored.
+//
+// Example:
+//   base := map[string]string{"a": "1", "b": "2"}
+//   over := map[string]any{"b": "overridden", "c": "3", "d": 123}
+//   result := MergeStringMaps(base, over)
+//   // result: map[string]string{"a": "1", "b": "overridden", "c": "3"}
+//   // Note: "d": 123 is ignored because it's not a string
 func MergeStringMaps(base map[string]string, over map[string]any) map[string]string {
 	res := make(map[string]string)
 
@@ -33,9 +41,25 @@ func MergeStringMaps(base map[string]string, over map[string]any) map[string]str
 	return res
 }
 
-// MergeMaps merges two maps of type map[string]any.
-// If keys conflict, the values from over override those in base.
-// Nested maps are merged recursively.
+// MergeMaps recursively merges two maps of type map[string]any.
+// If keys conflict, values from 'over' override those in 'base'.
+// Nested maps are merged recursively, preserving data from both maps.
+//
+// Example:
+//   base := map[string]any{
+//     "a": 1,
+//     "nested": map[string]any{"x": 1, "y": 2},
+//   }
+//   over := map[string]any{
+//     "nested": map[string]any{"y": 3, "z": 4},
+//     "c": 5,
+//   }
+//   result := MergeMaps(base, over)
+//   // result: map[string]any{
+//   //   "a": 1,
+//   //   "nested": map[string]any{"x": 1, "y": 3, "z": 4},
+//   //   "c": 5,
+//   // }
 func MergeMaps(base, over map[string]any) map[string]any {
 	merged := make(map[string]any)
 
@@ -62,7 +86,26 @@ func MergeMaps(base, over map[string]any) map[string]any {
 	return merged
 }
 
-// converting from a map[string]any to a struct
+// MapToStructByTags converts a map[string]any to a struct using struct tags.
+// Fields are mapped using the "map" tag, and validation is performed using the "validate" tag.
+// Supports nested structs, []byte fields, and map[string]string fields.
+//
+// Example:
+//   type User struct {
+//     Name     string            `map:"name" validate:"required"`
+//     Age      int               `map:"age"`
+//     Metadata map[string]string `map:"metadata"`
+//   }
+//   
+//   params := map[string]any{
+//     "name": "John",
+//     "age": 30,
+//     "metadata": map[string]any{"role": "admin", "dept": "IT"},
+//   }
+//   
+//   var user User
+//   err := MapToStructByTags(params, &user)
+//   // user.Name = "John", user.Age = 30, user.Metadata = {"role": "admin", "dept": "IT"}
 func MapToStructByTags(params map[string]any, dest any) error {
 
 	val := reflect.ValueOf(dest).Elem()
@@ -132,7 +175,29 @@ func MapToStructByTags(params map[string]any, dest any) error {
 	return nil
 }
 
-// converting from a struct to a map[string]any
+// StructToMapByTags converts a struct to a map[string]any using struct tags.
+// Fields are mapped using the "map" tag. Supports nested structs, []byte fields, and map[string]string fields.
+// This is the inverse operation of MapToStructByTags.
+//
+// Example:
+//   type User struct {
+//     Name     string            `map:"name"`
+//     Age      int               `map:"age"`
+//     Metadata map[string]string `map:"metadata"`
+//   }
+//   
+//   user := User{
+//     Name: "John",
+//     Age: 30,
+//     Metadata: map[string]string{"role": "admin", "dept": "IT"},
+//   }
+//   
+//   result, err := StructToMapByTags(user)
+//   // result: map[string]any{
+//   //   "name": "John",
+//   //   "age": 30,
+//   //   "metadata": map[string]string{"role": "admin", "dept": "IT"},
+//   // }
 func StructToMapByTags(src any) (map[string]any, error) {
 	result := make(map[string]any)
 
@@ -182,6 +247,19 @@ func StructToMapByTags(src any) (map[string]any, error) {
 	return result, nil
 }
 
+// AssignStruct assigns values from an ActionsParams map to a struct using struct tags.
+// Supports string and int fields with validation. Used for legacy action parameter assignment.
+//
+// Example:
+//   type Config struct {
+//     Name    string `map:"name" validate:"required"`
+//     Timeout int    `map:"timeout"`
+//   }
+//   
+//   params := ActionsParams{"name": "test", "timeout": "30"}
+//   var config Config
+//   err := AssignStruct(params, &config)
+//   // config.Name = "test", config.Timeout = 30
 func AssignStruct(pa ActionsParams, st any) error {
 	v := reflect.ValueOf(st).Elem()
 	t := v.Type()
@@ -227,10 +305,31 @@ func AssignStruct(pa ActionsParams, st any) error {
 	return nil
 }
 
+// FlattenInterface recursively flattens a nested data structure into a flat map[string]string.
+// Nested keys are separated by "__" (double underscore). Arrays and slices use numeric indices.
+//
+// Example:
+//   input := map[string]any{
+//     "user": map[string]any{
+//       "name": "John",
+//       "tags": []string{"admin", "user"},
+//     },
+//     "count": 42,
+//   }
+//   
+//   result := FlattenInterface(input)
+//   // result: map[string]string{
+//   //   "user__name": "John",
+//   //   "user__tags__0": "admin",
+//   //   "user__tags__1": "user",
+//   //   "count": "42",
+//   // }
 func FlattenInterface(i any) map[string]string {
 	return flattenIf(i, "")
 }
 
+// flattenIf is the internal recursive function used by FlattenInterface.
+// It handles the actual flattening logic with prefix accumulation.
 func flattenIf(input any, prefix string) map[string]string {
 	res := make(map[string]string)
 
@@ -279,7 +378,32 @@ func flattenIf(input any, prefix string) map[string]string {
 	return res
 }
 
-// Recursively convert a map[string]string to a map[string]any with array conversion and numeric conversion
+// UnflattenInterface converts a flattened map[string]string back to a nested map[string]any.
+// This is the inverse operation of FlattenInterface. Automatically detects and converts:
+// - Maps with sequential numeric keys (0, 1, 2...) to arrays
+// - Numeric strings to numbers (int or float64)
+// - Nested structures using "__" separator
+//
+// Example:
+//   flatMap := map[string]string{
+//     "user__name": "John",
+//     "user__tags__0": "admin", 
+//     "user__tags__1": "user",
+//     "count": "42",
+//     "price": "19.99",
+//   }
+//   
+//   result := UnflattenInterface(flatMap)
+//   // result: map[string]any{
+//   //   "user": map[string]any{
+//   //     "name": "John",
+//   //     "tags": []any{"admin", "user"},
+//   //   },
+//   //   "count": 42,
+//   //   "price": 19.99,
+//   // }
+//
+// Special case: If the root level forms an array, returns {"__array_root": []any{...}}
 func UnflattenInterface(flatMap map[string]string) map[string]any {
 	result := make(map[string]any)
 
@@ -298,7 +422,12 @@ func UnflattenInterface(flatMap map[string]string) map[string]any {
 	return convertMapsToArraysAndNumericStrings(result)
 }
 
-// convertMapsToArraysAndNumericStrings combines array conversion and numeric string conversion
+// convertMapsToArraysAndNumericStrings combines array conversion and numeric string conversion.
+// This internal function is used by UnflattenInterface to apply both transformations recursively.
+//
+// Performs two main conversions:
+// 1. Converts maps with sequential numeric keys (0,1,2...) to arrays
+// 2. Converts numeric strings to actual numbers (int or float64)
 func convertMapsToArraysAndNumericStrings(input map[string]any) map[string]any {
 	result := make(map[string]any)
 	
@@ -329,7 +458,22 @@ func convertMapsToArraysAndNumericStrings(input map[string]any) map[string]any {
 	return result
 }
 
-// convertMapToArrayWithNumericConversion converts a map with numeric keys to an array with numeric conversion
+// convertMapToArrayWithNumericConversion converts a map with numeric keys to an array.
+// Also applies numeric string conversion to array elements recursively.
+//
+// Example:
+//   input := map[string]any{
+//     "0": map[string]any{"name": "item1", "count": "5"},
+//     "1": map[string]any{"0": "nested1", "1": "nested2"},
+//     "2": "42",
+//   }
+//   
+//   result := convertMapToArrayWithNumericConversion(input)
+//   // result: []any{
+//   //   map[string]any{"name": "item1", "count": 5},
+//   //   []any{"nested1", "nested2"},
+//   //   42,
+//   // }
 func convertMapToArrayWithNumericConversion(m map[string]any) []any {
 	result := make([]any, len(m))
 	
@@ -361,7 +505,13 @@ func convertMapToArrayWithNumericConversion(m map[string]any) []any {
 }
 
 
-// shouldConvertToArray checks if a map should be converted to an array
+// shouldConvertToArray checks if a map should be converted to an array.
+// Returns true if all keys are numeric strings forming a complete sequence from 0 to len-1.
+//
+// Example:
+//   shouldConvertToArray(map[string]any{"0": "a", "1": "b", "2": "c"}) // true
+//   shouldConvertToArray(map[string]any{"0": "a", "2": "c"})           // false (missing 1)
+//   shouldConvertToArray(map[string]any{"a": "a", "b": "b"})           // false (non-numeric keys)
 func shouldConvertToArray(m map[string]any) bool {
 	if len(m) == 0 {
 		return false
@@ -376,7 +526,14 @@ func shouldConvertToArray(m map[string]any) bool {
 	return isNumericSequence(keys)
 }
 
-// isNumericSequence checks if the keys form a numeric sequence starting from 0
+// isNumericSequence checks if the keys form a numeric sequence starting from 0.
+// Used by shouldConvertToArray to validate array conversion eligibility.
+//
+// Example:
+//   isNumericSequence([]string{"0", "1", "2"})    // true
+//   isNumericSequence([]string{"2", "0", "1"})    // true (order doesn't matter)
+//   isNumericSequence([]string{"0", "2", "3"})    // false (missing 1)
+//   isNumericSequence([]string{"a", "b", "c"})    // false (non-numeric)
 func isNumericSequence(keys []string) bool {
 	if len(keys) == 0 {
 		return false
@@ -410,7 +567,13 @@ func isNumericSequence(keys []string) bool {
 }
 
 
-// A helper to set values for nested keys
+// nestMap is a helper function to set values for nested keys in UnflattenInterface.
+// Creates nested map structure based on key path and converts numeric strings to integers.
+//
+// Example:
+//   m := make(map[string]any)
+//   nestMap(m, []string{"user", "profile", "age"}, "30")
+//   // m becomes: {"user": {"profile": {"age": 30}}}
 func nestMap(m map[string]any, keys []string, value string) {
 	if len(keys) == 1 {
 		// when it is the last key, set the value
@@ -429,6 +592,15 @@ func nestMap(m map[string]any, keys []string, value string) {
 	}
 }
 
+// mustMarshalJSON attempts to unmarshal a JSON string into map[string]any.
+// If unmarshaling fails, returns a map with an error message instead of panicking.
+//
+// Example:
+//   result := mustMarshalJSON(`{"name": "John", "age": 30}`)
+//   // result: map[string]any{"name": "John", "age": 30}
+//   
+//   result := mustMarshalJSON(`invalid json`)
+//   // result: map[string]any{"error_message": "mustMarshalJSON error: ..."}
 func mustMarshalJSON(st string) map[string]any {
 	var re map[string]any
 	if err := json.Unmarshal([]byte(st), &re); err != nil {
@@ -439,6 +611,14 @@ func mustMarshalJSON(st string) map[string]any {
 	return re
 }
 
+// isJSON checks if a string appears to be JSON by examining its first and last characters.
+// This is a simple heuristic check and does not validate actual JSON syntax.
+//
+// Example:
+//   isJSON(`{"key": "value"}`)  // true
+//   isJSON(`["item1", "item2"]`) // true
+//   isJSON(`{key: value}`)       // true (note: this is actually invalid JSON but has JSON-like brackets)
+//   isJSON(`hello world`)        // false
 func isJSON(st string) bool {
 	trimmed := strings.TrimSpace(st)
 	if len(trimmed) < 2 {
@@ -451,6 +631,13 @@ func isJSON(st string) bool {
 	return (fChar == '{' && lChar == '}') || (fChar == '[' && lChar == ']')
 }
 
+// TitleCase converts a string to title case using a specified separator character.
+// Each part separated by the character has its first letter capitalized.
+//
+// Example:
+//   TitleCase("content-type", "-")     // "Content-Type"
+//   TitleCase("user_name", "_")        // "User_Name"
+//   TitleCase("hello-world-test", "-") // "Hello-World-Test"
 func TitleCase(st string, char string) string {
 	parts := strings.Split(st, char)
 	for i, part := range parts {
@@ -461,6 +648,13 @@ func TitleCase(st string, char string) string {
 	return strings.Join(parts, char)
 }
 
+// StrmapToAnymap converts a map[string]string to map[string]any.
+// This is a simple type conversion utility function.
+//
+// Example:
+//   input := map[string]string{"name": "John", "age": "30"}
+//   result := StrmapToAnymap(input)
+//   // result: map[string]any{"name": "John", "age": "30"}
 func StrmapToAnymap(strmap map[string]string) map[string]any {
 	anymap := make(map[string]any)
 	for k, v := range strmap {
@@ -469,6 +663,13 @@ func StrmapToAnymap(strmap map[string]string) map[string]any {
 	return anymap
 }
 
+// EnvMap returns all environment variables as a map[string]string.
+// Each environment variable is parsed from "KEY=VALUE" format.
+//
+// Example:
+//   env := EnvMap()
+//   // env contains all environment variables like:
+//   // {"PATH": "/usr/bin:/bin", "HOME": "/home/user", "USER": "username", ...}
 func EnvMap() map[string]string {
 	env := make(map[string]string)
 	for _, v := range os.Environ() {
