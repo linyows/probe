@@ -92,17 +92,23 @@
 
 :root {
   --vp-home-hero-name-color: transparent;
+  --vp-home-hero-name-background: var(--vp-button-brand-bg);
+/*
   --vp-home-hero-name-background: -webkit-linear-gradient(
     120deg,
     #bd34fe 30%,
     #41d1ff
   );
+*/
 
   --vp-home-hero-image-background-image: linear-gradient(
     -45deg,
     #bd34fe 50%,
-    #47caff 50%
+    #3e63dd 50%
   );
+/* #bd34fe 50%,
+   #41d1ff 50%
+*/
   --vp-home-hero-image-filter: blur(44px);
 }
 
@@ -137,3 +143,52 @@
   --docsearch-primary-color: var(--vp-c-brand-1) !important;
 }
 
+.home .title img {
+  display: none;
+}
+.home .search {
+  padding-left: 0;
+}
+
+.title span {
+  display: none;
+}
+
+.heading .name {
+  background-color: transparent;
+  text-indent: -999rem;
+  background-image: url("/probe-logo.svg");
+  background-position: top;
+  background-repeat: no-repeat;
+  background-clip: content-box;
+  display: block;
+  width: 300px;
+  height: 126px;
+  line-height: 1;
+  margin: 0 0 20px -12px!important;
+}
+
+.dark .heading .name {
+  background-image: url("/probe-logo-dark.svg");
+}
+
+@media (min-width: 640px) {
+  .heading .text {
+    font-size: 2.4rem;
+    line-height: 2.6rem;
+    padding: 0 0 .5rem;
+  }
+  .main .tagline {
+    padding: 1rem 0;
+  }
+}
+
+@media (min-width: 960px) {
+  .heading .text {
+    font-size: 3rem;
+    line-height: 3.4rem;
+  }
+  .main .tagline {
+    padding: 2rem 0;
+  }
+}

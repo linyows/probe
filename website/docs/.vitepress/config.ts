@@ -4,11 +4,29 @@ import { defineConfig } from 'vitepress'
 export default defineConfig({
   title: "Probe",
   description: "A powerful YAML-based workflow automation tool designed for testing, monitoring, and automation tasks. Probe uses plugin-based actions to execute workflows, making it highly flexible and extensible.",
+  rewrites: {
+    'en/:rest*': ':rest*'
+  },
+  locales: {
+    root: { label: 'English' },
+    ja: { label: '日本語' },
+  },
   ignoreDeadLinks: true,
   themeConfig: {
+    logo: {
+      light: '/probe-logo.svg',
+      dark: '/probe-logo-dark.svg',
+    },
+    footer: {
+      message: 'Released under the MIT License.',
+      copyright: 'Copyright © 2025-present linyows',
+    },
+    search: {
+      provider: 'local',
+    },
     // https://vitepress.dev/reference/default-theme-config
     nav: [
-      { text: 'Quickstart', link: '/get-quickstart/quickstart' },
+      { text: 'Quickstart', link: '/get-started/quickstart' },
       { text: 'Reference', link: '/reference/yaml-configuration' },
       { text: 'External',
         items: [
