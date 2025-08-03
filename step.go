@@ -137,7 +137,7 @@ func (st *Step) finalize(name string, actionResult map[string]any, jCtx *JobCont
 		jCtx.Result.AddStepResult(jCtx.CurrentJobID, stepResult)
 	}
 
-	if jCtx.Config.Verbose {
+	if jCtx.Verbose {
 		jCtx.Printer.PrintSeparator()
 	}
 }
@@ -153,7 +153,7 @@ func (st *Step) createStepResult(name string, jCtx *JobContext, repeatCounter *S
 		RepeatCounter: repeatCounter,
 	}
 
-	if jCtx.Config.RT && st.ctx.RT != "" {
+	if jCtx.RT && st.ctx.RT != "" {
 		result.RT = st.ctx.RT
 	}
 
