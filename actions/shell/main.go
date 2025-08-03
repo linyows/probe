@@ -223,10 +223,6 @@ func executeShellCommand(params *shellParams, log hclog.Logger) (map[string]stri
 		return map[string]string{}, fmt.Errorf("failed to start command: %w", err)
 	}
 
-	// Read output
-	stdoutBytes := make([]byte, 0)
-	stderrBytes := make([]byte, 0)
-
 	// Read stdout
 	stdoutChan := make(chan []byte, 1)
 	go func() {
@@ -266,8 +262,8 @@ func executeShellCommand(params *shellParams, log hclog.Logger) (map[string]stri
 	duration := time.Since(start)
 
 	// Get output
-	stdoutBytes = <-stdoutChan
-	stderrBytes = <-stderrChan
+	stdoutBytes := <-stdoutChan
+	stderrBytes := <-stderrChan
 
 	// Get exit code
 	exitCode := 0
