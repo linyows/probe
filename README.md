@@ -49,7 +49,7 @@ Features
 --------
 
 - **Simple YAML Syntax**: Easy-to-read workflow definitions
-- **Plugin Architecture**: Built-in HTTP, Shell, SMTP, and Hello actions with extensibility
+- **Plugin Architecture**: Built-in HTTP, Database, Shell, SMTP, and Hello actions with extensibility
 - **Job Dependencies**: Control execution order with `needs`
 - **Step Outputs**: Share data between steps and jobs using `outputs`
 - **Repetition**: Repeat jobs with configurable intervals
@@ -300,6 +300,23 @@ Built-in Actions
     body: Email content
     my-hostname: localhost
 ```
+
+### Database Action
+```yaml
+- name: Database Query
+  uses: db
+  with:
+    dsn: "mysql://user:password@localhost:3306/database"
+    query: "SELECT * FROM users WHERE active = ?"
+    params__0: true
+    timeout: 30s
+  test: res.code == 0 && res.rows_affected > 0
+```
+
+Supported databases:
+- **MySQL**: `mysql://user:pass@host:port/database`
+- **PostgreSQL**: `postgres://user:pass@host:port/database?sslmode=disable`
+- **SQLite**: `sqlite:///absolute/path/file.db` or `sqlite://./relative/path/file.db`
 
 ### Shell Action
 ```yaml
