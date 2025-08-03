@@ -33,15 +33,15 @@ jobs:
       - name: Setup Pages
         uses: actions/configure-pages@v4
       - name: Install dependencies
-        working-directory: website
+        working-directory: docs
         run: bun install
       - name: Build website
         run: bun run build
-        working-directory: website
+        working-directory: docs
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: website/docs/.vitepress/dist
+          path: docs/.vitepress/dist
 
   deploy:
     name: Deploy to Pages
