@@ -68,6 +68,11 @@ func parseParams(with map[string]string) (*shellParams, error) {
 		env:     make(map[string]string),
 	}
 
+	// Validate required parameters
+	if params.cmd == "" {
+		return nil, fmt.Errorf("cmd parameter is required")
+	}
+
 	// Set default shell
 	if params.shell == "" {
 		params.shell = "/bin/sh"
@@ -97,7 +102,7 @@ func parseParams(with map[string]string) (*shellParams, error) {
 		}
 	}
 
-	// Validate working directory
+	// Validate working directory if provided
 	if params.workdir != "" {
 		if err := validateWorkdir(params.workdir); err != nil {
 			return nil, err
@@ -108,6 +113,11 @@ func parseParams(with map[string]string) (*shellParams, error) {
 }
 
 func validateShellPath(shell string) error {
+	// Check if shell path is empty
+	if shell == "" {
+		return fmt.Errorf("shell path cannot be empty")
+	}
+
 	// Only allow common shell paths for security
 	allowedShells := []string{
 		"/bin/sh",
