@@ -72,7 +72,7 @@ func (c *Cmd) parseArgs(args []string) error {
 		if strings.HasPrefix(arg, "-") {
 			// Handle flags
 			flagName := strings.TrimLeft(arg, "-")
-			
+
 			// Handle flags with "=" (e.g., --flag=value)
 			if idx := strings.Index(flagName, "="); idx != -1 {
 				flagName = flagName[:idx]
@@ -184,9 +184,15 @@ func (c *Cmd) printOptions() {
 
 	for _, opt := range options {
 		if opt.short != "" {
-			fmt.Fprintf(flag.CommandLine.Output(), "  %s, %-12s %s\n", opt.short, opt.long, opt.description)
+			_, err := fmt.Fprintf(flag.CommandLine.Output(), "  %s, %-12s %s\n", opt.short, opt.long, opt.description)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "[ERROR] %v\n", err)
+			}
 		} else {
-			fmt.Fprintf(flag.CommandLine.Output(), "      %-12s %s\n", opt.long, opt.description)
+			_, err := fmt.Fprintf(flag.CommandLine.Output(), "      %-12s %s\n", opt.long, opt.description)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "[ERROR] %v\n", err)
+			}
 		}
 	}
 }
