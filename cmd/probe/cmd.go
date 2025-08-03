@@ -169,7 +169,26 @@ Options:`
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "[ERROR] %v\n", err)
 	}
-	flag.PrintDefaults()
+	c.printOptions()
+}
+
+func (c *Cmd) printOptions() {
+	options := []struct {
+		short, long, description string
+	}{
+		{"-h", "--help", "Show command usage"},
+		{"", "--version", "Show version information"},
+		{"", "--rt", "Show response time"},
+		{"-v", "--verbose", "Show verbose log"},
+	}
+
+	for _, opt := range options {
+		if opt.short != "" {
+			fmt.Fprintf(flag.CommandLine.Output(), "  %s, %-12s %s\n", opt.short, opt.long, opt.description)
+		} else {
+			fmt.Fprintf(flag.CommandLine.Output(), "      %-12s %s\n", opt.long, opt.description)
+		}
+	}
 }
 
 func (c *Cmd) start() int {
