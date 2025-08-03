@@ -164,6 +164,114 @@ jobs:
     user_email: res.json.data.user.email
 ```
 
+### Shell Action
+
+The `shell` action enables secure execution of shell commands and scripts within workflows. It provides comprehensive output capture, timeout protection, and environment variable support.
+
+#### Basic Usage
+
+```yaml
+- name: Build Application
+  uses: shell
+  with:
+    cmd: "npm run build"
+    workdir: "/app"
+    timeout: "5m"
+  test: res.code == 0
+```
+
+#### Complete Shell Action Reference
+
+```yaml
+- name: Deploy Application
+  uses: shell
+  with:
+    cmd: "./deploy.sh production"              # Required: Command to execute
+    shell: "/bin/bash"                        # Optional: Shell to use (default: /bin/sh)
+    workdir: "/deploy"                        # Optional: Working directory (absolute path)
+    timeout: "15m"                           # Optional: Execution timeout (default: 30s)
+    env:                                     # Optional: Environment variables
+      DEPLOY_ENV: "production"
+      API_KEY: "{{env.PRODUCTION_API_KEY}}"
+      BUILD_VERSION: "{{vars.version}}"
+  test: res.code == 0 && (res.stdout | contains("Deploy successful"))
+  outputs:
+    deploy_time: res.rt
+    deploy_log: res.stdout
+```
+
+#### Shell Response Object
+
+```yaml
+# Available response properties:
+test: |
+  res.code == 0 &&                         # Exit code (0 = success)
+  res.stdout.contains("success") &&        # Standard output
+  res.stderr == "" &&                      # Standard error (empty = no errors)
+  req.cmd == "npm run build" &&           # Original command
+  req.shell == "/bin/bash"                # Shell used for execution
+```
+
+#### Common Shell Patterns
+
+**Build and Test Pipeline:**
+```yaml
+jobs:
+  build-and-test:
+    steps:
+      - name: Install Dependencies
+        uses: shell
+        with:
+          cmd: "npm ci"
+          workdir: "/app"
+          timeout: "5m"
+        test: res.code == 0
+
+      - name: Run Tests
+        uses: shell
+        with:
+          cmd: "npm test"
+          workdir: "/app"
+          env:
+            NODE_ENV: "test"
+            CI: "true"
+        test: res.code == 0
+
+      - name: Build Application
+        uses: shell
+        with:
+          cmd: "npm run build"
+          workdir: "/app"
+          env:
+            NODE_ENV: "production"
+        test: res.code == 0
+```
+
+**System Health Monitoring:**
+```yaml
+- name: Check System Health
+  uses: shell
+  with:
+    cmd: |
+      echo "=== System Health Report ===" &&
+      echo "CPU Usage: $(top -bn1 | grep Cpu | cut -d' ' -f2)" &&
+      echo "Memory: $(free -h | grep Mem)" &&
+      echo "Disk: $(df -h /)"
+  test: res.code == 0
+  outputs:
+    health_report: res.stdout
+```
+
+#### Security Features
+
+The shell action implements multiple security layers:
+
+- **Shell Restriction**: Only allows approved shell executables
+- **Path Validation**: Working directories must be absolute paths
+- **Timeout Protection**: Prevents runaway processes
+- **Environment Isolation**: Safe environment variable handling
+- **Output Sanitization**: Secure capture of command output
+
 ### Hello Action
 
 The `hello` action is primarily used for testing and demonstrations. It provides a simple way to verify plugin functionality.

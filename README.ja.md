@@ -49,7 +49,7 @@ probe --workflow health-check.yml
 --------
 
 - **シンプルなYAML構文**: 読みやすいワークフロー定義
-- **プラグインアーキテクチャ**: HTTP、SMTP、Helloアクションが組み込まれており、拡張可能
+- **プラグインアーキテクチャ**: HTTP、Shell、SMTP、Helloアクションが組み込まれており、拡張可能
 - **ジョブ依存関係**: `needs`で実行順序を制御
 - **ステップアウトプット**: `outputs`を使用してステップとジョブ間でデータを共有
 - **繰り返し実行**: 設定可能な間隔でジョブを繰り返し
@@ -296,6 +296,20 @@ test: |
     body:
       key: value
     timeout: 30s
+```
+
+### Shellアクション
+```yaml
+- name: ビルドスクリプト実行
+  uses: shell
+  with:
+    cmd: "npm run build"
+    workdir: "/app"
+    shell: "/bin/bash"
+    timeout: "5m"
+    env:
+      NODE_ENV: production
+  test: res.code == 0
 ```
 
 ### SMTPアクション
