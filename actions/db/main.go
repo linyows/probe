@@ -61,12 +61,12 @@ func (a *Action) Run(args []string, with map[string]string) (map[string]string, 
 }
 
 type dbParams struct {
-	driver     string
-	driverDSN  string // DSN formatted for the specific driver
+	driver      string
+	driverDSN   string // DSN formatted for the specific driver
 	originalDSN string // Original DSN for logging
-	query      string
-	params     []interface{}
-	timeout    time.Duration
+	query       string
+	params      []interface{}
+	timeout     time.Duration
 }
 
 func parseParams(with map[string]string) (*dbParams, error) {
@@ -144,17 +144,17 @@ func parseDSN(dsn string) (driver, driverDSN string, err error) {
 		if u.Host == "" {
 			return "", "", fmt.Errorf("mysql DSN requires host")
 		}
-		
+
 		var auth string
 		if u.User != nil {
 			auth = u.User.String() + "@"
 		}
-		
+
 		driverDSN = fmt.Sprintf("%stcp(%s)%s", auth, u.Host, u.Path)
 		if u.RawQuery != "" {
 			driverDSN += "?" + u.RawQuery
 		}
-		
+
 		return "mysql", driverDSN, nil
 
 	case "postgres":
@@ -173,14 +173,14 @@ func parseDSN(dsn string) (driver, driverDSN string, err error) {
 		} else {
 			return "", "", fmt.Errorf("sqlite DSN format should be sqlite:///absolute/path or sqlite://./relative/path")
 		}
-		
+
 		// Ensure directory exists for SQLite
 		if dir := filepath.Dir(path); dir != "" && dir != "." {
 			if err := os.MkdirAll(dir, 0755); err != nil {
 				return "", "", fmt.Errorf("failed to create directory for SQLite database: %w", err)
 			}
 		}
-		
+
 		return "sqlite3", path, nil
 
 	default:
@@ -219,7 +219,11 @@ func executeQuery(params *dbParams, log hclog.Logger) (map[string]string, error)
 	if err != nil {
 		return createErrorResult(params, start, fmt.Errorf("failed to open database: %w", err))
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			log.Error("failed to parse database", "error", err)
+		}
+	}()
 
 	// Test connection
 	if err := db.Ping(); err != nil {
@@ -228,9 +232,9 @@ func executeQuery(params *dbParams, log hclog.Logger) (map[string]string, error)
 
 	// Determine query type
 	trimmedQuery := strings.TrimSpace(strings.ToUpper(params.query))
-	isSelect := strings.HasPrefix(trimmedQuery, "SELECT") || 
-		strings.HasPrefix(trimmedQuery, "SHOW") || 
-		strings.HasPrefix(trimmedQuery, "DESCRIBE") || 
+	isSelect := strings.HasPrefix(trimmedQuery, "SELECT") ||
+		strings.HasPrefix(trimmedQuery, "SHOW") ||
+		strings.HasPrefix(trimmedQuery, "DESCRIBE") ||
 		strings.HasPrefix(trimmedQuery, "EXPLAIN") ||
 		strings.HasPrefix(trimmedQuery, "WITH") // CTE queries
 
@@ -256,12 +260,17 @@ func executeQuery(params *dbParams, log hclog.Logger) (map[string]string, error)
 	return probe.FlattenInterface(mapResult), nil
 }
 
-func executeSelectQuery(db *sql.DB, params *dbParams, start time.Time) (*DbResult, error) {
+func executeSelectQuery(db *sql.DB, params *dbParams, start time.Time) (res *DbResult, err error) {
 	rows, err := db.Query(params.query, params.params...)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() {
+		closeErr := rows.Close()
+		if err == nil {
+			err = closeErr
+		}
+	}()
 
 	// Get column names
 	columns, err := rows.Columns()

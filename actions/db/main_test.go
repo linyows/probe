@@ -9,81 +9,81 @@ import (
 
 func TestParseDSN(t *testing.T) {
 	tests := []struct {
-		name        string
-		dsn         string
-		wantDriver  string
-		wantDSN     string
-		wantErr     bool
+		name       string
+		dsn        string
+		wantDriver string
+		wantDSN    string
+		wantErr    bool
 	}{
 		{
-			name:        "MySQL DSN",
-			dsn:         "mysql://user:pass@localhost:3306/testdb",
-			wantDriver:  "mysql",
-			wantDSN:     "user:pass@tcp(localhost:3306)/testdb",
-			wantErr:     false,
+			name:       "MySQL DSN",
+			dsn:        "mysql://user:pass@localhost:3306/testdb",
+			wantDriver: "mysql",
+			wantDSN:    "user:pass@tcp(localhost:3306)/testdb",
+			wantErr:    false,
 		},
 		{
-			name:        "MySQL DSN with query params",
-			dsn:         "mysql://user:pass@localhost:3306/testdb?charset=utf8",
-			wantDriver:  "mysql",
-			wantDSN:     "user:pass@tcp(localhost:3306)/testdb?charset=utf8",
-			wantErr:     false,
+			name:       "MySQL DSN with query params",
+			dsn:        "mysql://user:pass@localhost:3306/testdb?charset=utf8",
+			wantDriver: "mysql",
+			wantDSN:    "user:pass@tcp(localhost:3306)/testdb?charset=utf8",
+			wantErr:    false,
 		},
 		{
-			name:        "PostgreSQL DSN",
-			dsn:         "postgres://user:pass@localhost:5432/testdb",
-			wantDriver:  "postgres",
-			wantDSN:     "postgres://user:pass@localhost:5432/testdb",
-			wantErr:     false,
+			name:       "PostgreSQL DSN",
+			dsn:        "postgres://user:pass@localhost:5432/testdb",
+			wantDriver: "postgres",
+			wantDSN:    "postgres://user:pass@localhost:5432/testdb",
+			wantErr:    false,
 		},
 		{
-			name:        "PostgreSQL DSN with SSL",
-			dsn:         "postgres://user:pass@localhost:5432/testdb?sslmode=disable",
-			wantDriver:  "postgres",
-			wantDSN:     "postgres://user:pass@localhost:5432/testdb?sslmode=disable",
-			wantErr:     false,
+			name:       "PostgreSQL DSN with SSL",
+			dsn:        "postgres://user:pass@localhost:5432/testdb?sslmode=disable",
+			wantDriver: "postgres",
+			wantDSN:    "postgres://user:pass@localhost:5432/testdb?sslmode=disable",
+			wantErr:    false,
 		},
 		{
-			name:        "SQLite absolute path",
-			dsn:         "sqlite:///tmp/test.db",
-			wantDriver:  "sqlite3",
-			wantDSN:     "/tmp/test.db",
-			wantErr:     false,
+			name:       "SQLite absolute path",
+			dsn:        "sqlite:///tmp/test.db",
+			wantDriver: "sqlite3",
+			wantDSN:    "/tmp/test.db",
+			wantErr:    false,
 		},
 		{
-			name:        "SQLite relative path",
-			dsn:         "sqlite://./test.db",
-			wantDriver:  "sqlite3",
-			wantDSN:     "./test.db",
-			wantErr:     false,
+			name:       "SQLite relative path",
+			dsn:        "sqlite://./test.db",
+			wantDriver: "sqlite3",
+			wantDSN:    "./test.db",
+			wantErr:    false,
 		},
 		{
-			name:        "Unsupported scheme",
-			dsn:         "mongodb://localhost:27017/test",
-			wantDriver:  "",
-			wantDSN:     "",
-			wantErr:     true,
+			name:       "Unsupported scheme",
+			dsn:        "mongodb://localhost:27017/test",
+			wantDriver: "",
+			wantDSN:    "",
+			wantErr:    true,
 		},
 		{
-			name:        "Invalid DSN",
-			dsn:         "not-a-valid-dsn",
-			wantDriver:  "",
-			wantDSN:     "",
-			wantErr:     true,
+			name:       "Invalid DSN",
+			dsn:        "not-a-valid-dsn",
+			wantDriver: "",
+			wantDSN:    "",
+			wantErr:    true,
 		},
 		{
-			name:        "MySQL without host",
-			dsn:         "mysql:///testdb",
-			wantDriver:  "",
-			wantDSN:     "",
-			wantErr:     true,
+			name:       "MySQL without host",
+			dsn:        "mysql:///testdb",
+			wantDriver: "",
+			wantDSN:    "",
+			wantErr:    true,
 		},
 		{
-			name:        "SQLite with host (invalid)",
-			dsn:         "sqlite://localhost/test.db",
-			wantDriver:  "",
-			wantDSN:     "",
-			wantErr:     true,
+			name:       "SQLite with host (invalid)",
+			dsn:        "sqlite://localhost/test.db",
+			wantDriver: "",
+			wantDSN:    "",
+			wantErr:    true,
 		},
 	}
 
