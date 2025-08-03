@@ -8,6 +8,7 @@ import (
 
 	"github.com/fatih/color"
 	"github.com/linyows/probe"
+	"github.com/linyows/probe/actions/db"
 	"github.com/linyows/probe/actions/hello"
 	http "github.com/linyows/probe/actions/http"
 	"github.com/linyows/probe/actions/shell"
@@ -29,6 +30,8 @@ type Cmd struct {
 
 func runBuiltinActions(name string) {
 	switch name {
+	case "db":
+		db.Serve()
 	case "http":
 		http.Serve()
 	case "hello":
