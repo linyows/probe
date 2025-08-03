@@ -69,8 +69,9 @@ steps:
 **Actions** are the building blocks that actually do the work. Probe comes with built-in actions:
 
 - **`http`**: Make HTTP/HTTPS requests
+- **`shell`**: Execute shell commands and scripts securely
+- **`smtp`**: Send email notifications and alerts
 - **`hello`**: Simple greeting action (mainly for testing)
-- **`smtp`**: Send emails via SMTP
 
 Actions are implemented as plugins, so you can extend Probe with custom actions.
 

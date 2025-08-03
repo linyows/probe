@@ -10,6 +10,7 @@ import (
 	"github.com/linyows/probe"
 	"github.com/linyows/probe/actions/hello"
 	http "github.com/linyows/probe/actions/http"
+	"github.com/linyows/probe/actions/shell"
 	"github.com/linyows/probe/actions/smtp"
 )
 
@@ -32,6 +33,8 @@ func runBuiltinActions(name string) {
 		http.Serve()
 	case "hello":
 		hello.Serve()
+	case "shell":
+		shell.Serve()
 	case "smtp":
 		smtp.Serve()
 	}

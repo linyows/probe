@@ -49,7 +49,7 @@ Features
 --------
 
 - **Simple YAML Syntax**: Easy-to-read workflow definitions
-- **Plugin Architecture**: Built-in HTTP, SMTP, and Hello actions with extensibility
+- **Plugin Architecture**: Built-in HTTP, Shell, SMTP, and Hello actions with extensibility
 - **Job Dependencies**: Control execution order with `needs`
 - **Step Outputs**: Share data between steps and jobs using `outputs`
 - **Repetition**: Repeat jobs with configurable intervals
@@ -299,6 +299,20 @@ Built-in Actions
     subject: Test Email
     body: Email content
     my-hostname: localhost
+```
+
+### Shell Action
+```yaml
+- name: Run Build Script
+  uses: shell
+  with:
+    cmd: "npm run build"
+    workdir: "/app"
+    shell: "/bin/bash"
+    timeout: "5m"
+    env:
+      NODE_ENV: production
+  test: res.code == 0 && (res.stdout | contains("Build successful"))
 ```
 
 ### Hello Action (Testing)

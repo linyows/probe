@@ -1,0 +1,107 @@
+name: Shell Action Examples
+description: Demonstrates shell action usage with various configurations
+
+vars:
+  project_dir: "/tmp/probe-shell-demo"
+  build_timeout: "30s"
+
+jobs:
+- name: Basic Shell Commands
+  steps:
+  - name: Simple echo
+    uses: shell
+    with:
+      cmd: "echo 'Hello from Shell Action!'"
+    test: res.code == 0
+
+  - name: Environment variable usage
+    uses: shell
+    with:
+      cmd: "echo 'Project directory: $PROJECT_DIR'"
+      env:
+        PROJECT_DIR: "{{vars.project_dir}}"
+    test: res.code == 0
+
+  - name: Working directory example
+    uses: shell
+    with:
+      cmd: "pwd && ls -la"
+      workdir: "/tmp"
+    test: res.code == 0
+
+- name: Advanced Shell Usage
+  steps:
+  - name: Custom shell (bash)
+    uses: shell
+    with:
+      cmd: "echo 'Running in: $0'"
+      shell: "/bin/bash"
+    test: res.code == 0
+
+  - name: Command with timeout
+    uses: shell
+    with:
+      cmd: "sleep 1 && echo 'Task completed'"
+      timeout: "{{vars.build_timeout}}"
+    test: res.code == 0
+
+  - name: Error handling example
+    uses: shell
+    with:
+      cmd: "echo 'This will fail' && exit 1"
+    test: res.code == 1
+
+  - name: Command not found (exit code 127)
+    uses: shell
+    with:
+      cmd: "nonexistent_command"
+    test: res.code == 127
+
+  - name: Permission denied simulation (exit code 126)
+    uses: shell
+    with:
+      cmd: "echo 'exit 126' | sh"
+    test: res.code == 126
+
+- name: Output Capture Examples
+  steps:
+  - name: Capture stdout
+    id: output_test
+    uses: shell
+    with:
+      cmd: "echo 'Success message'"
+    outputs:
+      message: res.stdout
+    test: res.code == 0
+
+  - name: Capture stderr
+    uses: shell
+    with:
+      cmd: "echo 'Warning message' >&2"
+    test: res.code == 0
+
+  - name: Use previous output
+    uses: shell
+    with:
+      cmd: "echo 'Previous output was: {{outputs.output_test.message}}'"
+    test: res.code == 0
+
+- name: Practical Examples
+  steps:
+  - name: System information
+    uses: shell
+    with:
+      cmd: "uname -a"
+    test: res.code == 0
+
+  - name: File operations
+    uses: shell
+    with:
+      cmd: "mkdir -p /tmp/test && echo 'test content' > /tmp/test/file.txt && cat /tmp/test/file.txt"
+    test: res.code == 0
+
+  - name: Cleanup
+    uses: shell
+    with:
+      cmd: "rm -rf /tmp/test"
+    test: res.code == 0
