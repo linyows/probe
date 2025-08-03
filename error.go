@@ -89,7 +89,6 @@ func NewConfigurationError(operation, message string, cause error) *ProbeError {
 	return NewProbeError(ErrorTypeConfiguration, operation, message, cause)
 }
 
-
 func NewFileError(operation, message string, cause error) *ProbeError {
 	return NewProbeError(ErrorTypeFile, operation, message, cause)
 }
@@ -97,5 +96,3 @@ func NewFileError(operation, message string, cause error) *ProbeError {
 func NewActionError(operation, message string, cause error) *ProbeError {
 	return NewProbeError(ErrorTypeAction, operation, message, cause)
 }
-
-

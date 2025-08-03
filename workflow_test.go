@@ -598,7 +598,6 @@ func TestExecutor_ConcurrencyEdgeCases(t *testing.T) {
 	})
 }
 
-
 func TestEnv(t *testing.T) {
 	os.Setenv("HOST", "http://localhost")
 	os.Setenv("TOKEN", "secrets")
@@ -791,7 +790,7 @@ func TestStepRepeatCounterUpdate(t *testing.T) {
 	// Execute multiple times
 	for i := 1; i <= 3; i++ {
 		jCtx.RepeatCurrent = i
-		step.handleRepeatExecution(jCtx, "Test Step", "", false)
+		step.handleRepeatExecution(jCtx, "Test Step")
 	}
 
 	// Check final counter state

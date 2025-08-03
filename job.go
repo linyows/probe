@@ -4,7 +4,6 @@ import (
 	"fmt"
 )
 
-
 type Job struct {
 	Name     string   `yaml:"name" validate:"required"`
 	ID       string   `yaml:"id,omitempty"`

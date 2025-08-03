@@ -152,4 +152,3 @@ func WithAfter(f func(res *hp.Response)) Option {
 		c.after = f
 	}
 }
-

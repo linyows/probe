@@ -415,16 +415,16 @@ func (p *Printer) generateEchoOutput(content string, err error) string {
 	if err != nil {
 		return fmt.Sprintf("Echo\nerror: %#v\n", err)
 	}
-	
+
 	// Add indent to all lines, including after user-specified newlines
 	indent := "       "
 	lines := strings.Split(content, "\n")
 	indentedLines := make([]string, len(lines))
-	
+
 	for i, line := range lines {
 		indentedLines[i] = indent + line
 	}
-	
+
 	return strings.Join(indentedLines, "\n") + "\n"
 }
 
@@ -436,13 +436,21 @@ func (p *Printer) generateTestFailure(testExpr string, result interface{}, req, 
 }
 
 // generateTestError formats test evaluation error output
-func (p *Printer) generateTestError(err error) string {
+func (p *Printer) generateTestError(testExpr string, err error) string {
+	if p.verbose {
+		p.LogError("Test Error: %s", err)
+		p.LogError("Input: %s", testExpr)
+	}
 	return fmt.Sprintf("Test\nerror: %#v\n", err)
 }
 
 // generateTestTypeMismatch formats test type mismatch error output
 func (p *Printer) generateTestTypeMismatch(testExpr string, result interface{}) string {
-	return fmt.Sprintf("Test: `%s` = %v\n", testExpr, result)
+	txt := fmt.Sprintf("Test: `%s` = %v\n", testExpr, result)
+	if p.verbose {
+		p.LogDebug("%s", txt)
+	}
+	return txt
 }
 
 // PrintTestResult prints test result in verbose mode
@@ -453,7 +461,7 @@ func (p *Printer) PrintTestResult(success bool, testExpr string, context interfa
 	} else {
 		resultStr = colorError().Sprintf("Failure")
 	}
-	p.LogDebug("Test: %s (input: %s, env: %#v)", resultStr, testExpr, context)
+	p.LogDebug("Test: %s (input: %s, env: %s)", resultStr, testExpr, colorDim().Sprintf("%#v", context))
 }
 
 // PrintEchoContent prints echo content with proper indentation in verbose mode
@@ -461,7 +469,7 @@ func (p *Printer) PrintEchoContent(content string) {
 	// Add indent to all lines, including after user-specified newlines
 	indent := "       "
 	lines := strings.Split(content, "\n")
-	
+
 	for _, line := range lines {
 		p.LogDebug("%s%s", indent, line)
 	}
@@ -485,7 +493,7 @@ func (p *Printer) PrintMapData(data map[string]any) {
 		if nested, ok := v.(map[string]any); ok {
 			p.printNestedMap(k, nested)
 		} else {
-			p.LogDebug("  %s: %#v", k, v)
+			p.LogDebug("  %s: %v", k, v)
 		}
 	}
 }
@@ -494,6 +502,6 @@ func (p *Printer) PrintMapData(data map[string]any) {
 func (p *Printer) printNestedMap(key string, nested map[string]any) {
 	p.LogDebug("  %s:", key)
 	for kk, vv := range nested {
-		p.LogDebug("    %s: %#v", kk, vv)
+		p.LogDebug("    %s: %v", kk, vv)
 	}
 }

@@ -135,7 +135,6 @@ func replaceMethodAndURL(data map[string]string) error {
 	return nil
 }
 
-
 func convertBodyToTextWithContentType(data map[string]string) error {
 	values := url.Values{}
 

@@ -118,62 +118,32 @@ func (st *Step) processActionResult(actionResult map[string]any, jCtx *JobContex
 
 // finalize handles the final phase: test, echo, output save, and result creation
 func (st *Step) finalize(name string, actionResult map[string]any, jCtx *JobContext) {
-
-	// Extract commonly used values
-	req, okreq := actionResult["req"].(map[string]any)
-	res, okres := actionResult["res"].(map[string]any)
-	rt, okrt := actionResult["rt"].(string)
-
-	// Handle verbose mode
 	if jCtx.Config.Verbose {
-		st.handleVerboseMode(name, req, res, okreq, okres, jCtx)
-		return
+		jCtx.Printer.PrintRequestResponse(st.idx, name, st.ctx.Req, st.ctx.Res, st.ctx.RT)
 	}
 
 	// Handle repeat execution
 	if jCtx.IsRepeating {
-		st.handleRepeatExecution(jCtx, name, rt, okrt)
+		st.handleRepeatExecution(jCtx, name)
 		return
 	}
 
 	// Standard execution: save outputs and create result
 	st.saveOutputs(jCtx)
-	stepResult := st.createStepResult(name, rt, okrt, jCtx, nil)
+	stepResult := st.createStepResult(name, jCtx, nil)
 
 	// Add step result to workflow buffer
 	if jCtx.Result != nil {
 		jCtx.Result.AddStepResult(jCtx.CurrentJobID, stepResult)
 	}
-}
 
-// handleVerboseMode handles verbose execution mode
-func (st *Step) handleVerboseMode(name string, req, res map[string]any, okreq, okres bool, jCtx *JobContext) {
-	if !okreq || !okres {
-		jCtx.Printer.PrintVerbose("sorry, request or response is nil")
-		jCtx.SetFailed()
-		return
+	if jCtx.Verbose {
+		jCtx.Printer.PrintSeparator()
 	}
-
-	st.ShowRequestResponse(name, jCtx)
-
-	if st.Test != "" {
-		if ok := st.DoTestWithSequentialPrint(jCtx); !ok {
-			jCtx.SetFailed()
-		}
-	}
-
-	if st.Echo != "" {
-		st.DoEchoWithSequentialPrint(jCtx)
-	}
-
-	// Save step outputs even in verbose mode
-	st.saveOutputs(jCtx)
-
-	jCtx.Printer.PrintSeparator()
 }
 
 // createStepResult creates a StepResult from step execution
-func (st *Step) createStepResult(name, rt string, okrt bool, jCtx *JobContext, repeatCounter *StepRepeatCounter) StepResult {
+func (st *Step) createStepResult(name string, jCtx *JobContext, repeatCounter *StepRepeatCounter) StepResult {
 	result := StepResult{
 		Index:         st.idx,
 		Name:          name,
@@ -183,8 +153,8 @@ func (st *Step) createStepResult(name, rt string, okrt bool, jCtx *JobContext, r
 		RepeatCounter: repeatCounter,
 	}
 
-	if jCtx.Config.RT && okrt && rt != "" {
-		result.RT = rt
+	if jCtx.RT && st.ctx.RT != "" {
+		result.RT = st.ctx.RT
 	}
 
 	if st.Test != "" {
@@ -213,7 +183,7 @@ func (st *Step) getEchoOutput(printer *Printer) string {
 	return printer.generateEchoOutput(exprOut, err)
 }
 
-func (st *Step) handleRepeatExecution(jCtx *JobContext, name, rt string, okrt bool) {
+func (st *Step) handleRepeatExecution(jCtx *JobContext, name string) {
 
 	// Initialize counter if first execution
 	counter, exists := jCtx.StepCounters[st.idx]
@@ -251,7 +221,7 @@ func (st *Step) handleRepeatExecution(jCtx *JobContext, name, rt string, okrt bo
 
 	if isFinalExecution {
 		// Create StepResult with repeat counter for final execution
-		stepResult := st.createStepResult(name, rt, okrt, jCtx, &counter)
+		stepResult := st.createStepResult(name, jCtx, &counter)
 
 		// Add step result to workflow buffer
 		if jCtx.Result != nil {
@@ -265,42 +235,19 @@ func (st *Step) handleRepeatExecution(jCtx *JobContext, name, rt string, okrt bo
 	}
 }
 
-func (st *Step) DoTestWithSequentialPrint(jCtx *JobContext) bool {
-	exprOut, err := st.expr.Eval(st.Test, st.ctx)
-	if err != nil {
-		jCtx.Printer.LogError("Test Error: %s", err)
-		jCtx.Printer.LogError("Input: %s", st.Test)
-		return false
-	}
-
-	boolOutput, boolOk := exprOut.(bool)
-	if !boolOk {
-		jCtx.Printer.LogDebug("%s", jCtx.Printer.generateTestTypeMismatch(st.Test, exprOut))
-		return false
-	}
-
-	jCtx.Printer.PrintTestResult(boolOutput, st.Test, st.ctx)
-	return boolOutput
-}
-
-func (st *Step) DoEchoWithSequentialPrint(jCtx *JobContext) {
-	exprOut, err := st.expr.EvalTemplate(st.Echo, st.ctx)
-	if err != nil {
-		jCtx.Printer.LogError("Echo Error: %#v (input: %s)", err, st.Echo)
-	} else {
-		jCtx.Printer.PrintEchoContent(exprOut)
-	}
-}
-
 func (st *Step) DoTest(printer *Printer) (string, bool) {
 	exprOut, err := st.expr.Eval(st.Test, st.ctx)
 	if err != nil {
-		return printer.generateTestError(err), false
+		return printer.generateTestError(st.Test, err), false
 	}
 
 	boolOutput, boolOk := exprOut.(bool)
 	if !boolOk {
 		return printer.generateTestTypeMismatch(st.Test, exprOut), false
+	}
+
+	if printer.verbose {
+		printer.PrintTestResult(boolOutput, st.Test, st.ctx)
 	}
 
 	if !boolOutput {
@@ -313,7 +260,7 @@ func (st *Step) DoTest(printer *Printer) (string, bool) {
 func (st *Step) DoEcho(jCtx *JobContext) {
 	exprOut, err := st.expr.EvalTemplate(st.Echo, st.ctx)
 	if err != nil {
-		jCtx.Printer.LogError("Echo evaluation failed: %#v", err)
+		jCtx.Printer.LogError("Echo evaluation failed: %#v (input: %s)", err, st.Echo)
 	} else {
 		jCtx.Printer.PrintEchoContent(exprOut)
 	}
@@ -373,11 +320,6 @@ func (st *Step) updateCtx(logs []map[string]any, req, res map[string]any, rt str
 	st.ctx.Res = res
 	st.ctx.RT = rt
 }
-
-func (st *Step) ShowRequestResponse(name string, jCtx *JobContext) {
-	jCtx.Printer.PrintRequestResponse(st.idx, name, st.ctx.Req, st.ctx.Res, st.ctx.RT)
-}
-
 
 // handleWait processes the wait field and sleeps if necessary
 func (st *Step) handleWait(jCtx *JobContext) {

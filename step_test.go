@@ -203,12 +203,12 @@ func TestStep_handleWait(t *testing.T) {
 
 func TestStep_SkipIfWithWaitTiming(t *testing.T) {
 	tests := []struct {
-		name           string
-		wait           string
-		skipif         string
-		expectSkip     bool
-		maxDuration    time.Duration
-		minDuration    time.Duration
+		name        string
+		wait        string
+		skipif      string
+		expectSkip  bool
+		maxDuration time.Duration
+		minDuration time.Duration
 	}{
 		{
 			name:        "skipped step with wait should not wait",
@@ -431,12 +431,17 @@ func TestStep_createStepResult_WithRepeatCounter(t *testing.T) {
 		Test: "res.status == 200",
 		Echo: "Hello World",
 		Wait: "1s",
+		expr: &Expr{},
+		ctx: StepContext{
+			Res: map[string]any{"status": 200},
+			RT:  "250ms",
+		},
 	}
 	jCtx := &JobContext{
-		Config: Config{RT: true},
+		Config:  Config{RT: true},
+		Printer: NewPrinter(false, []string{}),
 	}
 	name := "Test Step"
-	rt := "250ms"
 	counter := &StepRepeatCounter{
 		SuccessCount: 3,
 		FailureCount: 1,
@@ -444,7 +449,7 @@ func TestStep_createStepResult_WithRepeatCounter(t *testing.T) {
 		LastResult:   true,
 	}
 
-	result := step.createStepResult(name, rt, true, jCtx, counter)
+	result := step.createStepResult(name, jCtx, counter)
 
 	if result.RepeatCounter == nil {
 		t.Error("RepeatCounter should not be nil when provided")
@@ -691,87 +696,6 @@ func TestStep_handleActionError(t *testing.T) {
 	}
 }
 
-func TestStep_handleVerboseMode(t *testing.T) {
-	tests := []struct {
-		name         string
-		req          map[string]any
-		res          map[string]any
-		okreq        bool
-		okres        bool
-		testExpr     string
-		echo         string
-		expectFailed bool
-	}{
-		{
-			name:         "normal verbose execution",
-			req:          map[string]any{"url": "http://example.com"},
-			res:          map[string]any{"status": 200},
-			okreq:        true,
-			okres:        true,
-			testExpr:     "",
-			echo:         "",
-			expectFailed: false,
-		},
-		{
-			name:         "nil request or response",
-			req:          nil,
-			res:          nil,
-			okreq:        false,
-			okres:        false,
-			testExpr:     "",
-			echo:         "",
-			expectFailed: true,
-		},
-		{
-			name:         "with test expression",
-			req:          map[string]any{"url": "http://example.com"},
-			res:          map[string]any{"status": 200},
-			okreq:        true,
-			okres:        true,
-			testExpr:     "true",
-			echo:         "",
-			expectFailed: false,
-		},
-		{
-			name:         "with echo",
-			req:          map[string]any{"url": "http://example.com"},
-			res:          map[string]any{"status": 200},
-			okreq:        true,
-			okres:        true,
-			testExpr:     "",
-			echo:         "response.status",
-			expectFailed: false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			step := &Step{
-				Test: tt.testExpr,
-				Echo: tt.echo,
-				expr: &Expr{},
-			}
-
-			// Set up context for test and echo evaluation
-			step.ctx = StepContext{
-				Req: tt.req,
-				Res: tt.res,
-			}
-
-			jCtx := &JobContext{
-				Printer: NewPrinter(false, []string{}),
-				Failed:  false,
-			}
-
-			step.handleVerboseMode("test-step", tt.req, tt.res, tt.okreq, tt.okres, jCtx)
-
-			if jCtx.Failed != tt.expectFailed {
-				t.Errorf("handleVerboseMode() Failed = %v, want %v", jCtx.Failed, tt.expectFailed)
-			}
-		})
-	}
-}
-
 func TestStep_finalize(t *testing.T) {
 	tests := []struct {
 		name         string
@@ -971,11 +895,11 @@ func TestSleepWithMessage(t *testing.T) {
 
 func TestStep_getEchoOutput(t *testing.T) {
 	tests := []struct {
-		name         string
-		echo         string
-		context      StepContext
-		expected     string
-		expectError  bool
+		name        string
+		echo        string
+		context     StepContext
+		expected    string
+		expectError bool
 	}{
 		{
 			name:        "single line echo",
@@ -1053,7 +977,7 @@ func TestStep_getEchoOutput_Error(t *testing.T) {
 	if !strings.Contains(result, "CompileError") && !strings.Contains(result, "RuntimeError") && !strings.Contains(result, "Echo\nerror:") {
 		t.Errorf("getEchoOutput() with invalid expression should return error message, got %q", result)
 	}
-	
+
 	// Verify indentation is applied even to error messages
 	lines := strings.Split(strings.TrimSuffix(result, "\n"), "\n")
 	for _, line := range lines {

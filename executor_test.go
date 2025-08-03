@@ -53,9 +53,9 @@ func TestExecutor_AppendRepeatStepResults(t *testing.T) {
 				LastResult:   true,
 			},
 		},
-		Config:         Config{Verbose: false},
-		Printer:        NewPrinter(false, []string{}),
-		Result: result,
+		Config:  Config{Verbose: false},
+		Printer: NewPrinter(false, []string{}),
+		Result:  result,
 	}
 
 	// Call the method
