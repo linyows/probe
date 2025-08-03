@@ -199,7 +199,6 @@ func TestConvertBodyToJson(t *testing.T) {
 	}
 }
 
-
 func TestConvertNumericStrings(t *testing.T) {
 	tests := []struct {
 		name     string

@@ -126,7 +126,7 @@ func (e *Executor) appendRepeatStepResults(ctx *JobContext) {
 	for i, step := range e.job.Steps {
 		if counter, exists := ctx.StepCounters[i]; exists {
 			hasTest := step.Test != ""
-			
+
 			// Determine status based on repeat counter results
 			var status StatusType
 			if hasTest {
@@ -149,7 +149,7 @@ func (e *Executor) appendRepeatStepResults(ctx *JobContext) {
 				HasTest:       hasTest,
 				RepeatCounter: &counter,
 			}
-			
+
 			// Add step result to workflow buffer
 			if ctx.Result != nil {
 				ctx.Result.AddStepResult(jobID, stepResult)

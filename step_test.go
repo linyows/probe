@@ -203,12 +203,12 @@ func TestStep_handleWait(t *testing.T) {
 
 func TestStep_SkipIfWithWaitTiming(t *testing.T) {
 	tests := []struct {
-		name           string
-		wait           string
-		skipif         string
-		expectSkip     bool
-		maxDuration    time.Duration
-		minDuration    time.Duration
+		name        string
+		wait        string
+		skipif      string
+		expectSkip  bool
+		maxDuration time.Duration
+		minDuration time.Duration
 	}{
 		{
 			name:        "skipped step with wait should not wait",
@@ -696,7 +696,6 @@ func TestStep_handleActionError(t *testing.T) {
 	}
 }
 
-
 func TestStep_finalize(t *testing.T) {
 	tests := []struct {
 		name         string
@@ -896,11 +895,11 @@ func TestSleepWithMessage(t *testing.T) {
 
 func TestStep_getEchoOutput(t *testing.T) {
 	tests := []struct {
-		name         string
-		echo         string
-		context      StepContext
-		expected     string
-		expectError  bool
+		name        string
+		echo        string
+		context     StepContext
+		expected    string
+		expectError bool
 	}{
 		{
 			name:        "single line echo",
@@ -978,7 +977,7 @@ func TestStep_getEchoOutput_Error(t *testing.T) {
 	if !strings.Contains(result, "CompileError") && !strings.Contains(result, "RuntimeError") && !strings.Contains(result, "Echo\nerror:") {
 		t.Errorf("getEchoOutput() with invalid expression should return error message, got %q", result)
 	}
-	
+
 	// Verify indentation is applied even to error messages
 	lines := strings.Split(strings.TrimSuffix(result, "\n"), "\n")
 	for _, line := range lines {
