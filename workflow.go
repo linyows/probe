@@ -27,8 +27,6 @@ func (w *Workflow) Start(c Config) error {
 		w.printer = NewPrinter(c.Verbose, jobIDs)
 	}
 
-	// Print workflow header at the beginning
-	w.printer.PrintHeader(w.Name, w.Description)
 	w.printer.StartSpinner()
 
 	// Initialize shared outputs
@@ -53,7 +51,7 @@ func (w *Workflow) Start(c Config) error {
 
 	w.printer.StopSpinner()
 
-	// Print workflow report using Result data
+	w.printer.PrintHeader(w.Name, w.Description)
 	w.printer.PrintReport(ctx.Result)
 
 	return nil

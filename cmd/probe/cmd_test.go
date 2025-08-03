@@ -196,6 +196,42 @@ func TestNewCmd(t *testing.T) {
 			expectVerbose:  false,
 			expectRT:       false,
 		},
+		{
+			name:           "options after argument",
+			args:           []string{"probe", "test.yml", "--verbose"},
+			expectNil:      false,
+			expectHelp:     false,
+			expectWorkflow: "test.yml",
+			expectVerbose:  true,
+			expectRT:       false,
+		},
+		{
+			name:           "options after argument with multiple flags",
+			args:           []string{"probe", "test.yml", "--verbose", "--rt"},
+			expectNil:      false,
+			expectHelp:     false,
+			expectWorkflow: "test.yml",
+			expectVerbose:  true,
+			expectRT:       true,
+		},
+		{
+			name:           "mixed options before and after argument",
+			args:           []string{"probe", "--verbose", "test.yml", "--rt"},
+			expectNil:      false,
+			expectHelp:     false,
+			expectWorkflow: "test.yml",
+			expectVerbose:  true,
+			expectRT:       true,
+		},
+		{
+			name:           "shorthand option after argument",
+			args:           []string{"probe", "test.yml", "-v"},
+			expectNil:      false,
+			expectHelp:     false,
+			expectWorkflow: "test.yml",
+			expectVerbose:  true,
+			expectRT:       false,
+		},
 		// Note: Builtin command tests are commented out because they try to start actual servers
 		// In a real test environment, these would need to be mocked or tested differently
 		// {
@@ -301,7 +337,7 @@ func TestNewCmd_InvalidFlags(t *testing.T) {
 	}
 
 	// Should output error message
-	if !strings.Contains(output, "Unknown flag: --invalid-flag") {
+	if !strings.Contains(output, "unknown flag: --invalid-flag") {
 		t.Errorf("Expected error message about unknown flag, got: %s", output)
 	}
 }
