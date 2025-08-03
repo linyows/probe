@@ -1,0 +1,85 @@
+name: Database Action Examples
+description: Test database actions with different drivers
+
+jobs:
+- name: SQLite Examples
+  steps:
+  - name: Create SQLite table
+    uses: db
+    with:
+      dsn: "sqlite://./test.db"
+      query: |
+        CREATE TABLE IF NOT EXISTS users (
+          id INTEGER PRIMARY KEY,
+          name TEXT NOT NULL,
+          email TEXT UNIQUE
+        )
+    test: res.code == 0
+
+  - name: Insert test data
+    uses: db
+    with:
+      dsn: "sqlite://./test.db"
+      query: "INSERT INTO users (name, email) VALUES (?, ?)"
+      params__0: "John Doe"
+      params__1: "john@example.com"
+    test: res.code == 0 && res.rows_affected == 1
+
+  - name: Select all users
+    uses: db
+    with:
+      dsn: "sqlite://./test.db"
+      query: "SELECT * FROM users"
+    test: res.code == 0 && res.rows_affected > 0
+
+  - name: Select user by ID
+    uses: db
+    with:
+      dsn: "sqlite://./test.db"
+      query: "SELECT * FROM users WHERE id = ?"
+      params__0: 1
+    test: res.code == 0 && res.rows_affected == 1
+
+  - name: Update user
+    uses: db
+    with:
+      dsn: "sqlite://./test.db"
+      query: "UPDATE users SET email = ? WHERE id = ?"
+      params__0: "john.doe@example.com"
+      params__1: 1
+    test: res.code == 0 && res.rows_affected == 1
+
+  - name: Delete user
+    uses: db
+    with:
+      dsn: "sqlite://./test.db"
+      query: "DELETE FROM users WHERE id = ?"
+      params__0: 1
+    test: res.code == 0 && res.rows_affected == 1
+
+  - name: Drop table
+    uses: db
+    with:
+      dsn: "sqlite://./test.db"
+      query: "DROP TABLE users"
+    test: res.code == 0
+
+# Uncomment and modify these examples if you have MySQL/PostgreSQL available:
+
+# - name: MySQL Examples
+#   steps:
+#   - name: MySQL connection test
+#     uses: db
+#     with:
+#       dsn: "mysql://user:password@localhost:3306/testdb"
+#       query: "SELECT 1 as test"
+#     test: res.code == 0
+
+# - name: PostgreSQL Examples  
+#   steps:
+#   - name: PostgreSQL connection test
+#     uses: db
+#     with:
+#       dsn: "postgres://user:password@localhost:5432/testdb"
+#       query: "SELECT 1 as test"
+#     test: res.code == 0
