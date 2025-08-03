@@ -52,31 +52,68 @@ func newCmd(args []string) *Cmd {
 		rev:        commit,
 	}
 
-	flag.BoolVar(&c.Help, "help", false, "Show command usage")
-	flag.BoolVar(&c.Help, "h", false, "Show command usage (shorthand)")
-	flag.BoolVar(&c.Version, "version", false, "Show version information")
-	//flag.BoolVar(&c.Init, "init", false, "Export a workflow template as yaml file")
-	//flag.BoolVar(&c.Lint, "lint", false, "Check the syntax in workflow")
-	flag.BoolVar(&c.RT, "rt", false, "Show response time")
-	flag.BoolVar(&c.Verbose, "verbose", false, "Show verbose log")
-	flag.BoolVar(&c.Verbose, "v", false, "Show verbose log (shorthand)")
-
-	for _, arg := range args[1:] {
-		if strings.HasPrefix(arg, "-") && !c.isValid(arg) {
-			fmt.Fprintf(os.Stderr, "[ERROR] Unknown flag: %s\n", arg)
-			fmt.Fprintf(os.Stderr, "[INFO] try --help to know more\n")
-			return nil
-		}
-	}
-
-	flag.Parse()
-
-	// Set WorkflowPath from first non-flag argument
-	if flag.NArg() > 0 {
-		c.WorkflowPath = flag.Arg(0)
+	// Parse arguments manually to allow options after arguments
+	if err := c.parseArgs(args[1:]); err != nil {
+		fmt.Fprintf(os.Stderr, "[ERROR] %v\n", err)
+		fmt.Fprintf(os.Stderr, "[INFO] try --help to know more\n")
+		return nil
 	}
 
 	return &c
+}
+
+// parseArgs parses command line arguments manually to allow options after arguments
+func (c *Cmd) parseArgs(args []string) error {
+	var nonFlagArgs []string
+
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
+
+		if strings.HasPrefix(arg, "-") {
+			// Handle flags
+			flagName := strings.TrimLeft(arg, "-")
+			
+			// Handle flags with "=" (e.g., --flag=value)
+			if idx := strings.Index(flagName, "="); idx != -1 {
+				flagName = flagName[:idx]
+			}
+
+			if !c.isValidFlag(flagName) {
+				return fmt.Errorf("unknown flag: %s", arg)
+			}
+
+			// Set the appropriate flag
+			switch flagName {
+			case "help", "h":
+				c.Help = true
+			case "version":
+				c.Version = true
+			case "rt":
+				c.RT = true
+			case "verbose", "v":
+				c.Verbose = true
+			}
+		} else {
+			// Non-flag arguments
+			nonFlagArgs = append(nonFlagArgs, arg)
+		}
+	}
+
+	// Set WorkflowPath from first non-flag argument
+	if len(nonFlagArgs) > 0 {
+		c.WorkflowPath = nonFlagArgs[0]
+	}
+
+	return nil
+}
+
+func (c *Cmd) isValidFlag(flagName string) bool {
+	for _, validFlag := range c.validFlags {
+		if flagName == validFlag {
+			return true
+		}
+	}
+	return false
 }
 
 func (c *Cmd) isValid(flag string) bool {
