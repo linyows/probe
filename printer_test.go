@@ -971,7 +971,7 @@ func TestPrinter_generateTestError(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := printer.generateTestError(tt.err)
+			result := printer.generateTestError("test expression", tt.err)
 			if result != tt.expected {
 				t.Errorf("generateTestError() = %q, want %q", result, tt.expected)
 			}
