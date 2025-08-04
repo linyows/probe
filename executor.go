@@ -108,7 +108,10 @@ func (e *Executor) finalize(overallSuccess bool, ctx JobContext) {
 	jr.EndTime = jr.StartTime.Add(duration)
 	jr.Success = overallSuccess
 	if overallSuccess {
-		jr.Status = "Completed"
+		// Don't overwrite "skipped" status
+		if jr.Status != "skipped" {
+			jr.Status = "Completed"
+		}
 	} else {
 		jr.Status = "Failed"
 	}
