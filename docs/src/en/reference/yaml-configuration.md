@@ -15,8 +15,8 @@ The basic structure of a Probe workflow:
 ```yaml
 name: string                    # Required: Workflow name
 description: string             # Optional: Workflow description
-env:                           # Optional: Environment variables
-  KEY: value
+vars:                          # Optional: Variables (including environment variables)
+  KEY: "{{ENV_VAR ?? 'default'}}"
 defaults:                      # Optional: Default settings
   http:
     timeout: duration
@@ -74,18 +74,18 @@ env:
 
 **Environment Variable Resolution:**
 ```yaml
-env:
+vars:
   # Static values
-  API_URL: "https://api.example.com"
+  api_url: "https://api.example.com"
   
   # Reference external environment variables
-  DB_PASSWORD: "{{env.DATABASE_PASSWORD}}"
+  db_password: "{{DATABASE_PASSWORD}}"
   
   # Default values
-  TIMEOUT: "{{env.REQUEST_TIMEOUT || '30s'}}"
+  timeout: "{{REQUEST_TIMEOUT ?? '30s'}}"
   
   # Computed values
-  BUILD_INFO: "Build {{env.BUILD_NUMBER || 'unknown'}} at {{unixtime()}}"
+  build_info: "Build {{BUILD_NUMBER ?? 'unknown'}} at {{unixtime()}}"
 ```
 
 ### `defaults`
@@ -107,7 +107,7 @@ defaults:
     headers:                          # Default headers for all HTTP requests
       User-Agent: "Probe Monitor"
       Accept: "application/json"
-      Authorization: "Bearer {{env.API_TOKEN}}"
+      Authorization: "Bearer {{vars.api_token}}"
 ```
 
 **Supported HTTP Defaults:**
@@ -175,9 +175,12 @@ jobs:
 **Context:** Access to environment variables and other job results
 
 ```yaml
+vars:
+  environment: "{{ENVIRONMENT}}"
+
 jobs:
   production-only:
-    if: env.ENVIRONMENT == "production"
+    if: vars.environment == "production"
   
   cleanup:
     if: jobs.test.failed
@@ -315,19 +318,24 @@ steps:
 
 **SMTP Action Parameters:**
 ```yaml
+vars:
+  smtp_user: "{{SMTP_USER}}"
+  smtp_pass: "{{SMTP_PASS}}"
+  service_name: "{{SERVICE_NAME}}"
+
 steps:
   - name: "Send Notification"
-    action: smtp
+    uses: smtp
     with:
       host: "smtp.gmail.com"                  # Required
       port: 587                               # Optional, default: 587
-      username: "{{env.SMTP_USER}}"           # Required
-      password: "{{env.SMTP_PASS}}"           # Required
+      username: "{{vars.smtp_user}}"          # Required
+      password: "{{vars.smtp_pass}}"          # Required
       from: "alerts@example.com"              # Required
       to: ["admin@example.com"]               # Required
       cc: ["team@example.com"]                # Optional
       bcc: ["audit@example.com"]              # Optional
-      subject: "Alert: {{env.SERVICE_NAME}}"  # Required
+      subject: "Alert: {{vars.service_name}}" # Required
       body: "Service alert message"           # Required
       html: false                             # Optional, default: false
       tls: true                              # Optional, default: true
