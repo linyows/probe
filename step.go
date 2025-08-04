@@ -111,9 +111,8 @@ func (st *Step) processActionResult(actionResult map[string]any, jCtx *JobContex
 		}
 	}
 
-	// Update logs and context
-	jCtx.Logs = append(jCtx.Logs, actionResult)
-	st.updateCtx(jCtx.Logs, req, res, rt)
+	// Update context
+	st.updateCtx(nil, req, res, rt)
 }
 
 // finalize handles the final phase: test, echo, output save, and result creation
@@ -276,7 +275,6 @@ func (st *Step) SetCtx(j JobContext, override map[string]any) {
 	// Create context for step vars evaluation
 	evalCtx := StepContext{
 		Vars:    j.Vars,
-		Logs:    j.Logs,
 		Outputs: outputs,
 	}
 
@@ -309,13 +307,11 @@ func (st *Step) SetCtx(j JobContext, override map[string]any) {
 
 	st.ctx = StepContext{
 		Vars:    vers,
-		Logs:    j.Logs,
 		Outputs: outputs,
 	}
 }
 
 func (st *Step) updateCtx(logs []map[string]any, req, res map[string]any, rt string) {
-	st.ctx.Logs = logs
 	st.ctx.Req = req
 	st.ctx.Res = res
 	st.ctx.RT = rt

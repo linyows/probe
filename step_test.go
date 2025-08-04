@@ -636,26 +636,9 @@ func TestStep_processActionResult(t *testing.T) {
 				expr: &Expr{},
 			}
 
-			jCtx := &JobContext{
-				Logs: []map[string]any{},
-			}
+			jCtx := &JobContext{}
 
 			step.processActionResult(tt.actionResult, jCtx)
-
-			if len(jCtx.Logs) != tt.expectLogs {
-				t.Errorf("processActionResult() logs count = %v, want %v", len(jCtx.Logs), tt.expectLogs)
-			}
-
-			// Verify the result was added to logs
-			if len(jCtx.Logs) > 0 {
-				lastLog := jCtx.Logs[len(jCtx.Logs)-1]
-				if req := lastLog["req"]; req == nil {
-					t.Errorf("processActionResult() should preserve req in logs")
-				}
-				if res := lastLog["res"]; res == nil {
-					t.Errorf("processActionResult() should preserve res in logs")
-				}
-			}
 		})
 	}
 }
@@ -808,7 +791,6 @@ func TestStep_Do_Integration(t *testing.T) {
 		jobContext := JobContext{
 			Config:  Config{Verbose: false},
 			Printer: NewPrinter(false, []string{}),
-			Logs:    []map[string]any{},
 		}
 
 		// The Do() method should execute without panicking
