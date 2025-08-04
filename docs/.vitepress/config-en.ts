@@ -84,7 +84,7 @@ export const enNavSidebar = {
     '/reference/': reference,
   },
   editLink: {
-    pattern: 'https://github.com/linyows/probe/edit/main/website/docs/:path',
+    pattern: 'https://github.com/linyows/probe/edit/main/docs/src/:path',
     text: 'Edit this page on GitHub'
   },
   lastUpdated: {

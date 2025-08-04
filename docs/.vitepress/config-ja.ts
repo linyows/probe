@@ -87,7 +87,7 @@ export const jaNavSidebar = {
     text: '更新日時',
   },
   editLink: {
-    pattern: 'https://github.com/linyows/probe/edit/main/website/docs/:path',
+    pattern: 'https://github.com/linyows/probe/edit/main/docs/src/:path',
     text: 'GitHubでこのページを編集する'
   }
 }
