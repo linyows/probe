@@ -16,4 +16,5 @@ jobs:
     test: |
       res.code == 200 &&
       res.body.form.message == "hello"
-    echo: steps[0].res.body.headers["X-Foobar"]
+    echo: |
+      X-Foobar: {{res.body.headers["X-Foobar"]}}
