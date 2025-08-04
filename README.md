@@ -446,12 +446,10 @@ Expression Reference
 --------------------
 
 ### Context Variables
-- `vars.*`: Workflow and step variables
-- `env.*`: Environment variables
+- `vars.*`: Workflow and step variables (including environment variables defined in vars)
 - `res.*`: Previous step response
-- `req.*`: Previous step request
+- `req.*`: Previous step request  
 - `outputs.*`: Step outputs
-- `steps[i].*`: Historical step data
 
 ### Response Object
 ```yaml
@@ -479,7 +477,7 @@ Configuration
 -------------
 
 ### Environment Variables
-- `PROBE_*`: Custom environment variables accessible via `env.*`
+- Environment variables can be accessed by defining them in the root `vars` section
 
 ### Defaults
 Use YAML anchors for common configurations:
