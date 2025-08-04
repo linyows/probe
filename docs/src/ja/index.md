@@ -9,7 +9,7 @@ hero:
   actions:
     - theme: brand
       text: いますぐ始める
-      link: /guide/get-started
+      link: /ja/guide/introduction/what-is-probe
     - theme: alt
       text: GitHubを見る
       link: https://github.com/linyows/probe
