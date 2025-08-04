@@ -11,6 +11,7 @@ type Job struct {
 	Steps    []*Step  `yaml:"steps" validate:"required"`
 	Repeat   *Repeat  `yaml:"repeat"`
 	Defaults any      `yaml:"defaults"`
+	SkipIf   string   `yaml:"skipif,omitempty"`
 	ctx      *JobContext
 }
 
@@ -28,6 +29,12 @@ func (j *Job) Start(ctx JobContext) error {
 
 	if err := j.expandJobName(expr, ctx); err != nil {
 		return NewExecutionError("job_start", "failed to expand job name", err)
+	}
+
+	// Check if job should be skipped
+	if j.shouldSkip(expr, ctx) {
+		j.handleSkip(ctx)
+		return nil
 	}
 
 	j.executeSteps(expr, ctx)
@@ -130,4 +137,55 @@ func isValidStepID(id string) bool {
 	}
 
 	return true
+}
+
+// shouldSkip evaluates the skipif expression and returns true if job should be skipped
+func (j *Job) shouldSkip(expr *Expr, ctx JobContext) bool {
+	if j.SkipIf == "" {
+		return false
+	}
+
+	// Create a step context for evaluation - same as SetCtx in step.go
+	var outputs map[string]map[string]any
+	if ctx.Outputs != nil {
+		outputs = ctx.Outputs.GetAll()
+	}
+
+	// Create context for job skipif evaluation
+	evalCtx := StepContext{
+		Vars:    ctx.Vars,
+		Logs:    ctx.Logs,
+		Outputs: outputs,
+	}
+
+	result, err := expr.Eval(j.SkipIf, evalCtx)
+	if err != nil {
+		j.ctx.Printer.PrintError("job skipif evaluation error: %v", err)
+		return false // Don't skip on evaluation error
+	}
+
+	boolResult, ok := result.(bool)
+	if !ok {
+		j.ctx.Printer.PrintError("job skipif expression must return boolean, got: %T", result)
+		return false // Don't skip on type error
+	}
+
+	return boolResult
+}
+
+// handleSkip handles the skipped job logic
+func (j *Job) handleSkip(ctx JobContext) {
+	if ctx.Config.Verbose {
+		j.ctx.Printer.LogDebug("Job '%s' (SKIPPED)", j.Name)
+		j.ctx.Printer.LogDebug("Skip condition: %s", j.SkipIf)
+		j.ctx.Printer.PrintSeparator()
+	}
+
+	// Mark job as skipped in the result
+	if ctx.Result != nil {
+		if jobResult, exists := ctx.Result.Jobs[j.ID]; exists {
+			jobResult.Status = "skipped"
+			jobResult.Success = true // Skipped jobs are considered successful
+		}
+	}
 }

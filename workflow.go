@@ -192,6 +192,9 @@ func (w *Workflow) evalVars() (map[string]any, error) {
 				return vars, err
 			}
 			vars[k] = output
+		} else {
+			// Handle other types directly (bool, int, float, etc.)
+			vars[k] = v
 		}
 	}
 
