@@ -45,6 +45,12 @@ func TestColorFunctions(t *testing.T) {
 			text:     "warning",
 			expected: "warning",
 		},
+		{
+			name:     "colorSkipped",
+			colorFn:  colorSkipped,
+			text:     "skipped",
+			expected: "skipped",
+		},
 	}
 
 	for _, tt := range tests {
@@ -178,6 +184,7 @@ func TestStatusType(t *testing.T) {
 		{StatusSuccess, "success"},
 		{StatusError, "error"},
 		{StatusWarning, "warning"},
+		{StatusSkipped, "skipped"},
 	}
 
 	for _, tt := range tests {
@@ -187,6 +194,33 @@ func TestStatusType(t *testing.T) {
 				t.Errorf("StatusType %s should have a valid integer value", tt.expected)
 			}
 		})
+	}
+}
+
+// Test StatusType constants have expected values
+func TestStatusTypeConstants(t *testing.T) {
+	// Test that status constants are assigned in expected order
+	if StatusSuccess != 0 {
+		t.Errorf("StatusSuccess should be 0, got %d", StatusSuccess)
+	}
+	if StatusError != 1 {
+		t.Errorf("StatusError should be 1, got %d", StatusError)
+	}
+	if StatusWarning != 2 {
+		t.Errorf("StatusWarning should be 2, got %d", StatusWarning)
+	}
+	if StatusSkipped != 3 {
+		t.Errorf("StatusSkipped should be 3, got %d", StatusSkipped)
+	}
+
+	// Test that all constants are different
+	statuses := []StatusType{StatusSuccess, StatusError, StatusWarning, StatusSkipped}
+	for i, status1 := range statuses {
+		for j, status2 := range statuses {
+			if i != j && status1 == status2 {
+				t.Errorf("StatusType constants should be unique, but %d and %d are both %d", i, j, status1)
+			}
+		}
 	}
 }
 
@@ -369,6 +403,10 @@ func TestPrinter_generateLogError(t *testing.T) {
 	}
 }
 func TestPrinter_generateJobStatus(t *testing.T) {
+	// Disable color output for consistent testing
+	color.NoColor = true
+	defer func() { color.NoColor = false }()
+
 	printer := NewPrinter(false, []string{})
 
 	tests := []struct {
@@ -396,12 +434,20 @@ func TestPrinter_generateJobStatus(t *testing.T) {
 			want:     "⏺ Failed Job (Failed in 2.30s)\n",
 		},
 		{
-			name:     "warning status",
+			name:     "skipped status",
 			jobID:    "job3",
 			jobName:  "Skipped Job",
+			status:   StatusSkipped,
+			duration: 0.0,
+			want:     "⏺ Skipped Job (SKIPPED)\n",
+		},
+		{
+			name:     "warning status",
+			jobID:    "job4",
+			jobName:  "Warning Job",
 			status:   StatusWarning,
 			duration: 0.1,
-			want:     "⏺ Skipped Job (Skipped in 0.10s)\n",
+			want:     "⏺ Warning Job (Unknown status in 0.10s)\n",
 		},
 	}
 
@@ -411,17 +457,124 @@ func TestPrinter_generateJobStatus(t *testing.T) {
 			printer.generateJobStatus(tt.jobID, tt.jobName, tt.status, tt.duration, &output)
 
 			result := output.String()
-			// Remove color codes for easier testing
-			if !strings.Contains(result, tt.jobName) {
-				t.Errorf("generateJobStatus() should contain job name %s, got %s", tt.jobName, result)
-			}
-			if !strings.Contains(result, "1.50s") && tt.duration == 1.5 {
-				t.Errorf("generateJobStatus() should contain duration 1.50s, got %s", result)
-			}
-			if !strings.Contains(result, "Completed") && tt.status == StatusSuccess {
-				t.Errorf("generateJobStatus() should contain Completed for success status, got %s", result)
+			if result != tt.want {
+				t.Errorf("generateJobStatus() = %q, want %q", result, tt.want)
 			}
 		})
+	}
+}
+
+// Test that job status uses correct colors for each status type - with actual color detection
+func TestPrinter_generateJobStatus_ColorMapping(t *testing.T) {
+	// Enable colors to detect actual color differences
+	color.NoColor = false
+	defer func() { color.NoColor = true }()
+
+	printer := NewPrinter(false, []string{})
+
+	tests := []struct {
+		name              string
+		status            StatusType
+		expectedColorCode string // ANSI color code we expect
+	}{
+		{
+			name:              "success uses green color",
+			status:            StatusSuccess,
+			expectedColorCode: "\x1b[38;2;0;175;0m", // RGB(0,175,0) from colorSuccess
+		},
+		{
+			name:              "error uses red color", 
+			status:            StatusError,
+			expectedColorCode: "\x1b[31m", // Red from colorError
+		},
+		{
+			name:              "skipped uses gray color",
+			status:            StatusSkipped,
+			expectedColorCode: "\x1b[90m", // Bright black (gray) from colorSkipped
+		},
+		{
+			name:              "warning uses yellow color",
+			status:            StatusWarning,
+			expectedColorCode: "\x1b[33m", // Yellow from colorWarning
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var output strings.Builder
+			printer.generateJobStatus("test-job", "Test Job", tt.status, 1.0, &output)
+
+			result := output.String()
+			
+			// Verify basic content is present
+			if !strings.Contains(result, "Test Job") {
+				t.Errorf("generateJobStatus() should contain job name, got %q", result)
+			}
+			
+			// Verify the expected color code is present in the output
+			if !strings.Contains(result, tt.expectedColorCode) {
+				t.Errorf("generateJobStatus() should contain color code %q for %s, got %q", tt.expectedColorCode, tt.name, result)
+			}
+		})
+	}
+}
+
+// Test that SUCCESS status specifically does NOT use blue color (colorInfo)
+func TestPrinter_generateJobStatus_SuccessNotBlue(t *testing.T) {
+	// Enable colors to detect actual color differences
+	color.NoColor = false
+	defer func() { color.NoColor = true }()
+
+	printer := NewPrinter(false, []string{})
+
+	var output strings.Builder
+	printer.generateJobStatus("success-job", "Success Job", StatusSuccess, 1.5, &output)
+
+	result := output.String()
+	
+	// Blue color code from colorInfo
+	blueColorCode := "\x1b[34m"
+	
+	// SUCCESS jobs should NOT contain blue color
+	if strings.Contains(result, blueColorCode) {
+		t.Errorf("StatusSuccess should NOT use blue color (colorInfo), but found blue color code in output: %q", result)
+	}
+	
+	// SUCCESS jobs SHOULD contain green color
+	greenColorCode := "\x1b[38;2;0;175;0m" // RGB(0,175,0) from colorSuccess
+	if !strings.Contains(result, greenColorCode) {
+		t.Errorf("StatusSuccess should use green color (colorSuccess), but green color code not found in output: %q", result)
+	}
+}
+
+// Test that skipped jobs have gray formatting for entire line
+func TestPrinter_generateJobStatus_SkippedFormatting(t *testing.T) {
+	// Disable color output for consistent testing
+	color.NoColor = true
+	defer func() { color.NoColor = false }()
+
+	printer := NewPrinter(false, []string{})
+
+	// Test skipped job formatting
+	var output strings.Builder
+	printer.generateJobStatus("skip-job", "Skipped Job", StatusSkipped, 0.0, &output)
+
+	result := output.String()
+	expected := "⏺ Skipped Job (SKIPPED)\n"
+
+	if result != expected {
+		t.Errorf("generateJobStatus() for skipped job = %q, want %q", result, expected)
+	}
+
+	// Test non-skipped job formatting for comparison
+	var output2 strings.Builder
+	printer.generateJobStatus("success-job", "Success Job", StatusSuccess, 1.5, &output2)
+
+	result2 := output2.String()
+	expected2 := "⏺ Success Job (Completed in 1.50s)\n"
+
+	if result2 != expected2 {
+		t.Errorf("generateJobStatus() for success job = %q, want %q", result2, expected2)
 	}
 }
 
