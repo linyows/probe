@@ -45,9 +45,12 @@ steps:
 **Supports:** Template expressions
 
 ```yaml
+vars:
+  api_base_url: "{{API_BASE_URL ?? 'https://api.example.com'}}"
+
 with:
   url: "https://api.example.com/users"
-  url: "{{env.API_BASE_URL}}/v1/health"
+  url: "{{vars.api_base_url}}/v1/health"
   url: "https://api.example.com/users/{{outputs.auth.user_id}}"
 ```
 
@@ -70,13 +73,16 @@ with:
 **Supports:** Template expressions in values
 
 ```yaml
+vars:
+  api_token: "{{API_TOKEN}}"
+
 with:
   url: "https://api.example.com/users"
   headers:
-    Authorization: "Bearer {{env.API_TOKEN}}"
+    Authorization: "Bearer {{vars.api_token}}"
     Content-Type: "application/json"
     User-Agent: "Probe Monitor v1.0"
-    X-Request-ID: "{{uuid()}}"
+    X-Request-ID: "{{unixtime()}}"
 ```
 
 #### `body` (optional)
@@ -87,6 +93,10 @@ with:
 
 ```yaml
 # JSON body
+vars:
+  user_name: "{{USER_NAME}}"
+  user_email: "{{USER_EMAIL}}"
+
 with:
   url: "https://api.example.com/users"
   method: "POST"
@@ -94,8 +104,8 @@ with:
     Content-Type: "application/json"
   body: |
     {
-      "name": "{{env.USER_NAME}}",
-      "email": "{{env.USER_EMAIL}}",
+      "name": "{{vars.user_name}}",
+      "email": "{{vars.user_email}}",
       "active": true
     }
 
@@ -105,7 +115,7 @@ with:
   method: "POST"
   headers:
     Content-Type: "application/x-www-form-urlencoded"
-  body: "name={{env.USER_NAME}}&email={{env.USER_EMAIL}}"
+  body: "name={{vars.user_name}}&email={{vars.user_email}}"
 
 # Template expression
 with:
@@ -201,30 +211,37 @@ steps:
 #### Authentication
 
 ```yaml
+vars:
+  api_url: "{{API_URL}}"
+  access_token: "{{ACCESS_TOKEN}}"
+  username: "{{USERNAME}}"
+  password: "{{PASSWORD}}"
+  api_key: "{{API_KEY}}"
+
 # Bearer token
 steps:
   - name: "Authenticated Request"
-    action: http
+    uses: http
     with:
-      url: "{{env.API_URL}}/protected"
+      url: "{{vars.api_url}}/protected"
       headers:
-        Authorization: "Bearer {{env.ACCESS_TOKEN}}"
+        Authorization: "Bearer {{vars.access_token}}"
 
 # Basic auth
   - name: "Basic Auth Request"
-    action: http
+    uses: http
     with:
-      url: "{{env.API_URL}}/basic"
+      url: "{{vars.api_url}}/basic"
       headers:
-        Authorization: "Basic {{base64(env.USERNAME + ':' + env.PASSWORD)}}"
+        Authorization: "Basic {{encode_base64(vars.username + ':' + vars.password)}}"
 
 # API key
   - name: "API Key Request"
-    action: http
+    uses: http
     with:
-      url: "{{env.API_URL}}/data"
+      url: "{{vars.api_url}}/data"
       headers:
-        X-API-Key: "{{env.API_KEY}}"
+        X-API-Key: "{{vars.api_key}}"
 ```
 
 #### Content Types

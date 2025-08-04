@@ -33,13 +33,18 @@ Functions are called within template expressions using the pipe operator (`|`) o
 
 ```yaml
 # Pipe syntax (preferred for chaining)
-value: "{{env.USER_NAME | upper | trim}}"
+vars:
+  user_name: "{{USER_NAME}}"
+  base_url: "{{BASE_URL}}"
+  path: "{{PATH}}"
+
+value: "{{vars.user_name | upper | trim}}"
 
 # Direct function call
-value: "{{upper(env.USER_NAME)}}"
+value: "{{upper(vars.user_name)}}"
 
 # Mixed usage
-value: "{{env.BASE_URL}}/{{env.PATH | lower | replace(' ', '-')}}"
+value: "{{vars.base_url}}/{{vars.path | lower | replace(' ', '-')}}"
 ```
 
 ## String Functions

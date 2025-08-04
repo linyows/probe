@@ -18,13 +18,13 @@ Start with a basic API endpoint test:
 name: Basic API Test
 description: Test a simple REST API endpoint
 
-env:
-  API_BASE_URL: https://jsonplaceholder.typicode.com
-  TIMEOUT: 30s
+vars:
+  api_base_url: "{{API_BASE_URL ?? 'https://jsonplaceholder.typicode.com'}}"
+  timeout: "{{TIMEOUT ?? '30s'}}"
 
 defaults:
   http:
-    timeout: "{{env.TIMEOUT}}"
+    timeout: "{{vars.timeout}}"
     headers:
       Accept: "application/json"
       User-Agent: "Probe API Tester v1.0"
@@ -36,7 +36,7 @@ jobs:
       - name: Get Posts
         action: http
         with:
-          url: "{{env.API_BASE_URL}}/posts"
+          url: "{{vars.api_base_url}}/posts"
         test: |
           res.status == 200 &&
           res.headers["content-type"].contains("application/json") &&
@@ -50,7 +50,7 @@ jobs:
       - name: Get Single Post
         action: http
         with:
-          url: "{{env.API_BASE_URL}}/posts/{{outputs.first_post_id}}"
+          url: "{{vars.api_base_url}}/posts/{{outputs.first_post_id}}"
         test: |
           res.status == 200 &&
           res.json.id == outputs.first_post_id &&
@@ -80,9 +80,9 @@ Test Create, Read, Update, Delete operations:
 name: CRUD API Testing
 description: Test complete CRUD operations on a REST API
 
-env:
-  API_BASE_URL: https://jsonplaceholder.typicode.com
-  TEST_USER_ID: 1
+vars:
+  api_base_url: "{{API_BASE_URL ?? 'https://jsonplaceholder.typicode.com'}}"
+  test_user_id: "{{TEST_USER_ID ?? '1'}}"
 
 jobs:
   crud-operations:
@@ -93,7 +93,7 @@ jobs:
         id: create
         action: http
         with:
-          url: "{{env.API_BASE_URL}}/posts"
+          url: "{{vars.api_base_url}}/posts"
           method: POST
           headers:
             Content-Type: "application/json"
@@ -101,13 +101,13 @@ jobs:
             {
               "title": "Test Post {{random_str(6)}}",
               "body": "This is a test post created by Probe at {{unixtime()}}",
-              "userId": {{env.TEST_USER_ID}}
+              "userId": {{vars.test_user_id}}
             }
         test: |
           res.status == 201 &&
           res.json.id != null &&
           res.json.title != null &&
-          res.json.userId == {{env.TEST_USER_ID}}
+          res.json.userId == {{vars.test_user_id}}
         outputs:
           created_post_id: res.json.id
           created_title: res.json.title
@@ -117,7 +117,7 @@ jobs:
       - name: Read Created Post
         action: http
         with:
-          url: "{{env.API_BASE_URL}}/posts/{{outputs.create.created_post_id}}"
+          url: "{{vars.api_base_url}}/posts/{{outputs.create.created_post_id}}"
         test: |
           res.status == 200 &&
           res.json.id == outputs.create.created_post_id &&
@@ -130,7 +130,7 @@ jobs:
         id: update
         action: http
         with:
-          url: "{{env.API_BASE_URL}}/posts/{{outputs.create.created_post_id}}"
+          url: "{{vars.api_base_url}}/posts/{{outputs.create.created_post_id}}"
           method: PUT
           headers:
             Content-Type: "application/json"
@@ -139,7 +139,7 @@ jobs:
               "id": {{outputs.create.created_post_id}},
               "title": "Updated: {{outputs.create.created_title}}",
               "body": "This post was updated by Probe at {{unixtime()}}",
-              "userId": {{env.TEST_USER_ID}}
+              "userId": {{vars.test_user_id}}
             }
         test: |
           res.status == 200 &&
@@ -152,7 +152,7 @@ jobs:
       - name: Partial Update Post
         action: http
         with:
-          url: "{{env.API_BASE_URL}}/posts/{{outputs.create.created_post_id}}"
+          url: "{{vars.api_base_url}}/posts/{{outputs.create.created_post_id}}"
           method: PATCH
           headers:
             Content-Type: "application/json"
@@ -170,7 +170,7 @@ jobs:
       - name: Delete Post
         action: http
         with:
-          url: "{{env.API_BASE_URL}}/posts/{{outputs.create.created_post_id}}"
+          url: "{{vars.api_base_url}}/posts/{{outputs.create.created_post_id}}"
           method: DELETE
         test: res.status == 200
         outputs:
@@ -180,7 +180,7 @@ jobs:
       - name: Verify Deletion
         action: http
         with:
-          url: "{{env.API_BASE_URL}}/posts/{{outputs.create.created_post_id}}"
+          url: "{{vars.api_base_url}}/posts/{{outputs.create.created_post_id}}"
         test: res.status == 404
         continue_on_error: true
         outputs:
@@ -214,11 +214,13 @@ jobs:
 name: Bearer Token API Testing
 description: Test APIs with Bearer token authentication
 
-env:
-  API_BASE_URL: https://api.yourapp.com
-  AUTH_URL: https://auth.yourapp.com
-  TEST_USERNAME: test@example.com
-  TEST_PASSWORD: test_password_123
+vars:
+  api_base_url: "{{API_BASE_URL ?? 'https://api.yourapp.com'}}"
+  auth_url: "{{AUTH_URL ?? 'https://auth.yourapp.com'}}"
+  test_username: "{{TEST_USERNAME ?? 'test@example.com'}}"
+  test_password: "{{TEST_PASSWORD ?? 'test_password_123'}}"
+  client_id: "{{CLIENT_ID}}"
+  client_secret: "{{CLIENT_SECRET}}"
 
 jobs:
   authentication-flow:
@@ -229,17 +231,17 @@ jobs:
         id: login
         action: http
         with:
-          url: "{{env.AUTH_URL}}/oauth/token"
+          url: "{{vars.auth_url}}/oauth/token"
           method: POST
           headers:
             Content-Type: "application/json"
           body: |
             {
               "grant_type": "password",
-              "username": "{{env.TEST_USERNAME}}",
-              "password": "{{env.TEST_PASSWORD}}",
-              "client_id": "{{env.CLIENT_ID}}",
-              "client_secret": "{{env.CLIENT_SECRET}}"
+              "username": "{{vars.test_username}}",
+              "password": "{{vars.test_password}}",
+              "client_id": "{{vars.client_id}}",
+              "client_secret": "{{vars.client_secret}}"
             }
         test: |
           res.status == 200 &&
@@ -257,14 +259,14 @@ jobs:
         id: profile
         action: http
         with:
-          url: "{{env.API_BASE_URL}}/user/profile"
+          url: "{{vars.api_base_url}}/user/profile"
           headers:
             Authorization: "{{outputs.login.token_type}} {{outputs.login.access_token}}"
             Accept: "application/json"
         test: |
           res.status == 200 &&
           res.json.id != null &&
-          res.json.email == "{{env.TEST_USERNAME}}"
+          res.json.email == "{{vars.test_username}}"
         outputs:
           user_id: res.json.id
           user_email: res.json.email
@@ -274,7 +276,7 @@ jobs:
       - name: Access Protected Resource
         action: http
         with:
-          url: "{{env.API_BASE_URL}}/user/{{outputs.profile.user_id}}/data"
+          url: "{{vars.api_base_url}}/user/{{outputs.profile.user_id}}/data"
           headers:
             Authorization: "{{outputs.login.token_type}} {{outputs.login.access_token}}"
         test: |
@@ -288,7 +290,7 @@ jobs:
         id: refresh
         action: http
         with:
-          url: "{{env.AUTH_URL}}/oauth/token"
+          url: "{{vars.auth_url}}/oauth/token"
           method: POST
           headers:
             Content-Type: "application/json"
@@ -296,8 +298,8 @@ jobs:
             {
               "grant_type": "refresh_token",
               "refresh_token": "{{outputs.login.refresh_token}}",
-              "client_id": "{{env.CLIENT_ID}}",
-              "client_secret": "{{env.CLIENT_SECRET}}"
+              "client_id": "{{vars.client_id}}",
+              "client_secret": "{{vars.client_secret}}"
             }
         test: |
           res.status == 200 &&
@@ -310,7 +312,7 @@ jobs:
       - name: Test New Token
         action: http
         with:
-          url: "{{env.API_BASE_URL}}/user/profile"
+          url: "{{vars.api_base_url}}/user/profile"
           headers:
             Authorization: "Bearer {{outputs.refresh.new_access_token}}"
         test: res.status == 200
@@ -324,7 +326,7 @@ jobs:
       - name: Test No Authorization
         action: http
         with:
-          url: "{{env.API_BASE_URL}}/user/profile"
+          url: "{{vars.api_base_url}}/user/profile"
         test: res.status == 401
         outputs:
           no_auth_rejected: res.status == 401
@@ -333,7 +335,7 @@ jobs:
       - name: Test Invalid Token
         action: http
         with:
-          url: "{{env.API_BASE_URL}}/user/profile"
+          url: "{{vars.api_base_url}}/user/profile"
           headers:
             Authorization: "Bearer invalid_token_123"
         test: res.status == 401
@@ -342,12 +344,12 @@ jobs:
 
       # Test with expired token (if available)
       - name: Test Expired Token
-        if: env.EXPIRED_TOKEN
+        if: vars.expired_token
         action: http
         with:
-          url: "{{env.API_BASE_URL}}/user/profile"
+          url: "{{vars.api_base_url}}/user/profile"
           headers:
-            Authorization: "Bearer {{env.EXPIRED_TOKEN}}"
+            Authorization: "Bearer {{vars.expired_token}}"
         test: res.status == 401
         outputs:
           expired_token_rejected: res.status == 401
@@ -370,7 +372,7 @@ jobs:
           SECURITY VALIDATION:
           ✅ No Auth Rejected: {{outputs.unauthorized-access-test.no_auth_rejected ? "Yes (401)" : "Security Issue!"}}
           ✅ Invalid Token Rejected: {{outputs.unauthorized-access-test.invalid_token_rejected ? "Yes (401)" : "Security Issue!"}}
-          {{env.EXPIRED_TOKEN ? "✅ Expired Token Rejected: " + (outputs.unauthorized-access-test.expired_token_rejected ? "Yes (401)" : "Security Issue!") : ""}}
+          {{vars.expired_token ? "✅ Expired Token Rejected: " + (outputs.unauthorized-access-test.expired_token_rejected ? "Yes (401)" : "Security Issue!") : ""}}
           
           USER INFORMATION:
           User ID: {{outputs.authentication-flow.user_id}}
@@ -385,10 +387,10 @@ jobs:
 name: API Key Authentication Testing
 description: Test APIs using API key authentication
 
-env:
-  API_BASE_URL: https://api.yourservice.com
-  API_KEY: your_api_key_here
-  RATE_LIMIT_TIER: premium
+vars:
+  api_base_url: "{{API_BASE_URL ?? 'https://api.yourservice.com'}}"
+  api_key: "{{API_KEY}}"
+  rate_limit_tier: "{{RATE_LIMIT_TIER ?? 'premium'}}"
 
 jobs:
   api-key-tests:
@@ -398,9 +400,9 @@ jobs:
       - name: Test API Key in Header
         action: http
         with:
-          url: "{{env.API_BASE_URL}}/data"
+          url: "{{vars.api_base_url}}/data"
           headers:
-            X-API-Key: "{{env.API_KEY}}"
+            X-API-Key: "{{vars.api_key}}"
             Accept: "application/json"
         test: |
           res.status == 200 &&
@@ -415,7 +417,7 @@ jobs:
       - name: Test API Key in Query
         action: http
         with:
-          url: "{{env.API_BASE_URL}}/data?api_key={{env.API_KEY}}"
+          url: "{{vars.api_base_url}}/data?api_key={{vars.api_key}}"
         test: res.status == 200
         outputs:
           query_auth_success: true
@@ -424,12 +426,12 @@ jobs:
       - name: Test Rate Limit Info
         action: http
         with:
-          url: "{{env.API_BASE_URL}}/rate-limit-status"
+          url: "{{vars.api_base_url}}/rate-limit-status"
           headers:
-            X-API-Key: "{{env.API_KEY}}"
+            X-API-Key: "{{vars.api_key}}"
         test: |
           res.status == 200 &&
-          res.json.tier == "{{env.RATE_LIMIT_TIER}}" &&
+          res.json.tier == "{{vars.rate_limit_tier}}" &&
           res.json.requests_remaining > 0
         outputs:
           requests_remaining: res.json.requests_remaining
@@ -440,7 +442,7 @@ jobs:
       - name: Test Invalid API Key
         action: http
         with:
-          url: "{{env.API_BASE_URL}}/data"
+          url: "{{vars.api_base_url}}/data"
           headers:
             X-API-Key: "invalid_key_123"
         test: res.status == 401 || res.status == 403
@@ -456,7 +458,7 @@ jobs:
           Invalid Key Rejected: {{outputs.invalid_key_rejected ? "✅ Yes" : "❌ Security Issue"}}
           
           Rate Limiting:
-          Tier: {{env.RATE_LIMIT_TIER}}
+          Tier: {{vars.rate_limit_tier}}
           Requests Remaining: {{outputs.requests_remaining}}/{{outputs.requests_per_hour}}
           Current Usage: {{outputs.current_usage}}
           Reset Time: {{outputs.rate_limit_reset}}
@@ -481,9 +483,9 @@ jobs:
         id: users
         action: http
         with:
-          url: "{{env.API_BASE_URL}}/users"
+          url: "{{vars.api_base_url}}/users"
           headers:
-            Authorization: "Bearer {{env.API_TOKEN}}"
+            Authorization: "Bearer {{vars.api_token}}"
         test: |
           res.status == 200 &&
           res.json != null &&
@@ -515,9 +517,9 @@ jobs:
       - name: Get Single User Details
         action: http
         with:
-          url: "{{env.API_BASE_URL}}/users/{{outputs.users.first_user_id}}"
+          url: "{{vars.api_base_url}}/users/{{outputs.users.first_user_id}}"
           headers:
-            Authorization: "Bearer {{env.API_TOKEN}}"
+            Authorization: "Bearer {{vars.api_token}}"
         test: |
           res.status == 200 &&
           res.json.user != null &&
@@ -544,9 +546,9 @@ jobs:
       - name: Test Data Consistency
         action: http
         with:
-          url: "{{env.API_BASE_URL}}/users/{{outputs.users.first_user_id}}/orders"
+          url: "{{vars.api_base_url}}/users/{{outputs.users.first_user_id}}/orders"
           headers:
-            Authorization: "Bearer {{env.API_TOKEN}}"
+            Authorization: "Bearer {{vars.api_token}}"
         test: |
           res.status == 200 &&
           res.json.orders != null &&
@@ -609,11 +611,11 @@ jobs:
       - name: Test Bad Request
         action: http
         with:
-          url: "{{env.API_BASE_URL}}/users"
+          url: "{{vars.api_base_url}}/users"
           method: POST
           headers:
             Content-Type: "application/json"
-            Authorization: "Bearer {{env.API_TOKEN}}"
+            Authorization: "Bearer {{vars.api_token}}"
           body: |
             {
               "email": "invalid-email",
@@ -634,7 +636,7 @@ jobs:
       - name: Test Unauthorized Access
         action: http
         with:
-          url: "{{env.API_BASE_URL}}/admin/users"
+          url: "{{vars.api_base_url}}/admin/users"
         test: |
           res.status == 401 &&
           res.json.error != null &&
@@ -647,7 +649,7 @@ jobs:
       - name: Test Forbidden Access
         action: http
         with:
-          url: "{{env.API_BASE_URL}}/admin/users"
+          url: "{{vars.api_base_url}}/admin/users"
           headers:
             Authorization: "Bearer {{env.USER_TOKEN}}"  # Non-admin token
         test: |
@@ -662,9 +664,9 @@ jobs:
       - name: Test Not Found
         action: http
         with:
-          url: "{{env.API_BASE_URL}}/users/99999999"
+          url: "{{vars.api_base_url}}/users/99999999"
           headers:
-            Authorization: "Bearer {{env.API_TOKEN}}"
+            Authorization: "Bearer {{vars.api_token}}"
         test: |
           res.status == 404 &&
           res.json.error != null &&
@@ -677,11 +679,11 @@ jobs:
       - name: Test Unprocessable Entity
         action: http
         with:
-          url: "{{env.API_BASE_URL}}/users"
+          url: "{{vars.api_base_url}}/users"
           method: POST
           headers:
             Content-Type: "application/json"
-            Authorization: "Bearer {{env.API_TOKEN}}"
+            Authorization: "Bearer {{vars.api_token}}"
           body: |
             {
               "email": "existing@example.com",
@@ -699,7 +701,7 @@ jobs:
       - name: Test Rate Limiting
         action: http
         with:
-          url: "{{env.API_BASE_URL}}/high-rate-endpoint"
+          url: "{{vars.api_base_url}}/high-rate-endpoint"
           headers:
             Authorization: "Bearer {{env.LIMITED_TOKEN}}"
         test: |
@@ -755,7 +757,7 @@ jobs:
         id: register
         action: http
         with:
-          url: "{{env.API_BASE_URL}}/auth/register"
+          url: "{{vars.api_base_url}}/auth/register"
           method: POST
           headers:
             Content-Type: "application/json"
@@ -780,7 +782,7 @@ jobs:
       - name: Email Verification Check
         action: http
         with:
-          url: "{{env.API_BASE_URL}}/user/profile"
+          url: "{{vars.api_base_url}}/user/profile"
           headers:
             Authorization: "Bearer {{outputs.register.access_token}}"
         test: |
@@ -798,7 +800,7 @@ jobs:
         id: browse
         action: http
         with:
-          url: "{{env.API_BASE_URL}}/products?category=electronics&limit=10"
+          url: "{{vars.api_base_url}}/products?category=electronics&limit=10"
         test: |
           res.status == 200 &&
           res.json.products.length > 0 &&
@@ -813,7 +815,7 @@ jobs:
         id: add-cart
         action: http
         with:
-          url: "{{env.API_BASE_URL}}/cart/items"
+          url: "{{vars.api_base_url}}/cart/items"
           method: POST
           headers:
             Content-Type: "application/json"
@@ -835,7 +837,7 @@ jobs:
       - name: View Cart
         action: http
         with:
-          url: "{{env.API_BASE_URL}}/cart"
+          url: "{{vars.api_base_url}}/cart"
           headers:
             Authorization: "Bearer {{outputs.user-registration-flow.access_token}}"
         test: |
@@ -854,7 +856,7 @@ jobs:
         id: discount
         action: http
         with:
-          url: "{{env.API_BASE_URL}}/cart/discount"
+          url: "{{vars.api_base_url}}/cart/discount"
           method: POST
           headers:
             Content-Type: "application/json"
@@ -878,7 +880,7 @@ jobs:
         id: payment
         action: http
         with:
-          url: "{{env.API_BASE_URL}}/payment-methods"
+          url: "{{vars.api_base_url}}/payment-methods"
           method: POST
           headers:
             Content-Type: "application/json"
@@ -903,7 +905,7 @@ jobs:
         id: order
         action: http
         with:
-          url: "{{env.API_BASE_URL}}/orders"
+          url: "{{vars.api_base_url}}/orders"
           method: POST
           headers:
             Content-Type: "application/json"
@@ -932,7 +934,7 @@ jobs:
       - name: Verify Order Processing
         action: http
         with:
-          url: "{{env.API_BASE_URL}}/orders/{{outputs.order.order_id}}"
+          url: "{{vars.api_base_url}}/orders/{{outputs.order.order_id}}"
           headers:
             Authorization: "Bearer {{outputs.user-registration-flow.access_token}}"
         test: |
@@ -996,7 +998,7 @@ jobs:
         id: ping
         action: http
         with:
-          url: "{{env.API_BASE_URL}}/ping"
+          url: "{{vars.api_base_url}}/ping"
         test: |
           res.status == 200 &&
           res.time < 500
@@ -1008,9 +1010,9 @@ jobs:
         id: db-query
         action: http
         with:
-          url: "{{env.API_BASE_URL}}/users?limit=100"
+          url: "{{vars.api_base_url}}/users?limit=100"
           headers:
-            Authorization: "Bearer {{env.API_TOKEN}}"
+            Authorization: "Bearer {{vars.api_token}}"
         test: |
           res.status == 200 &&
           res.time < {{env.PERFORMANCE_THRESHOLD_MS}}
@@ -1025,9 +1027,9 @@ jobs:
         id: aggregation
         action: http
         with:
-          url: "{{env.API_BASE_URL}}/analytics/summary"
+          url: "{{vars.api_base_url}}/analytics/summary"
           headers:
-            Authorization: "Bearer {{env.API_TOKEN}}"
+            Authorization: "Bearer {{vars.api_token}}"
         test: |
           res.status == 200 &&
           res.time < {{env.ACCEPTABLE_THRESHOLD_MS}}
@@ -1039,10 +1041,10 @@ jobs:
         id: upload
         action: http
         with:
-          url: "{{env.API_BASE_URL}}/files/upload"
+          url: "{{vars.api_base_url}}/files/upload"
           method: POST
           headers:
-            Authorization: "Bearer {{env.API_TOKEN}}"
+            Authorization: "Bearer {{vars.api_token}}"
             Content-Type: "multipart/form-data"
           body: |
             --boundary123
@@ -1107,7 +1109,7 @@ body: |
 - name: Cleanup Test User
   action: http
   with:
-    url: "{{env.API_BASE_URL}}/users/{{outputs.create.user_id}}"
+    url: "{{vars.api_base_url}}/users/{{outputs.create.user_id}}"
     method: DELETE
 ```
 

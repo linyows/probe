@@ -109,16 +109,16 @@ probe workflow.yml
 
 ```yaml
 # /etc/probe/defaults.yml
-env:
-  # Common environment variables
-  USER_AGENT: "Probe Monitor v1.0"
-  DEFAULT_TIMEOUT: "30s"
+vars:
+  # Environment variables accessed via vars
+  user_agent: "{{USER_AGENT ?? 'Probe Monitor v1.0'}}"
+  default_timeout: "{{DEFAULT_TIMEOUT ?? '30s'}}"
 
 defaults:
   http:
-    timeout: "{{env.DEFAULT_TIMEOUT}}"
+    timeout: "{{vars.default_timeout}}"
     headers:
-      User-Agent: "{{env.USER_AGENT}}"
+      User-Agent: "{{vars.user_agent}}"
       Accept: "application/json"
 ```
 
@@ -165,13 +165,13 @@ export API_TOKEN="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
 
 ```yaml
 # workflow.yml
-env:
-  API_TOKEN: "{{env.API_TOKEN}}"
+vars:
+  api_token: "{{API_TOKEN}}"
 
 defaults:
   http:
     headers:
-      Authorization: "Bearer {{env.API_TOKEN}}"
+      Authorization: "Bearer {{vars.api_token}}"
 ```
 
 #### `USERNAME` / `PASSWORD`
@@ -184,17 +184,17 @@ export API_PASSWORD="secret123"
 
 ```yaml
 # workflow.yml
-env:
-  USERNAME: "{{env.API_USERNAME}}"
-  PASSWORD: "{{env.API_PASSWORD}}"
+vars:
+  username: "{{API_USERNAME}}"
+  password: "{{API_PASSWORD}}"
 
 steps:
   - name: "Authenticated Request"
-    action: http
+    uses: http
     with:
       url: "https://api.example.com/protected"
       headers:
-        Authorization: "Basic {{base64(env.USERNAME + ':' + env.PASSWORD)}}"
+        Authorization: "Basic {{encode_base64(vars.username + ':' + vars.password)}}"
 ```
 
 ### Email Authentication
@@ -217,13 +217,19 @@ export SMTP_PASSWORD="account-password"
 
 ```yaml
 # workflow.yml
+vars:
+  smtp_host: "{{SMTP_HOST}}"
+  smtp_port: "{{SMTP_PORT}}"
+  smtp_username: "{{SMTP_USERNAME}}"
+  smtp_password: "{{SMTP_PASSWORD}}"
+
 defaults:
   smtp:
-    host: "{{env.SMTP_HOST}}"
-    port: "{{env.SMTP_PORT}}"
-    username: "{{env.SMTP_USERNAME}}"
-    password: "{{env.SMTP_PASSWORD}}"
-    from: "{{env.SMTP_USERNAME}}"
+    host: "{{vars.smtp_host}}"
+    port: "{{vars.smtp_port}}"
+    username: "{{vars.smtp_username}}"
+    password: "{{vars.smtp_password}}"
+    from: "{{vars.smtp_username}}"
 ```
 
 ## Application Configuration Variables
@@ -257,24 +263,31 @@ export ENABLE_PERFORMANCE_TRACKING=true
 
 ```yaml
 # workflow.yml
+vars:
+  enable_monitoring: "{{ENABLE_MONITORING}}"
+  enable_performance_tracking: "{{ENABLE_PERFORMANCE_TRACKING}}"
+  enable_slack_notifications: "{{ENABLE_SLACK_NOTIFICATIONS}}"
+  api_base_url: "{{API_BASE_URL}}"
+  slack_webhook_url: "{{SLACK_WEBHOOK_URL}}"
+
 jobs:
   monitoring:
-    if: env.ENABLE_MONITORING == "true"
+    if: vars.enable_monitoring == "true"
     steps:
       - name: "Performance Check"
-        if: env.ENABLE_PERFORMANCE_TRACKING == "true"
-        action: http
+        if: vars.enable_performance_tracking == "true"
+        uses: http
         with:
-          url: "{{env.API_BASE_URL}}/metrics"
+          url: "{{vars.api_base_url}}/metrics"
 
   notifications:
-    if: env.ENABLE_SLACK_NOTIFICATIONS == "true"
+    if: vars.enable_slack_notifications == "true"
     needs: [monitoring]
     steps:
       - name: "Slack Alert"
-        action: http
+        uses: http
         with:
-          url: "{{env.SLACK_WEBHOOK_URL}}"
+          url: "{{vars.slack_webhook_url}}"
           method: "POST"
           body: |
             {
