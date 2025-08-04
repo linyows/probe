@@ -1,11 +1,13 @@
 name: Success Workflow
 description: Simple workflow that should succeed
+vars:
+  server_url: "{{TEST_SERVER_URL ?? 'https://httpbin.org'}}"
 jobs:
 - name: test-job
   steps:
   - name: Success Step
     uses: http
     with:
-      url: "{{env.TEST_SERVER_URL ? env.TEST_SERVER_URL : \"https://httpbin.org\"}}"
+      url: "{{vars.server_url}}"
       get: /status/200
     test: res.code == 200

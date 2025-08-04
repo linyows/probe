@@ -211,7 +211,6 @@ func (w *Workflow) newJobContext(c Config, vars map[string]any) (JobContext, err
 
 	return JobContext{
 		Vars:         vars,
-		Logs:         []map[string]any{},
 		Config:       c,
 		Printer:      w.printer,
 		Result:       rs,

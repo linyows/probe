@@ -2,6 +2,7 @@ name: REST API Example
 vars:
   token: "{{TOKEN ?? 'secret'}}"
   url: "{{URL ?? 'https://httpbin.org'}}"
+
 jobs:
 - name: "Request to {{vars.url}}"
   defaults:
@@ -13,15 +14,19 @@ jobs:
         accept: application/json
   steps:
   - name: Post
+    id: hello
     uses: http
     with:
       post: /post
       body:
         message: hello
-    echo: steps[0].res.body.origin
     test: |
       res.code == 200 &&
       res.body.json.message == "hello"
+    echo: |
+      IP: {{res.body.origin}}
+    outputs:
+      ip: res.body.origin
   - name: Get
     uses: http
     with:
@@ -34,10 +39,10 @@ jobs:
     with:
       put: /put
       body:
-        ip: "{{steps[0].res.body.origin}}"
+        ip: "{{outputs.hello.ip}}"
     test: |
       res.code == 200 &&
-      res.body.json.ip == steps[0].res.body.origin
+      res.body.json.ip == outputs.hello.ip
   - name: Patch
     uses: http
     with:

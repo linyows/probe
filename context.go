@@ -3,7 +3,6 @@ package probe
 // StepContext provides context data for step expression evaluation
 type StepContext struct {
 	Vars    map[string]any            `expr:"vars"`
-	Logs    []map[string]any          `expr:"steps"`
 	Res     map[string]any            `expr:"res"`
 	Req     map[string]any            `expr:"req"`
 	RT      string                    `expr:"rt"`
@@ -13,7 +12,6 @@ type StepContext struct {
 // JobContext provides context data for job execution
 type JobContext struct {
 	Vars map[string]any   `expr:"vars"`
-	Logs []map[string]any `expr:"steps"`
 	Config
 	Failed bool
 	// Current job ID for this context

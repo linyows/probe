@@ -154,7 +154,6 @@ func (j *Job) shouldSkip(expr *Expr, ctx JobContext) bool {
 	// Create context for job skipif evaluation
 	evalCtx := StepContext{
 		Vars:    ctx.Vars,
-		Logs:    ctx.Logs,
 		Outputs: outputs,
 	}
 

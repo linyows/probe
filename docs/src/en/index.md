@@ -9,7 +9,7 @@ hero:
   actions:
     - theme: brand
       text: Get Started
-      link: /get-started/installation
+      link: /guide/introduction/what-is-probe
     - theme: alt
       text: View on GitHub
       link: https://github.com/linyows/probe
