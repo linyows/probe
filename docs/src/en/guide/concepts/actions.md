@@ -55,7 +55,7 @@ The `http` action is the most versatile and commonly used action for making HTTP
     method: POST                                  # Optional: HTTP method (default: GET)
     headers:                                      # Optional: Request headers
       Content-Type: "application/json"
-      Authorization: "Bearer {{env.API_TOKEN}}"
+      Authorization: "Bearer {{vars.api_token}}"
       X-Request-ID: "{{random_str(16)}}"
     body: |                                       # Optional: Request body
       {
@@ -100,14 +100,14 @@ jobs:
         id: auth
         action: http
         with:
-          url: "{{env.API_BASE_URL}}/auth/login"
+          url: "{{vars.api_base_url}}/auth/login"
           method: POST
           headers:
             Content-Type: "application/json"
           body: |
             {
-              "username": "{{env.API_USERNAME}}",
-              "password": "{{env.API_PASSWORD}}"
+              "username": "{{vars.api_username}}",
+              "password": "{{vars.api_password}}"
             }
         test: res.status == 200
         outputs:
@@ -117,7 +117,7 @@ jobs:
       - name: Make Authenticated Request
         action: http
         with:
-          url: "{{env.API_BASE_URL}}/protected/resource"
+          url: "{{vars.api_base_url}}/protected/resource"
           method: GET
           headers:
             Authorization: "Bearer {{outputs.auth.access_token}}"
@@ -129,7 +129,7 @@ jobs:
 - name: Upload File
   action: http
   with:
-    url: "{{env.API_URL}}/upload"
+    url: "{{vars.api_url}}/upload"
     method: POST
     headers:
       Content-Type: "multipart/form-data"
@@ -148,15 +148,15 @@ jobs:
 - name: GraphQL Query
   action: http
   with:
-    url: "{{env.GRAPHQL_ENDPOINT}}"
+    url: "{{vars.graphql_endpoint}}"
     method: POST
     headers:
       Content-Type: "application/json"
-      Authorization: "Bearer {{env.GRAPHQL_TOKEN}}"
+      Authorization: "Bearer {{vars.graphql_token}}"
     body: |
       {
         "query": "query GetUser($id: ID!) { user(id: $id) { name email active } }",
-        "variables": { "id": "{{env.TEST_USER_ID}}" }
+        "variables": { "id": "{{vars.test_user_id}}" }
       }
   test: res.status == 200 && res.json.data.user != null
   outputs:
@@ -192,7 +192,7 @@ The `shell` action enables secure execution of shell commands and scripts within
     timeout: "15m"                           # Optional: Execution timeout (default: 30s)
     env:                                     # Optional: Environment variables
       DEPLOY_ENV: "production"
-      API_KEY: "{{env.PRODUCTION_API_KEY}}"
+      API_KEY: "{{vars.production_api_key}}"
       BUILD_VERSION: "{{vars.version}}"
   test: res.code == 0 && (res.stdout | contains("Deploy successful"))
   outputs:
@@ -307,19 +307,19 @@ The `smtp` action enables email sending capabilities for notifications and alert
   with:
     host: smtp.gmail.com              # SMTP server host
     port: 587                         # SMTP server port
-    username: "{{env.SMTP_USERNAME}}" # SMTP authentication username
-    password: "{{env.SMTP_PASSWORD}}" # SMTP authentication password
+    username: "{{vars.smtp_username}}" # SMTP authentication username
+    password: "{{vars.smtp_password}}" # SMTP authentication password
     from: alerts@mycompany.com        # Sender email address
     to: ["admin@mycompany.com", "team@mycompany.com"]  # Recipients
     cc: ["manager@mycompany.com"]     # CC recipients (optional)
     bcc: ["audit@mycompany.com"]      # BCC recipients (optional)
-    subject: "System Alert: {{env.ALERT_TYPE}}"       # Email subject
+    subject: "System Alert: {{vars.alert_type}}"       # Email subject
     body: |                           # Email body (plain text or HTML)
       System Alert Notification
       
-      Alert Type: {{env.ALERT_TYPE}}
+      Alert Type: {{vars.alert_type}}
       Time: {{unixtime()}}
-      Service: {{env.SERVICE_NAME}}
+      Service: {{vars.service_name}}
       
       Please investigate immediately.
     html: true                        # Optional: Send as HTML
@@ -347,8 +347,8 @@ with:
 with:
   host: email-smtp.us-east-1.amazonaws.com
   port: 587
-  username: "{{env.AWS_SES_USERNAME}}"
-  password: "{{env.AWS_SES_PASSWORD}}"
+  username: "{{vars.aws_ses_username}}"
+  password: "{{vars.aws_ses_password}}"
   tls: true
 ```
 
@@ -358,7 +358,7 @@ with:
   host: smtp.office365.com
   port: 587
   username: "your-email@company.com"
-  password: "{{env.O365_PASSWORD}}"
+  password: "{{vars.o365_password}}"
   tls: true
 ```
 
@@ -376,7 +376,7 @@ jobs:
         id: primary
         action: http
         with:
-          url: "{{env.PRIMARY_URL}}/health"
+          url: "{{vars.primary_url}}/health"
           method: GET
           timeout: 10s
         test: res.status == 200
@@ -390,7 +390,7 @@ jobs:
         id: secondary
         action: http
         with:
-          url: "{{env.SECONDARY_URL}}/health"
+          url: "{{vars.secondary_url}}/health"
           method: GET
           timeout: 15s
         test: res.status == 200
@@ -403,10 +403,10 @@ jobs:
         if: "!outputs.primary.primary_healthy && !outputs.secondary.secondary_healthy"
         action: smtp
         with:
-          host: "{{env.SMTP_HOST}}"
+          host: "{{vars.smtp_host}}"
           port: 587
-          username: "{{env.SMTP_USER}}"
-          password: "{{env.SMTP_PASS}}"
+          username: "{{vars.smtp_user}}"
+          password: "{{vars.smtp_pass}}"
           from: "alerts@company.com"
           to: ["ops-team@company.com"]
           subject: "CRITICAL: All endpoints down"
@@ -435,7 +435,7 @@ jobs:
         id: health
         action: http
         with:
-          url: "{{env.API_URL}}/health"
+          url: "{{vars.api_url}}/health"
         test: res.status == 200
         outputs:
           api_version: res.json.version
@@ -446,14 +446,14 @@ jobs:
         id: auth
         action: http
         with:
-          url: "{{env.API_URL}}/auth/token"
+          url: "{{vars.api_url}}/auth/token"
           method: POST
           headers:
             Content-Type: "application/json"
           body: |
             {
-              "client_id": "{{env.CLIENT_ID}}",
-              "client_secret": "{{env.CLIENT_SECRET}}",
+              "client_id": "{{vars.client_id}}",
+              "client_secret": "{{vars.client_secret}}",
               "grant_type": "client_credentials"
             }
         test: res.status == 200
@@ -466,7 +466,7 @@ jobs:
         id: functional
         action: http
         with:
-          url: "{{env.API_URL}}/api/test"
+          url: "{{vars.api_url}}/api/test"
           method: GET
           headers:
             Authorization: "Bearer {{outputs.auth.access_token}}"
@@ -480,10 +480,10 @@ jobs:
         if: outputs.functional.test_duration > 2000
         action: smtp
         with:
-          host: "{{env.SMTP_HOST}}"
+          host: "{{vars.smtp_host}}"
           port: 587
-          username: "{{env.SMTP_USER}}"
-          password: "{{env.SMTP_PASS}}"
+          username: "{{vars.smtp_user}}"
+          password: "{{vars.smtp_pass}}"
           from: "performance@company.com"
           to: ["dev-team@company.com"]
           subject: "Performance Alert: Slow API Response"
@@ -520,7 +520,7 @@ jobs:
         id: env
         action: http
         with:
-          url: "{{env.CONFIG_SERVICE_URL}}/environment"
+          url: "{{vars.config_service_url}}/environment"
         test: res.status == 200
         outputs:
           environment: res.json.environment
@@ -531,7 +531,7 @@ jobs:
         id: health
         action: http
         with:
-          url: "{{env.SERVICE_URL}}/health"
+          url: "{{vars.service_url}}/health"
           timeout: "{{outputs.env.environment == 'production' ? '5s' : '30s'}}"
         test: res.status == 200
         outputs:
@@ -547,7 +547,7 @@ jobs:
           host: "{{outputs.env.smtp_config.host}}"
           port: "{{outputs.env.smtp_config.port}}"
           username: "{{outputs.env.smtp_config.username}}"
-          password: "{{env.SMTP_PASSWORD}}"
+          password: "{{vars.smtp_password}}"
           from: "monitoring@company.com"
           to: "{{outputs.env.environment == 'production' ? ['ops@company.com', 'management@company.com'] : ['dev@company.com']}}"
           subject: "{{outputs.env.environment == 'production' ? 'PRODUCTION' : 'NON-PROD'}} Alert: Service Errors Detected"
@@ -605,13 +605,13 @@ Always set appropriate timeouts:
 - name: Quick Health Check
   action: http
   with:
-    url: "{{env.API_URL}}/ping"
+    url: "{{vars.api_url}}/ping"
     timeout: 5s              # Quick ping should respond fast
 
 - name: Complex Query
   action: http
   with:
-    url: "{{env.API_URL}}/complex-report"
+    url: "{{vars.api_url}}/complex-report"
     timeout: 60s             # Complex operations need more time
 ```
 
@@ -624,7 +624,7 @@ Implement appropriate error handling:
 - name: Database Connectivity Check
   action: http
   with:
-    url: "{{env.DB_URL}}/ping"
+    url: "{{vars.db_url}}/ping"
   test: res.status == 200
   continue_on_error: false   # Default: stop on failure
 
@@ -632,7 +632,7 @@ Implement appropriate error handling:
 - name: Optional Analytics Update
   action: http
   with:
-    url: "{{env.ANALYTICS_URL}}/update"
+    url: "{{vars.analytics_url}}/update"
   test: res.status == 200
   continue_on_error: true    # Continue even if this fails
 ```
@@ -646,17 +646,17 @@ Handle sensitive data properly:
 - name: Authenticated Request
   action: http
   with:
-    url: "{{env.API_URL}}/secure"
+    url: "{{vars.api_url}}/secure"
     headers:
-      Authorization: "Bearer {{env.API_TOKEN}}"  # From environment
+      Authorization: "Bearer {{vars.api_token}}"  # From vars
 
 # Good: Use secure SMTP configuration
 - name: Send Alert
   action: smtp
   with:
-    host: "{{env.SMTP_HOST}}"
-    username: "{{env.SMTP_USER}}"
-    password: "{{env.SMTP_PASS}}"     # Never hardcode passwords
+    host: "{{vars.smtp_host}}"
+    username: "{{vars.smtp_user}}"
+    password: "{{vars.smtp_pass}}"     # Never hardcode passwords
 
 # Avoid: Hardcoded secrets
 - name: Bad Example
@@ -674,7 +674,7 @@ Validate action responses thoroughly:
 - name: Comprehensive API Test
   action: http
   with:
-    url: "{{env.API_URL}}/users"
+    url: "{{vars.api_url}}/users"
   test: |
     res.status == 200 &&
     res.headers["content-type"].contains("application/json") &&
@@ -694,7 +694,7 @@ Define useful outputs for other steps:
 - name: User Creation Test
   action: http
   with:
-    url: "{{env.API_URL}}/users"
+    url: "{{vars.api_url}}/users"
     method: POST
     body: '{"name": "Test User", "email": "test@example.com"}'
   test: res.status == 201
