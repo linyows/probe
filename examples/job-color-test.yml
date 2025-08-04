@@ -1,0 +1,44 @@
+name: Job Color Test
+description: Test job icons with different statuses
+
+jobs:
+  - id: success-job
+    name: Success Job
+    steps:
+      - name: Successful step
+        uses: http
+        with:
+          get: /status/200
+          url: https://httpbin.org
+
+  - id: skip-job
+    name: Skipped Job  
+    skipif: true
+    needs: [success-job]
+    steps:
+      - name: This will be skipped
+        uses: http
+        with:
+          get: /status/200
+          url: https://httpbin.org
+
+  - id: fail-job
+    name: Failed Job
+    needs: [success-job]
+    steps:
+      - name: This will fail
+        uses: http
+        with:
+          get: /status/500
+          url: https://httpbin.org
+        test: res.code == 200
+
+  - id: cleanup-job
+    name: Cleanup Job
+    needs: [success-job]
+    steps:
+      - name: Final cleanup
+        uses: http
+        with:
+          get: /status/200
+          url: https://httpbin.org

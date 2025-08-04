@@ -1,0 +1,59 @@
+name: Job Skipif Simple Demo
+description: Simple demonstration of job-level skipif functionality
+
+vars:
+  environment: development
+  skip_tests: true
+  deploy_to_production: false
+
+jobs:
+- id: setup
+  name: Environment Setup
+  steps:
+  - name: Check environment
+    uses: http
+    with:
+      url: https://httpbin.org
+      get: /status
+
+- id: test
+  name: Run Tests
+  needs: [setup]
+  skipif: vars.skip_tests
+  steps:
+  - name: Execute tests
+    uses: http
+    with:
+      url: https://httpbin.org
+      get: /status
+
+- id: build
+  name: Build Application
+  needs: [setup]
+  steps:
+  - name: Build app
+    uses: http
+    with:
+      url: https://httpbin.org
+      get: /status
+
+- id: deploy-production
+  name: Deploy to Production
+  needs: [build, test]
+  skipif: vars.deploy_to_production == false
+  steps:
+  - name: Deploy app
+    uses: http
+    with:
+      url: https://httpbin.org
+      get: /status
+
+- id: cleanup
+  name: Cleanup
+  needs: [build]
+  steps:
+  - name: Clean up
+    uses: http
+    with:
+      url: https://httpbin.org
+      get: /status

@@ -1,0 +1,36 @@
+name: Job Skipif Test
+description: Test job-level skipif functionality
+
+vars:
+  skip_this: true
+
+jobs:
+  - id: always-run
+    name: Always Run Job
+    steps:
+      - name: Basic task
+        uses: http
+        with:
+          get: /status
+          url: https://httpbin.org
+
+  - id: should-skip
+    name: Should Be Skipped
+    needs: [always-run]
+    skipif: vars.skip_this
+    steps:
+      - name: This should not run
+        uses: http
+        with:
+          get: /status
+          url: https://httpbin.org
+
+  - id: cleanup
+    name: Final Cleanup
+    needs: [always-run]
+    steps:
+      - name: Clean up task
+        uses: http
+        with:
+          get: /status
+          url: https://httpbin.org

@@ -176,3 +176,152 @@ func TestIsValidStepID(t *testing.T) {
 		})
 	}
 }
+
+func TestJob_shouldSkip(t *testing.T) {
+	tests := []struct {
+		name     string
+		skipIf   string
+		vars     map[string]any
+		expected bool
+	}{
+		{
+			name:     "empty skipif",
+			skipIf:   "",
+			expected: false,
+		},
+		{
+			name:     "skipif true",
+			skipIf:   "true",
+			expected: true,
+		},
+		{
+			name:     "skipif false",
+			skipIf:   "false",
+			expected: false,
+		},
+		{
+			name:     "skipif with variable true",
+			skipIf:   "vars.skip_job",
+			vars:     map[string]any{"skip_job": true},
+			expected: true,
+		},
+		{
+			name:     "skipif with variable false",
+			skipIf:   "vars.skip_job",
+			vars:     map[string]any{"skip_job": false},
+			expected: false,
+		},
+		{
+			name:     "skipif with expression",
+			skipIf:   `vars.env == "test"`,
+			vars:     map[string]any{"env": "test"},
+			expected: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			job := &Job{
+				Name:   "Test Job",
+				SkipIf: tt.skipIf,
+			}
+
+			ctx := JobContext{
+				Vars:    tt.vars,
+				Outputs: NewOutputs(),
+				Printer: NewPrinter(false, []string{}),
+			}
+			job.ctx = &ctx
+
+			expr := &Expr{}
+			result := job.shouldSkip(expr, ctx)
+
+			if result != tt.expected {
+				t.Errorf("shouldSkip() = %v, want %v", result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestJob_shouldSkip_errorHandling(t *testing.T) {
+	tests := []struct {
+		name     string
+		skipIf   string
+		expected bool
+	}{
+		{
+			name:     "invalid expression",
+			skipIf:   "invalid syntax ===",
+			expected: false, // Should not skip on error
+		},
+		{
+			name:     "non-boolean result",
+			skipIf:   `"string_value"`,
+			expected: false, // Should not skip on type error
+		},
+		{
+			name:     "undefined variable",
+			skipIf:   "vars.undefined_var",
+			expected: false, // Should not skip on evaluation error
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			job := &Job{
+				Name:   "Test Job",
+				SkipIf: tt.skipIf,
+			}
+
+			ctx := JobContext{
+				Vars:    map[string]any{},
+				Outputs: NewOutputs(),
+				Printer: NewPrinter(false, []string{}),
+			}
+			job.ctx = &ctx
+
+			expr := &Expr{}
+			result := job.shouldSkip(expr, ctx)
+
+			if result != tt.expected {
+				t.Errorf("shouldSkip() = %v, want %v", result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestJob_handleSkip(t *testing.T) {
+	job := &Job{
+		ID:   "test-job",
+		Name: "Test Job",
+	}
+
+	// Create a result with the job entry
+	result := NewResult()
+	jobResult := &JobResult{
+		JobID:   "test-job",
+		JobName: "Test Job",
+		Status:  "running",
+		Success: false,
+	}
+	result.Jobs["test-job"] = jobResult
+
+	ctx := JobContext{
+		Result:  result,
+		Printer: NewPrinter(false, []string{}),
+		Config:  Config{Verbose: false},
+	}
+	job.ctx = &ctx
+
+	// Call handleSkip
+	job.handleSkip(ctx)
+
+	// Verify the job was marked as skipped
+	if jobResult.Status != "skipped" {
+		t.Errorf("Expected job status to be 'skipped', got '%s'", jobResult.Status)
+	}
+
+	if !jobResult.Success {
+		t.Errorf("Expected skipped job to be marked as successful")
+	}
+}
