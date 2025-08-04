@@ -36,6 +36,11 @@ func colorWarning() *color.Color {
 	return color.New(color.FgYellow)
 }
 
+// colorSkipped returns a *color.Color for skipped items (gray)
+func colorSkipped() *color.Color {
+	return color.New(color.FgHiBlack)
+}
+
 // String truncation utilities
 
 const (
@@ -71,8 +76,8 @@ func TruncateMapStringString(params map[string]string, maxLen int) map[string]st
 const (
 	IconSuccess = "✔︎ "
 	IconError   = "✘ "
-	IconWarning = "▲ "
-	IconCircle  = "⏺ "
+	IconWarning = "▲"
+	IconCircle  = "⏺"
 	IconWait    = "🕐︎"
 	IconSkip    = "⏭ "
 )
@@ -165,39 +170,6 @@ func (p *Printer) printStepRepeatResult(counter *StepRepeatCounter, hasTest bool
 	}
 }
 
-// generateJobStatus generates the result of a job execution as string
-func (p *Printer) generateJobStatus(jobID string, jobName string, status StatusType, duration float64, output *strings.Builder) {
-	statusColor := colorSuccess()
-	statusIcon := IconCircle
-
-	switch status {
-	case StatusError:
-		statusColor = colorError()
-	case StatusWarning:
-		statusColor = colorInfo()
-	}
-
-	statusStr := ""
-	switch status {
-	case StatusSuccess:
-		statusStr = "Completed"
-	case StatusError:
-		statusStr = "Failed"
-	case StatusWarning:
-		statusStr = "Skipped"
-	}
-
-	dt := colorDim().Sprintf("(%s in %.2fs)",
-		statusStr,
-		duration)
-	outputLine := fmt.Sprintf("%s%s %s\n",
-		statusColor.Sprint(statusIcon),
-		jobName,
-		dt)
-
-	output.WriteString(outputLine)
-}
-
 // generateJobResults generates buffered job results as string
 func (p *Printer) generateJobResults(jobID string, input string, output *strings.Builder) {
 	input = strings.TrimSpace(input)
@@ -231,6 +203,45 @@ func (p *Printer) generateFooter(totalTime float64, successCount, totalJobs int,
 	}
 }
 
+// generateJobStatus generates job status line with appropriate icon and color
+func (p *Printer) generateJobStatus(jobID, jobName string, status StatusType, duration float64, output *strings.Builder) {
+	var icon string
+	var statusText string
+	var colorFunc func() *color.Color
+
+	switch status {
+	case StatusSuccess:
+		icon = IconCircle
+		statusText = fmt.Sprintf("Completed in %.2fs", duration)
+		colorFunc = colorSuccess
+	case StatusError:
+		icon = IconCircle
+		statusText = fmt.Sprintf("Failed in %.2fs", duration)
+		colorFunc = colorError
+	case StatusSkipped:
+		icon = IconCircle
+		statusText = "(SKIPPED)"
+		colorFunc = colorSkipped
+	default:
+		icon = IconCircle
+		statusText = fmt.Sprintf("Unknown status in %.2fs", duration)
+		colorFunc = colorWarning
+	}
+
+	// For skipped jobs, make the entire line gray
+	if status == StatusSkipped {
+		fmt.Fprintf(output, "%s %s %s\n",
+			colorFunc().Sprint(icon),
+			colorFunc().Sprint(jobName),
+			colorFunc().Sprint(statusText))
+	} else {
+		fmt.Fprintf(output, "%s %s (%s)\n",
+			colorFunc().Sprintf(icon),
+			jobName,
+			statusText)
+	}
+}
+
 // generateReport generates a complete workflow report string using Result data
 func (p *Printer) generateReport(rs *Result) string {
 	if rs == nil {
@@ -251,8 +262,9 @@ func (p *Printer) generateReport(rs *Result) string {
 			totalTime += duration
 
 			status := StatusSuccess
-			if jr.Status == "Skipped" {
-				status = StatusWarning
+			if jr.Status == "skipped" {
+				status = StatusSkipped
+				successCount++ // Skipped jobs are considered successful
 			} else if !jr.Success {
 				status = StatusError
 			} else {
