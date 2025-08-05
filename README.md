@@ -25,6 +25,8 @@
 
 A powerful YAML-based workflow automation tool designed for testing, monitoring, and automation tasks. Probe uses plugin-based actions to execute workflows, making it highly flexible and extensible.
 
+![Architecture](/misc/probe-architecture.svg)
+
 Quick Start
 -----------
 

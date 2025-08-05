@@ -440,7 +440,7 @@ steps:
 ```yaml
 steps:
   - name: "Production Only Step"
-    if: env.ENVIRONMENT == "production"
+    if: "{{env.ENVIRONMENT}}" == "production"
     action: http
     with:
       url: "{{env.PROD_API_URL}}/check"
@@ -524,7 +524,7 @@ message: "Hello {{outputs.user.name}}"
 
 # Test expressions (for conditions)
 test: res.status == 200 && res.time < 1000
-if: env.ENVIRONMENT == "production"
+if: "{{env.ENVIRONMENT}}" == "production"
 ```
 
 ### Environment Variable References
@@ -567,29 +567,33 @@ env:
 ### Environment-Specific Configuration
 
 ```yaml
-env:
-  ENVIRONMENT: "{{env.NODE_ENV || 'development'}}"
-  API_URL: |
-    {{env.NODE_ENV == "production" ? 
+vars:
+  node_env: "{{NODE_ENV}}"
+  environment: "{{vars.node_env || 'development'}}"
+  api_url: |
+    {{vars.node_env == "production" ? 
       "https://api.prod.com" : 
       "https://api.dev.com"}}
-  TIMEOUT: |
-    {{env.NODE_ENV == "production" ? "10s" : "30s"}}
+  timeout: |
+    {{vars.node_env == "production" ? "10s" : "30s"}}
 ```
 
 ### Conditional Job Execution
 
 ```yaml
+vars:
+  environment: "{{ENVIRONMENT}}"
+
 jobs:
   setup:
     # Always runs
   
   development-tests:
-    if: env.ENVIRONMENT == "development"
+    if: "{{vars.environment}}" == "development"
     needs: [setup]
   
   production-checks:
-    if: env.ENVIRONMENT == "production"  
+    if: "{{vars.environment}}" == "production"  
     needs: [setup]
   
   cleanup:

@@ -483,7 +483,7 @@ func TestPrinter_generateJobStatus_ColorMapping(t *testing.T) {
 			expectedColorCode: "\x1b[38;2;0;175;0m", // RGB(0,175,0) from colorSuccess
 		},
 		{
-			name:              "error uses red color", 
+			name:              "error uses red color",
 			status:            StatusError,
 			expectedColorCode: "\x1b[31m", // Red from colorError
 		},
@@ -505,12 +505,12 @@ func TestPrinter_generateJobStatus_ColorMapping(t *testing.T) {
 			printer.generateJobStatus("test-job", "Test Job", tt.status, 1.0, &output)
 
 			result := output.String()
-			
+
 			// Verify basic content is present
 			if !strings.Contains(result, "Test Job") {
 				t.Errorf("generateJobStatus() should contain job name, got %q", result)
 			}
-			
+
 			// Verify the expected color code is present in the output
 			if !strings.Contains(result, tt.expectedColorCode) {
 				t.Errorf("generateJobStatus() should contain color code %q for %s, got %q", tt.expectedColorCode, tt.name, result)
@@ -531,15 +531,15 @@ func TestPrinter_generateJobStatus_SuccessNotBlue(t *testing.T) {
 	printer.generateJobStatus("success-job", "Success Job", StatusSuccess, 1.5, &output)
 
 	result := output.String()
-	
+
 	// Blue color code from colorInfo
 	blueColorCode := "\x1b[34m"
-	
+
 	// SUCCESS jobs should NOT contain blue color
 	if strings.Contains(result, blueColorCode) {
 		t.Errorf("StatusSuccess should NOT use blue color (colorInfo), but found blue color code in output: %q", result)
 	}
-	
+
 	// SUCCESS jobs SHOULD contain green color
 	greenColorCode := "\x1b[38;2;0;175;0m" // RGB(0,175,0) from colorSuccess
 	if !strings.Contains(result, greenColorCode) {
@@ -725,7 +725,7 @@ func TestPrinter_generateReport(t *testing.T) {
 		},
 	}
 
-	result := printer.generateReport(rs)
+	result := printer.GenerateReport(rs, true)
 
 	// Verify the report contains expected elements
 	expectedContains := []string{
@@ -747,13 +747,13 @@ func TestPrinter_generateReport(t *testing.T) {
 func TestPrinter_generateReport_EmptyBuffer(t *testing.T) {
 	printer := NewPrinter(false, []string{})
 
-	result := printer.generateReport(nil)
+	result := printer.GenerateReport(nil, false)
 	if result != "" {
 		t.Errorf("generateReport(nil) should return empty string, got %q", result)
 	}
 
 	rs := NewResult()
-	result = printer.generateReport(rs)
+	result = printer.GenerateReport(rs, true)
 
 	// Should contain at least the footer
 	if !strings.Contains(result, "Total workflow time: 0.00s") {
@@ -791,7 +791,7 @@ func TestPrinter_generateReport_WithRepeatStep(t *testing.T) {
 		},
 	}
 
-	result := printer.generateReport(rs)
+	result := printer.GenerateReport(rs, true)
 
 	expectedContains := []string{
 		"Job with Repeat",

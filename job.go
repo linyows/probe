@@ -65,7 +65,7 @@ func (j *Job) expandJobName(expr *Expr, ctx JobContext) error {
 func (j *Job) executeSteps(expr *Expr, ctx JobContext) {
 	idx := 0
 	for _, st := range j.Steps {
-		st.expr = expr
+		st.Expr = expr
 
 		if len(st.Iter) == 0 {
 			j.executeStep(st, &idx, *j.ctx, nil)
@@ -77,7 +77,7 @@ func (j *Job) executeSteps(expr *Expr, ctx JobContext) {
 
 // executeStep executes a single step without iterations
 func (j *Job) executeStep(st *Step, idx *int, ctx JobContext, vars map[string]any) {
-	st.idx = *idx
+	st.Idx = *idx
 	*idx++
 	st.SetCtx(ctx, vars)
 	st.Do(j.ctx)
@@ -146,7 +146,7 @@ func (j *Job) shouldSkip(expr *Expr, ctx JobContext) bool {
 	}
 
 	// Create a step context for evaluation - same as SetCtx in step.go
-	var outputs map[string]map[string]any
+	var outputs map[string]any
 	if ctx.Outputs != nil {
 		outputs = ctx.Outputs.GetAll()
 	}

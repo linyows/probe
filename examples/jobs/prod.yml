@@ -1,0 +1,22 @@
+name: Authentication for Prod
+
+steps:
+- name: Get ID
+  id: get_id
+  uses: shell
+  with:
+    cmd: echo "prodbar"
+  outputs:
+    myid: replace(res.stdout, '\n', '')
+  echo: |
+    STDOUT: {{res.stdout}}
+
+- name: Get token
+  id: get_token
+  uses: shell
+  with:
+    cmd: echo "secret!!!!!"
+  outputs:
+    mytoken: replace(res.stdout, '\n', '')
+  echo: |
+    STDOUT: {{res.stdout}}

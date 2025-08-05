@@ -247,12 +247,17 @@ steps:
 #### Content Types
 
 ```yaml
+vars:
+  api_url: "{{API_URL}}"
+  graphql_url: "{{GRAPHQL_URL}}"
+  user_id: "{{USER_ID}}"
+
 # JSON API
 steps:
   - name: "JSON Request"
     action: http
     with:
-      url: "{{env.API_URL}}/json"
+      url: "{{vars.api_url}}/json"
       method: "POST"
       headers:
         Content-Type: "application/json"
@@ -266,7 +271,7 @@ steps:
   - name: "XML Request"
     action: http
     with:
-      url: "{{env.API_URL}}/xml"
+      url: "{{vars.api_url}}/xml"
       method: "POST"
       headers:
         Content-Type: "application/xml"
@@ -280,24 +285,27 @@ steps:
   - name: "GraphQL Query"
     action: http
     with:
-      url: "{{env.GRAPHQL_URL}}"
+      url: "{{vars.graphql_url}}"
       method: "POST"
       headers:
         Content-Type: "application/json"
       body: |
         {
-          "query": "query { user(id: \"{{env.USER_ID}}\") { name email } }"
+          "query": "query { user(id: \"{{vars.user_id}}\") { name email } }"
         }
 ```
 
 #### File Upload
 
 ```yaml
+vars:
+  api_url: "{{API_URL}}"
+
 steps:
   - name: "File Upload"
     action: http
     with:
-      url: "{{env.API_URL}}/upload"
+      url: "{{vars.api_url}}/upload"
       method: "POST"
       headers:
         Content-Type: "multipart/form-data"
@@ -337,14 +345,23 @@ steps:
 
 ```yaml
 # MySQL
+vars:
+  db_pass: "{{DB_PASS}}"
+
 with:
   dsn: "mysql://user:password@localhost:3306/database"
-  dsn: "mysql://{{vars.db_user}}:{{env.DB_PASS}}@{{vars.db_host}}/{{vars.db_name}}"
+  dsn: "mysql://{{vars.db_user}}:{{vars.db_pass}}@{{vars.db_host}}/{{vars.db_name}}"
 
-# PostgreSQL  
+# PostgreSQL
+vars:
+  pg_user: "{{PG_USER}}"
+  pg_pass: "{{PG_PASS}}"
+  pg_host: "{{PG_HOST}}"
+  pg_db: "{{PG_DB}}"
+
 with:
   dsn: "postgres://user:password@localhost:5432/database?sslmode=disable"
-  dsn: "postgres://{{env.PG_USER}}:{{env.PG_PASS}}@{{env.PG_HOST}}/{{env.PG_DB}}"
+  dsn: "postgres://{{vars.pg_user}}:{{vars.pg_pass}}@{{vars.pg_host}}/{{vars.pg_db}}"
 
 # SQLite
 with:
@@ -662,10 +679,13 @@ steps:
 **Supports:** Template expressions
 
 ```yaml
+vars:
+  api_url: "{{API_URL}}"
+
 with:
   cmd: "echo 'Hello World'"
   cmd: "npm run {{vars.build_script}}"
-  cmd: "curl -f {{env.API_URL}}/health"
+  cmd: "curl -f {{vars.api_url}}/health"
 ```
 
 #### `shell` (optional)
@@ -713,11 +733,14 @@ with:
 **Supports:** Template expressions in values
 
 ```yaml
+vars:
+  production_api_url: "{{PRODUCTION_API_URL}}"
+
 with:
   cmd: "npm run build"
   env:
     NODE_ENV: "production"
-    API_URL: "{{env.PRODUCTION_API_URL}}"
+    API_URL: "{{vars.production_api_url}}"
     BUILD_VERSION: "{{vars.version}}"
 ```
 
@@ -775,16 +798,20 @@ req:
 #### Environment-specific Deployment
 
 ```yaml
+vars:
+  target_env: "{{TARGET_ENV}}"
+  deploy_key: "{{DEPLOY_KEY}}"
+
 - name: "Deploy to Environment"
   uses: shell
   with:
-    cmd: "./deploy.sh {{env.TARGET_ENV}}"
+    cmd: "./deploy.sh {{vars.target_env}}"
     workdir: "/deploy"
     shell: "/bin/bash"
     timeout: "15m"
     env:
-      DEPLOY_KEY: "{{env.DEPLOY_KEY}}"
-      TARGET_ENV: "{{env.TARGET_ENV}}"
+      DEPLOY_KEY: "{{vars.deploy_key}}"
+      TARGET_ENV: "{{vars.target_env}}"
   test: res.code == 0
 ```
 
@@ -846,13 +873,17 @@ The `smtp` action sends email notifications and alerts through SMTP servers.
 ### Basic Syntax
 
 ```yaml
+vars:
+  smtp_user: "{{SMTP_USER}}"
+  smtp_pass: "{{SMTP_PASS}}"
+
 steps:
   - name: "Send Alert"
     action: smtp
     with:
       host: "smtp.gmail.com"
-      username: "{{env.SMTP_USER}}"
-      password: "{{env.SMTP_PASS}}"
+      username: "{{vars.smtp_user}}"
+      password: "{{vars.smtp_pass}}"
       from: "alerts@example.com"
       to: ["admin@example.com"]
       subject: "Service Alert"
@@ -894,8 +925,11 @@ with:
 **Supports:** Template expressions
 
 ```yaml
+vars:
+  smtp_username: "{{SMTP_USERNAME}}"
+
 with:
-  username: "{{env.SMTP_USERNAME}}"
+  username: "{{vars.smtp_username}}"
   username: "alerts@example.com"
 ```
 
@@ -906,9 +940,13 @@ with:
 **Supports:** Template expressions
 
 ```yaml
+vars:
+  smtp_password: "{{SMTP_PASSWORD}}"
+  email_app_password: "{{EMAIL_APP_PASSWORD}}"
+
 with:
-  password: "{{env.SMTP_PASSWORD}}"
-  password: "{{env.EMAIL_APP_PASSWORD}}"
+  password: "{{vars.smtp_password}}"
+  password: "{{vars.email_app_password}}"
 ```
 
 #### `from` (required)
@@ -918,9 +956,12 @@ with:
 **Supports:** Template expressions
 
 ```yaml
+vars:
+  from_email: "{{FROM_EMAIL}}"
+
 with:
   from: "alerts@example.com"
-  from: "{{env.FROM_EMAIL}}"
+  from: "{{vars.from_email}}"
   from: "Probe Monitor <probe@example.com>"
 ```
 
@@ -931,10 +972,13 @@ with:
 **Supports:** Template expressions
 
 ```yaml
+vars:
+  alert_email: "{{ALERT_EMAIL}}"
+
 with:
   to: ["admin@example.com"]
   to: ["user1@example.com", "user2@example.com"]
-  to: ["{{env.ALERT_EMAIL}}"]
+  to: ["{{vars.alert_email}}"]"
 ```
 
 #### `cc` (optional)
@@ -966,9 +1010,12 @@ with:
 **Supports:** Template expressions
 
 ```yaml
+vars:
+  service_name: "{{SERVICE_NAME}}"
+
 with:
   subject: "Alert: Service Down"
-  subject: "{{env.SERVICE_NAME}} Status: {{outputs.health-check.status}}"
+  subject: "{{vars.service_name}} Status: {{outputs.health-check.status}}"
   subject: "Daily Report - {{date('2006-01-02')}}"
 ```
 
@@ -1049,15 +1096,19 @@ The SMTP action provides a `res` object with the following properties:
 #### Gmail Configuration
 
 ```yaml
+vars:
+  gmail_username: "{{GMAIL_USERNAME}}"
+  gmail_app_password: "{{GMAIL_APP_PASSWORD}}"
+
 steps:
   - name: "Send Gmail Alert"
     action: smtp
     with:
       host: "smtp.gmail.com"
       port: 587
-      username: "{{env.GMAIL_USERNAME}}"
-      password: "{{env.GMAIL_APP_PASSWORD}}"  # Use app password, not account password
-      from: "{{env.GMAIL_USERNAME}}"
+      username: "{{vars.gmail_username}}"
+      password: "{{vars.gmail_app_password}}"  # Use app password, not account password
+      from: "{{vars.gmail_username}}"
       to: ["admin@example.com"]
       subject: "Probe Alert - {{date('15:04')}}"
       body: |
@@ -1072,15 +1123,19 @@ steps:
 #### Office 365 Configuration
 
 ```yaml
+vars:
+  o365_username: "{{O365_USERNAME}}"
+  o365_password: "{{O365_PASSWORD}}"
+
 steps:
   - name: "Send Office 365 Alert"
     action: smtp
     with:
       host: "smtp.office365.com"
       port: 587
-      username: "{{env.O365_USERNAME}}"
-      password: "{{env.O365_PASSWORD}}"
-      from: "{{env.O365_USERNAME}}"
+      username: "{{vars.o365_username}}"
+      password: "{{vars.o365_password}}"
+      from: "{{vars.o365_username}}"
       to: ["team@company.com"]
       subject: "System Alert"
       body: "Alert message content"
@@ -1090,14 +1145,19 @@ steps:
 #### HTML Email with Multiple Recipients
 
 ```yaml
+vars:
+  smtp_host: "{{SMTP_HOST}}"
+  smtp_user: "{{SMTP_USER}}"
+  smtp_pass: "{{SMTP_PASS}}"
+
 steps:
   - name: "HTML Status Report"
     action: smtp
     with:
-      host: "{{env.SMTP_HOST}}"
+      host: "{{vars.smtp_host}}"
       port: 587
-      username: "{{env.SMTP_USER}}"
-      password: "{{env.SMTP_PASS}}"
+      username: "{{vars.smtp_user}}"
+      password: "{{vars.smtp_pass}}"
       from: "reports@example.com"
       to: ["admin@example.com", "ops@example.com"]
       cc: ["manager@example.com"]
@@ -1145,7 +1205,10 @@ steps:
 with:
   message: "Hello, World!"
   message: "Current time: {{iso8601()}}"
-  message: "Hello {{env.USER_NAME}}"
+vars:
+  user_name: "{{USER_NAME}}"
+
+  message: "Hello {{vars.user_name}}"
 ```
 
 #### `delay` (optional)
@@ -1202,8 +1265,11 @@ steps:
   - name: "Template Test"
     action: hello
     with:
-      message: "User: {{env.USER}}, Time: {{unixtime()}}"
-    test: res.message | contains(env.USER)
+vars:
+  user: "{{USER}}"
+
+      message: "User: {{vars.user}}, Time: {{unixtime()}}"
+    test: res.message | contains(vars.user)
     outputs:
       rendered_message: res.message
 ```
@@ -1234,14 +1300,18 @@ steps:
 
 #### SMTP Action Errors
 
+vars:
+  smtp_user: "{{SMTP_USER}}"
+  smtp_pass: "{{SMTP_PASS}}"
+
 ```yaml
 steps:
   - name: "SMTP with Error Handling"
     action: smtp
     with:
       host: "smtp.example.com"
-      username: "{{env.SMTP_USER}}"
-      password: "{{env.SMTP_PASS}}"
+      username: "{{vars.smtp_user}}"
+      password: "{{vars.smtp_pass}}"
       from: "test@example.com"
       to: ["admin@example.com"]
       subject: "Test"
@@ -1264,6 +1334,9 @@ steps:
 
 ```yaml
 # Performance-optimized HTTP configuration
+vars:
+  api_url: "{{API_URL}}"
+
 defaults:
   http:
     timeout: "10s"
@@ -1276,7 +1349,7 @@ jobs:
       - name: "Quick Health Check"
         action: http
         with:
-          url: "{{env.API_URL}}/ping"
+          url: "{{vars.api_url}}/ping"
           timeout: "2s"
         test: res.status == 200 && res.time < 500
 ```
@@ -1289,13 +1362,17 @@ jobs:
 
 ```yaml
 # Efficient email notification
+vars:
+  smtp_user: "{{SMTP_USER}}"
+  smtp_pass: "{{SMTP_PASS}}"
+
 steps:
   - name: "Batch Notification"
     action: smtp
     with:
       host: "smtp.example.com"
-      username: "{{env.SMTP_USER}}"
-      password: "{{env.SMTP_PASS}}"
+      username: "{{vars.smtp_user}}"
+      password: "{{vars.smtp_pass}}"
       from: "alerts@example.com"
       to: ["admin1@example.com", "admin2@example.com", "admin3@example.com"]
       subject: "Batch Alert"

@@ -16,7 +16,6 @@ jobs:
     uses: http
     with:
       get: /get
-    echo: "{{res.body.origin}}"
     outputs:
       token: res.body.origin
 
@@ -26,10 +25,12 @@ jobs:
       post: /post
       body:
         myip: "{{outputs.step1.token}}"
-    echo: "myip: {{res.body.json.myip}}\nbar:{{vars.foo.bar}}"
     vars:
       foo:
         bar: "{{outputs.step1.token}}"
+    echo: |
+      IP from res: {{res.body.json.myip}}
+      bar from vars:{{vars.foo.bar}}
 
 - name: Test Job 2
   needs: [job1]
@@ -41,4 +42,6 @@ jobs:
       post: /post
       body:
         myip: "{{outputs.step1.token}}"
-    echo: "{{outputs.step1.token}}"
+    echo: |
+      Full: {{outputs.step1.token }}
+      Short: {{outputs.token}}

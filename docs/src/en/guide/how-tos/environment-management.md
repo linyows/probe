@@ -19,9 +19,14 @@ Create a base workflow that works across environments:
 name: Multi-Environment API Test
 description: API testing workflow that adapts to different environments
 
+vars:
+  api_base_url: "{{API_BASE_URL}}"
+  environment: "{{ENVIRONMENT ?? 'Unknown'}}"
+  default_timeout: "{{DEFAULT_TIMEOUT ?? '30s'}}"
+
 defaults:
   http:
-    timeout: "{{env.DEFAULT_TIMEOUT || '30s'}}"
+    timeout: "{{vars.default_timeout}}"
     headers:
       User-Agent: "Probe Test Agent"
       Accept: "application/json"
@@ -33,7 +38,7 @@ jobs:
       - name: Health Endpoint Test
         action: http
         with:
-          url: "{{env.API_BASE_URL}}/health"
+          url: "{{vars.api_base_url}}/health"
         test: res.status == 200
         outputs:
           api_healthy: res.status == 200
@@ -43,7 +48,7 @@ jobs:
       - name: Database Health Check
         action: http
         with:
-          url: "{{env.API_BASE_URL}}/health/database"
+          url: "{{vars.api_base_url}}/health/database"
         test: res.status == 200
         outputs:
           database_healthy: res.status == 200
@@ -58,8 +63,8 @@ jobs:
           🌍 Environment Test Report
           =========================
           
-          Environment: {{env.ENVIRONMENT || "Unknown"}}
-          API Base URL: {{env.API_BASE_URL}}
+          Environment: {{vars.environment}}
+          API Base URL: {{vars.api_base_url}}
           
           Health Check Results:
           API Health: {{outputs.api-health-check.api_healthy ? "✅ Healthy" : "❌ Down"}} ({{outputs.api-health-check.response_time}}ms)
@@ -67,9 +72,9 @@ jobs:
           API Version: {{outputs.api-health-check.api_version}}
           
           Environment-Specific Notes:
-          {{env.ENVIRONMENT == "development" ? "• Development environment - extended timeouts enabled" : ""}}
-          {{env.ENVIRONMENT == "staging" ? "• Staging environment - production-like testing" : ""}}
-          {{env.ENVIRONMENT == "production" ? "• Production environment - strict validation" : ""}}
+          {{vars.environment == "development" ? "• Development environment - extended timeouts enabled" : ""}}
+          {{vars.environment == "staging" ? "• Staging environment - production-like testing" : ""}}
+          {{vars.environment == "production" ? "• Production environment - strict validation" : ""}}
 ```
 
 **development.yml:**
@@ -84,6 +89,9 @@ defaults:
     timeout: 60s  # More lenient for development
 
 # Development-specific additional checks
+vars:
+  api_base_url: "{{API_BASE_URL}}"
+
 jobs:
   dev-specific-checks:
     name: Development Environment Checks
@@ -92,7 +100,7 @@ jobs:
       - name: Hot Reload Check
         action: http
         with:
-          url: "{{env.API_BASE_URL}}/dev/hot-reload-status"
+          url: "{{vars.api_base_url}}/dev/hot-reload-status"
         test: res.status == 200
         continue_on_error: true
         outputs:
@@ -101,7 +109,7 @@ jobs:
       - name: Debug Endpoints Check
         action: http
         with:
-          url: "{{env.API_BASE_URL}}/debug/info"
+          url: "{{vars.api_base_url}}/debug/info"
         test: res.status == 200
         continue_on_error: true
         outputs:
@@ -128,6 +136,9 @@ defaults:
       X-Environment: staging
 
 # Staging-specific additional checks
+vars:
+  api_base_url: "{{API_BASE_URL}}"
+
 jobs:
   staging-specific-checks:
     name: Staging Environment Checks
@@ -136,7 +147,7 @@ jobs:
       - name: Load Balancer Check
         action: http
         with:
-          url: "{{env.API_BASE_URL}}/health/load-balancer"
+          url: "{{vars.api_base_url}}/health/load-balancer"
         test: res.status == 200
         outputs:
           load_balancer_healthy: res.status == 200
@@ -145,7 +156,7 @@ jobs:
       - name: Cache Layer Check
         action: http
         with:
-          url: "{{env.API_BASE_URL}}/health/cache"
+          url: "{{vars.api_base_url}}/health/cache"
         test: res.status == 200
         outputs:
           cache_healthy: res.status == 200
@@ -154,7 +165,7 @@ jobs:
       - name: Integration Tests
         action: http
         with:
-          url: "{{env.API_BASE_URL}}/test/integration"
+          url: "{{vars.api_base_url}}/test/integration"
         test: res.status == 200 && res.json.all_tests_passed == true
         outputs:
           integration_tests_passed: res.json.all_tests_passed
@@ -181,6 +192,9 @@ defaults:
       X-Environment: production
 
 # Production-specific additional checks
+vars:
+  api_base_url: "{{API_BASE_URL}}"
+
 jobs:
   production-specific-checks:
     name: Production Environment Checks
@@ -189,7 +203,7 @@ jobs:
       - name: SSL Certificate Check
         action: http
         with:
-          url: "{{env.API_BASE_URL}}/health/ssl"
+          url: "{{vars.api_base_url}}/health/ssl"
         test: |
           res.status == 200 &&
           res.json.certificate_valid == true &&
@@ -201,7 +215,7 @@ jobs:
       - name: Performance SLA Check
         action: http
         with:
-          url: "{{env.API_BASE_URL}}/health/performance"
+          url: "{{vars.api_base_url}}/health/performance"
         test: |
           res.status == 200 &&
           res.json.avg_response_time < 500 &&
@@ -214,7 +228,7 @@ jobs:
       - name: Security Compliance Check
         action: http
         with:
-          url: "{{env.API_BASE_URL}}/health/security"
+          url: "{{vars.api_base_url}}/health/security"
         test: |
           res.status == 200 &&
           res.json.security_score >= 0.95
@@ -253,35 +267,37 @@ Control which features are tested in different environments:
 **feature-flags.yml:**
 ```yaml
 # Feature flags configuration
-env:
+vars:
+  api_base_url: "{{API_BASE_URL}}"
+  admin_token: "{{ADMIN_TOKEN}}"
+  environment: "{{ENVIRONMENT}}"
   # Core features (always enabled)
-  FEATURE_USER_MANAGEMENT: true
-  FEATURE_BASIC_API: true
-  
+  feature_user_management: true
+  feature_basic_api: true
   # Environment-specific features
-  FEATURE_BETA_API: "{{env.ENVIRONMENT != 'production'}}"
-  FEATURE_ADMIN_TOOLS: "{{env.ENVIRONMENT == 'development'}}"
-  FEATURE_PERFORMANCE_TESTING: "{{env.ENVIRONMENT != 'development'}}"
-  FEATURE_SECURITY_SCANNING: "{{env.ENVIRONMENT == 'production'}}"
+  feature_beta_api: "{{vars.environment != 'production'}}"
+  feature_admin_tools: "{{vars.environment == 'development'}}"
+  feature_performance_testing: "{{vars.environment != 'development'}}"
+  feature_security_scanning: "{{vars.environment == 'production'}}"
 
 jobs:
   core-feature-tests:
     name: Core Feature Tests
     steps:
       - name: User Management Test
-        if: env.FEATURE_USER_MANAGEMENT == "true"
+        if: vars.feature_user_management == true
         action: http
         with:
-          url: "{{env.API_BASE_URL}}/users"
+          url: "{{vars.api_base_url}}/users"
         test: res.status == 200
         outputs:
           user_management_working: res.status == 200
 
       - name: Basic API Test
-        if: env.FEATURE_BASIC_API == "true"
+        if: vars.feature_basic_api == true
         action: http
         with:
-          url: "{{env.API_BASE_URL}}/api/basic"
+          url: "{{vars.api_base_url}}/api/basic"
         test: res.status == 200
         outputs:
           basic_api_working: res.status == 200
@@ -290,10 +306,10 @@ jobs:
     name: Beta Feature Tests
     steps:
       - name: Beta API Test
-        if: env.FEATURE_BETA_API == "true"
+        if: vars.feature_beta_api == true
         action: http
         with:
-          url: "{{env.API_BASE_URL}}/api/beta"
+          url: "{{vars.api_base_url}}/api/beta"
         test: res.status == 200
         continue_on_error: true
         outputs:
@@ -303,12 +319,12 @@ jobs:
     name: Admin Feature Tests
     steps:
       - name: Admin Tools Test
-        if: env.FEATURE_ADMIN_TOOLS == "true"
+        if: vars.feature_admin_tools == true
         action: http
         with:
-          url: "{{env.API_BASE_URL}}/admin/tools"
+          url: "{{vars.api_base_url}}/admin/tools"
           headers:
-            Authorization: "Bearer {{env.ADMIN_TOKEN}}"
+            Authorization: "Bearer {{vars.admin_token}}"
         test: res.status == 200
         continue_on_error: true
         outputs:
@@ -316,17 +332,17 @@ jobs:
 
   performance-tests:
     name: Performance Tests
-    if: env.FEATURE_PERFORMANCE_TESTING == "true"
+    if: vars.feature_performance_testing == true
     steps:
       - name: Load Test
         action: http
         with:
-          url: "{{env.API_BASE_URL}}/test/load"
+          url: "{{vars.api_base_url}}/test/load"
           method: POST
           body: |
             {
-              "concurrent_users": {{env.ENVIRONMENT == "staging" ? 10 : 50}},
-              "duration_seconds": {{env.ENVIRONMENT == "staging" ? 60 : 300}}
+              "concurrent_users": {{vars.environment == "staging" ? 10 : 50}},
+              "duration_seconds": {{vars.environment == "staging" ? 60 : 300}}
             }
         test: res.status == 200
         outputs:
@@ -334,12 +350,12 @@ jobs:
 
   security-tests:
     name: Security Tests
-    if: env.FEATURE_SECURITY_SCANNING == "true"
+    if: vars.feature_security_scanning == true
     steps:
       - name: Security Scan
         action: http
         with:
-          url: "{{env.API_BASE_URL}}/security/scan"
+          url: "{{vars.api_base_url}}/security/scan"
           method: POST
         test: res.status == 200 && res.json.vulnerabilities_found == 0
         outputs:
@@ -351,33 +367,33 @@ jobs:
     steps:
       - name: Environment Feature Report
         echo: |
-          🚀 Feature Test Summary for {{env.ENVIRONMENT}}:
+          🚀 Feature Test Summary for {{vars.environment}}:
           ================================================
           
           CORE FEATURES:
-          {{env.FEATURE_USER_MANAGEMENT == "true" ? "User Management: " + (outputs.core-feature-tests.user_management_working ? "✅ Working" : "❌ Failed") : "User Management: ⏸️ Disabled"}}
-          {{env.FEATURE_BASIC_API == "true" ? "Basic API: " + (outputs.core-feature-tests.basic_api_working ? "✅ Working" : "❌ Failed") : "Basic API: ⏸️ Disabled"}}
+          {{vars.feature_user_management == true ? "User Management: " + (outputs.core-feature-tests.user_management_working ? "✅ Working" : "❌ Failed") : "User Management: ⏸️ Disabled"}}
+          {{vars.feature_basic_api == true ? "Basic API: " + (outputs.core-feature-tests.basic_api_working ? "✅ Working" : "❌ Failed") : "Basic API: ⏸️ Disabled"}}
           
           BETA FEATURES:
-          {{env.FEATURE_BETA_API == "true" ? "Beta API: " + (outputs.beta-feature-tests.beta_api_working ? "✅ Working" : "❌ Failed") : "Beta API: ⏸️ Disabled"}}
+          {{vars.feature_beta_api == true ? "Beta API: " + (outputs.beta-feature-tests.beta_api_working ? "✅ Working" : "❌ Failed") : "Beta API: ⏸️ Disabled"}}
           
           ADMIN FEATURES:
-          {{env.FEATURE_ADMIN_TOOLS == "true" ? "Admin Tools: " + (outputs.admin-feature-tests.admin_tools_working ? "✅ Working" : "❌ Failed") : "Admin Tools: ⏸️ Disabled"}}
+          {{vars.feature_admin_tools == true ? "Admin Tools: " + (outputs.admin-feature-tests.admin_tools_working ? "✅ Working" : "❌ Failed") : "Admin Tools: ⏸️ Disabled"}}
           
           PERFORMANCE TESTING:
-          {{env.FEATURE_PERFORMANCE_TESTING == "true" ? "Load Testing: " + (outputs.performance-tests.load_test_passed ? "✅ Passed" : "❌ Failed") : "Performance Testing: ⏸️ Disabled"}}
+          {{vars.feature_performance_testing == true ? "Load Testing: " + (outputs.performance-tests.load_test_passed ? "✅ Passed" : "❌ Failed") : "Performance Testing: ⏸️ Disabled"}}
           
           SECURITY TESTING:
-          {{env.FEATURE_SECURITY_SCANNING == "true" ? "Security Scan: " + (outputs.security-tests.security_scan_clean ? "✅ Clean" : "❌ Vulnerabilities Found") : "Security Testing: ⏸️ Disabled"}}
+          {{vars.feature_security_scanning == true ? "Security Scan: " + (outputs.security-tests.security_scan_clean ? "✅ Clean" : "❌ Vulnerabilities Found") : "Security Testing: ⏸️ Disabled"}}
           
           Environment Configuration:
           Features enabled: {{
-            (env.FEATURE_USER_MANAGEMENT == "true" ? 1 : 0) +
-            (env.FEATURE_BASIC_API == "true" ? 1 : 0) +
-            (env.FEATURE_BETA_API == "true" ? 1 : 0) +
-            (env.FEATURE_ADMIN_TOOLS == "true" ? 1 : 0) +
-            (env.FEATURE_PERFORMANCE_TESTING == "true" ? 1 : 0) +
-            (env.FEATURE_SECURITY_SCANNING == "true" ? 1 : 0)
+            (vars.feature_user_management == true ? 1 : 0) +
+            (vars.feature_basic_api == true ? 1 : 0) +
+            (vars.feature_beta_api == true ? 1 : 0) +
+            (vars.feature_admin_tools == true ? 1 : 0) +
+            (vars.feature_performance_testing == true ? 1 : 0) +
+            (vars.feature_security_scanning == true ? 1 : 0)
           }} / 6
 ```
 
@@ -406,11 +422,11 @@ env:
 
 **credentials-staging.yml:**
 ```yaml
-env:
+vars:
   # Staging credentials (from environment variables)
-  API_TOKEN: "{{env.STAGING_API_TOKEN}}"
-  DB_PASSWORD: "{{env.STAGING_DB_PASSWORD}}"
-  ADMIN_TOKEN: "{{env.STAGING_ADMIN_TOKEN}}"
+  api_token: "{{STAGING_API_TOKEN}}"
+  db_password: "{{STAGING_DB_PASSWORD}}"
+  admin_token: "{{STAGING_ADMIN_TOKEN}}"
   
   # Staging service URLs
   API_BASE_URL: https://api.staging.yourcompany.com
@@ -425,11 +441,11 @@ env:
 
 **credentials-production.yml:**
 ```yaml
-env:
+vars:
   # Production credentials (from secure environment variables)
-  API_TOKEN: "{{env.PROD_API_TOKEN}}"
-  DB_PASSWORD: "{{env.PROD_DB_PASSWORD}}"
-  ADMIN_TOKEN: "{{env.PROD_ADMIN_TOKEN}}"
+  api_token: "{{PROD_API_TOKEN}}"
+  db_password: "{{PROD_DB_PASSWORD}}"
+  admin_token: "{{PROD_ADMIN_TOKEN}}"
   
   # Production service URLs
   API_BASE_URL: https://api.yourcompany.com
@@ -456,6 +472,13 @@ Validate environment configuration before running tests:
 name: Environment Validation
 description: Validate environment configuration and prerequisites
 
+vars:
+  environment: "{{ENVIRONMENT}}"
+  api_base_url: "{{API_BASE_URL}}"
+  api_token: "{{API_TOKEN}}"
+  log_level: "{{LOG_LEVEL}}"
+  default_timeout: "{{DEFAULT_TIMEOUT}}"
+
 jobs:
   environment-validation:
     name: Environment Configuration Validation
@@ -465,41 +488,41 @@ jobs:
           🔍 Environment Variables Validation:
           
           Required Variables:
-          ENVIRONMENT: {{env.ENVIRONMENT ? "✅ Set (" + env.ENVIRONMENT + ")" : "❌ Missing"}}
-          API_BASE_URL: {{env.API_BASE_URL ? "✅ Set (" + env.API_BASE_URL + ")" : "❌ Missing"}}
-          API_TOKEN: {{env.API_TOKEN ? "✅ Set (***)" : "❌ Missing"}}
+          ENVIRONMENT: {{vars.environment ? "✅ Set (" + vars.environment + ")" : "❌ Missing"}}
+          API_BASE_URL: {{vars.api_base_url ? "✅ Set (" + vars.api_base_url + ")" : "❌ Missing"}}
+          API_TOKEN: {{vars.api_token ? "✅ Set (***)" : "❌ Missing"}}
           
           Optional Variables:
-          LOG_LEVEL: {{env.LOG_LEVEL ? "✅ Set (" + env.LOG_LEVEL + ")" : "⚠️ Using default"}}
-          DEFAULT_TIMEOUT: {{env.DEFAULT_TIMEOUT ? "✅ Set (" + env.DEFAULT_TIMEOUT + ")" : "⚠️ Using default"}}
+          LOG_LEVEL: {{vars.log_level ? "✅ Set (" + vars.log_level + ")" : "⚠️ Using default"}}
+          DEFAULT_TIMEOUT: {{vars.default_timeout ? "✅ Set (" + vars.default_timeout + ")" : "⚠️ Using default"}}
           
           Validation Status: {{
-            env.ENVIRONMENT && env.API_BASE_URL && env.API_TOKEN ? "✅ Valid" : "❌ Invalid"
+            vars.environment && vars.api_base_url && vars.api_token ? "✅ Valid" : "❌ Invalid"
           }}
 
       - name: Environment-Specific Validation
         echo: |
           📋 Environment-Specific Validation:
           
-          {{env.ENVIRONMENT == "development" ? "Development Environment:" : ""}}
-          {{env.ENVIRONMENT == "development" ? "• Extended timeouts enabled" : ""}}
-          {{env.ENVIRONMENT == "development" ? "• Debug features available" : ""}}
-          {{env.ENVIRONMENT == "development" ? "• Security checks relaxed" : ""}}
+          {{vars.environment == "development" ? "Development Environment:" : ""}}
+          {{vars.environment == "development" ? "• Extended timeouts enabled" : ""}}
+          {{vars.environment == "development" ? "• Debug features available" : ""}}
+          {{vars.environment == "development" ? "• Security checks relaxed" : ""}}
           
-          {{env.ENVIRONMENT == "staging" ? "Staging Environment:" : ""}}
-          {{env.ENVIRONMENT == "staging" ? "• Production-like configuration" : ""}}
-          {{env.ENVIRONMENT == "staging" ? "• Integration testing enabled" : ""}}
-          {{env.ENVIRONMENT == "staging" ? "• Performance testing included" : ""}}
+          {{vars.environment == "staging" ? "Staging Environment:" : ""}}
+          {{vars.environment == "staging" ? "• Production-like configuration" : ""}}
+          {{vars.environment == "staging" ? "• Integration testing enabled" : ""}}
+          {{vars.environment == "staging" ? "• Performance testing included" : ""}}
           
-          {{env.ENVIRONMENT == "production" ? "Production Environment:" : ""}}
-          {{env.ENVIRONMENT == "production" ? "• Strict timeouts enforced" : ""}}
-          {{env.ENVIRONMENT == "production" ? "• Security scanning enabled" : ""}}
-          {{env.ENVIRONMENT == "production" ? "• Full monitoring active" : ""}}
+          {{vars.environment == "production" ? "Production Environment:" : ""}}
+          {{vars.environment == "production" ? "• Strict timeouts enforced" : ""}}
+          {{vars.environment == "production" ? "• Security scanning enabled" : ""}}
+          {{vars.environment == "production" ? "• Full monitoring active" : ""}}
 
       - name: Service Connectivity Pre-Check
         action: http
         with:
-          url: "{{env.API_BASE_URL}}/health"
+          url: "{{vars.api_base_url}}/health"
           timeout: 10s
         test: res.status == 200
         outputs:
@@ -510,9 +533,9 @@ jobs:
       - name: Authentication Pre-Check
         action: http
         with:
-          url: "{{env.API_BASE_URL}}/auth/validate"
+          url: "{{vars.api_base_url}}/auth/validate"
           headers:
-            Authorization: "Bearer {{env.API_TOKEN}}"
+            Authorization: "Bearer {{vars.api_token}}"
         test: res.status == 200
         outputs:
           auth_valid: res.status == 200
@@ -524,14 +547,14 @@ jobs:
           
           Connectivity: {{outputs.connectivity_ok ? "✅ Connected" : "❌ Failed"}}
           API Version: {{outputs.api_version}}
-          Environment Match: {{outputs.environment_confirmed == env.ENVIRONMENT ? "✅ Confirmed" : "⚠️ Mismatch"}}
+          Environment Match: {{outputs.environment_confirmed == vars.environment ? "✅ Confirmed" : "⚠️ Mismatch"}}
           Authentication: {{outputs.auth_valid ? "✅ Valid" : "❌ Invalid"}}
           {{outputs.auth_valid ? "Token Expires In: " + outputs.token_expires_in + " seconds" : ""}}
           
           Environment Ready: {{
             outputs.connectivity_ok && 
             outputs.auth_valid && 
-            outputs.environment_confirmed == env.ENVIRONMENT
+            outputs.environment_confirmed == vars.environment
             ? "🟢 YES" : "🔴 NO"
           }}
 ```
@@ -628,6 +651,9 @@ Create different test suites for different environments:
 name: Production Smoke Test
 description: Minimal smoke test for production environment
 
+vars:
+  api_base_url: "{{API_BASE_URL}}"
+
 jobs:
   critical-endpoints:
     name: Critical Endpoints Check
@@ -635,7 +661,7 @@ jobs:
       - name: Health Check
         action: http
         with:
-          url: "{{env.API_BASE_URL}}/health"
+          url: "{{vars.api_base_url}}/health"
         test: res.status == 200
         outputs:
           api_healthy: res.status == 200
@@ -643,7 +669,7 @@ jobs:
       - name: Authentication Check
         action: http
         with:
-          url: "{{env.API_BASE_URL}}/auth/health"
+          url: "{{vars.api_base_url}}/auth/health"
         test: res.status == 200
         outputs:
           auth_healthy: res.status == 200
@@ -651,7 +677,7 @@ jobs:
       - name: Database Check
         action: http
         with:
-          url: "{{env.API_BASE_URL}}/health/database"
+          url: "{{vars.api_base_url}}/health/database"
         test: res.status == 200
         outputs:
           db_healthy: res.status == 200
@@ -682,6 +708,9 @@ jobs:
 name: Comprehensive Staging Test
 description: Full test suite for staging environment validation
 
+vars:
+  api_base_url: "{{API_BASE_URL}}"
+
 jobs:
   api-tests:
     name: API Test Suite
@@ -689,19 +718,19 @@ jobs:
       - name: User Management API
         action: http
         with:
-          url: "{{env.API_BASE_URL}}/users"
+          url: "{{vars.api_base_url}}/users"
         test: res.status == 200
 
       - name: Order Management API
         action: http
         with:
-          url: "{{env.API_BASE_URL}}/orders"
+          url: "{{vars.api_base_url}}/orders"
         test: res.status == 200
 
       - name: Product Catalog API
         action: http
         with:
-          url: "{{env.API_BASE_URL}}/products"
+          url: "{{vars.api_base_url}}/products"
         test: res.status == 200
 
   integration-tests:
@@ -711,13 +740,13 @@ jobs:
       - name: User-Order Integration
         action: http
         with:
-          url: "{{env.API_BASE_URL}}/test/user-order-flow"
+          url: "{{vars.api_base_url}}/test/user-order-flow"
         test: res.status == 200 && res.json.test_passed == true
 
       - name: Payment Integration
         action: http
         with:
-          url: "{{env.API_BASE_URL}}/test/payment-flow"
+          url: "{{vars.api_base_url}}/test/payment-flow"
         test: res.status == 200 && res.json.test_passed == true
 
   performance-tests:
@@ -727,7 +756,7 @@ jobs:
       - name: Load Test
         action: http
         with:
-          url: "{{env.API_BASE_URL}}/test/load"
+          url: "{{vars.api_base_url}}/test/load"
           method: POST
           body: |
             {
@@ -748,9 +777,14 @@ Monitor the health of each environment continuously:
 name: Environment Health Monitor
 description: Continuous monitoring of environment health
 
-env:
-  MONITORING_INTERVAL: 300  # 5 minutes
-  ALERT_THRESHOLD: 2        # Alert after 2 consecutive failures
+vars:
+  api_base_url: "{{API_BASE_URL}}"
+  environment: "{{ENVIRONMENT}}"
+  smtp_host: "{{SMTP_HOST}}"
+  smtp_username: "{{SMTP_USERNAME}}"
+  smtp_password: "{{SMTP_PASSWORD}}"
+  monitoring_interval: "{{MONITORING_INTERVAL ?? '300'}}"  # 5 minutes
+  alert_threshold: "{{ALERT_THRESHOLD ?? '2'}}"        # Alert after 2 consecutive failures
 
 jobs:
   environment-health-check:
@@ -760,7 +794,7 @@ jobs:
         id: resources
         action: http
         with:
-          url: "{{env.API_BASE_URL}}/health/resources"
+          url: "{{vars.api_base_url}}/health/resources"
         test: |
           res.status == 200 &&
           res.json.cpu_usage < 80 &&
@@ -781,7 +815,7 @@ jobs:
         id: dependencies
         action: http
         with:
-          url: "{{env.API_BASE_URL}}/health/dependencies"
+          url: "{{vars.api_base_url}}/health/dependencies"
         test: |
           res.status == 200 &&
           res.json.all_dependencies_healthy == true
@@ -792,11 +826,11 @@ jobs:
 
       - name: Environment-Specific Checks
         echo: |
-          Environment-specific validation for {{env.ENVIRONMENT}}
+          Environment-specific validation for {{vars.environment}}
         outputs:
           env_specific_checks: |
-            {{env.ENVIRONMENT == "production" ? "SSL, Security, Performance" :
-              env.ENVIRONMENT == "staging" ? "Integration, Load Testing" :
+            {{vars.environment == "production" ? "SSL, Security, Performance" :
+              vars.environment == "staging" ? "Integration, Load Testing" :
               "Development Tools, Debug Features"}}
 
   alerting:
@@ -809,18 +843,18 @@ jobs:
       - name: Environment Alert
         action: smtp
         with:
-          host: "{{env.SMTP_HOST}}"
+          host: "{{vars.smtp_host}}"
           port: 587
-          username: "{{env.SMTP_USERNAME}}"
-          password: "{{env.SMTP_PASSWORD}}"
+          username: "{{vars.smtp_username}}"
+          password: "{{vars.smtp_password}}"
           from: "environment-alerts@yourcompany.com"
           to: ["devops@yourcompany.com"]
-          subject: "🚨 Environment Health Alert - {{env.ENVIRONMENT}}"
+          subject: "🚨 Environment Health Alert - {{vars.environment}}"
           body: |
             ENVIRONMENT HEALTH ALERT
             ========================
             
-            Environment: {{env.ENVIRONMENT}}
+            Environment: {{vars.environment}}
             Time: {{unixtime()}}
             
             RESOURCE STATUS:
@@ -833,7 +867,7 @@ jobs:
             {{outputs.environment-health-check.dependencies_healthy ? "✅ All Dependencies Healthy" : "❌ Dependency Issues"}}
             {{!outputs.environment-health-check.dependencies_healthy ? "Unhealthy Services: " + outputs.environment-health-check.unhealthy_services : ""}}
             
-            ACTION REQUIRED: Investigate {{env.ENVIRONMENT}} environment immediately
+            ACTION REQUIRED: Investigate {{vars.environment}} environment immediately
 
   health-summary:
     name: Health Summary
@@ -844,14 +878,14 @@ jobs:
     steps:
       - name: All Systems Healthy
         echo: |
-          ✅ {{env.ENVIRONMENT}} Environment Health Check
+          ✅ {{vars.environment}} Environment Health Check
           
           All systems operational:
           • Resources: CPU {{outputs.environment-health-check.cpu_usage}}%, Memory {{outputs.environment-health-check.memory_usage}}%, Disk {{outputs.environment-health-check.disk_usage}}%
           • Dependencies: All healthy
-          • Environment: {{env.ENVIRONMENT}}
+          • Environment: {{vars.environment}}
           
-          Next check in {{env.MONITORING_INTERVAL}} seconds
+          Next check in {{vars.monitoring_interval}} seconds
 ```
 
 ## Best Practices
@@ -885,23 +919,28 @@ Production → Smoke Tests + Monitoring
 
 ```yaml
 # Good: Validate before running tests
+vars:
+  environment: "{{ENVIRONMENT}}"
+  api_base_url: "{{API_BASE_URL}}"
+  api_token: "{{API_TOKEN}}"
+
 - name: Pre-Test Validation
   echo: |
-    Environment: {{env.ENVIRONMENT ? "✅" : "❌"}}
-    API URL: {{env.API_BASE_URL ? "✅" : "❌"}}
-    Credentials: {{env.API_TOKEN ? "✅" : "❌"}}
+    Environment: {{vars.environment ? "✅" : "❌"}}
+    API URL: {{vars.api_base_url ? "✅" : "❌"}}
+    Credentials: {{vars.api_token ? "✅" : "❌"}}
 ```
 
 ### 4. Secure Secret Management
 
 ```yaml
 # Good: Use environment variables for secrets
-env:
-  API_TOKEN: "{{env.PROD_API_TOKEN}}"  # From secure env var
+vars:
+  api_token: "{{PROD_API_TOKEN}}"  # From secure env var
 
 # Avoid: Hardcoded secrets
-env:
-  API_TOKEN: "hardcoded_secret_123"  # Never do this
+vars:
+  api_token: "hardcoded_secret_123"  # Never do this
 ```
 
 ## What's Next?

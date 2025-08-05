@@ -32,6 +32,7 @@ type StepResult struct {
 	WaitTime      string
 	TestOutput    string
 	EchoOutput    string
+	Report        string
 	HasTest       bool
 	RepeatCounter *StepRepeatCounter // For repeat execution information
 }

@@ -21,8 +21,8 @@ type Step struct {
 	Outputs map[string]string `yaml:"outputs,omitempty"`
 	err     error
 	ctx     StepContext
-	idx     int
-	expr    *Expr
+	Idx     int   `yaml:"-"`
+	Expr    *Expr `yaml:"-"`
 }
 
 func (st *Step) Do(jCtx *JobContext) {
@@ -58,7 +58,7 @@ func (st *Step) prepare(jCtx *JobContext) (string, bool) {
 	jCtx.Printer.AddSpinnerSuffix(st.Name)
 
 	// Evaluate step name
-	name, err := st.expr.EvalTemplate(st.Name, st.ctx)
+	name, err := st.Expr.EvalTemplate(st.Name, st.ctx)
 	if err != nil {
 		jCtx.Printer.PrintError("step name evaluation error: %v", err)
 		return "", false
@@ -78,7 +78,7 @@ func (st *Step) prepare(jCtx *JobContext) (string, bool) {
 
 // executeAction executes the step action and returns the result
 func (st *Step) executeAction(name string, jCtx *JobContext) (map[string]any, error) {
-	expW := st.expr.EvalTemplateMap(st.With, st.ctx)
+	expW := st.Expr.EvalTemplateMap(st.With, st.ctx)
 	ret, err := RunActions(st.Uses, []string{}, expW, jCtx.Config.Verbose)
 	if err != nil {
 		return nil, err
@@ -118,7 +118,7 @@ func (st *Step) processActionResult(actionResult map[string]any, jCtx *JobContex
 // finalize handles the final phase: test, echo, output save, and result creation
 func (st *Step) finalize(name string, actionResult map[string]any, jCtx *JobContext) {
 	if jCtx.Config.Verbose {
-		jCtx.Printer.PrintRequestResponse(st.idx, name, st.ctx.Req, st.ctx.Res, st.ctx.RT)
+		jCtx.Printer.PrintRequestResponse(st.Idx, name, st.ctx.Req, st.ctx.Res, st.ctx.RT)
 	}
 
 	// Handle repeat execution
@@ -144,7 +144,7 @@ func (st *Step) finalize(name string, actionResult map[string]any, jCtx *JobCont
 // createStepResult creates a StepResult from step execution
 func (st *Step) createStepResult(name string, jCtx *JobContext, repeatCounter *StepRepeatCounter) StepResult {
 	result := StepResult{
-		Index:         st.idx,
+		Index:         st.Idx,
 		Name:          name,
 		HasTest:       st.Test != "",
 		RT:            "",
@@ -154,6 +154,11 @@ func (st *Step) createStepResult(name string, jCtx *JobContext, repeatCounter *S
 
 	if jCtx.RT && st.ctx.RT != "" {
 		result.RT = st.ctx.RT
+	}
+	if v, ok := st.ctx.Res["report"]; ok {
+		if report, sok := v.(string); sok {
+			result.Report = report
+		}
 	}
 
 	if st.Test != "" {
@@ -178,14 +183,14 @@ func (st *Step) createStepResult(name string, jCtx *JobContext, repeatCounter *S
 
 // getEchoOutput returns the echo output as string
 func (st *Step) getEchoOutput(printer *Printer) string {
-	exprOut, err := st.expr.EvalTemplate(st.Echo, st.ctx)
+	exprOut, err := st.Expr.EvalTemplate(st.Echo, st.ctx)
 	return printer.generateEchoOutput(exprOut, err)
 }
 
 func (st *Step) handleRepeatExecution(jCtx *JobContext, name string) {
 
 	// Initialize counter if first execution
-	counter, exists := jCtx.StepCounters[st.idx]
+	counter, exists := jCtx.StepCounters[st.Idx]
 	if !exists {
 		counter = StepRepeatCounter{
 			Name: name,
@@ -213,7 +218,7 @@ func (st *Step) handleRepeatExecution(jCtx *JobContext, name string) {
 	counter.LastResult = testResult
 
 	// Store updated counter
-	jCtx.StepCounters[st.idx] = counter
+	jCtx.StepCounters[st.Idx] = counter
 
 	// Display on first execution and final execution only
 	isFinalExecution := jCtx.RepeatCurrent == jCtx.RepeatTotal
@@ -235,7 +240,7 @@ func (st *Step) handleRepeatExecution(jCtx *JobContext, name string) {
 }
 
 func (st *Step) DoTest(printer *Printer) (string, bool) {
-	exprOut, err := st.expr.Eval(st.Test, st.ctx)
+	exprOut, err := st.Expr.Eval(st.Test, st.ctx)
 	if err != nil {
 		return printer.generateTestError(st.Test, err), false
 	}
@@ -257,7 +262,7 @@ func (st *Step) DoTest(printer *Printer) (string, bool) {
 }
 
 func (st *Step) DoEcho(jCtx *JobContext) {
-	exprOut, err := st.expr.EvalTemplate(st.Echo, st.ctx)
+	exprOut, err := st.Expr.EvalTemplate(st.Echo, st.ctx)
 	if err != nil {
 		jCtx.Printer.LogError("Echo evaluation failed: %#v (input: %s)", err, st.Echo)
 	} else {
@@ -267,7 +272,7 @@ func (st *Step) DoEcho(jCtx *JobContext) {
 
 func (st *Step) SetCtx(j JobContext, override map[string]any) {
 	// Use outputs from the unified Outputs structure
-	var outputs map[string]map[string]any
+	var outputs map[string]any
 	if j.Outputs != nil {
 		outputs = j.Outputs.GetAll()
 	}
@@ -408,7 +413,7 @@ func (st *Step) shouldSkip(jCtx *JobContext) bool {
 		return false
 	}
 
-	result, err := st.expr.Eval(st.SkipIf, st.ctx)
+	result, err := st.Expr.Eval(st.SkipIf, st.ctx)
 	if err != nil {
 		jCtx.Printer.PrintError("skipif evaluation error: %v", err)
 		return false // Don't skip on evaluation error
@@ -426,7 +431,7 @@ func (st *Step) shouldSkip(jCtx *JobContext) bool {
 // handleSkip handles the skipped step logic
 func (st *Step) handleSkip(name string, jCtx *JobContext) {
 	if jCtx.Config.Verbose {
-		jCtx.Printer.LogDebug("%s", colorWarning().Sprintf("--- Step %d: %s (SKIPPED)", st.idx, name))
+		jCtx.Printer.LogDebug("%s", colorWarning().Sprintf("--- Step %d: %s (SKIPPED)", st.Idx, name))
 		jCtx.Printer.LogDebug("Skip condition: %s", st.SkipIf)
 		jCtx.Printer.PrintSeparator()
 		return
@@ -450,7 +455,7 @@ func (st *Step) handleSkip(name string, jCtx *JobContext) {
 // handleSkipRepeatExecution handles skipped step in repeat mode
 func (st *Step) handleSkipRepeatExecution(jCtx *JobContext, name string) {
 	// Initialize counter if first execution
-	counter, exists := jCtx.StepCounters[st.idx]
+	counter, exists := jCtx.StepCounters[st.Idx]
 	if !exists {
 		counter = StepRepeatCounter{
 			Name: name,
@@ -462,7 +467,7 @@ func (st *Step) handleSkipRepeatExecution(jCtx *JobContext, name string) {
 	counter.LastResult = true
 
 	// Store updated counter
-	jCtx.StepCounters[st.idx] = counter
+	jCtx.StepCounters[st.Idx] = counter
 
 	// Display on first execution and final execution only
 	isFinalExecution := jCtx.RepeatCurrent == jCtx.RepeatTotal
@@ -480,7 +485,7 @@ func (st *Step) handleSkipRepeatExecution(jCtx *JobContext, name string) {
 // createSkippedStepResult creates a StepResult for a skipped step
 func (st *Step) createSkippedStepResult(name string, jCtx *JobContext, repeatCounter *StepRepeatCounter) StepResult {
 	return StepResult{
-		Index:         st.idx,
+		Index:         st.Idx,
 		Name:          name + " (SKIPPED)",
 		Status:        StatusSkipped,
 		RT:            "",
@@ -499,7 +504,7 @@ func (st *Step) saveOutputs(jCtx *JobContext) {
 	// Evaluate each output expression
 	outputs := make(map[string]any)
 	for outputName, outputExpr := range st.Outputs {
-		result, err := st.expr.Eval(outputExpr, st.ctx)
+		result, err := st.Expr.Eval(outputExpr, st.ctx)
 		if err != nil {
 			jCtx.Printer.PrintError("output '%s' evaluation error: %v", outputName, err)
 			continue // Skip this output but continue with others
@@ -509,7 +514,9 @@ func (st *Step) saveOutputs(jCtx *JobContext) {
 
 	// Save outputs to the unified Outputs structure
 	if jCtx.Outputs != nil {
-		jCtx.Outputs.Set(st.ID, outputs)
+		if err := jCtx.Outputs.Set(st.ID, outputs); err != nil {
+			jCtx.Printer.PrintError("Output conflict warning: %v", err)
+		}
 	}
 
 	if jCtx.Config.Verbose {
