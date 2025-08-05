@@ -21,8 +21,8 @@ type Step struct {
 	Outputs map[string]string `yaml:"outputs,omitempty"`
 	err     error
 	ctx     StepContext
-	Idx     int
-	Expr    *Expr
+	Idx     int   `yaml:"-"`
+	Expr    *Expr `yaml:"-"`
 }
 
 func (st *Step) Do(jCtx *JobContext) {

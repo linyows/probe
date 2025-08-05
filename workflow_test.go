@@ -778,8 +778,8 @@ func TestStepRepeatCounterUpdate(t *testing.T) {
 	step := &Step{
 		Name: "Test Step",
 		Test: "true", // Always success
-		idx:  0,
-		expr: &Expr{},
+		Idx:  0,
+		Expr: &Expr{},
 	}
 
 	// Capture stdout to avoid test output noise

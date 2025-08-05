@@ -235,7 +235,7 @@ func TestStep_SkipIfWithWaitTiming(t *testing.T) {
 				Uses:   "hello",
 				Wait:   tt.wait,
 				SkipIf: tt.skipif,
-				expr:   &Expr{},
+				Expr:   &Expr{},
 			}
 
 			jCtx := &JobContext{
@@ -354,7 +354,7 @@ func TestStep_shouldSkip(t *testing.T) {
 			step := &Step{
 				SkipIf: tt.skipif,
 				ctx:    tt.context,
-				expr:   &Expr{},
+				Expr:   &Expr{},
 			}
 			jCtx := &JobContext{
 				Printer: &Printer{},
@@ -370,7 +370,7 @@ func TestStep_shouldSkip(t *testing.T) {
 
 func TestStep_createSkippedStepResult(t *testing.T) {
 	step := &Step{
-		idx:  1,
+		Idx:  1,
 		Wait: "2s",
 	}
 	jCtx := &JobContext{}
@@ -400,7 +400,7 @@ func TestStep_createSkippedStepResult(t *testing.T) {
 
 func TestStep_createSkippedStepResult_WithRepeatCounter(t *testing.T) {
 	step := &Step{
-		idx:  1,
+		Idx:  1,
 		Wait: "2s",
 	}
 	jCtx := &JobContext{}
@@ -427,11 +427,11 @@ func TestStep_createSkippedStepResult_WithRepeatCounter(t *testing.T) {
 
 func TestStep_createStepResult_WithRepeatCounter(t *testing.T) {
 	step := &Step{
-		idx:  1,
+		Idx:  1,
 		Test: "res.status == 200",
 		Echo: "Hello World",
 		Wait: "1s",
-		expr: &Expr{},
+		Expr: &Expr{},
 		ctx: StepContext{
 			Res: map[string]any{"status": 200},
 			RT:  "250ms",
@@ -551,7 +551,7 @@ func TestStep_prepare(t *testing.T) {
 				Name:   tt.stepName,
 				Wait:   tt.wait,
 				SkipIf: tt.skipif,
-				expr:   &Expr{},
+				Expr:   &Expr{},
 			}
 
 			// Set up context
@@ -588,7 +588,7 @@ func TestStep_executeAction(t *testing.T) {
 		step := &Step{
 			Uses: "test-action",
 			With: map[string]any{},
-			expr: &Expr{},
+			Expr: &Expr{},
 		}
 
 		// Verify method signature exists (this will compile successfully if signature is correct)
@@ -633,7 +633,7 @@ func TestStep_processActionResult(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			step := &Step{
-				expr: &Expr{},
+				Expr: &Expr{},
 			}
 
 			jCtx := &JobContext{}
@@ -646,7 +646,7 @@ func TestStep_processActionResult(t *testing.T) {
 func TestStep_handleActionError(t *testing.T) {
 	step := &Step{
 		Uses: "mock-action-for-error-test",
-		expr: &Expr{},
+		Expr: &Expr{},
 	}
 
 	jCtx := &JobContext{
@@ -725,7 +725,7 @@ func TestStep_finalize(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			step := &Step{
-				expr: &Expr{},
+				Expr: &Expr{},
 			}
 
 			jCtx := &JobContext{
@@ -754,7 +754,7 @@ func TestStep_Do_Integration(t *testing.T) {
 			Name:   "Skipped Step",
 			Uses:   "", // Empty action since this step should be skipped anyway
 			SkipIf: "true",
-			expr:   &Expr{},
+			Expr:   &Expr{},
 		}
 
 		step.ctx = StepContext{
@@ -781,7 +781,7 @@ func TestStep_Do_Integration(t *testing.T) {
 			Name:   "Test Step",
 			Uses:   "any-action", // This won't be executed due to skip
 			SkipIf: "true",       // Always skip to avoid plugin execution
-			expr:   &Expr{},
+			Expr:   &Expr{},
 		}
 
 		step.ctx = StepContext{
@@ -932,7 +932,7 @@ func TestStep_getEchoOutput(t *testing.T) {
 			step := &Step{
 				Echo: tt.echo,
 				ctx:  tt.context,
-				expr: &Expr{},
+				Expr: &Expr{},
 			}
 			printer := NewPrinter(false, []string{})
 
@@ -949,7 +949,7 @@ func TestStep_getEchoOutput_Error(t *testing.T) {
 	step := &Step{
 		Echo: "{{invalid_expression + }}", // Invalid syntax that will cause template error
 		ctx:  StepContext{},
-		expr: &Expr{},
+		Expr: &Expr{},
 	}
 	printer := NewPrinter(false, []string{})
 
