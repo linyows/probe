@@ -8,10 +8,13 @@ func TestOutputsFlatAccess(t *testing.T) {
 	outputs := NewOutputs()
 
 	// Test case 1: Normal case - no conflicts
-	outputs.Set("auth", map[string]any{
+	err := outputs.Set("auth", map[string]any{
 		"token":   "secret123",
 		"user_id": "user456",
 	})
+	if err != nil {
+		t.Errorf("Unexpected error: %v", err)
+	}
 
 	// Both access methods should work
 	stepOutputs, exists := outputs.Get("auth")
@@ -39,9 +42,12 @@ func TestOutputsFlatAccess(t *testing.T) {
 	}
 
 	// Test case 2: Conflict with step ID
-	outputs.Set("token", map[string]any{
+	err = outputs.Set("token", map[string]any{
 		"value": "different_token",
 	})
+	if err == nil {
+		t.Errorf("Expected conflict error but got none")
+	}
 
 	// Debug: Check all data
 	allData := outputs.GetAll()
@@ -63,10 +69,13 @@ func TestOutputsFlatAccess(t *testing.T) {
 	}
 
 	// Test case 3: Duplicate output names
-	outputs.Set("profile", map[string]any{
+	err = outputs.Set("profile", map[string]any{
 		"token": "profile_token", // Conflicts with existing "token"
 		"name":  "john_doe",
 	})
+	if err != nil {
+		t.Errorf("Unexpected error for profile step: %v", err)
+	}
 
 	// Original flat access should be preserved
 	flatToken, exists = outputs.GetFlat("token")
@@ -103,13 +112,19 @@ func TestOutputsFlatAccess(t *testing.T) {
 func TestOutputsGetAll(t *testing.T) {
 	outputs := NewOutputs()
 
-	outputs.Set("auth", map[string]any{
+	err := outputs.Set("auth", map[string]any{
 		"token": "secret123",
 	})
+	if err != nil {
+		t.Errorf("Unexpected error: %v", err)
+	}
 
-	outputs.Set("profile", map[string]any{
+	err = outputs.Set("profile", map[string]any{
 		"name": "john_doe",
 	})
+	if err != nil {
+		t.Errorf("Unexpected error: %v", err)
+	}
 
 	all := outputs.GetAll()
 
@@ -136,14 +151,20 @@ func TestOutputsNoFlatAccessForStepIDConflict(t *testing.T) {
 	outputs := NewOutputs()
 
 	// Create a step with ID "token"
-	outputs.Set("token", map[string]any{
+	err := outputs.Set("token", map[string]any{
 		"value": "step_value",
 	})
+	if err != nil {
+		t.Errorf("Unexpected error: %v", err)
+	}
 
 	// Try to create another step with output name "token"
-	outputs.Set("auth", map[string]any{
+	err = outputs.Set("auth", map[string]any{
 		"token": "auth_token",
 	})
+	if err != nil {
+		t.Errorf("Unexpected error: %v", err)
+	}
 
 	// Flat access to "token" should not work because "token" is a step ID
 	_, exists := outputs.GetFlat("token")
@@ -166,5 +187,46 @@ func TestOutputsNoFlatAccessForStepIDConflict(t *testing.T) {
 	}
 	if authStep["token"] != "auth_token" {
 		t.Errorf("Expected auth token 'auth_token', got %v", authStep["token"])
+	}
+}
+
+func TestOutputsConflictWarning(t *testing.T) {
+	outputs := NewOutputs()
+
+	// First, create a flat output 'foo'
+	err := outputs.Set("step1", map[string]any{
+		"foo": "flat_value",
+	})
+	if err != nil {
+		t.Errorf("Unexpected error: %v", err)
+	}
+
+	// Now try to create a step with ID 'foo' - this should return an error
+	err = outputs.Set("foo", map[string]any{
+		"bar": "step_value",
+	})
+	if err == nil {
+		t.Error("Expected conflict error when step ID conflicts with flat output name")
+	}
+
+	// Verify the error message
+	expectedMsg := "cannot create step-based outputs for 'foo' because flat output with same name exists"
+	if err.Error() != expectedMsg {
+		t.Errorf("Expected error message '%s', got '%s'", expectedMsg, err.Error())
+	}
+
+	// Flat access should still work
+	flatFoo, exists := outputs.GetFlat("foo")
+	if !exists {
+		t.Error("Expected flat access to 'foo' to still work")
+	}
+	if flatFoo != "flat_value" {
+		t.Errorf("Expected flat foo 'flat_value', got %v", flatFoo)
+	}
+
+	// Step-based access should not work due to conflict
+	_, exists = outputs.Get("foo")
+	if exists {
+		t.Error("Expected step-based access to 'foo' to fail due to conflict")
 	}
 }

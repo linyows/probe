@@ -1,6 +1,7 @@
 package probe
 
 import (
+	"fmt"
 	"sync"
 )
 
@@ -18,16 +19,18 @@ func NewOutputs() *Outputs {
 }
 
 // Set stores outputs for a step with flat access support
-func (o *Outputs) Set(stepID string, outputs map[string]any) {
+func (o *Outputs) Set(stepID string, outputs map[string]any) error {
 	o.mu.Lock()
 	defer o.mu.Unlock()
 
 	// Check if stepID conflicts with existing flat data
 	stepIDConflictsWithFlat := false
+	var conflictError error
 	if existingValue, exists := o.data[stepID]; exists {
 		if _, isMap := existingValue.(map[string]any); !isMap {
-			// stepID conflicts with existing flat data
+			// stepID conflicts with existing flat data - this will prevent step-based access
 			stepIDConflictsWithFlat = true
+			conflictError = fmt.Errorf("cannot create step-based outputs for '%s' because flat output with same name exists", stepID)
 		}
 	}
 
@@ -46,6 +49,8 @@ func (o *Outputs) Set(stepID string, outputs map[string]any) {
 		// Safe to store flat access
 		o.data[outputName] = value
 	}
+
+	return conflictError
 }
 
 // Get retrieves outputs for a step (existing functionality)

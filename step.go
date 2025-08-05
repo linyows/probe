@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"regexp"
 	"strconv"
-	"strings"
 	"time"
 )
 
@@ -510,7 +509,9 @@ func (st *Step) saveOutputs(jCtx *JobContext) {
 
 	// Save outputs to the unified Outputs structure
 	if jCtx.Outputs != nil {
-		jCtx.Outputs.Set(st.ID, outputs)
+		if err := jCtx.Outputs.Set(st.ID, outputs); err != nil {
+			jCtx.Printer.PrintError("Output conflict warning: %v", err)
+		}
 	}
 
 	if jCtx.Config.Verbose {
