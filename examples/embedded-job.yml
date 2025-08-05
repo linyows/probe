@@ -1,0 +1,32 @@
+name: Embedded Job
+
+vars:
+  testenv: "{{TESTENV ?? 'dev'}}"
+
+jobs:
+- name: First job
+  defaults:
+    http:
+      url: https://httpbin.org
+  steps:
+  - name: Authentication(Embedded Job)
+    id: auth
+    uses: embedded
+    with:
+      path: "./examples/jobs/{{vars.testenv}}.yml"
+      vars:
+        name: foobar
+    test: res.code == 0
+    outputs:
+      id: res.outputs.myid
+      token: res.outputs.mytoken
+
+  - name: POST
+    uses: http
+    with:
+      post: /post
+      headers:
+        authorization: "Bearer {{outputs.auth.token}}"
+        content-type: application/json
+    test: res.code == 200
+    echo: "{{res.body.headers.Authorization}}"

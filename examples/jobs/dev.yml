@@ -1,0 +1,27 @@
+name: Authentication for Dev
+
+steps:
+- name: Get ID
+  id: get_id
+  uses: shell
+  with:
+    cmd: echo "foobar"
+  outputs:
+    myid: replace(res.stdout, '\n', '')
+  echo: |
+    STDOUT: {{res.stdout}}
+
+- name: Get token
+  id: get_token
+  uses: shell
+  with:
+    cmd: echo "0123456789"
+  outputs:
+    mytoken: replace(res.stdout, '\n', '')
+  echo: |
+    STDOUT: {{res.stdout}}
+
+- name: Hello
+  uses: shell
+  with:
+    cmd: echo "Hello"
