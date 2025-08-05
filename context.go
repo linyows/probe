@@ -6,12 +6,13 @@ type StepContext struct {
 	Res     map[string]any `expr:"res"`
 	Req     map[string]any `expr:"req"`
 	RT      string         `expr:"rt"`
+	Report  string         `expr:"report"`
 	Outputs map[string]any `expr:"outputs"`
 }
 
 // JobContext provides context data for job execution
 type JobContext struct {
-	Vars map[string]any   `expr:"vars"`
+	Vars map[string]any `expr:"vars"`
 	Config
 	Failed bool
 	// Current job ID for this context

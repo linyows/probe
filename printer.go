@@ -242,8 +242,8 @@ func (p *Printer) generateJobStatus(jobID, jobName string, status StatusType, du
 	}
 }
 
-// generateReport generates a complete workflow report string using Result data
-func (p *Printer) generateReport(rs *Result) string {
+// GenerateReport generates a complete workflow report string using Result data
+func (p *Printer) GenerateReport(rs *Result, isFooter bool) string {
 	if rs == nil {
 		return ""
 	}
@@ -283,14 +283,16 @@ func (p *Printer) generateReport(rs *Result) string {
 	}
 
 	// Generate workflow footer
-	p.generateFooter(totalTime.Seconds(), successCount, len(rs.Jobs), &output)
+	if isFooter {
+		p.generateFooter(totalTime.Seconds(), successCount, len(rs.Jobs), &output)
+	}
 
 	return output.String()
 }
 
 // PrintReport prints a complete workflow report using Result data
 func (p *Printer) PrintReport(rs *Result) {
-	reportOutput := p.generateReport(rs)
+	reportOutput := p.GenerateReport(rs, true)
 	if reportOutput != "" {
 		fmt.Print(reportOutput)
 	}
@@ -338,6 +340,17 @@ func (p *Printer) generateJobResultsFromStepResults(stepResults []StepResult) st
 				fmt.Fprintf(&output, "%s %s %s%s%s\n", num, colorInfo().Sprintf(IconWarning), waitPrefix, stepResult.Name, ps)
 			case StatusSkipped:
 				fmt.Fprintf(&output, "%s %s %s%s%s\n", num, colorInfo().Sprintf(IconSkip), waitPrefix, colorDim().Sprintf("%s", stepResult.Name), ps)
+			}
+
+			if stepResult.Report != "" {
+				a7space := "       "
+				a6space := "      "
+				a5space := "     "
+				re := strings.ReplaceAll(stepResult.Report, "\n", "\n"+a7space)
+				re = strings.ReplaceAll(re, "⎿", "⎿ ")
+				re = strings.ReplaceAll(re, a7space+a6space, a7space+a5space)
+				re = strings.TrimRight(re, " \t")
+				output.WriteString(a7space + re)
 			}
 
 			if stepResult.EchoOutput != "" {
