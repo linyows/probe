@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"regexp"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -267,7 +268,7 @@ func (st *Step) DoEcho(jCtx *JobContext) {
 
 func (st *Step) SetCtx(j JobContext, override map[string]any) {
 	// Use outputs from the unified Outputs structure
-	var outputs map[string]map[string]any
+	var outputs map[string]any
 	if j.Outputs != nil {
 		outputs = j.Outputs.GetAll()
 	}

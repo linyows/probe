@@ -146,7 +146,7 @@ func (j *Job) shouldSkip(expr *Expr, ctx JobContext) bool {
 	}
 
 	// Create a step context for evaluation - same as SetCtx in step.go
-	var outputs map[string]map[string]any
+	var outputs map[string]any
 	if ctx.Outputs != nil {
 		outputs = ctx.Outputs.GetAll()
 	}

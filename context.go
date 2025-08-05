@@ -2,11 +2,11 @@ package probe
 
 // StepContext provides context data for step expression evaluation
 type StepContext struct {
-	Vars    map[string]any            `expr:"vars"`
-	Res     map[string]any            `expr:"res"`
-	Req     map[string]any            `expr:"req"`
-	RT      string                    `expr:"rt"`
-	Outputs map[string]map[string]any `expr:"outputs"`
+	Vars    map[string]any `expr:"vars"`
+	Res     map[string]any `expr:"res"`
+	Req     map[string]any `expr:"req"`
+	RT      string         `expr:"rt"`
+	Outputs map[string]any `expr:"outputs"`
 }
 
 // JobContext provides context data for job execution
