@@ -57,16 +57,16 @@ func (o *Outputs) Set(stepID string, outputs map[string]any) error {
 func (o *Outputs) Get(stepID string) (map[string]any, bool) {
 	o.mu.RLock()
 	defer o.mu.RUnlock()
-	
+
 	value, exists := o.data[stepID]
 	if !exists {
 		return nil, false
 	}
-	
+
 	if outputs, ok := value.(map[string]any); ok {
 		return outputs, true
 	}
-	
+
 	return nil, false
 }
 
@@ -74,17 +74,17 @@ func (o *Outputs) Get(stepID string) (map[string]any, bool) {
 func (o *Outputs) GetFlat(outputName string) (any, bool) {
 	o.mu.RLock()
 	defer o.mu.RUnlock()
-	
+
 	value, exists := o.data[outputName]
 	if !exists {
 		return nil, false
 	}
-	
+
 	// If it's a map[string]any, it's step-based data, not flat data
 	if _, isMap := value.(map[string]any); isMap {
 		return nil, false
 	}
-	
+
 	return value, true
 }
 
@@ -92,9 +92,9 @@ func (o *Outputs) GetFlat(outputName string) (any, bool) {
 func (o *Outputs) GetAll() map[string]any {
 	o.mu.RLock()
 	defer o.mu.RUnlock()
-	
+
 	copy := make(map[string]any)
-	
+
 	for k, v := range o.data {
 		if stepOutputs, ok := v.(map[string]any); ok {
 			// This is step-based data, create a deep copy
@@ -108,7 +108,7 @@ func (o *Outputs) GetAll() map[string]any {
 			copy[k] = v
 		}
 	}
-	
+
 	return copy
 }
 
@@ -116,9 +116,9 @@ func (o *Outputs) GetAll() map[string]any {
 func (o *Outputs) GetAllWithFlat() map[string]any {
 	o.mu.RLock()
 	defer o.mu.RUnlock()
-	
+
 	copy := make(map[string]any)
-	
+
 	for k, v := range o.data {
 		if stepOutputs, ok := v.(map[string]any); ok {
 			// This is step-based data, create a deep copy
@@ -132,7 +132,7 @@ func (o *Outputs) GetAllWithFlat() map[string]any {
 			copy[k] = v
 		}
 	}
-	
+
 	return copy
 }
 
