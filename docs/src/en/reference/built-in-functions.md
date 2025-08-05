@@ -108,8 +108,9 @@ outputs:
   clean_url: trimPrefix(res.headers.Location, "https://")
   # "https://api.example.com/users" becomes "api.example.com/users"
 
-env:
-  CLEAN_PATH: "{{trimPrefix(env.FULL_PATH, '/api/v1')}}"
+vars:
+  full_path: "{{FULL_PATH}}"
+  clean_path: "{{trimPrefix(vars.full_path, '/api/v1')}}"
 ```
 
 ### `trimSuffix`
@@ -124,8 +125,9 @@ outputs:
   base_name: trimSuffix(res.json.filename, ".json")
   # "data.json" becomes "data"
 
-env:
-  SERVICE_NAME: "{{trimSuffix(env.CONTAINER_NAME, '-container')}}"
+vars:
+  container_name: "{{CONTAINER_NAME}}"
+  service_name: "{{trimSuffix(vars.container_name, '-container')}}"
 ```
 
 ### `replace`
@@ -152,11 +154,14 @@ Splits a string by a delimiter and returns an array.
 **Returns:** Array of strings
 
 ```yaml
+vars:
+  comma_list: "{{COMMA_LIST}}"
+
 outputs:
   url_parts: split(res.headers.Location, "/")
   # "https://api.example.com/v1/users" becomes ["https:", "", "api.example.com", "v1", "users"]
   
-  first_part: split(env.COMMA_LIST, ",")[0]
+  first_part: split(vars.comma_list, ",")[0]
   # "apple,banana,cherry" -> first element is "apple"
 ```
 
@@ -186,7 +191,7 @@ test: |
   res.json.message | contains("success") &&
   res.headers["Content-Type"] | contains("application/json")
 
-if: env.ENVIRONMENT | contains("prod")
+if: "{{env.ENVIRONMENT}}" | contains("prod")
 ```
 
 ### `hasPrefix`
@@ -199,7 +204,7 @@ Checks if a string starts with a prefix.
 ```yaml
 test: hasPrefix(res.headers.Location, "https://")
 
-if: hasPrefix(env.API_URL, "https://secure")
+if: hasPrefix("{{env.API_URL}}", "https://secure")
 ```
 
 ### `hasSuffix`
@@ -212,7 +217,7 @@ Checks if a string ends with a suffix.
 ```yaml
 test: hasSuffix(res.json.filename, ".json")
 
-if: hasSuffix(env.IMAGE_NAME, ":latest")
+if: hasSuffix("{{env.IMAGE_NAME}}", ":latest")
 ```
 
 ### `len`
@@ -325,7 +330,7 @@ Encodes a string to base64.
 ```yaml
 with:
   headers:
-    Authorization: "Basic {{base64(env.USERNAME + ':' + env.PASSWORD)}}"
+    Authorization: "Basic {{base64(\"{{env.USERNAME}}\" + ':' + \"{{env.PASSWORD}}\")}}"
     # Encodes "user:pass" to "dXNlcjpwYXNz"
 
 outputs:
@@ -552,12 +557,12 @@ Returns a default value if the input is empty or null.
 **Returns:** Any type
 
 ```yaml
-env:
-  TIMEOUT: "{{env.REQUEST_TIMEOUT || '30s'}}"
-  # Use 30s if REQUEST_TIMEOUT is not set
+vars:
+  request_timeout: "{{REQUEST_TIMEOUT || '30s'}}"
+  custom_timeout: "{{CUSTOM_TIMEOUT}}"
 
 with:
-  timeout: "{{default(env.CUSTOM_TIMEOUT, '60s')}}"
+  timeout: "{{default(vars.custom_timeout, '60s')}}"
 ```
 
 ### `coalesce`
@@ -568,12 +573,15 @@ Returns the first non-empty value from a list.
 **Returns:** Any type
 
 ```yaml
-env:
-  API_URL: "{{coalesce(env.CUSTOM_API_URL, env.DEFAULT_API_URL, 'https://api.example.com')}}"
-  # Uses first available URL
+vars:
+  custom_api_url: "{{CUSTOM_API_URL}}"
+  default_api_url: "{{DEFAULT_API_URL}}"
+  step_timeout: "{{STEP_TIMEOUT}}"
+  job_timeout: "{{JOB_TIMEOUT}}"
+  api_url: "{{coalesce(vars.custom_api_url, vars.default_api_url, 'https://api.example.com')}}"
 
 with:
-  timeout: "{{coalesce(env.STEP_TIMEOUT, env.JOB_TIMEOUT, '30s')}}"
+  timeout: "{{coalesce(vars.step_timeout, vars.job_timeout, '30s')}}"
 ```
 
 ## JSON Functions
@@ -689,13 +697,18 @@ test: |
   contains(res.json.status | upper, "SUCCESS")
 
 if: |
-  env.ENVIRONMENT == "production" ||
-  (env.ENVIRONMENT == "staging" && contains(env.BRANCH_NAME, "release"))
+  "{{env.ENVIRONMENT}}" == "production" ||
+  ("{{env.ENVIRONMENT}}" == "staging" && contains("{{env.BRANCH_NAME}}", "release"))
 ```
 
 ### Complex Data Manipulation
 
 ```yaml
+vars:
+  base_url: "{{BASE_URL}}"
+  api_version: "{{API_VERSION}}"
+  resource: "{{RESOURCE}}"
+
 outputs:
   # Extract and format user data
   formatted_users: |
@@ -709,7 +722,7 @@ outputs:
   
   # Generate URLs
   api_endpoints: |
-    {{env.BASE_URL | trimSuffix('/')}}/{{env.API_VERSION}}/{{env.RESOURCE | lower}}
+    {{vars.base_url | trimSuffix('/')}}/{{vars.api_version}}/{{vars.resource | lower}}
 ```
 
 ### Error-Safe Function Usage
@@ -717,6 +730,10 @@ outputs:
 Use default values and null checks to make functions more robust:
 
 ```yaml
+vars:
+  custom_url: "{{CUSTOM_URL}}"
+  default_url: "{{DEFAULT_URL}}"
+
 outputs:
   safe_length: "{{len(res.json.items || []))}}"
   # Use empty array if items is null
@@ -724,7 +741,7 @@ outputs:
   safe_name: "{{res.json.user.name | default('Unknown') | upper}}"  
   # Provide default if name is missing
   
-  safe_url: "{{coalesce(env.CUSTOM_URL, env.DEFAULT_URL, 'https://fallback.com')}}"
+  safe_url: "{{coalesce(vars.custom_url, vars.default_url, 'https://fallback.com')}}"
   # Multiple fallback options
 ```
 
@@ -741,23 +758,24 @@ outputs:
 
 ```yaml
 # Good: Compute once, reuse
-env:
-  CURRENT_TIME: "{{iso8601()}}"
-  API_URL: "{{env.BASE_URL | trimSuffix('/')}}"
+vars:
+  base_url: "{{BASE_URL}}"
+  current_time: "{{iso8601()}}"
+  api_url: "{{vars.base_url | trimSuffix('/')}}"
 
 jobs:
   test:
     steps:
       - name: "Use precomputed values"
         with:
-          url: "{{env.API_URL}}/health"
+          url: "{{vars.api_url}}/health"
           headers:
-            X-Timestamp: "{{env.CURRENT_TIME}}"
+            X-Timestamp: "{{vars.current_time}}"
 
 # Avoid: Recomputing in every step
       - name: "Inefficient"
         with:
-          url: "{{env.BASE_URL | trimSuffix('/')}}/health"  # Recomputed
+          url: "{{vars.base_url | trimSuffix('/')}}/health"  # Recomputed
           headers:
             X-Timestamp: "{{iso8601()}}"  # Different timestamp
 ```

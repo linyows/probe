@@ -471,8 +471,8 @@ env:
   API_TOKEN: "secret-token-here"
 
 # ✅ Good: Reference environment variable
-env:
-  API_TOKEN: "{{env.API_TOKEN}}"
+vars:
+  api_token: "{{API_TOKEN}}"
 ```
 
 ### Variable Management
@@ -520,20 +520,25 @@ probe -v workflow.yml 2>&1 | grep -i "environment"
 
 ```yaml
 # workflow.yml - Debug environment variable expansion
+vars:
+  api_base_url: "{{API_BASE_URL}}"
+  environment: "{{ENVIRONMENT}}"
+  default_timeout: "{{DEFAULT_TIMEOUT || 'not set'}}"
+
 steps:
   - name: "Debug Environment"
     action: hello
     with:
       message: |
         Environment Debug:
-        API_URL: {{env.API_BASE_URL}}
-        Environment: {{env.ENVIRONMENT}}
-        Timeout: {{env.DEFAULT_TIMEOUT || "not set"}}
+        API_URL: "{{vars.api_base_url}}"
+        Environment: "{{vars.environment}}"
+        Timeout: "{{vars.default_timeout}}"
         
   - name: "Test Variable Access"
     echo: |
       Available variables:
-      {{range $key, $value := env}}
+      {{range $key, $value := vars}}
         {{$key}}: {{$value}}
       {{end}}
 ```
@@ -578,13 +583,17 @@ export ENABLE_SLACK_ALERTS=$([[ "$ENVIRONMENT" == "production" ]] && echo "true"
 
 ```yaml
 # workflow.yml
+vars:
+  skip_performance_tests: "{{SKIP_PERFORMANCE_TESTS}}"
+  enable_slack_alerts: "{{ENABLE_SLACK_ALERTS}}"
+
 jobs:
   performance-tests:
-    if: env.SKIP_PERFORMANCE_TESTS != "true"
+    if: "{{vars.skip_performance_tests}}" != "true"
     # Performance test steps
     
   alerts:
-    if: env.ENABLE_SLACK_ALERTS == "true"
+    if: "{{vars.enable_slack_alerts}}" == "true"
     needs: [performance-tests]
     # Alert steps
 ```

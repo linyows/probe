@@ -18,10 +18,11 @@ Start with simple response time measurements:
 name: Basic Performance Testing
 description: Measure and validate API response times
 
-env:
-  API_BASE_URL: https://api.yourcompany.com
-  PERFORMANCE_THRESHOLD_MS: 1000
-  EXCELLENT_THRESHOLD_MS: 500
+vars:
+  api_base_url: "{{API_BASE_URL ?? 'https://api.yourcompany.com'}}"
+  api_token: "{{API_TOKEN}}"
+  performance_threshold_ms: "{{PERFORMANCE_THRESHOLD_MS ?? '1000'}}"
+  excellent_threshold_ms: "{{EXCELLENT_THRESHOLD_MS ?? '500'}}"
 
 defaults:
   http:
@@ -37,7 +38,7 @@ jobs:
         id: ping
         action: http
         with:
-          url: "{{env.API_BASE_URL}}/ping"
+          url: "{{vars.api_base_url}}/ping"
         test: |
           res.status == 200 &&
           res.time < 200
@@ -52,26 +53,26 @@ jobs:
         id: query
         action: http
         with:
-          url: "{{env.API_BASE_URL}}/users?limit=50"
+          url: "{{vars.api_base_url}}/users?limit=50"
           headers:
-            Authorization: "Bearer {{env.API_TOKEN}}"
+            Authorization: "Bearer {{vars.api_token}}"
         test: |
           res.status == 200 &&
-          res.time < {{env.PERFORMANCE_THRESHOLD_MS}}
+          res.time < {{vars.performance_threshold_ms}}
         outputs:
           query_time: res.time
           query_performance: |
-            {{res.time < env.EXCELLENT_THRESHOLD_MS ? "excellent" :
-              res.time < env.PERFORMANCE_THRESHOLD_MS ? "good" :
+            {{res.time < vars.excellent_threshold_ms ? "excellent" :
+              res.time < vars.performance_threshold_ms ? "good" :
               res.time < 2000 ? "acceptable" : "poor"}}
 
       - name: Complex Computation Endpoint
         id: computation
         action: http
         with:
-          url: "{{env.API_BASE_URL}}/analytics/summary"
+          url: "{{vars.api_base_url}}/analytics/summary"
           headers:
-            Authorization: "Bearer {{env.API_TOKEN}}"
+            Authorization: "Bearer {{vars.api_token}}"
         test: |
           res.status == 200 &&
           res.time < 5000
@@ -86,10 +87,10 @@ jobs:
         id: upload
         action: http
         with:
-          url: "{{env.API_BASE_URL}}/files/upload"
+          url: "{{vars.api_base_url}}/files/upload"
           method: POST
           headers:
-            Authorization: "Bearer {{env.API_TOKEN}}"
+            Authorization: "Bearer {{vars.api_token}}"
             Content-Type: "multipart/form-data"
           body: |
             --boundary123
@@ -147,6 +148,14 @@ env:
   SLO_ERROR_RATE: 0.01  # 1% error rate
   SLO_AVAILABILITY: 0.999  # 99.9% availability
 
+vars:
+  api_base_url: "{{API_BASE_URL}}"
+  api_token: "{{API_TOKEN}}"
+  slo_p50_ms: "{{SLO_P50_MS}}"
+  slo_p99_ms: "{{SLO_P99_MS}}"
+  slo_error_rate: "{{SLO_ERROR_RATE}}"
+  slo_availability: "{{SLO_AVAILABILITY}}"
+
 jobs:
   performance-slo-validation:
     name: Performance SLO Validation
@@ -156,9 +165,9 @@ jobs:
         id: sample1
         action: http
         with:
-          url: "{{env.API_BASE_URL}}/users"
+          url: "{{vars.api_base_url}}/users"
           headers:
-            Authorization: "Bearer {{env.API_TOKEN}}"
+            Authorization: "Bearer {{vars.api_token}}"
         test: res.status == 200
         continue_on_error: true
         outputs:
@@ -169,9 +178,9 @@ jobs:
         id: sample2
         action: http
         with:
-          url: "{{env.API_BASE_URL}}/orders"
+          url: "{{vars.api_base_url}}/orders"
           headers:
-            Authorization: "Bearer {{env.API_TOKEN}}"
+            Authorization: "Bearer {{vars.api_token}}"
         test: res.status == 200
         continue_on_error: true
         outputs:
@@ -182,9 +191,9 @@ jobs:
         id: sample3
         action: http
         with:
-          url: "{{env.API_BASE_URL}}/products"
+          url: "{{vars.api_base_url}}/products"
           headers:
-            Authorization: "Bearer {{env.API_TOKEN}}"
+            Authorization: "Bearer {{vars.api_token}}"
         test: res.status == 200
         continue_on_error: true
         outputs:
@@ -195,9 +204,9 @@ jobs:
         id: sample4
         action: http
         with:
-          url: "{{env.API_BASE_URL}}/analytics"
+          url: "{{vars.api_base_url}}/analytics"
           headers:
-            Authorization: "Bearer {{env.API_TOKEN}}"
+            Authorization: "Bearer {{vars.api_token}}"
         test: res.status == 200
         continue_on_error: true
         outputs:
@@ -208,9 +217,9 @@ jobs:
         id: sample5
         action: http
         with:
-          url: "{{env.API_BASE_URL}}/reports"
+          url: "{{vars.api_base_url}}/reports"
           headers:
-            Authorization: "Bearer {{env.API_TOKEN}}"
+            Authorization: "Bearer {{vars.api_token}}"
         test: res.status == 200
         continue_on_error: true
         outputs:
@@ -281,16 +290,16 @@ jobs:
           Error Rate: {{(outputs.slo-analysis.error_rate * 100)}}%
           
           SLO COMPLIANCE:
-          P50 (Average): {{outputs.slo-analysis.avg_response_time <= env.SLO_P50_MS ? "✅ PASS" : "❌ FAIL"}} ({{outputs.slo-analysis.avg_response_time}}ms ≤ {{env.SLO_P50_MS}}ms)
-          P99 (Max): {{outputs.slo-analysis.max_response_time <= env.SLO_P99_MS ? "✅ PASS" : "❌ FAIL"}} ({{outputs.slo-analysis.max_response_time}}ms ≤ {{env.SLO_P99_MS}}ms)
-          Error Rate: {{outputs.slo-analysis.error_rate <= env.SLO_ERROR_RATE ? "✅ PASS" : "❌ FAIL"}} ({{(outputs.slo-analysis.error_rate * 100)}}% ≤ {{(env.SLO_ERROR_RATE * 100)}}%)
-          Availability: {{outputs.slo-analysis.availability >= env.SLO_AVAILABILITY ? "✅ PASS" : "❌ FAIL"}} ({{(outputs.slo-analysis.availability * 100)}}% ≥ {{(env.SLO_AVAILABILITY * 100)}}%)
+          P50 (Average): {{outputs.slo-analysis.avg_response_time <= vars.slo_p50_ms ? "✅ PASS" : "❌ FAIL"}} ({{outputs.slo-analysis.avg_response_time}}ms ≤ {{vars.slo_p50_ms}}ms)
+          P99 (Max): {{outputs.slo-analysis.max_response_time <= vars.slo_p99_ms ? "✅ PASS" : "❌ FAIL"}} ({{outputs.slo-analysis.max_response_time}}ms ≤ {{vars.slo_p99_ms}}ms)
+          Error Rate: {{outputs.slo-analysis.error_rate <= vars.slo_error_rate ? "✅ PASS" : "❌ FAIL"}} ({{(outputs.slo-analysis.error_rate * 100)}}% ≤ {{(vars.slo_error_rate * 100)}}%)
+          Availability: {{outputs.slo-analysis.availability >= vars.slo_availability ? "✅ PASS" : "❌ FAIL"}} ({{(outputs.slo-analysis.availability * 100)}}% ≥ {{(vars.slo_availability * 100)}}%)
           
           OVERALL SLO STATUS: {{
-            outputs.slo-analysis.avg_response_time <= env.SLO_P50_MS &&
-            outputs.slo-analysis.max_response_time <= env.SLO_P99_MS &&
-            outputs.slo-analysis.error_rate <= env.SLO_ERROR_RATE &&
-            outputs.slo-analysis.availability >= env.SLO_AVAILABILITY
+            outputs.slo-analysis.avg_response_time <= vars.slo_p50_ms &&
+            outputs.slo-analysis.max_response_time <= vars.slo_p99_ms &&
+            outputs.slo-analysis.error_rate <= vars.slo_error_rate &&
+            outputs.slo-analysis.availability >= vars.slo_availability
             ? "🟢 ALL SLOs MET" : "🔴 SLO VIOLATIONS DETECTED"
           }}
 ```
@@ -305,9 +314,10 @@ Gradually increase load to find performance breaking points:
 name: Sequential Load Testing
 description: Gradually increase load to identify performance limits
 
-env:
-  API_BASE_URL: https://api.yourcompany.com
-  LOAD_TEST_ENDPOINT: /api/stress-test
+vars:
+  api_base_url: "{{API_BASE_URL ?? 'https://api.yourcompany.com'}}"
+  load_test_endpoint: "{{LOAD_TEST_ENDPOINT ?? '/api/stress-test'}}"
+  api_token: "{{API_TOKEN}}"
 
 jobs:
   sequential-load-test:
@@ -318,11 +328,11 @@ jobs:
         id: light-load
         action: http
         with:
-          url: "{{env.API_BASE_URL}}{{env.LOAD_TEST_ENDPOINT}}"
+          url: "{{vars.api_base_url}}{{vars.load_test_endpoint}}"
           method: POST
           headers:
             Content-Type: "application/json"
-            Authorization: "Bearer {{env.API_TOKEN}}"
+            Authorization: "Bearer {{vars.api_token}}"
           body: |
             {
               "test_type": "light_load",
@@ -346,11 +356,11 @@ jobs:
         id: medium-load
         action: http
         with:
-          url: "{{env.API_BASE_URL}}{{env.LOAD_TEST_ENDPOINT}}"
+          url: "{{vars.api_base_url}}{{vars.load_test_endpoint}}"
           method: POST
           headers:
             Content-Type: "application/json"
-            Authorization: "Bearer {{env.API_TOKEN}}"
+            Authorization: "Bearer {{vars.api_token}}"
           body: |
             {
               "test_type": "medium_load",
@@ -374,11 +384,11 @@ jobs:
         id: heavy-load
         action: http
         with:
-          url: "{{env.API_BASE_URL}}{{env.LOAD_TEST_ENDPOINT}}"
+          url: "{{vars.api_base_url}}{{vars.load_test_endpoint}}"
           method: POST
           headers:
             Content-Type: "application/json"
-            Authorization: "Bearer {{env.API_TOKEN}}"
+            Authorization: "Bearer {{vars.api_token}}"
           body: |
             {
               "test_type": "heavy_load",
@@ -404,11 +414,11 @@ jobs:
         id: peak-load
         action: http
         with:
-          url: "{{env.API_BASE_URL}}{{env.LOAD_TEST_ENDPOINT}}"
+          url: "{{vars.api_base_url}}{{vars.load_test_endpoint}}"
           method: POST
           headers:
             Content-Type: "application/json"
-            Authorization: "Bearer {{env.API_TOKEN}}"
+            Authorization: "Bearer {{vars.api_token}}"
           body: |
             {
               "test_type": "peak_load",
@@ -488,9 +498,10 @@ Push the system beyond normal operating conditions:
 name: Stress Testing
 description: Test system behavior under extreme load conditions
 
-env:
-  API_BASE_URL: https://api.yourcompany.com
-  STRESS_TEST_ENDPOINT: /api/stress-test
+vars:
+  api_base_url: "{{API_BASE_URL ?? 'https://api.yourcompany.com'}}"
+  stress_test_endpoint: "{{STRESS_TEST_ENDPOINT ?? '/api/stress-test'}}"
+  api_token: "{{API_TOKEN}}"
 
 jobs:
   stress-testing:
@@ -501,11 +512,11 @@ jobs:
         id: baseline
         action: http
         with:
-          url: "{{env.API_BASE_URL}}{{env.STRESS_TEST_ENDPOINT}}"
+          url: "{{vars.api_base_url}}{{vars.stress_test_endpoint}}"
           method: POST
           headers:
             Content-Type: "application/json"
-            Authorization: "Bearer {{env.API_TOKEN}}"
+            Authorization: "Bearer {{vars.api_token}}"
           body: |
             {
               "test_type": "baseline",
@@ -523,11 +534,11 @@ jobs:
         id: concurrency-stress
         action: http
         with:
-          url: "{{env.API_BASE_URL}}{{env.STRESS_TEST_ENDPOINT}}"
+          url: "{{vars.api_base_url}}{{vars.stress_test_endpoint}}"
           method: POST
           headers:
             Content-Type: "application/json"
-            Authorization: "Bearer {{env.API_TOKEN}}"
+            Authorization: "Bearer {{vars.api_token}}"
           body: |
             {
               "test_type": "concurrency_stress",
@@ -550,11 +561,11 @@ jobs:
         id: rate-stress
         action: http
         with:
-          url: "{{env.API_BASE_URL}}{{env.STRESS_TEST_ENDPOINT}}"
+          url: "{{vars.api_base_url}}{{vars.stress_test_endpoint}}"
           method: POST
           headers:
             Content-Type: "application/json"
-            Authorization: "Bearer {{env.API_TOKEN}}"
+            Authorization: "Bearer {{vars.api_token}}"
           body: |
             {
               "test_type": "rate_stress",
@@ -577,11 +588,11 @@ jobs:
         id: memory-stress
         action: http
         with:
-          url: "{{env.API_BASE_URL}}{{env.STRESS_TEST_ENDPOINT}}"
+          url: "{{vars.api_base_url}}{{vars.stress_test_endpoint}}"
           method: POST
           headers:
             Content-Type: "application/json"
-            Authorization: "Bearer {{env.API_TOKEN}}"
+            Authorization: "Bearer {{vars.api_token}}"
           body: |
             {
               "test_type": "memory_stress",
@@ -658,12 +669,14 @@ Monitor performance continuously and alert on degradation:
 name: Continuous Performance Monitoring
 description: Monitor system performance and detect degradation
 
-env:
-  API_BASE_URL: https://api.yourcompany.com
-  BASELINE_RESPONSE_TIME: 500
-  WARNING_THRESHOLD: 1000
-  CRITICAL_THRESHOLD: 2000
-  DEGRADATION_THRESHOLD: 2.0  # 2x baseline
+vars:
+  api_base_url: "{{API_BASE_URL ?? 'https://api.yourcompany.com'}}"
+  perf_test_username: "{{PERF_TEST_USERNAME}}"
+  perf_test_password: "{{PERF_TEST_PASSWORD}}"
+  baseline_response_time: "{{BASELINE_RESPONSE_TIME ?? '500'}}"
+  warning_threshold: "{{WARNING_THRESHOLD ?? '1000'}}"
+  critical_threshold: "{{CRITICAL_THRESHOLD ?? '2000'}}"
+  degradation_threshold: "{{DEGRADATION_THRESHOLD ?? '2.0'}}"  # 2x baseline
 
 jobs:
   performance-monitoring:
@@ -674,14 +687,14 @@ jobs:
         id: login
         action: http
         with:
-          url: "{{env.API_BASE_URL}}/auth/login"
+          url: "{{vars.api_base_url}}/auth/login"
           method: POST
           headers:
             Content-Type: "application/json"
           body: |
             {
-              "username": "{{env.PERF_TEST_USERNAME}}",
-              "password": "{{env.PERF_TEST_PASSWORD}}"
+              "username": "{{vars.perf_test_username}}",
+              "password": "{{vars.perf_test_password}}"
             }
         test: res.status == 200
         outputs:
@@ -694,7 +707,7 @@ jobs:
         id: data-retrieval
         action: http
         with:
-          url: "{{env.API_BASE_URL}}/dashboard/data"
+          url: "{{vars.api_base_url}}/dashboard/data"
           headers:
             Authorization: "Bearer {{outputs.login.auth_token}}"
         test: res.status == 200
@@ -708,7 +721,7 @@ jobs:
         id: search
         action: http
         with:
-          url: "{{env.API_BASE_URL}}/search?q=test&limit=50"
+          url: "{{vars.api_base_url}}/search?q=test&limit=50"
           headers:
             Authorization: "Bearer {{outputs.login.auth_token}}"
         test: res.status == 200
@@ -722,7 +735,7 @@ jobs:
         id: transaction
         action: http
         with:
-          url: "{{env.API_BASE_URL}}/transactions"
+          url: "{{vars.api_base_url}}/transactions"
           method: POST
           headers:
             Content-Type: "application/json"
@@ -758,21 +771,29 @@ jobs:
           
           # Check for performance degradation
           degradation_detected: |
-            {{outputs.login.login_time > (env.BASELINE_RESPONSE_TIME * env.DEGRADATION_THRESHOLD) ||
-              outputs.data-retrieval.retrieval_time > (env.BASELINE_RESPONSE_TIME * env.DEGRADATION_THRESHOLD) ||
-              outputs.search.search_time > (env.BASELINE_RESPONSE_TIME * env.DEGRADATION_THRESHOLD) ||
-              outputs.transaction.transaction_time > (env.BASELINE_RESPONSE_TIME * env.DEGRADATION_THRESHOLD)}}
+            {{outputs.login.login_time > (vars.baseline_response_time * vars.degradation_threshold) ||
+              outputs.data-retrieval.retrieval_time > (vars.baseline_response_time * vars.degradation_threshold) ||
+              outputs.search.search_time > (vars.baseline_response_time * vars.degradation_threshold) ||
+              outputs.transaction.transaction_time > (vars.baseline_response_time * vars.degradation_threshold)}}
           
           # Determine alert level
           alert_level: |
-            {{outputs.login.login_time > env.CRITICAL_THRESHOLD ||
-              outputs.data-retrieval.retrieval_time > env.CRITICAL_THRESHOLD ||
-              outputs.search.search_time > env.CRITICAL_THRESHOLD ||
-              outputs.transaction.transaction_time > env.CRITICAL_THRESHOLD ? "critical" :
-              outputs.login.login_time > env.WARNING_THRESHOLD ||
-              outputs.data-retrieval.retrieval_time > env.WARNING_THRESHOLD ||
-              outputs.search.search_time > env.WARNING_THRESHOLD ||
-              outputs.transaction.transaction_time > env.WARNING_THRESHOLD ? "warning" : "ok"}}
+            {{outputs.login.login_time > vars.critical_threshold ||
+              outputs.data-retrieval.retrieval_time > vars.critical_threshold ||
+              outputs.search.search_time > vars.critical_threshold ||
+              outputs.transaction.transaction_time > vars.critical_threshold ? "critical" :
+              outputs.login.login_time > vars.warning_threshold ||
+              outputs.data-retrieval.retrieval_time > vars.warning_threshold ||
+              outputs.search.search_time > vars.warning_threshold ||
+              outputs.transaction.transaction_time > vars.warning_threshold ? "warning" : "ok"}}
+
+vars:
+  smtp_host: "{{SMTP_HOST}}"
+  smtp_username: "{{SMTP_USERNAME}}"
+  smtp_password: "{{SMTP_PASSWORD}}"
+  environment: "{{ENVIRONMENT}}"
+  performance_dashboard_url: "{{PERFORMANCE_DASHBOARD_URL}}"
+  performance_runbook_url: "{{PERFORMANCE_RUNBOOK_URL}}"
 
   performance-alerting:
     name: Performance Alerting
@@ -783,10 +804,10 @@ jobs:
         if: outputs.performance-monitoring.alert_level == "critical"
         action: smtp
         with:
-          host: "{{env.SMTP_HOST}}"
+          host: "{{vars.smtp_host}}"
           port: 587
-          username: "{{env.SMTP_USERNAME}}"
-          password: "{{env.SMTP_PASSWORD}}"
+          username: "{{vars.smtp_username}}"
+          password: "{{vars.smtp_password}}"
           from: "performance-alerts@yourcompany.com"
           to: ["oncall@yourcompany.com", "performance-team@yourcompany.com"]
           subject: "🚨 CRITICAL: Performance Degradation Detected"
@@ -795,32 +816,32 @@ jobs:
             =========================
             
             Time: {{unixtime()}}
-            Environment: {{env.ENVIRONMENT}}
+            Environment: {{vars.environment}}
             
             Performance Metrics:
-            Login: {{outputs.performance-monitoring.login_time}}ms (threshold: {{env.CRITICAL_THRESHOLD}}ms)
+            Login: {{outputs.performance-monitoring.login_time}}ms (threshold: {{vars.critical_threshold}}ms)
             Data Retrieval: {{outputs.performance-monitoring.retrieval_time}}ms
             Search: {{outputs.performance-monitoring.search_time}}ms
             Transaction: {{outputs.performance-monitoring.transaction_time}}ms
             
             Average Response Time: {{outputs.performance-monitoring.avg_response_time}}ms
-            Baseline: {{env.BASELINE_RESPONSE_TIME}}ms
+            Baseline: {{vars.baseline_response_time}}ms
             
             Impact: User experience severely degraded
             Action Required: Immediate investigation
             
-            Dashboard: {{env.PERFORMANCE_DASHBOARD_URL}}
-            Runbook: {{env.PERFORMANCE_RUNBOOK_URL}}
+            Dashboard: {{vars.performance_dashboard_url}}
+            Runbook: {{vars.performance_runbook_url}}
 
       # Warning performance alert
       - name: Warning Performance Alert
         if: outputs.performance-monitoring.alert_level == "warning"
         action: smtp
         with:
-          host: "{{env.SMTP_HOST}}"
+          host: "{{vars.smtp_host}}"
           port: 587
-          username: "{{env.SMTP_USERNAME}}"
-          password: "{{env.SMTP_PASSWORD}}"
+          username: "{{vars.smtp_username}}"
+          password: "{{vars.smtp_password}}"
           from: "performance-alerts@yourcompany.com"
           to: ["performance-team@yourcompany.com"]
           subject: "⚠️ WARNING: Performance Degradation Detected"
@@ -829,7 +850,7 @@ jobs:
             ==================
             
             Time: {{unixtime()}}
-            Environment: {{env.ENVIRONMENT}}
+            Environment: {{vars.environment}}
             
             Performance Metrics:
             Login: {{outputs.performance-monitoring.login_time}}ms
@@ -838,7 +859,7 @@ jobs:
             Transaction: {{outputs.performance-monitoring.transaction_time}}ms
             
             Average Response Time: {{outputs.performance-monitoring.avg_response_time}}ms
-            Warning Threshold: {{env.WARNING_THRESHOLD}}ms
+            Warning Threshold: {{vars.warning_threshold}}ms
             
             Action: Monitor closely and investigate if degradation continues
 
@@ -868,9 +889,10 @@ Test database query performance and optimization:
 name: Database Performance Testing
 description: Test database query performance and identify bottlenecks
 
-env:
-  DB_API_URL: https://db-api.yourcompany.com
-  QUERY_TIMEOUT: 5000
+vars:
+  db_api_url: "{{DB_API_URL ?? 'https://db-api.yourcompany.com'}}"
+  db_api_token: "{{DB_API_TOKEN}}"
+  query_timeout: "{{QUERY_TIMEOUT ?? '5000'}}"
 
 jobs:
   database-performance:
@@ -881,15 +903,15 @@ jobs:
         id: simple-query
         action: http
         with:
-          url: "{{env.DB_API_URL}}/query/simple"
+          url: "{{vars.db_api_url}}/query/simple"
           method: POST
           headers:
             Content-Type: "application/json"
-            Authorization: "Bearer {{env.DB_API_TOKEN}}"
+            Authorization: "Bearer {{vars.db_api_token}}"
           body: |
             {
               "query": "SELECT COUNT(*) FROM users WHERE active = true",
-              "timeout": {{env.QUERY_TIMEOUT}}
+              "timeout": {{vars.query_timeout}}
             }
         test: |
           res.status == 200 &&
@@ -905,15 +927,15 @@ jobs:
         id: complex-query
         action: http
         with:
-          url: "{{env.DB_API_URL}}/query/complex"
+          url: "{{vars.db_api_url}}/query/complex"
           method: POST
           headers:
             Content-Type: "application/json"
-            Authorization: "Bearer {{env.DB_API_TOKEN}}"
+            Authorization: "Bearer {{vars.db_api_token}}"
           body: |
             {
               "query": "SELECT u.*, COUNT(o.id) as order_count FROM users u LEFT JOIN orders o ON u.id = o.user_id WHERE u.created_at > DATE_SUB(NOW(), INTERVAL 30 DAY) GROUP BY u.id ORDER BY order_count DESC LIMIT 100",
-              "timeout": {{env.QUERY_TIMEOUT}}
+              "timeout": {{vars.query_timeout}}
             }
         test: |
           res.status == 200 &&
@@ -929,15 +951,15 @@ jobs:
         id: aggregation-query
         action: http
         with:
-          url: "{{env.DB_API_URL}}/query/aggregation"
+          url: "{{vars.db_api_url}}/query/aggregation"
           method: POST
           headers:
             Content-Type: "application/json"
-            Authorization: "Bearer {{env.DB_API_TOKEN}}"
+            Authorization: "Bearer {{vars.db_api_token}}"
           body: |
             {
               "query": "SELECT DATE(created_at) as date, COUNT(*) as daily_orders, SUM(total) as daily_revenue, AVG(total) as avg_order_value FROM orders WHERE created_at >= DATE_SUB(NOW(), INTERVAL 90 DAY) GROUP BY DATE(created_at) ORDER BY date DESC",
-              "timeout": {{env.QUERY_TIMEOUT}}
+              "timeout": {{vars.query_timeout}}
             }
         test: |
           res.status == 200 &&
@@ -953,9 +975,9 @@ jobs:
         id: index-test
         action: http
         with:
-          url: "{{env.DB_API_URL}}/performance/indexes"
+          url: "{{vars.db_api_url}}/performance/indexes"
           headers:
-            Authorization: "Bearer {{env.DB_API_TOKEN}}"
+            Authorization: "Bearer {{vars.db_api_token}}"
         test: res.status == 200
         outputs:
           index_efficiency: res.json.index_efficiency_percent
@@ -1005,10 +1027,13 @@ jobs:
 
 ```yaml
 # Good: Establish baseline before testing
+vars:
+  api_url: "{{API_URL}}"
+
 - name: Establish Baseline
   action: http
   with:
-    url: "{{env.API_URL}}/health"
+    url: "{{vars.api_url}}/health"
   outputs:
     baseline_response_time: res.time
 ```
