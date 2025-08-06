@@ -96,7 +96,7 @@ func (st *Step) handleActionError(err error, name string, jCtx *JobContext) {
 	jCtx.SetFailed()
 
 	// Create and add step result for failed action execution
-	if jCtx.Config.Verbose {
+	if jCtx.Verbose {
 		jCtx.Printer.PrintRequestResponse(st.Idx, name, st.ctx.Req, st.ctx.Res, st.ctx.RT)
 	}
 
