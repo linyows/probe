@@ -39,6 +39,7 @@ steps:
   with:
     post: /post
     body:
+      myid: "{{ outputs.get_id.myid }}"
   test: res.code == 200
   echo: |
     Response Body: {{res.body}}
