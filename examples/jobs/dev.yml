@@ -1,5 +1,11 @@
 name: Authentication for Dev
 
+defaults:
+  http:
+    url: "{{ vars.url }}"
+    headers:
+      content-type: application/json
+
 steps:
 - name: Get ID
   id: get_id
@@ -24,4 +30,15 @@ steps:
 - name: Hello
   uses: shell
   with:
-    cmd: echo "Hello"
+    cmd: echo "Hello, {{ vars.id }} ({{ vars.testenv }})"
+  echo: |
+    STDOUT: {{res.stdout}}
+
+- name: POST
+  uses: http
+  with:
+    post: /post
+    body:
+  test: res.code == 200
+  echo: |
+    Response Body: {{res.body}}

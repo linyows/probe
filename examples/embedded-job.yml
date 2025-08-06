@@ -2,13 +2,24 @@ name: Embedded Job
 
 vars:
   testenv: "{{TESTENV ?? 'dev'}}"
+  url: "https://httpbin.org"
 
 jobs:
 - name: First job
   defaults:
     http:
-      url: https://httpbin.org
+      url: "{{ vars.url }}"
+
   steps:
+  - name: Get ID
+    id: shell
+    uses: shell
+    with:
+      cmd: whoami
+    test: res.code == 0
+    outputs:
+      login: replace(res.stdout, '\n', '')
+
   - name: Authentication(Embedded Job)
     id: auth
     uses: embedded
@@ -16,12 +27,15 @@ jobs:
       path: "./examples/jobs/{{vars.testenv}}.yml"
       vars:
         name: foobar
+        testenv: "{{ vars.testenv }}"
+        id: "{{ outputs.shell.login }}"
+        url: "{{ vars.url }}"
     test: res.code == 0
     outputs:
       id: res.outputs.myid
       token: res.outputs.mytoken
 
-  - name: POST
+  - name: POST with outputs of embedded job
     uses: http
     with:
       post: /post
