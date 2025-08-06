@@ -94,6 +94,29 @@ func (st *Step) handleActionError(err error, name string, jCtx *JobContext) {
 	st.err = actionErr
 	jCtx.Printer.PrintError("Action execution failed: %v", actionErr)
 	jCtx.SetFailed()
+
+	// Create and add step result for failed action execution
+	if jCtx.Config.Verbose {
+		jCtx.Printer.PrintRequestResponse(st.Idx, name, st.ctx.Req, st.ctx.Res, st.ctx.RT)
+	}
+
+	// Handle repeat execution
+	if jCtx.IsRepeating {
+		st.handleRepeatExecution(jCtx, name)
+		return
+	}
+
+	// Standard execution: create result for failed step
+	stepResult := st.createFailedStepResult(name, jCtx, nil)
+
+	// Add step result to workflow buffer
+	if jCtx.Result != nil {
+		jCtx.Result.AddStepResult(jCtx.CurrentJobID, stepResult)
+	}
+
+	if jCtx.Verbose {
+		jCtx.Printer.PrintSeparator()
+	}
 }
 
 // processActionResult processes the action result and updates context
@@ -493,6 +516,35 @@ func (st *Step) createSkippedStepResult(name string, jCtx *JobContext, repeatCou
 		HasTest:       false,
 		RepeatCounter: repeatCounter,
 	}
+}
+
+// createFailedStepResult creates a StepResult for a failed step
+func (st *Step) createFailedStepResult(name string, jCtx *JobContext, repeatCounter *StepRepeatCounter) StepResult {
+	result := StepResult{
+		Index:         st.Idx,
+		Name:          name,
+		Status:        StatusError,
+		RT:            "",
+		WaitTime:      st.getWaitTimeForDisplay(),
+		HasTest:       st.Test != "",
+		RepeatCounter: repeatCounter,
+	}
+
+	if jCtx.RT && st.ctx.RT != "" {
+		result.RT = st.ctx.RT
+	}
+	if v, ok := st.ctx.Res["report"]; ok {
+		if report, sok := v.(string); sok {
+			result.Report = report
+		}
+	}
+
+	// Include error information if available
+	if st.err != nil {
+		result.TestOutput = st.err.Error()
+	}
+
+	return result
 }
 
 // saveOutputs evaluates and saves step outputs to JobContext
