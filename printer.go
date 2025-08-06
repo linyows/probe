@@ -76,7 +76,7 @@ func TruncateMapStringString(params map[string]string, maxLen int) map[string]st
 const (
 	IconSuccess = "✔︎ "
 	IconError   = "✘ "
-	IconWarning = "▲"
+	IconWarning = "△ "
 	IconCircle  = "⏺"
 	IconWait    = "🕐︎"
 	IconSkip    = "⏭ "
@@ -344,11 +344,8 @@ func (p *Printer) generateJobResultsFromStepResults(stepResults []StepResult) st
 
 			if stepResult.Report != "" {
 				a7space := "       "
-				a6space := "      "
-				a5space := "     "
 				re := strings.ReplaceAll(stepResult.Report, "\n", "\n"+a7space)
 				re = strings.ReplaceAll(re, "⎿", "⎿ ")
-				re = strings.ReplaceAll(re, a7space+a6space, a7space+a5space)
 				re = strings.TrimRight(re, " \t")
 				output.WriteString(a7space + re)
 			}
