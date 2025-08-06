@@ -20,3 +20,10 @@ steps:
     mytoken: replace(res.stdout, '\n', '')
   echo: |
     STDOUT: {{res.stdout}}
+
+- name: Hello
+  uses: shell
+  with:
+    cmd: echo "Hello, {{ vars.id }} ({{ vars.testenv }})"
+  echo: |
+    STDOUT: {{res.stdout}}

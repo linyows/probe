@@ -84,6 +84,9 @@ func executeEmbeddedSteps(req *Req, log hclog.Logger) (map[string]string, error)
 		return map[string]string{}, fmt.Errorf("no steps found in embedded file: %s", absPath)
 	}
 
+	// Apply defaults to steps if they exist
+	applyDefaultsToSteps(job, log)
+
 	log.Debug("parsed embedded steps", "count", len(job.Steps))
 
 	start := time.Now()
@@ -114,13 +117,14 @@ func executeEmbeddedSteps(req *Req, log hclog.Logger) (map[string]string, error)
 		code = 1
 		er = err.Error()
 		jr.Status = "Failed"
+		log.Debug("embedded job failed", "error", err, "context_failed", ctx.Failed)
 	} else {
 		jr.Status = "Completed"
 	}
 	duration := time.Since(start)
 	jr.EndTime = jr.StartTime.Add(duration)
 
-	log.Debug("embedded execution completed", "outputs", ctx.Outputs.GetAll())
+	log.Debug("embedded execution completed", "outputs", ctx.Outputs.GetAll(), "steps_in_result", len(result.Jobs[jobID].StepResults))
 
 	ret := &Result{
 		Req: *req,
@@ -157,4 +161,59 @@ func Serve() {
 		Plugins:         map[string]plugin.Plugin{"actions": pl},
 		GRPCServer:      plugin.DefaultGRPCServer,
 	})
+}
+
+// applyDefaultsToSteps applies defaults from job to steps, similar to probe.go setDefaultsToSteps
+func applyDefaultsToSteps(job *probe.Job, log hclog.Logger) {
+	if job.Defaults == nil {
+		return
+	}
+
+	dataMap, ok := job.Defaults.(map[string]any)
+	if !ok {
+		log.Debug("job defaults is not a map, skipping", "type", fmt.Sprintf("%T", job.Defaults))
+		return
+	}
+
+	log.Debug("applying defaults to embedded steps", "defaults", dataMap)
+
+	for key, values := range dataMap {
+		defaults, defok := values.(map[string]any)
+		if !defok {
+			log.Debug("defaults value is not a map, skipping", "key", key, "type", fmt.Sprintf("%T", values))
+			continue
+		}
+
+		for _, s := range job.Steps {
+			if s.Uses != key {
+				continue
+			}
+
+			if s.With == nil {
+				s.With = make(map[string]any)
+			}
+
+			applyDefaults(s.With, defaults)
+			log.Debug("applied defaults to step", "step", s.Name, "uses", s.Uses, "with", s.With)
+		}
+	}
+}
+
+// applyDefaults recursively applies default values, similar to probe.go setDefaults
+func applyDefaults(data, defaults map[string]any) {
+	for key, defaultValue := range defaults {
+		// If key does not exist in data
+		if _, exists := data[key]; !exists {
+			data[key] = defaultValue
+			continue
+		}
+
+		// If you have a nested map with a key of data
+		if nestedDefault, ok := defaultValue.(map[string]any); ok {
+			if nestedData, ok := data[key].(map[string]any); ok {
+				// Recursively set default values
+				applyDefaults(nestedData, nestedDefault)
+			}
+		}
+	}
 }

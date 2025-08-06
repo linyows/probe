@@ -465,6 +465,114 @@ func TestStep_createStepResult_WithRepeatCounter(t *testing.T) {
 	}
 }
 
+func TestStep_createFailedStepResult(t *testing.T) {
+	testErr := fmt.Errorf("test error message")
+	step := &Step{
+		Idx:  2,
+		Test: "res.code == 200",
+		Wait: "3s",
+		err:  testErr,
+		ctx: StepContext{
+			RT:  "500ms",
+			Res: map[string]any{"report": "HTTP error occurred"},
+		},
+	}
+	jCtx := &JobContext{
+		Config: Config{RT: true},
+	}
+	name := "Failed Step"
+
+	result := step.createFailedStepResult(name, jCtx, nil)
+
+	if result.Index != 2 {
+		t.Errorf("Index = %v, want %v", result.Index, 2)
+	}
+	if result.Name != "Failed Step" {
+		t.Errorf("Name = %v, want %v", result.Name, "Failed Step")
+	}
+	if result.Status != StatusError {
+		t.Errorf("Status = %v, want %v", result.Status, StatusError)
+	}
+	if result.WaitTime != "3s" {
+		t.Errorf("WaitTime = %v, want %v", result.WaitTime, "3s")
+	}
+	if result.HasTest != true {
+		t.Errorf("HasTest = %v, want %v", result.HasTest, true)
+	}
+	if result.RT != "500ms" {
+		t.Errorf("RT = %v, want %v", result.RT, "500ms")
+	}
+	if result.Report != "HTTP error occurred" {
+		t.Errorf("Report = %v, want %v", result.Report, "HTTP error occurred")
+	}
+	if result.TestOutput != "test error message" {
+		t.Errorf("TestOutput = %v, want %v", result.TestOutput, "test error message")
+	}
+	if result.RepeatCounter != nil {
+		t.Errorf("RepeatCounter should be nil for non-repeat step, got %v", result.RepeatCounter)
+	}
+}
+
+func TestStep_createFailedStepResult_WithRepeatCounter(t *testing.T) {
+	testErr := fmt.Errorf("connection timeout")
+	step := &Step{
+		Idx:  3,
+		Test: "res.status < 400",
+		Wait: "1s",
+		err:  testErr,
+		ctx: StepContext{
+			RT: "10s",
+		},
+	}
+	jCtx := &JobContext{
+		Config: Config{RT: true},
+	}
+	name := "Timeout Step"
+	counter := &StepRepeatCounter{
+		SuccessCount: 1,
+		FailureCount: 4,
+		Name:         "Timeout Counter",
+		LastResult:   false,
+	}
+
+	result := step.createFailedStepResult(name, jCtx, counter)
+
+	if result.RepeatCounter == nil {
+		t.Error("RepeatCounter should not be nil when provided")
+	}
+	if result.RepeatCounter != counter {
+		t.Error("RepeatCounter should be the same instance that was passed")
+	}
+	if result.RepeatCounter.FailureCount != 4 {
+		t.Errorf("RepeatCounter.FailureCount = %v, want %v", result.RepeatCounter.FailureCount, 4)
+	}
+	if result.Status != StatusError {
+		t.Errorf("Status = %v, want %v", result.Status, StatusError)
+	}
+	if result.TestOutput != "connection timeout" {
+		t.Errorf("TestOutput = %v, want %v", result.TestOutput, "connection timeout")
+	}
+}
+
+func TestStep_createFailedStepResult_NoTest(t *testing.T) {
+	step := &Step{
+		Idx: 1,
+		// No Test field
+		ctx: StepContext{},
+	}
+	jCtx := &JobContext{}
+	name := "No Test Step"
+
+	result := step.createFailedStepResult(name, jCtx, nil)
+
+	if result.HasTest != false {
+		t.Errorf("HasTest = %v, want %v", result.HasTest, false)
+	}
+	if result.TestOutput != "" {
+		t.Errorf("TestOutput = %v, want empty string", result.TestOutput)
+	}
+}
+
 // Tests for refactored methods
 
 func TestStep_prepare(t *testing.T) {
