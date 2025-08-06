@@ -16,6 +16,7 @@ steps:
     myid: replace(res.stdout, '\n', '')
   echo: |
     STDOUT: {{res.stdout}}
+  test: res.code == 0
 
 - name: Get token
   id: get_token
@@ -43,3 +44,4 @@ steps:
   test: res.code == 200
   echo: |
     Response Body: {{res.body}}
+  test: res.code == 200
