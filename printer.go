@@ -102,6 +102,10 @@ type Printer struct {
 
 // NewPrinter creates a new console print writer
 func NewPrinter(verbose bool, bufferIDs []string) *Printer {
+	if os.Getenv("FORCE_COLOR") == "1" {
+		color.NoColor = false
+	}
+
 	buffer := make(map[string]*strings.Builder)
 
 	// Pre-initialize buffers for all provided job IDs
