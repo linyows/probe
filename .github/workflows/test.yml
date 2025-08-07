@@ -39,7 +39,4 @@ jobs:
         TERM: xterm-256color
       run: |
         make
-        echo "---"
-        ./probe --help
-        echo "---"
         ./probe examples/realtime-print.yml
