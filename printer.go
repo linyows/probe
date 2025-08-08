@@ -102,7 +102,7 @@ type Printer struct {
 
 // NewPrinter creates a new console print writer
 func NewPrinter(verbose bool, bufferIDs []string) *Printer {
-	if os.Getenv("FORCE_COLOR") == "1" {
+	if os.Getenv("FORCE_COLOR") == "1" || os.Getenv("PROBE_TTY") == "1" {
 		color.NoColor = false
 	}
 
