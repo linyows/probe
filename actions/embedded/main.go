@@ -117,9 +117,17 @@ func executeEmbeddedSteps(req *Req, log hclog.Logger) (map[string]string, error)
 		code = 1
 		er = err.Error()
 		jr.Status = "Failed"
+		jr.Success = false
 		log.Debug("embedded job failed", "error", err, "context_failed", ctx.Failed)
+	} else if ctx.Failed {
+		code = 1
+		er = "job execution failed"
+		jr.Status = "Failed"
+		jr.Success = false
+		log.Debug("embedded job failed due to step failures", "context_failed", ctx.Failed)
 	} else {
 		jr.Status = "Completed"
+		jr.Success = true
 	}
 	duration := time.Since(start)
 	jr.EndTime = jr.StartTime.Add(duration)
