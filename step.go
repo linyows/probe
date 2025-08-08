@@ -177,6 +177,7 @@ func (st *Step) createStepResult(name string, jCtx *JobContext, repeatCounter *S
 
 	if jCtx.RT && st.ctx.RT != "" {
 		result.RT = st.ctx.RT
+		result.RTSec = st.ctx.RTSec
 	}
 	if v, ok := st.ctx.Res["report"]; ok {
 		if report, sok := v.(string); sok {
@@ -343,6 +344,13 @@ func (st *Step) updateCtx(logs []map[string]any, req, res map[string]any, rt str
 	st.ctx.Req = req
 	st.ctx.Res = res
 	st.ctx.RT = rt
+	
+	// Parse RT string to calculate RTSec
+	if rt != "" {
+		if duration, err := time.ParseDuration(rt); err == nil {
+			st.ctx.RTSec = duration.Seconds()
+		}
+	}
 }
 
 // handleWait processes the wait field and sleeps if necessary
@@ -532,6 +540,7 @@ func (st *Step) createFailedStepResult(name string, jCtx *JobContext, repeatCoun
 
 	if jCtx.RT && st.ctx.RT != "" {
 		result.RT = st.ctx.RT
+		result.RTSec = st.ctx.RTSec
 	}
 	if v, ok := st.ctx.Res["report"]; ok {
 		if report, sok := v.(string); sok {

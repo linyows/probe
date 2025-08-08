@@ -29,6 +29,7 @@ type StepResult struct {
 	Name          string
 	Status        StatusType
 	RT            string
+	RTSec         float64
 	WaitTime      string
 	TestOutput    string
 	EchoOutput    string

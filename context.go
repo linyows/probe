@@ -6,6 +6,7 @@ type StepContext struct {
 	Res     map[string]any `expr:"res"`
 	Req     map[string]any `expr:"req"`
 	RT      string         `expr:"rt"`
+	RTSec   float64        `expr:"rt_sec"`
 	Report  string         `expr:"report"`
 	Outputs map[string]any `expr:"outputs"`
 }
