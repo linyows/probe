@@ -725,7 +725,7 @@ func TestPrinter_generateReport(t *testing.T) {
 		},
 	}
 
-	result := printer.GenerateReport(rs, true)
+	result := printer.GenerateReport(rs)
 
 	// Verify the report contains expected elements
 	expectedContains := []string{
@@ -747,13 +747,8 @@ func TestPrinter_generateReport(t *testing.T) {
 func TestPrinter_generateReport_EmptyBuffer(t *testing.T) {
 	printer := NewPrinter(false, []string{})
 
-	result := printer.GenerateReport(nil, false)
-	if result != "" {
-		t.Errorf("generateReport(nil) should return empty string, got %q", result)
-	}
-
 	rs := NewResult()
-	result = printer.GenerateReport(rs, true)
+	result := printer.GenerateReport(rs)
 
 	// Should contain at least the footer
 	if !strings.Contains(result, "Total workflow time: 0.00s") {
@@ -791,7 +786,7 @@ func TestPrinter_generateReport_WithRepeatStep(t *testing.T) {
 		},
 	}
 
-	result := printer.GenerateReport(rs, true)
+	result := printer.GenerateReport(rs)
 
 	expectedContains := []string{
 		"Job with Repeat",
