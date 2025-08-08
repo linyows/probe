@@ -325,3 +325,78 @@ func TestJob_handleSkip(t *testing.T) {
 		t.Errorf("Expected skipped job to be marked as successful")
 	}
 }
+
+func TestJob_RunIndependently_Success(t *testing.T) {
+	job := &Job{
+		Name: "Test Job",
+		Steps: []*Step{
+			{
+				Name: "Success Step",
+				Uses: "hello",
+				With: map[string]any{"msg": "test message"},
+			},
+		},
+	}
+
+	vars := map[string]any{"test_var": "test_value"}
+	success, outputs, report, errorMsg, duration := job.RunIndependently(vars, false, "test-job")
+
+	if !success {
+		t.Errorf("Expected job to succeed, but it failed with error: %s", errorMsg)
+	}
+
+	if errorMsg != "" {
+		t.Errorf("Expected no error message for successful job, got: %s", errorMsg)
+	}
+
+	if outputs == nil {
+		t.Errorf("Expected outputs to be non-nil")
+	}
+
+	if report == "" {
+		t.Errorf("Expected non-empty report")
+	}
+
+	if duration <= 0 {
+		t.Errorf("Expected positive duration, got: %v", duration)
+	}
+}
+
+func TestJob_RunIndependently_Failure(t *testing.T) {
+	job := &Job{
+		Name: "Test Job",
+		Steps: []*Step{
+			{
+				Name: "Failure Step", 
+				Uses: "shell",
+				With: map[string]any{
+					"cmd": "exit 1",
+				},
+				Test: "res.code == 0", // This will fail since exit code is 1
+			},
+		},
+	}
+
+	vars := map[string]any{"test_var": "test_value"}
+	success, outputs, report, errorMsg, duration := job.RunIndependently(vars, false, "test-job")
+
+	if success {
+		t.Errorf("Expected job to fail, but it succeeded")
+	}
+
+	if errorMsg == "" {
+		t.Errorf("Expected error message for failed job")
+	}
+
+	if outputs == nil {
+		t.Errorf("Expected outputs to be non-nil even for failed job")
+	}
+
+	if report == "" {
+		t.Errorf("Expected non-empty report even for failed job")
+	}
+
+	if duration <= 0 {
+		t.Errorf("Expected positive duration, got: %v", duration)
+	}
+}
