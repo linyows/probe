@@ -433,8 +433,9 @@ func TestStep_createStepResult_WithRepeatCounter(t *testing.T) {
 		Wait: "1s",
 		Expr: &Expr{},
 		ctx: StepContext{
-			Res: map[string]any{"status": 200},
-			RT:  "250ms",
+			Res:   map[string]any{"status": 200},
+			RT:    "250ms",
+			RTSec: 0.25,
 		},
 	}
 	jCtx := &JobContext{
@@ -463,6 +464,9 @@ func TestStep_createStepResult_WithRepeatCounter(t *testing.T) {
 	if result.RT != "250ms" {
 		t.Errorf("RT = %v, want %v", result.RT, "250ms")
 	}
+	if result.RTSec != 0.25 {
+		t.Errorf("RTSec = %v, want %v", result.RTSec, 0.25)
+	}
 }
 
 func TestStep_createFailedStepResult(t *testing.T) {
@@ -473,8 +477,9 @@ func TestStep_createFailedStepResult(t *testing.T) {
 		Wait: "3s",
 		err:  testErr,
 		ctx: StepContext{
-			RT:  "500ms",
-			Res: map[string]any{"report": "HTTP error occurred"},
+			RT:    "500ms",
+			RTSec: 0.5,
+			Res:   map[string]any{"report": "HTTP error occurred"},
 		},
 	}
 	jCtx := &JobContext{
@@ -501,6 +506,9 @@ func TestStep_createFailedStepResult(t *testing.T) {
 	}
 	if result.RT != "500ms" {
 		t.Errorf("RT = %v, want %v", result.RT, "500ms")
+	}
+	if result.RTSec != 0.5 {
+		t.Errorf("RTSec = %v, want %v", result.RTSec, 0.5)
 	}
 	if result.Report != "HTTP error occurred" {
 		t.Errorf("Report = %v, want %v", result.Report, "HTTP error occurred")
