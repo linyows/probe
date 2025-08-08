@@ -247,7 +247,7 @@ func (p *Printer) generateJobStatus(jobID, jobName string, status StatusType, du
 }
 
 // GenerateReport generates a complete workflow report string using Result data
-func (p *Printer) GenerateReport(rs *Result, isFooter bool) string {
+func (p *Printer) GenerateReport(rs *Result) string {
 	if rs == nil {
 		return ""
 	}
@@ -287,8 +287,26 @@ func (p *Printer) GenerateReport(rs *Result, isFooter bool) string {
 	}
 
 	// Generate workflow footer
-	if isFooter {
-		p.generateFooter(totalTime.Seconds(), successCount, len(rs.Jobs), &output)
+	p.generateFooter(totalTime.Seconds(), successCount, len(rs.Jobs), &output)
+
+	return output.String()
+}
+
+func (p *Printer) GenerateReportOnlySteps(rs *Result) string {
+	if rs == nil {
+		return ""
+	}
+
+	var output strings.Builder
+
+	for _, jobID := range p.BufferIDs {
+		if jr, exists := rs.Jobs[jobID]; exists {
+			jr.mutex.Lock()
+			// Generate job results from StepResults
+			stepOutput := p.generateJobResultsFromStepResults(jr.StepResults)
+			p.generateJobResults(jr.JobID, stepOutput, &output)
+			jr.mutex.Unlock()
+		}
 	}
 
 	return output.String()
@@ -296,7 +314,7 @@ func (p *Printer) GenerateReport(rs *Result, isFooter bool) string {
 
 // PrintReport prints a complete workflow report using Result data
 func (p *Printer) PrintReport(rs *Result) {
-	reportOutput := p.GenerateReport(rs, true)
+	reportOutput := p.GenerateReport(rs)
 	if reportOutput != "" {
 		fmt.Print(reportOutput)
 	}
@@ -347,11 +365,10 @@ func (p *Printer) generateJobResultsFromStepResults(stepResults []StepResult) st
 			}
 
 			if stepResult.Report != "" {
-				a7space := "       "
-				re := strings.ReplaceAll(stepResult.Report, "\n", "\n"+a7space)
-				re = strings.ReplaceAll(re, "⎿", "⎿ ")
+				a5space := "     "
+				re := strings.ReplaceAll(stepResult.Report, "\n", "\n"+a5space)
 				re = strings.TrimRight(re, " \t")
-				output.WriteString(a7space + re)
+				output.WriteString(a5space + re)
 			}
 
 			if stepResult.EchoOutput != "" {

@@ -139,7 +139,7 @@ func executeEmbeddedSteps(req *Req, log hclog.Logger) (map[string]string, error)
 		Res: Res{
 			Code:    code,
 			Outputs: ctx.Outputs.GetAll(),
-			Report:  ctx.Printer.GenerateReport(result, false),
+			Report:  ctx.Printer.GenerateReportOnlySteps(result),
 			Err:     er,
 		},
 		RT: duration,
