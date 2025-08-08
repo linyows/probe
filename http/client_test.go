@@ -47,6 +47,17 @@ func TestDo(t *testing.T) {
 	if string(got.Res.Body) != expects {
 		t.Errorf("\nExpected:\n%s\nGot:\n%s", expects, got.Res.Body)
 	}
+
+	// Check that RTSec field is populated
+	if got.RTSec <= 0 {
+		t.Errorf("RTSec should be greater than 0, got: %f", got.RTSec)
+	}
+
+	// Check that RTSec matches RT.Seconds()
+	expectedRTSec := got.RT.Seconds()
+	if got.RTSec != expectedRTSec {
+		t.Errorf("RTSec = %f, want %f", got.RTSec, expectedRTSec)
+	}
 }
 
 func TestConvertBodyToJson(t *testing.T) {

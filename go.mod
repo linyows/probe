@@ -13,6 +13,7 @@ require (
 	github.com/hashicorp/go-plugin v1.6.1
 	github.com/jarcoal/httpmock v1.3.1
 	github.com/lib/pq v1.10.9
+	github.com/mattn/go-isatty v0.0.20
 	github.com/mattn/go-sqlite3 v1.14.30
 	google.golang.org/grpc v1.67.0
 	google.golang.org/protobuf v1.34.2
@@ -27,7 +28,6 @@ require (
 	github.com/hashicorp/yamux v0.1.1 // indirect
 	github.com/leodido/go-urn v1.2.0 // indirect
 	github.com/mattn/go-colorable v0.1.13 // indirect
-	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/mitchellh/go-testing-interface v0.0.0-20171004221916-a61a99592b77 // indirect
 	github.com/oklog/run v1.0.0 // indirect
 	github.com/stretchr/testify v1.7.0 // indirect
