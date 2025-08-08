@@ -28,7 +28,7 @@ type Config struct {
 func New(path string, v bool) *Probe {
 	// Set TTY detection for embedded plugins
 	if isatty.IsTerminal(os.Stdout.Fd()) {
-		os.Setenv("PROBE_TTY", "1")
+		_ = os.Setenv("PROBE_TTY", "1")
 	}
 
 	return &Probe{
