@@ -2,6 +2,7 @@ package probe
 
 import (
 	"fmt"
+	"time"
 )
 
 type Job struct {
@@ -187,4 +188,54 @@ func (j *Job) handleSkip(ctx JobContext) {
 			jobResult.Success = true // Skipped jobs are considered successful
 		}
 	}
+}
+
+// RunIndependently executes a job independently with its own context and result tracking
+// Returns success/failure status, outputs, report, error message, and duration
+func (j *Job) RunIndependently(vars map[string]any, verbose bool, jobID string) (bool, map[string]any, string, string, time.Duration) {
+	start := time.Now()
+	j.ID = jobID
+	result := NewResult()
+	jr := &JobResult{
+		JobName:   j.Name,
+		JobID:     jobID,
+		StartTime: start,
+	}
+	result.Jobs[jobID] = jr
+
+	ctx := JobContext{
+		Vars:    vars,
+		Outputs: NewOutputs(),
+		Result:  result,
+		Config: Config{
+			Verbose: verbose,
+		},
+		Printer: NewPrinter(verbose, []string{jobID}),
+	}
+
+	success := true
+	errorMsg := ""
+	
+	if err := j.Start(ctx); err != nil {
+		success = false
+		errorMsg = err.Error()
+		jr.Status = "Failed"
+		jr.Success = false
+	} else if ctx.Failed {
+		success = false
+		errorMsg = "job execution failed"
+		jr.Status = "Failed"
+		jr.Success = false
+	} else {
+		jr.Status = "Completed"
+		jr.Success = true
+	}
+	
+	duration := time.Since(start)
+	jr.EndTime = jr.StartTime.Add(duration)
+
+	outputs := ctx.Outputs.GetAll()
+	report := ctx.Printer.GenerateReportOnlySteps(result)
+	
+	return success, outputs, report, errorMsg, duration
 }

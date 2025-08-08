@@ -89,58 +89,28 @@ func executeEmbeddedSteps(req *Req, log hclog.Logger) (map[string]string, error)
 
 	log.Debug("parsed embedded steps", "count", len(job.Steps))
 
-	start := time.Now()
+	// Execute job independently using the refactored function
 	jobID := "embedded"
-	job.ID = jobID
-	result := probe.NewResult()
-	jr := &probe.JobResult{
-		JobName:   job.Name,
-		JobID:     jobID,
-		StartTime: start,
-	}
-	result.Jobs[jobID] = jr
-
 	verbose := true
-	ctx := probe.JobContext{
-		Vars:    req.Vars,
-		Outputs: probe.NewOutputs(),
-		Result:  result,
-		Config: probe.Config{
-			Verbose: verbose,
-		},
-		Printer: probe.NewPrinter(verbose, []string{jobID}),
-	}
+	success, outputs, report, errorMsg, duration := job.RunIndependently(req.Vars, verbose, jobID)
 
 	code := 0
-	er := ""
-	if err := job.Start(ctx); err != nil {
+	if !success {
 		code = 1
-		er = err.Error()
-		jr.Status = "Failed"
-		jr.Success = false
-		log.Debug("embedded job failed", "error", err, "context_failed", ctx.Failed)
-	} else if ctx.Failed {
-		code = 1
-		er = "job execution failed"
-		jr.Status = "Failed"
-		jr.Success = false
-		log.Debug("embedded job failed due to step failures", "context_failed", ctx.Failed)
+		log.Debug("embedded job failed", "error", errorMsg)
 	} else {
-		jr.Status = "Completed"
-		jr.Success = true
+		log.Debug("embedded job succeeded")
 	}
-	duration := time.Since(start)
-	jr.EndTime = jr.StartTime.Add(duration)
 
-	log.Debug("embedded execution completed", "outputs", ctx.Outputs.GetAll(), "steps_in_result", len(result.Jobs[jobID].StepResults))
+	log.Debug("embedded execution completed", "outputs", outputs)
 
 	ret := &Result{
 		Req: *req,
 		Res: Res{
 			Code:    code,
-			Outputs: ctx.Outputs.GetAll(),
-			Report:  ctx.Printer.GenerateReportOnlySteps(result),
-			Err:     er,
+			Outputs: outputs,
+			Report:  report,
+			Err:     errorMsg,
 		},
 		RT: duration,
 	}
