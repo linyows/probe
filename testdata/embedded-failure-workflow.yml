@@ -1,0 +1,11 @@
+name: Embedded Failure Test
+
+jobs:
+- name: Test Job
+  steps:
+  - name: Failure embedded job
+    id: embedded_test
+    uses: embedded
+    with:
+      path: "./testdata/embedded-failure-job.yml"
+    test: res.code == 0

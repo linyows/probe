@@ -21,6 +21,16 @@ func TestEndToEndExitCodes(t *testing.T) {
 			workflowPath: "testdata/failure-hello.yml",
 			expectedCode: 1,
 		},
+		{
+			name:         "success workflow with embedded action returns exit code 0",
+			workflowPath: "testdata/embedded-success-workflow.yml",
+			expectedCode: 0,
+		},
+		{
+			name:         "failure workflow with embedded action returns exit code 1",
+			workflowPath: "testdata/embedded-failure-workflow.yml",
+			expectedCode: 1,
+		},
 	}
 
 	for _, tt := range tests {
@@ -46,3 +56,4 @@ func TestEndToEndExitCodes(t *testing.T) {
 		})
 	}
 }
+
