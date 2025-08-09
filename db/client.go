@@ -154,7 +154,7 @@ func parseDSN(dsn string) (driver, driverDSN string, err error) {
 	}
 }
 
-func (r *Req) Execute(driverDSN string, timeout time.Duration) (map[string]string, error) {
+func (r *Req) Execute(driverDSN string, timeout time.Duration) (res map[string]string, err error) {
 	start := time.Now()
 
 	// Before callback
@@ -168,13 +168,11 @@ func (r *Req) Execute(driverDSN string, timeout time.Duration) (map[string]strin
 		return r.createErrorResult(start, fmt.Errorf("failed to open database: %w", err))
 	}
 	defer func() {
-		if err := db.Close(); err != nil {
-			// Log close error if needed
-		}
+		err = db.Close()
 	}()
 
 	// Test connection
-	if err := db.Ping(); err != nil {
+	if err = db.Ping(); err != nil {
 		return r.createErrorResult(start, fmt.Errorf("failed to connect to database: %w", err))
 	}
 
