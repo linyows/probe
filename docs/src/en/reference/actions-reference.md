@@ -331,7 +331,7 @@ steps:
     with:
       dsn: "mysql://user:password@localhost:3306/database"
       query: "SELECT * FROM users WHERE active = ?"
-      params__0: true
+      params: [true]
     test: res.code == 0 && res.rows_affected > 0
 ```
 
@@ -365,8 +365,8 @@ with:
 
 # SQLite
 with:
+  dsn: "sqlite://./testdata/sqlite.db"
   dsn: "sqlite:///absolute/path/to/database.db"
-  dsn: "sqlite://./relative/path/to/database.db"
   dsn: "sqlite://{{vars.data_dir}}/app.db"
 ```
 
@@ -387,18 +387,16 @@ with:
     WHERE u.active = ? AND u.created_at > ?
 ```
 
-#### `params__N` (optional)
+#### `params` (optional)
 
-**Type:** Mixed (String, Number, Boolean)  
-**Description:** Query parameters for prepared statements (N starts from 0)  
+**Type:** Array of mixed values (String, Number, Boolean)  
+**Description:** Query parameters for prepared statements  
 **Supports:** Template expressions
 
 ```yaml
 with:
   query: "SELECT * FROM users WHERE id = ? AND active = ?"
-  params__0: 123
-  params__1: true
-  params__2: "{{vars.user_email}}"
+  params: [123, true, "{{vars.user_email}}"]
 ```
 
 #### `timeout` (optional)
@@ -436,7 +434,7 @@ steps:
     with:
       dsn: "mysql://user:pass@localhost/db"
       query: "SELECT id, name, email FROM users WHERE active = ?"
-      params__0: true
+      params: [true]
     test: res.code == 0 && res.rows_affected > 0
     outputs:
       user_count: res.rows_affected
@@ -453,8 +451,7 @@ steps:
     with:
       dsn: "postgres://user:pass@localhost/db"
       query: "INSERT INTO users (name, email) VALUES ($1, $2)"
-      params__0: "John Doe"
-      params__1: "john@example.com"
+      params: ["John Doe", "john@example.com"]
     test: res.code == 0 && res.rows_affected == 1
 ```
 
@@ -477,7 +474,7 @@ steps:
   with:
     dsn: "mysql://user:pass@localhost:3306/database"
     query: "CALL GetUsersByDepartment(?)"
-    params__0: "Engineering"
+    params: ["Engineering"]
   test: res.code == 0
 ```
 
@@ -493,7 +490,7 @@ steps:
       SELECT name, data->>'role' as role, data->'preferences' as prefs
       FROM users 
       WHERE data ? 'role' AND data->>'role' = $1
-    params__0: "admin"
+    params: ["admin"]
   test: res.code == 0
 
 # PostgreSQL array operations
@@ -502,7 +499,7 @@ steps:
   with:
     dsn: "postgres://user:pass@localhost:5432/database"
     query: "SELECT name FROM users WHERE tags && $1"
-    params__0: '{"admin","moderator"}'
+    params: ['{"admin","moderator"}']
   test: res.code == 0
 ```
 
@@ -513,7 +510,7 @@ steps:
 - name: "SQLite Query"
   uses: db
   with:
-    dsn: "sqlite://./data/app.db"
+    dsn: "sqlite://./testdata/sqlite.db"
     query: |
       CREATE TABLE IF NOT EXISTS users (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -611,7 +608,7 @@ Common error scenarios and handling patterns:
   with:
     dsn: "mysql://user:pass@localhost/db"
     query: "SELECT * FROM users WHERE id = ?"
-    params__0: 999999
+    params: [999999]
   test: |
     res.code == 0 ? true :
     res.error | contains("connection") ? false :
@@ -644,7 +641,7 @@ While the action doesn't directly support transactions, you can use database-spe
   with:
     dsn: "postgres://user:pass@localhost/db"
     query: "INSERT INTO users (name) VALUES ($1)"
-    params__0: "Test User"
+    params: ["Test User"]
   test: res.code == 0
 
 - name: "Commit Transaction"

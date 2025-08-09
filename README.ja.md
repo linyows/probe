@@ -51,7 +51,7 @@ probe --workflow health-check.yml
 --------
 
 - **シンプルなYAML構文**: 読みやすいワークフロー定義
-- **プラグインアーキテクチャ**: HTTP、Shell、SMTP、Helloアクションが組み込まれており、拡張可能
+- **プラグインアーキテクチャ**: HTTP、データベース、Shell、SMTP、Helloアクションが組み込まれており、拡張可能
 - **ジョブ依存関係**: `needs`で実行順序を制御
 - **ステップアウトプット**: `outputs`を使用してステップとジョブ間でデータを共有
 - **繰り返し実行**: 設定可能な間隔でジョブを繰り返し
@@ -313,6 +313,23 @@ test: |
       NODE_ENV: production
   test: res.code == 0
 ```
+
+### データベースアクション
+```yaml
+- name: データベースクエリ
+  uses: db
+  with:
+    dsn: "mysql://user:password@localhost:3306/database"
+    query: "SELECT * FROM users WHERE active = ?"
+    params: [true]
+    timeout: 30s
+  test: res.code == 0 && res.rows_affected > 0
+```
+
+対応データベース:
+- **MySQL**: `mysql://user:pass@host:port/database`
+- **PostgreSQL**: `postgres://user:pass@host:port/database?sslmode=disable`
+- **SQLite**: `sqlite://./testdata/sqlite.db` または `sqlite:///absolute/path/database.db`
 
 ### SMTPアクション
 ```yaml

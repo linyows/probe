@@ -310,7 +310,7 @@ Built-in Actions
   with:
     dsn: "mysql://user:password@localhost:3306/database"
     query: "SELECT * FROM users WHERE active = ?"
-    params__0: true
+    params: [true]
     timeout: 30s
   test: res.code == 0 && res.rows_affected > 0
 ```
@@ -318,7 +318,7 @@ Built-in Actions
 Supported databases:
 - **MySQL**: `mysql://user:pass@host:port/database`
 - **PostgreSQL**: `postgres://user:pass@host:port/database?sslmode=disable`
-- **SQLite**: `sqlite:///absolute/path/file.db` or `sqlite://./relative/path/file.db`
+- **SQLite**: `sqlite://./testdata/sqlite.db` or `sqlite:///absolute/path/database.db`
 
 ### Shell Action
 ```yaml
