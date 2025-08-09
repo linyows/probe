@@ -79,14 +79,14 @@ func TestParseParams(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			params, err := ParseParams(tt.input)
+			req, _, _, err := ParseRequest(tt.input)
 			if (err != nil) != tt.wantErr {
-				t.Errorf("ParseParams() error = %v, wantErr %v", err, tt.wantErr)
+				t.Errorf("ParseRequest() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
 			
-			if !tt.wantErr && params == nil {
-				t.Error("ParseParams() returned nil params for valid input")
+			if !tt.wantErr && req == nil {
+				t.Error("ParseRequest() returned nil request for valid input")
 			}
 		})
 	}

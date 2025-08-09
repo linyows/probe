@@ -10,7 +10,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/hashicorp/go-hclog"
 	"github.com/linyows/probe"
 
 	_ "github.com/go-sql-driver/mysql"
@@ -18,14 +17,6 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
-type Params struct {
-	driver      string
-	driverDSN   string // DSN formatted for the specific driver
-	originalDSN string // Original DSN for logging
-	query       string
-	params      []interface{}
-	timeout     time.Duration
-}
 
 type Req struct {
 	Driver  string        `map:"driver"`
@@ -33,6 +24,7 @@ type Req struct {
 	Query   string        `map:"query"`
 	Params  []interface{} `map:"params"`
 	Timeout string        `map:"timeout"`
+	cb      *Callback
 }
 
 type Res struct {
@@ -48,90 +40,46 @@ type Result struct {
 	RT  time.Duration `map:"rt"`
 }
 
-func ParseParams(with map[string]string) (*Params, error) {
-	dsn := with["dsn"]
-	query := with["query"]
+func ParseRequest(with map[string]string) (*Req, string, time.Duration, error) {
+	// First unflatten the input to handle nested structures like arrays
+	unflattenedWith := probe.UnflattenInterface(with)
+	
+	// Use MapToStructByTags to directly populate Req struct
+	req := &Req{}
+	err := probe.MapToStructByTags(unflattenedWith, req)
+	if err != nil {
+		return nil, "", 0, fmt.Errorf("failed to parse request: %w", err)
+	}
 
 	// Validate required parameters
-	if dsn == "" {
-		return nil, fmt.Errorf("dsn parameter is required")
+	if req.DSN == "" {
+		return nil, "", 0, fmt.Errorf("dsn parameter is required")
 	}
-	if query == "" {
-		return nil, fmt.Errorf("query parameter is required")
+	if req.Query == "" {
+		return nil, "", 0, fmt.Errorf("query parameter is required")
 	}
 
 	// Parse driver and DSN from URL-style DSN
-	driver, driverDSN, err := parseDSN(dsn)
+	driver, driverDSN, err := parseDSN(req.DSN)
 	if err != nil {
-		return nil, err
+		return nil, "", 0, err
 	}
-
-	params := &Params{
-		driver:      driver,
-		driverDSN:   driverDSN,
-		originalDSN: dsn,
-		query:       query,
-		params:      make([]interface{}, 0),
-	}
+	req.Driver = driver
 
 	// Parse timeout
-	if timeoutStr := with["timeout"]; timeoutStr != "" {
-		timeout, err := time.ParseDuration(timeoutStr)
-		if err != nil {
-			// Try parsing as seconds (integer)
-			if seconds, errInt := strconv.Atoi(timeoutStr); errInt == nil {
-				timeout = time.Duration(seconds) * time.Second
-			} else {
-				return nil, fmt.Errorf("invalid timeout format: %s (use duration string like '30s' or integer seconds)", timeoutStr)
-			}
+	timeout := 30 * time.Second // Default timeout
+	if req.Timeout != "" {
+		if parsedTimeout, err := time.ParseDuration(req.Timeout); err == nil {
+			timeout = parsedTimeout
+		} else if seconds, errInt := strconv.Atoi(req.Timeout); errInt == nil {
+			timeout = time.Duration(seconds) * time.Second
+		} else {
+			return nil, "", 0, fmt.Errorf("invalid timeout format: %s (use duration string like '30s' or integer seconds)", req.Timeout)
 		}
-		params.timeout = timeout
-	} else {
-		params.timeout = 30 * time.Second // Default timeout
 	}
+	req.Timeout = timeout.String()
 
-	// Parse query parameters (param1, param2, etc.) in correct order
-	paramMap := make(map[int]string)
-	maxParamNum := 0
-	
-	// First collect all parameters with their numbers
-	for key, value := range with {
-		if strings.HasPrefix(key, "param") {
-			// Extract parameter number
-			paramNumStr := strings.TrimPrefix(key, "param")
-			if paramNumStr == "" {
-				continue
-			}
-			
-			paramNum, err := strconv.Atoi(paramNumStr)
-			if err != nil {
-				continue
-			}
-			
-			paramMap[paramNum] = value
-			if paramNum > maxParamNum {
-				maxParamNum = paramNum
-			}
-		}
-	}
-	
-	// Add parameters in order
-	for i := 1; i <= maxParamNum; i++ {
-		if value, exists := paramMap[i]; exists {
-			// Try to convert to appropriate type
-			if intVal, err := strconv.Atoi(value); err == nil {
-				params.params = append(params.params, intVal)
-			} else if floatVal, err := strconv.ParseFloat(value, 64); err == nil {
-				params.params = append(params.params, floatVal)
-			} else if boolVal, err := strconv.ParseBool(value); err == nil {
-				params.params = append(params.params, boolVal)
-			} else {
-				params.params = append(params.params, value)
-			}
-		}
-	}
-
-	return params, nil
+	return req, driverDSN, timeout, nil
 }
 
 func parseDSN(dsn string) (driver, driverDSN string, err error) {
@@ -204,29 +152,32 @@ func parseDSN(dsn string) (driver, driverDSN string, err error) {
 	}
 }
 
-func ExecuteQuery(params *Params, log hclog.Logger) (map[string]string, error) {
+func (r *Req) Execute(driverDSN string, timeout time.Duration) (map[string]string, error) {
 	start := time.Now()
 
-	log.Debug("executing database query", "driver", params.driver, "query", params.query, "params", params.params)
+	// Before callback
+	if r.cb != nil && r.cb.before != nil {
+		r.cb.before(r.Query, r.Params)
+	}
 
 	// Open database connection
-	db, err := sql.Open(params.driver, params.driverDSN)
+	db, err := sql.Open(r.Driver, driverDSN)
 	if err != nil {
-		return createErrorResult(params, start, fmt.Errorf("failed to open database: %w", err))
+		return r.createErrorResult(start, fmt.Errorf("failed to open database: %w", err))
 	}
 	defer func() {
 		if err := db.Close(); err != nil {
-			log.Error("failed to parse database", "error", err)
+			// Log close error if needed
 		}
 	}()
 
 	// Test connection
 	if err := db.Ping(); err != nil {
-		return createErrorResult(params, start, fmt.Errorf("failed to connect to database: %w", err))
+		return r.createErrorResult(start, fmt.Errorf("failed to connect to database: %w", err))
 	}
 
 	// Determine query type
-	trimmedQuery := strings.TrimSpace(strings.ToUpper(params.query))
+	trimmedQuery := strings.TrimSpace(strings.ToUpper(r.Query))
 	isSelect := strings.HasPrefix(trimmedQuery, "SELECT") ||
 		strings.HasPrefix(trimmedQuery, "SHOW") ||
 		strings.HasPrefix(trimmedQuery, "DESCRIBE") ||
@@ -236,27 +187,32 @@ func ExecuteQuery(params *Params, log hclog.Logger) (map[string]string, error) {
 	var result *Result
 
 	if isSelect {
-		result, err = executeSelectQuery(db, params, start)
+		result, err = r.executeSelectQuery(db, start)
 	} else {
-		result, err = executeNonSelectQuery(db, params, start)
+		result, err = r.executeNonSelectQuery(db, start)
 	}
 
 	if err != nil {
-		return createErrorResult(params, start, err)
+		return r.createErrorResult(start, err)
+	}
+
+	// After callback on success
+	if r.cb != nil && r.cb.after != nil {
+		r.cb.after(result)
 	}
 
 	// Convert to map[string]string using probe's mapping function
 	mapResult, err := probe.StructToMapByTags(result)
 	if err != nil {
-		return createErrorResult(params, start, fmt.Errorf("failed to convert result to map: %w", err))
+		return r.createErrorResult(start, fmt.Errorf("failed to convert result to map: %w", err))
 	}
 
 	// Flatten the result like other actions do
 	return probe.FlattenInterface(mapResult), nil
 }
 
-func executeSelectQuery(db *sql.DB, params *Params, start time.Time) (res *Result, err error) {
-	rows, err := db.Query(params.query, params.params...)
+func (r *Req) executeSelectQuery(db *sql.DB, start time.Time) (res *Result, err error) {
+	rows, err := db.Query(r.Query, r.Params...)
 	if err != nil {
 		return nil, err
 	}
@@ -310,13 +266,7 @@ func executeSelectQuery(db *sql.DB, params *Params, start time.Time) (res *Resul
 	duration := time.Since(start)
 
 	return &Result{
-		Req: Req{
-			Driver:  params.driver,
-			DSN:     params.originalDSN,
-			Query:   params.query,
-			Params:  params.params,
-			Timeout: params.timeout.String(),
-		},
+		Req: *r,
 		Res: Res{
 			Code:         0,
 			RowsAffected: int64(len(results)),
@@ -326,8 +276,8 @@ func executeSelectQuery(db *sql.DB, params *Params, start time.Time) (res *Resul
 	}, nil
 }
 
-func executeNonSelectQuery(db *sql.DB, params *Params, start time.Time) (*Result, error) {
-	result, err := db.Exec(params.query, params.params...)
+func (r *Req) executeNonSelectQuery(db *sql.DB, start time.Time) (*Result, error) {
+	result, err := db.Exec(r.Query, r.Params...)
 	if err != nil {
 		return nil, err
 	}
@@ -340,13 +290,7 @@ func executeNonSelectQuery(db *sql.DB, params *Params, start time.Time) (*Result
 	duration := time.Since(start)
 
 	return &Result{
-		Req: Req{
-			Driver:  params.driver,
-			DSN:     params.originalDSN,
-			Query:   params.query,
-			Params:  params.params,
-			Timeout: params.timeout.String(),
-		},
+		Req: *r,
 		Res: Res{
 			Code:         0,
 			RowsAffected: rowsAffected,
@@ -356,17 +300,11 @@ func executeNonSelectQuery(db *sql.DB, params *Params, start time.Time) (*Result
 	}, nil
 }
 
-func createErrorResult(params *Params, start time.Time, err error) (map[string]string, error) {
+func (r *Req) createErrorResult(start time.Time, err error) (map[string]string, error) {
 	duration := time.Since(start)
 
 	result := &Result{
-		Req: Req{
-			Driver:  params.driver,
-			DSN:     params.originalDSN,
-			Query:   params.query,
-			Params:  params.params,
-			Timeout: params.timeout.String(),
-		},
+		Req: *r,
 		Res: Res{
 			Code:         1,
 			RowsAffected: 0,
@@ -384,3 +322,38 @@ func createErrorResult(params *Params, start time.Time, err error) (map[string]s
 
 	return probe.FlattenInterface(mapResult), err
 }
+
+type Option func(*Callback)
+
+type Callback struct {
+	before func(query string, params []interface{})
+	after  func(result *Result)
+}
+
+func ExecuteQuery(data map[string]string, opts ...Option) (map[string]string, error) {
+	req, driverDSN, timeout, err := ParseRequest(data)
+	if err != nil {
+		return map[string]string{}, err
+	}
+
+	cb := &Callback{}
+	for _, opt := range opts {
+		opt(cb)
+	}
+	req.cb = cb
+
+	return req.Execute(driverDSN, timeout)
+}
+
+func WithBefore(f func(query string, params []interface{})) Option {
+	return func(c *Callback) {
+		c.before = f
+	}
+}
+
+func WithAfter(f func(result *Result)) Option {
+	return func(c *Callback) {
+		c.after = f
+	}
+}
+
