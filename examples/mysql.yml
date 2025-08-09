@@ -5,21 +5,33 @@ vars:
   # Configure these variables for your MySQL setup
   mysql_host: localhost
   mysql_port: 3306
-  mysql_user: testuser
-  mysql_password: testpass
+  mysql_user: root
+  mysql_password: ""
   mysql_database: testdb
 
 jobs:
+- name: Setup Database
+  id: setup
+  steps:
+  - name: Create Test Database
+    uses: db
+    with:
+      dsn: "mysql://{{vars.mysql_user}}:{{vars.mysql_password}}@{{vars.mysql_host}}:{{vars.mysql_port}}/"
+      query: "CREATE DATABASE IF NOT EXISTS {{vars.mysql_database}}"
+    test: res.code == 0
+
 - name: MySQL Basic Operations
+  id: basic-ops
+  needs: [setup]
   steps:
   - name: Test MySQL Connection
     uses: db
     with:
       dsn: "mysql://{{vars.mysql_user}}:{{vars.mysql_password}}@{{vars.mysql_host}}:{{vars.mysql_port}}/{{vars.mysql_database}}"
-      query: "SELECT 1 as connection_test, NOW() as current_time"
+      query: "SELECT 1 as connection_test, NOW() as server_time"
     test: res.code == 0
     outputs:
-      server_time: res.rows__0__current_time
+      server_time: res.rows__0__server_time
 
   - name: Create Test Table
     uses: db
@@ -44,11 +56,12 @@ jobs:
       query: |
         INSERT INTO employees (name, email, department, salary, hire_date) 
         VALUES (?, ?, ?, ?, ?)
-      params__0: "Alice Johnson"
-      params__1: "alice.johnson@company.com"
-      params__2: "Engineering"
-      params__3: 75000.00
-      params__4: "2023-01-15"
+      params:
+        - "Alice Johnson"
+        - "alice.johnson@company.com"
+        - "Engineering"
+        - "75000.00"
+        - "2023-01-15"
     test: res.code == 0 && res.rows_affected == 1
     outputs:
       employee_id: res.rows_affected
@@ -77,8 +90,9 @@ jobs:
     with:
       dsn: "mysql://{{vars.mysql_user}}:{{vars.mysql_password}}@{{vars.mysql_host}}:{{vars.mysql_port}}/{{vars.mysql_database}}"
       query: "SELECT * FROM employees WHERE department = ? AND salary > ?"
-      params__0: "Engineering"
-      params__1: 70000
+      params:
+        - "Engineering"
+        - "70000"
     test: res.code == 0
 
   - name: Update Employee Salary
@@ -86,7 +100,8 @@ jobs:
     with:
       dsn: "mysql://{{vars.mysql_user}}:{{vars.mysql_password}}@{{vars.mysql_host}}:{{vars.mysql_port}}/{{vars.mysql_database}}"
       query: "UPDATE employees SET salary = salary * 1.1 WHERE department = ?"
-      params__0: "Engineering"
+      params:
+        - "Engineering"
     test: res.code == 0 && res.rows_affected >= 1
 
   - name: Count Employees by Department
@@ -107,17 +122,7 @@ jobs:
       query: "DESCRIBE employees"
     test: res.code == 0
 
-  # Cleanup step - uncomment if you want to remove the test table
-  # - name: Drop Test Table
-  #   uses: db
-  #   with:
-  #     dsn: "mysql://{{vars.mysql_user}}:{{vars.mysql_password}}@{{vars.mysql_host}}:{{vars.mysql_port}}/{{vars.mysql_database}}"
-  #     query: "DROP TABLE IF EXISTS employees"
-  #   test: res.code == 0
-
-- name: MySQL Advanced Features
-  steps:
-  - name: Transaction Example (Create Procedure)
+  - name: Create Stored Procedure
     uses: db
     with:
       dsn: "mysql://{{vars.mysql_user}}:{{vars.mysql_password}}@{{vars.mysql_host}}:{{vars.mysql_port}}/{{vars.mysql_database}}"
@@ -136,14 +141,8 @@ jobs:
     with:
       dsn: "mysql://{{vars.mysql_user}}:{{vars.mysql_password}}@{{vars.mysql_host}}:{{vars.mysql_port}}/{{vars.mysql_database}}"
       query: "CALL GetEmployeesByDepartment(?)"
-      params__0: "Engineering"
-    test: res.code == 0
-
-  - name: Show MySQL Version and Status
-    uses: db
-    with:
-      dsn: "mysql://{{vars.mysql_user}}:{{vars.mysql_password}}@{{vars.mysql_host}}:{{vars.mysql_port}}/{{vars.mysql_database}}"
-      query: "SELECT VERSION() as mysql_version, CONNECTION_ID() as connection_id"
+      params:
+        - "Engineering"
     test: res.code == 0
 
   - name: Cleanup Procedure
@@ -151,4 +150,33 @@ jobs:
     with:
       dsn: "mysql://{{vars.mysql_user}}:{{vars.mysql_password}}@{{vars.mysql_host}}:{{vars.mysql_port}}/{{vars.mysql_database}}"
       query: "DROP PROCEDURE IF EXISTS GetEmployeesByDepartment"
+    test: res.code == 0
+
+  - name: Drop Test Table
+    uses: db
+    with:
+      dsn: "mysql://{{vars.mysql_user}}:{{vars.mysql_password}}@{{vars.mysql_host}}:{{vars.mysql_port}}/{{vars.mysql_database}}"
+      query: "DROP TABLE IF EXISTS employees"
+    test: res.code == 0
+
+- name: MySQL Advanced Features
+  id: advanced
+  needs: [basic-ops]
+  steps:
+  - name: Show MySQL Version and Status
+    uses: db
+    with:
+      dsn: "mysql://{{vars.mysql_user}}:{{vars.mysql_password}}@{{vars.mysql_host}}:{{vars.mysql_port}}/{{vars.mysql_database}}"
+      query: "SELECT VERSION() as mysql_version, CONNECTION_ID() as connection_id"
+    test: res.code == 0
+
+- name: Cleanup
+  id: cleanup
+  needs: [advanced]
+  steps:
+  - name: Drop Test Database
+    uses: db
+    with:
+      dsn: "mysql://{{vars.mysql_user}}:{{vars.mysql_password}}@{{vars.mysql_host}}:{{vars.mysql_port}}/"
+      query: "DROP DATABASE IF EXISTS {{vars.mysql_database}}"
     test: res.code == 0
