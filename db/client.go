@@ -17,7 +17,6 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
-
 type Req struct {
 	Driver  string        `map:"driver"`
 	DSN     string        `map:"dsn"`
@@ -43,7 +42,7 @@ type Result struct {
 func ParseRequest(with map[string]string) (*Req, string, time.Duration, error) {
 	// First unflatten the input to handle nested structures like arrays
 	unflattenedWith := probe.UnflattenInterface(with)
-	
+
 	// Use MapToStructByTags to directly populate Req struct
 	req := &Req{}
 	err := probe.MapToStructByTags(unflattenedWith, req)
@@ -82,23 +81,14 @@ func ParseRequest(with map[string]string) (*Req, string, time.Duration, error) {
 	return req, driverDSN, timeout, nil
 }
 
-func parseDSN(dsn string) (driver, driverDSN string, err error) {
-	// Handle file paths for SQLite
-	if strings.HasSuffix(dsn, ".db") || strings.HasSuffix(dsn, ".sqlite") || strings.HasSuffix(dsn, ".sqlite3") {
-		abs, err := filepath.Abs(dsn)
-		if err != nil {
-			return "", "", fmt.Errorf("failed to resolve SQLite file path: %w", err)
-		}
-		
-		// Check if file exists or can be created
-		dir := filepath.Dir(abs)
-		if _, err := os.Stat(dir); os.IsNotExist(err) {
-			return "", "", fmt.Errorf("directory does not exist for SQLite file: %s", dir)
-		}
-		
-		return "sqlite3", abs, nil
-	}
+const (
+	defaultTimeout   = 30
+	sqliteScheme     = "sqlite://"
+	mysqlScheme      = "mysql://"
+	postgresqlScheme = "postgresql://"
+)
 
+func parseDSN(dsn string) (driver, driverDSN string, err error) {
 	// Parse URL-style DSN
 	u, err := url.Parse(dsn)
 	if err != nil {
@@ -119,18 +109,18 @@ func parseDSN(dsn string) (driver, driverDSN string, err error) {
 				userInfo = fmt.Sprintf("%s@", u.User.Username())
 			}
 		}
-		
+
 		host := u.Host
 		if host == "" {
 			host = "localhost:3306"
 		}
-		
+
 		database := strings.TrimPrefix(u.Path, "/")
 		query := ""
 		if u.RawQuery != "" {
 			query = "?" + u.RawQuery
 		}
-		
+
 		driverDSN = fmt.Sprintf("%stcp(%s)/%s%s", userInfo, host, database, query)
 		return "mysql", driverDSN, nil
 
@@ -144,8 +134,20 @@ func parseDSN(dsn string) (driver, driverDSN string, err error) {
 		return "postgres", driverDSN, nil
 
 	case "sqlite", "sqlite3":
+		// Handle file paths for SQLite
+		abs, err := filepath.Abs(strings.TrimPrefix(dsn, sqliteScheme))
+		if err != nil {
+			return "", "", fmt.Errorf("failed to resolve SQLite file path: %w", err)
+		}
+
+		// Check if file exists or can be created
+		dir := filepath.Dir(abs)
+		if _, err := os.Stat(dir); os.IsNotExist(err) {
+			return "", "", fmt.Errorf("directory does not exist for SQLite file: %s", dir)
+		}
+
 		// SQLite DSN: just the file path
-		return "sqlite3", strings.TrimPrefix(u.Path, "/"), nil
+		return "sqlite3", abs, nil
 
 	default:
 		return "", "", fmt.Errorf("unsupported database driver: %s (supported: mysql, postgres, sqlite3)", u.Scheme)
@@ -356,4 +358,3 @@ func WithAfter(f func(result *Result)) Option {
 		c.after = f
 	}
 }
-
