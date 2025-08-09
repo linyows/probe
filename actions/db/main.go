@@ -30,15 +30,15 @@ func (a *Action) Run(args []string, with map[string]string) (map[string]string, 
 		return map[string]string{}, fmt.Errorf("query parameter is required")
 	}
 
-	// Parse parameters using db client
-	params, err := cl.ParseParams(with)
-	if err != nil {
-		a.log.Error("failed to parse parameters", "error", err)
-		return map[string]string{}, err
-	}
-
-	// Execute database query using db client
-	result, err := cl.ExecuteQuery(params, a.log)
+	// Execute database query with logger callbacks
+	result, err := cl.ExecuteQuery(with,
+		cl.WithBefore(func(query string, params []interface{}) {
+			a.log.Debug("executing database query", "query", query, "params", params)
+		}),
+		cl.WithAfter(func(result *cl.Result) {
+			a.log.Debug("database query completed", "rows_affected", result.Res.RowsAffected, "duration", result.RT)
+		}),
+	)
 	if err != nil {
 		a.log.Error("database query execution failed", "error", err)
 		// Return result even on error for debugging
