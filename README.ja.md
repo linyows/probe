@@ -51,7 +51,7 @@ probe --workflow health-check.yml
 --------
 
 - **シンプルなYAML構文**: 読みやすいワークフロー定義
-- **プラグインアーキテクチャ**: HTTP、データベース、Shell、SMTP、Helloアクションが組み込まれており、拡張可能
+- **プラグインアーキテクチャ**: HTTP、データベース、ブラウザ、Shell、SMTP、Helloアクションが組み込まれており、拡張可能
 - **ジョブ依存関係**: `needs`で実行順序を制御
 - **ステップアウトプット**: `outputs`を使用してステップとジョブ間でデータを共有
 - **繰り返し実行**: 設定可能な間隔でジョブを繰り返し
@@ -330,6 +330,28 @@ test: |
 - **MySQL**: `mysql://user:pass@host:port/database`
 - **PostgreSQL**: `postgres://user:pass@host:port/database?sslmode=disable`
 - **SQLite**: `sqlite://./testdata/sqlite.db` または `sqlite:///absolute/path/database.db`
+
+### ブラウザアクション
+```yaml
+- name: ウェブ自動化
+  uses: browser
+  with:
+    action: navigate
+    url: "https://example.com"
+    headless: true
+    timeout: 30s
+  test: res.success == "true"
+```
+
+対応アクション:
+- **navigate**: URLへのナビゲーション
+- **get_text**: 要素からのテキスト内容抽出
+- **get_attribute**: 要素の属性値取得
+- **click**: 要素のクリック
+- **type**: 入力フィールドへのテキスト入力
+- **submit**: フォーム送信
+- **screenshot**: ページのスクリーンショット撮影
+- **wait_visible**: 要素が表示されるまで待機
 
 ### SMTPアクション
 ```yaml

@@ -51,7 +51,7 @@ Features
 --------
 
 - **Simple YAML Syntax**: Easy-to-read workflow definitions
-- **Plugin Architecture**: Built-in HTTP, Database, Shell, SMTP, and Hello actions with extensibility
+- **Plugin Architecture**: Built-in HTTP, Database, Browser, Shell, SMTP, and Hello actions with extensibility
 - **Job Dependencies**: Control execution order with `needs`
 - **Step Outputs**: Share data between steps and jobs using `outputs`
 - **Repetition**: Repeat jobs with configurable intervals
@@ -319,6 +319,28 @@ Supported databases:
 - **MySQL**: `mysql://user:pass@host:port/database`
 - **PostgreSQL**: `postgres://user:pass@host:port/database?sslmode=disable`
 - **SQLite**: `sqlite://./testdata/sqlite.db` or `sqlite:///absolute/path/database.db`
+
+### Browser Action
+```yaml
+- name: Web Automation
+  uses: browser
+  with:
+    action: navigate
+    url: "https://example.com"
+    headless: true
+    timeout: 30s
+  test: res.success == "true"
+```
+
+Supported actions:
+- **navigate**: Navigate to URL
+- **get_text**: Extract text content from elements
+- **get_attribute**: Get element attribute values
+- **click**: Click on elements
+- **type**: Type text into input fields
+- **submit**: Submit forms
+- **screenshot**: Capture page screenshots
+- **wait_visible**: Wait for elements to become visible
 
 ### Shell Action
 ```yaml
