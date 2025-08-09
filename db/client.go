@@ -90,15 +90,34 @@ func ParseParams(with map[string]string) (*Params, error) {
 		params.timeout = 30 * time.Second // Default timeout
 	}
 
-	// Parse query parameters (param1, param2, etc.)
+	// Parse query parameters (param1, param2, etc.) in correct order
+	paramMap := make(map[int]string)
+	maxParamNum := 0
+	
+	// First collect all parameters with their numbers
 	for key, value := range with {
 		if strings.HasPrefix(key, "param") {
 			// Extract parameter number
-			paramNum := strings.TrimPrefix(key, "param")
-			if paramNum == "" {
+			paramNumStr := strings.TrimPrefix(key, "param")
+			if paramNumStr == "" {
 				continue
 			}
-
+			
+			paramNum, err := strconv.Atoi(paramNumStr)
+			if err != nil {
+				continue
+			}
+			
+			paramMap[paramNum] = value
+			if paramNum > maxParamNum {
+				maxParamNum = paramNum
+			}
+		}
+	}
+	
+	// Add parameters in order
+	for i := 1; i <= maxParamNum; i++ {
+		if value, exists := paramMap[i]; exists {
 			// Try to convert to appropriate type
 			if intVal, err := strconv.Atoi(value); err == nil {
 				params.params = append(params.params, intVal)
@@ -143,9 +162,12 @@ func parseDSN(dsn string) (driver, driverDSN string, err error) {
 		// Convert to MySQL DSN format: user:password@tcp(host:port)/database?params
 		userInfo := ""
 		if u.User != nil {
-			if password, ok := u.User.Password(); ok {
+			password, hasPassword := u.User.Password()
+			if hasPassword {
+				// Password is explicitly set (even if empty)
 				userInfo = fmt.Sprintf("%s:%s@", u.User.Username(), password)
 			} else {
+				// No password field in URL
 				userInfo = fmt.Sprintf("%s@", u.User.Username())
 			}
 		}
