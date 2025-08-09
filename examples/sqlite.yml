@@ -13,11 +13,14 @@ jobs:
 
 - name: SQLite Examples
   needs: [setup]
+  defaults:
+    db:
+      dsn: sqlite://./testdata/sqlite.db
+
   steps:
   - name: Create SQLite table
     uses: db
     with:
-      dsn: "sqlite://./testdata/sqlite.db"
       query: |
         CREATE TABLE users (
           id INTEGER PRIMARY KEY,
@@ -29,45 +32,43 @@ jobs:
   - name: Insert test data
     uses: db
     with:
-      dsn: "sqlite://./testdata/sqlite.db"
-      query: "INSERT INTO users (name, email) VALUES (?, ?)"
-      params: ["John Doe", "john@example.com"]
+      query: INSERT INTO users (name, email) VALUES (?, ?)
+      params:
+      - John Doe
+      - john@example.com
     test: res.code == 0 && res.rows_affected == 1
 
   - name: Select all users
     uses: db
     with:
-      dsn: "sqlite://./testdata/sqlite.db"
-      query: "SELECT * FROM users"
+      query: SELECT * FROM users
     test: res.code == 0 && res.rows_affected > 0
 
   - name: Select user by ID
     uses: db
     with:
-      dsn: "sqlite://./testdata/sqlite.db"
-      query: "SELECT * FROM users WHERE id = ?"
+      query: SELECT * FROM users WHERE id = ?
       params: [1]
     test: res.code == 0 && res.rows_affected == 1
 
   - name: Update user
     uses: db
     with:
-      dsn: "sqlite://./testdata/sqlite.db"
-      query: "UPDATE users SET email = ? WHERE id = ?"
-      params: ["john.doe@example.com", 1]
+      query: UPDATE users SET email = ? WHERE id = ?
+      params:
+      - john.doe@example.com
+      - 1
     test: res.code == 0 && res.rows_affected == 1
 
   - name: Delete user
     uses: db
     with:
-      dsn: "sqlite://./testdata/sqlite.db"
-      query: "DELETE FROM users WHERE id = ?"
+      query: DELETE FROM users WHERE id = ?
       params: [1]
     test: res.code == 0 && res.rows_affected == 1
 
   - name: Drop table
     uses: db
     with:
-      dsn: "sqlite://./testdata/sqlite.db"
-      query: "DROP TABLE users"
+      query: DROP TABLE users
     test: res.code == 0

@@ -2,13 +2,11 @@ name: PostgreSQL Database Examples
 description: Examples for using the db action with PostgreSQL
 
 vars:
-  # Configure these variables for your PostgreSQL setup
-  # Set these environment variables: POSTGRES_USER, POSTGRES_PASSWORD
-  postgres_host: localhost
-  postgres_port: 5432
-  postgres_user: "{{POSTGRES_USER}}"
-  postgres_password: "{{POSTGRES_PASSWORD}}"
-  postgres_database: testdb
+  postgres_host: "{{POSTGRES_HOST ?? 'localhost'}}"
+  postgres_port: "{{POSTGRES_PORT ?? 5432}}"
+  postgres_user: "{{POSTGRES_USER ?? 'root'}}"
+  postgres_pass: "{{POSTGRES_PASS ?? ''}}"
+  postgres_database: probe_test
 
 jobs:
 - name: Setup Database
@@ -17,7 +15,7 @@ jobs:
   - name: Create Test Database
     uses: db
     with:
-      dsn: "postgres://{{vars.postgres_user}}:{{vars.postgres_password}}@{{vars.postgres_host}}:{{vars.postgres_port}}/postgres?sslmode=disable"
+      dsn: "postgres://{{vars.postgres_user}}:{{vars.postgres_pass}}@{{vars.postgres_host}}:{{vars.postgres_port}}/postgres?sslmode=disable"
       query: "CREATE DATABASE {{vars.postgres_database}}"
     test: res.code == 0
 
@@ -28,7 +26,7 @@ jobs:
   - name: Test PostgreSQL Connection
     uses: db
     with:
-      dsn: "postgres://{{vars.postgres_user}}:{{vars.postgres_password}}@{{vars.postgres_host}}:{{vars.postgres_port}}/{{vars.postgres_database}}?sslmode=disable"
+      dsn: "postgres://{{vars.postgres_user}}:{{vars.postgres_pass}}@{{vars.postgres_host}}:{{vars.postgres_port}}/{{vars.postgres_database}}?sslmode=disable"
       query: "SELECT 1 as connection_test, NOW() as server_time, version() as pg_version"
     test: res.code == 0
     outputs:
@@ -37,7 +35,7 @@ jobs:
   - name: Create Test Table
     uses: db
     with:
-      dsn: "postgres://{{vars.postgres_user}}:{{vars.postgres_password}}@{{vars.postgres_host}}:{{vars.postgres_port}}/{{vars.postgres_database}}?sslmode=disable"
+      dsn: "postgres://{{vars.postgres_user}}:{{vars.postgres_pass}}@{{vars.postgres_host}}:{{vars.postgres_port}}/{{vars.postgres_database}}?sslmode=disable"
       query: |
         CREATE TABLE IF NOT EXISTS products (
           id SERIAL PRIMARY KEY,
@@ -56,7 +54,7 @@ jobs:
   - name: Insert Sample Products
     uses: db
     with:
-      dsn: "postgres://{{vars.postgres_user}}:{{vars.postgres_password}}@{{vars.postgres_host}}:{{vars.postgres_port}}/{{vars.postgres_database}}?sslmode=disable"
+      dsn: "postgres://{{vars.postgres_user}}:{{vars.postgres_pass}}@{{vars.postgres_host}}:{{vars.postgres_port}}/{{vars.postgres_database}}?sslmode=disable"
       query: |
         INSERT INTO products (name, description, category, price, stock_quantity, tags) 
         VALUES ($1, $2, $3, $4, $5, $6)
@@ -72,7 +70,7 @@ jobs:
   - name: Bulk Insert Products
     uses: db
     with:
-      dsn: "postgres://{{vars.postgres_user}}:{{vars.postgres_password}}@{{vars.postgres_host}}:{{vars.postgres_port}}/{{vars.postgres_database}}?sslmode=disable"
+      dsn: "postgres://{{vars.postgres_user}}:{{vars.postgres_pass}}@{{vars.postgres_host}}:{{vars.postgres_port}}/{{vars.postgres_database}}?sslmode=disable"
       query: |
         INSERT INTO products (name, description, category, price, stock_quantity, tags) VALUES 
         ('Laptop Stand', 'Adjustable aluminum laptop stand', 'Accessories', 49.99, 100, '{"material": "aluminum", "adjustable": true}'),
@@ -84,7 +82,7 @@ jobs:
   - name: Query Products with JSON Operations
     uses: db
     with:
-      dsn: "postgres://{{vars.postgres_user}}:{{vars.postgres_password}}@{{vars.postgres_host}}:{{vars.postgres_port}}/{{vars.postgres_database}}?sslmode=disable"
+      dsn: "postgres://{{vars.postgres_user}}:{{vars.postgres_pass}}@{{vars.postgres_host}}:{{vars.postgres_port}}/{{vars.postgres_database}}?sslmode=disable"
       query: |
         SELECT 
           id, 
@@ -101,7 +99,7 @@ jobs:
   - name: Update Product with JSONB
     uses: db
     with:
-      dsn: "postgres://{{vars.postgres_user}}:{{vars.postgres_password}}@{{vars.postgres_host}}:{{vars.postgres_port}}/{{vars.postgres_database}}?sslmode=disable"
+      dsn: "postgres://{{vars.postgres_user}}:{{vars.postgres_pass}}@{{vars.postgres_host}}:{{vars.postgres_port}}/{{vars.postgres_database}}?sslmode=disable"
       query: |
         UPDATE products 
         SET 
@@ -115,7 +113,7 @@ jobs:
   - name: Complex Query with Window Functions
     uses: db
     with:
-      dsn: "postgres://{{vars.postgres_user}}:{{vars.postgres_password}}@{{vars.postgres_host}}:{{vars.postgres_port}}/{{vars.postgres_database}}?sslmode=disable"
+      dsn: "postgres://{{vars.postgres_user}}:{{vars.postgres_pass}}@{{vars.postgres_host}}:{{vars.postgres_port}}/{{vars.postgres_database}}?sslmode=disable"
       query: |
         SELECT 
           name,
@@ -135,7 +133,7 @@ jobs:
   - name: Array and Text Search
     uses: db
     with:
-      dsn: "postgres://{{vars.postgres_user}}:{{vars.postgres_password}}@{{vars.postgres_host}}:{{vars.postgres_port}}/{{vars.postgres_database}}?sslmode=disable"
+      dsn: "postgres://{{vars.postgres_user}}:{{vars.postgres_pass}}@{{vars.postgres_host}}:{{vars.postgres_port}}/{{vars.postgres_database}}?sslmode=disable"
       query: |
         SELECT 
           name,
@@ -153,7 +151,7 @@ jobs:
   - name: Create and Use Custom Types
     uses: db
     with:
-      dsn: "postgres://{{vars.postgres_user}}:{{vars.postgres_password}}@{{vars.postgres_host}}:{{vars.postgres_port}}/{{vars.postgres_database}}?sslmode=disable"
+      dsn: "postgres://{{vars.postgres_user}}:{{vars.postgres_pass}}@{{vars.postgres_host}}:{{vars.postgres_port}}/{{vars.postgres_database}}?sslmode=disable"
       query: |
         DO $$
         BEGIN
@@ -166,7 +164,7 @@ jobs:
   - name: Generate Series and Random Data
     uses: db
     with:
-      dsn: "postgres://{{vars.postgres_user}}:{{vars.postgres_password}}@{{vars.postgres_host}}:{{vars.postgres_port}}/{{vars.postgres_database}}?sslmode=disable"
+      dsn: "postgres://{{vars.postgres_user}}:{{vars.postgres_pass}}@{{vars.postgres_host}}:{{vars.postgres_port}}/{{vars.postgres_database}}?sslmode=disable"
       query: |
         SELECT 
           generate_series(1, 5) as id,
@@ -178,7 +176,7 @@ jobs:
   - name: Database Statistics
     uses: db
     with:
-      dsn: "postgres://{{vars.postgres_user}}:{{vars.postgres_password}}@{{vars.postgres_host}}:{{vars.postgres_port}}/{{vars.postgres_database}}?sslmode=disable"
+      dsn: "postgres://{{vars.postgres_user}}:{{vars.postgres_pass}}@{{vars.postgres_host}}:{{vars.postgres_port}}/{{vars.postgres_database}}?sslmode=disable"
       query: |
         SELECT 
           schemaname,
@@ -198,7 +196,7 @@ jobs:
   - name: Show PostgreSQL Version and Settings
     uses: db
     with:
-      dsn: "postgres://{{vars.postgres_user}}:{{vars.postgres_password}}@{{vars.postgres_host}}:{{vars.postgres_port}}/{{vars.postgres_database}}?sslmode=disable"
+      dsn: "postgres://{{vars.postgres_user}}:{{vars.postgres_pass}}@{{vars.postgres_host}}:{{vars.postgres_port}}/{{vars.postgres_database}}?sslmode=disable"
       query: "SELECT version() as pg_version, current_database() as current_db"
     test: res.code == 0
 
@@ -209,7 +207,7 @@ jobs:
   - name: Drop Test Objects
     uses: db
     with:
-      dsn: "postgres://{{vars.postgres_user}}:{{vars.postgres_password}}@{{vars.postgres_host}}:{{vars.postgres_port}}/{{vars.postgres_database}}?sslmode=disable"
+      dsn: "postgres://{{vars.postgres_user}}:{{vars.postgres_pass}}@{{vars.postgres_host}}:{{vars.postgres_port}}/{{vars.postgres_database}}?sslmode=disable"
       query: |
         DROP TABLE IF EXISTS products;
         DROP TYPE IF EXISTS product_status;
@@ -218,6 +216,6 @@ jobs:
   - name: Drop Test Database
     uses: db
     with:
-      dsn: "postgres://{{vars.postgres_user}}:{{vars.postgres_password}}@{{vars.postgres_host}}:{{vars.postgres_port}}/postgres?sslmode=disable"
+      dsn: "postgres://{{vars.postgres_user}}:{{vars.postgres_pass}}@{{vars.postgres_host}}:{{vars.postgres_port}}/postgres?sslmode=disable"
       query: "DROP DATABASE IF EXISTS {{vars.postgres_database}}"
     test: res.code == 0
