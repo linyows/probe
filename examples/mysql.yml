@@ -12,12 +12,16 @@ vars:
 jobs:
 - name: Setup Database
   id: setup
+  defaults:
+    db:
+      dsn: mysql://{{vars.mysql_user}}:{{vars.mysql_password}}@{{vars.mysql_host}}:{{vars.mysql_port}}/{{vars.mysql_database}}
+
   steps:
   - name: Create Test Database
     uses: db
     with:
-      dsn: "mysql://{{vars.mysql_user}}:{{vars.mysql_password}}@{{vars.mysql_host}}:{{vars.mysql_port}}/"
-      query: "CREATE DATABASE IF NOT EXISTS {{vars.mysql_database}}"
+      dsn: mysql://{{vars.mysql_user}}:{{vars.mysql_password}}@{{vars.mysql_host}}:{{vars.mysql_port}}/
+      query: CREATE DATABASE IF NOT EXISTS {{vars.mysql_database}}
     test: res.code == 0
 
 - name: MySQL Basic Operations
@@ -27,8 +31,7 @@ jobs:
   - name: Test MySQL Connection
     uses: db
     with:
-      dsn: "mysql://{{vars.mysql_user}}:{{vars.mysql_password}}@{{vars.mysql_host}}:{{vars.mysql_port}}/{{vars.mysql_database}}"
-      query: "SELECT 1 as connection_test, NOW() as server_time"
+      query: SELECT 1 as connection_test, NOW() as server_time
     test: res.code == 0
     outputs:
       server_time: res.rows__0__server_time
@@ -36,7 +39,6 @@ jobs:
   - name: Create Test Table
     uses: db
     with:
-      dsn: "mysql://{{vars.mysql_user}}:{{vars.mysql_password}}@{{vars.mysql_host}}:{{vars.mysql_port}}/{{vars.mysql_database}}"
       query: |
         CREATE TABLE IF NOT EXISTS employees (
           id INT AUTO_INCREMENT PRIMARY KEY,
@@ -52,16 +54,15 @@ jobs:
   - name: Insert Sample Data
     uses: db
     with:
-      dsn: "mysql://{{vars.mysql_user}}:{{vars.mysql_password}}@{{vars.mysql_host}}:{{vars.mysql_port}}/{{vars.mysql_database}}"
       query: |
         INSERT INTO employees (name, email, department, salary, hire_date) 
         VALUES (?, ?, ?, ?, ?)
       params:
-        - "Alice Johnson"
-        - "alice.johnson@company.com"
-        - "Engineering"
-        - "75000.00"
-        - "2023-01-15"
+        - Alice Johnson
+        - alice.johnson@company.com
+        - Engineering
+        - 75000.00
+        - 2023-01-15
     test: res.code == 0 && res.rows_affected == 1
     outputs:
       employee_id: res.rows_affected
@@ -69,7 +70,6 @@ jobs:
   - name: Insert Multiple Employees
     uses: db
     with:
-      dsn: "mysql://{{vars.mysql_user}}:{{vars.mysql_password}}@{{vars.mysql_host}}:{{vars.mysql_port}}/{{vars.mysql_database}}"
       query: |
         INSERT INTO employees (name, email, department, salary, hire_date) 
         VALUES 
@@ -81,33 +81,29 @@ jobs:
   - name: Query All Employees
     uses: db
     with:
-      dsn: "mysql://{{vars.mysql_user}}:{{vars.mysql_password}}@{{vars.mysql_host}}:{{vars.mysql_port}}/{{vars.mysql_database}}"
-      query: "SELECT id, name, email, department, salary FROM employees ORDER BY hire_date"
+      query: SELECT id, name, email, department, salary FROM employees ORDER BY hire_date
     test: res.code == 0 && res.rows_affected >= 4
 
   - name: Query with WHERE Clause
     uses: db
     with:
-      dsn: "mysql://{{vars.mysql_user}}:{{vars.mysql_password}}@{{vars.mysql_host}}:{{vars.mysql_port}}/{{vars.mysql_database}}"
-      query: "SELECT * FROM employees WHERE department = ? AND salary > ?"
+      query: SELECT * FROM employees WHERE department = ? AND salary > ?
       params:
-        - "Engineering"
-        - "70000"
+        - Engineering
+        - 70000
     test: res.code == 0
 
   - name: Update Employee Salary
     uses: db
     with:
-      dsn: "mysql://{{vars.mysql_user}}:{{vars.mysql_password}}@{{vars.mysql_host}}:{{vars.mysql_port}}/{{vars.mysql_database}}"
-      query: "UPDATE employees SET salary = salary * 1.1 WHERE department = ?"
+      query: UPDATE employees SET salary = salary * 1.1 WHERE department = ?
       params:
-        - "Engineering"
+        - Engineering
     test: res.code == 0 && res.rows_affected >= 1
 
   - name: Count Employees by Department
     uses: db
     with:
-      dsn: "mysql://{{vars.mysql_user}}:{{vars.mysql_password}}@{{vars.mysql_host}}:{{vars.mysql_port}}/{{vars.mysql_database}}"
       query: |
         SELECT department, COUNT(*) as employee_count, AVG(salary) as avg_salary
         FROM employees 
@@ -118,14 +114,12 @@ jobs:
   - name: Show Table Info
     uses: db
     with:
-      dsn: "mysql://{{vars.mysql_user}}:{{vars.mysql_password}}@{{vars.mysql_host}}:{{vars.mysql_port}}/{{vars.mysql_database}}"
-      query: "DESCRIBE employees"
+      query: DESCRIBE employees
     test: res.code == 0
 
   - name: Create Stored Procedure
     uses: db
     with:
-      dsn: "mysql://{{vars.mysql_user}}:{{vars.mysql_password}}@{{vars.mysql_host}}:{{vars.mysql_port}}/{{vars.mysql_database}}"
       query: |
         CREATE PROCEDURE IF NOT EXISTS GetEmployeesByDepartment(IN dept_name VARCHAR(50))
         BEGIN
@@ -139,24 +133,21 @@ jobs:
   - name: Call Stored Procedure
     uses: db
     with:
-      dsn: "mysql://{{vars.mysql_user}}:{{vars.mysql_password}}@{{vars.mysql_host}}:{{vars.mysql_port}}/{{vars.mysql_database}}"
-      query: "CALL GetEmployeesByDepartment(?)"
+      query: CALL GetEmployeesByDepartment(?)
       params:
-        - "Engineering"
+        - Engineering
     test: res.code == 0
 
   - name: Cleanup Procedure
     uses: db
     with:
-      dsn: "mysql://{{vars.mysql_user}}:{{vars.mysql_password}}@{{vars.mysql_host}}:{{vars.mysql_port}}/{{vars.mysql_database}}"
-      query: "DROP PROCEDURE IF EXISTS GetEmployeesByDepartment"
+      query: DROP PROCEDURE IF EXISTS GetEmployeesByDepartment
     test: res.code == 0
 
   - name: Drop Test Table
     uses: db
     with:
-      dsn: "mysql://{{vars.mysql_user}}:{{vars.mysql_password}}@{{vars.mysql_host}}:{{vars.mysql_port}}/{{vars.mysql_database}}"
-      query: "DROP TABLE IF EXISTS employees"
+      query: DROP TABLE IF EXISTS employees
     test: res.code == 0
 
 - name: MySQL Advanced Features
@@ -166,8 +157,7 @@ jobs:
   - name: Show MySQL Version and Status
     uses: db
     with:
-      dsn: "mysql://{{vars.mysql_user}}:{{vars.mysql_password}}@{{vars.mysql_host}}:{{vars.mysql_port}}/{{vars.mysql_database}}"
-      query: "SELECT VERSION() as mysql_version, CONNECTION_ID() as connection_id"
+      query: SELECT VERSION() as mysql_version, CONNECTION_ID() as connection_id
     test: res.code == 0
 
 - name: Cleanup
@@ -177,6 +167,6 @@ jobs:
   - name: Drop Test Database
     uses: db
     with:
-      dsn: "mysql://{{vars.mysql_user}}:{{vars.mysql_password}}@{{vars.mysql_host}}:{{vars.mysql_port}}/"
-      query: "DROP DATABASE IF EXISTS {{vars.mysql_database}}"
+      dsn: mysql://{{vars.mysql_user}}:{{vars.mysql_password}}@{{vars.mysql_host}}:{{vars.mysql_port}}/
+      query: DROP DATABASE IF EXISTS {{vars.mysql_database}}
     test: res.code == 0
