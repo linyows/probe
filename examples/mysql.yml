@@ -2,31 +2,30 @@ name: MySQL Database Examples
 description: Examples for using the db action with MySQL
 
 vars:
-  # Configure these variables for your MySQL setup
-  mysql_host: localhost
-  mysql_port: 3306
-  mysql_user: root
-  mysql_password: ""
-  mysql_database: testdb
+  mysql_host: "{{MYSQL_HOST ?? 'localhost'}}"
+  mysql_port: "{{MYSQL_PORT ?? 3306}}"
+  mysql_user: "{{MYSQL_USER ?? 'root'}}"
+  mysql_pass: "{{MYSQL_PASS ?? ''}}"
+  mysql_database: probe_test
 
 jobs:
 - name: Setup Database
   id: setup
-  defaults:
-    db:
-      dsn: mysql://{{vars.mysql_user}}:{{vars.mysql_password}}@{{vars.mysql_host}}:{{vars.mysql_port}}/{{vars.mysql_database}}
 
   steps:
   - name: Create Test Database
     uses: db
     with:
-      dsn: mysql://{{vars.mysql_user}}:{{vars.mysql_password}}@{{vars.mysql_host}}:{{vars.mysql_port}}/
+      dsn: mysql://{{vars.mysql_user}}:{{vars.mysql_pass}}@{{vars.mysql_host}}:{{vars.mysql_port}}/
       query: CREATE DATABASE IF NOT EXISTS {{vars.mysql_database}}
     test: res.code == 0
 
 - name: MySQL Basic Operations
   id: basic-ops
   needs: [setup]
+  defaults:
+    db:
+      dsn: mysql://{{vars.mysql_user}}:{{vars.mysql_pass}}@{{vars.mysql_host}}:{{vars.mysql_port}}/{{vars.mysql_database}}
   steps:
   - name: Test MySQL Connection
     uses: db
@@ -157,6 +156,7 @@ jobs:
   - name: Show MySQL Version and Status
     uses: db
     with:
+      dsn: mysql://{{vars.mysql_user}}:{{vars.mysql_pass}}@{{vars.mysql_host}}:{{vars.mysql_port}}/{{vars.mysql_database}}
       query: SELECT VERSION() as mysql_version, CONNECTION_ID() as connection_id
     test: res.code == 0
 
@@ -167,6 +167,6 @@ jobs:
   - name: Drop Test Database
     uses: db
     with:
-      dsn: mysql://{{vars.mysql_user}}:{{vars.mysql_password}}@{{vars.mysql_host}}:{{vars.mysql_port}}/
+      dsn: mysql://{{vars.mysql_user}}:{{vars.mysql_pass}}@{{vars.mysql_host}}:{{vars.mysql_port}}/
       query: DROP DATABASE IF EXISTS {{vars.mysql_database}}
     test: res.code == 0
