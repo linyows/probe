@@ -2,14 +2,24 @@ name: Database Action Examples
 description: Test database actions with different drivers
 
 jobs:
+- name: Setup SQLite database file
+  id: setup
+  steps:
+  - name: rm -f testdata/sqlite.db
+    uses: shell
+    with:
+      cmd: rm -f testdata/sqlite.db
+    test: res.code == 0
+
 - name: SQLite Examples
+  needs: [setup]
   steps:
   - name: Create SQLite table
     uses: db
     with:
-      dsn: "sqlite://./test.db"
+      dsn: "sqlite://./testdata/sqlite.db"
       query: |
-        CREATE TABLE IF NOT EXISTS users (
+        CREATE TABLE users (
           id INTEGER PRIMARY KEY,
           name TEXT NOT NULL,
           email TEXT UNIQUE
@@ -19,7 +29,7 @@ jobs:
   - name: Insert test data
     uses: db
     with:
-      dsn: "sqlite://./test.db"
+      dsn: "sqlite://./testdata/sqlite.db"
       query: "INSERT INTO users (name, email) VALUES (?, ?)"
       params: ["John Doe", "john@example.com"]
     test: res.code == 0 && res.rows_affected == 1
@@ -27,14 +37,14 @@ jobs:
   - name: Select all users
     uses: db
     with:
-      dsn: "sqlite://./test.db"
+      dsn: "sqlite://./testdata/sqlite.db"
       query: "SELECT * FROM users"
     test: res.code == 0 && res.rows_affected > 0
 
   - name: Select user by ID
     uses: db
     with:
-      dsn: "sqlite://./test.db"
+      dsn: "sqlite://./testdata/sqlite.db"
       query: "SELECT * FROM users WHERE id = ?"
       params: [1]
     test: res.code == 0 && res.rows_affected == 1
@@ -42,7 +52,7 @@ jobs:
   - name: Update user
     uses: db
     with:
-      dsn: "sqlite://./test.db"
+      dsn: "sqlite://./testdata/sqlite.db"
       query: "UPDATE users SET email = ? WHERE id = ?"
       params: ["john.doe@example.com", 1]
     test: res.code == 0 && res.rows_affected == 1
@@ -50,7 +60,7 @@ jobs:
   - name: Delete user
     uses: db
     with:
-      dsn: "sqlite://./test.db"
+      dsn: "sqlite://./testdata/sqlite.db"
       query: "DELETE FROM users WHERE id = ?"
       params: [1]
     test: res.code == 0 && res.rows_affected == 1
@@ -58,28 +68,6 @@ jobs:
   - name: Drop table
     uses: db
     with:
-      dsn: "sqlite://./test.db"
+      dsn: "sqlite://./testdata/sqlite.db"
       query: "DROP TABLE users"
     test: res.code == 0
-
-# Uncomment and modify these examples if you have MySQL/PostgreSQL available:
-
-# - name: MySQL Examples
-#   steps:
-#   - name: MySQL connection test with parameters
-#     uses: db
-#     with:
-#       dsn: "mysql://{{MYSQL_USER}}:{{MYSQL_PASSWORD}}@localhost:3306/testdb"
-#       query: "SELECT ? as test, ? as name"
-#       params: [1, "example"]
-#     test: res.code == 0
-
-# - name: PostgreSQL Examples  
-#   steps:
-#   - name: PostgreSQL connection test with parameters
-#     uses: db
-#     with:
-#       dsn: "postgres://{{POSTGRES_USER}}:{{POSTGRES_PASSWORD}}@localhost:5432/testdb"
-#       query: "SELECT $1 as test, $2 as name"
-#       params: [1, "example"]
-#     test: res.code == 0
