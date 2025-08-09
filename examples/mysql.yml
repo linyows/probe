@@ -56,11 +56,12 @@ jobs:
       query: |
         INSERT INTO employees (name, email, department, salary, hire_date) 
         VALUES (?, ?, ?, ?, ?)
-      param1: "Alice Johnson"
-      param2: "alice.johnson@company.com"
-      param3: "Engineering"
-      param4: "75000.00"
-      param5: "2023-01-15"
+      params:
+        - "Alice Johnson"
+        - "alice.johnson@company.com"
+        - "Engineering"
+        - "75000.00"
+        - "2023-01-15"
     test: res.code == 0 && res.rows_affected == 1
     outputs:
       employee_id: res.rows_affected
@@ -89,8 +90,9 @@ jobs:
     with:
       dsn: "mysql://{{vars.mysql_user}}:{{vars.mysql_password}}@{{vars.mysql_host}}:{{vars.mysql_port}}/{{vars.mysql_database}}"
       query: "SELECT * FROM employees WHERE department = ? AND salary > ?"
-      param1: "Engineering"
-      param2: "70000"
+      params:
+        - "Engineering"
+        - "70000"
     test: res.code == 0
 
   - name: Update Employee Salary
@@ -98,7 +100,8 @@ jobs:
     with:
       dsn: "mysql://{{vars.mysql_user}}:{{vars.mysql_password}}@{{vars.mysql_host}}:{{vars.mysql_port}}/{{vars.mysql_database}}"
       query: "UPDATE employees SET salary = salary * 1.1 WHERE department = ?"
-      param1: "Engineering"
+      params:
+        - "Engineering"
     test: res.code == 0 && res.rows_affected >= 1
 
   - name: Count Employees by Department
@@ -138,7 +141,8 @@ jobs:
     with:
       dsn: "mysql://{{vars.mysql_user}}:{{vars.mysql_password}}@{{vars.mysql_host}}:{{vars.mysql_port}}/{{vars.mysql_database}}"
       query: "CALL GetEmployeesByDepartment(?)"
-      param1: "Engineering"
+      params:
+        - "Engineering"
     test: res.code == 0
 
   - name: Cleanup Procedure
