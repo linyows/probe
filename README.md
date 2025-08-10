@@ -44,7 +44,7 @@ jobs:
 ```
 
 ```bash
-probe --workflow health-check.yml
+probe health-check.yml
 ```
 
 Features
@@ -83,17 +83,17 @@ Usage
 ### Basic Usage
 ```bash
 # Run a workflow
-probe --workflow ./workflow.yml
+probe ./workflow.yml
 
 # Verbose output
-probe --workflow ./workflow.yml --verbose
+probe ./workflow.yml --verbose
 
 # Show response times
-probe --workflow ./workflow.yml --rt
+probe ./workflow.yml --rt
 ```
 
 ### CLI Options
-- `--workflow <path>`: Specify YAML workflow file
+- `<workflow>`: Specify YAML workflow file path
 - `--verbose`: Enable detailed output
 - `--rt`: Show response times
 - `--help`: Show help information
@@ -554,7 +554,7 @@ Troubleshooting
 ### Debug Output
 Use `--verbose` flag for detailed execution information:
 ```bash
-probe --workflow test.yml --verbose
+probe test.yml --verbose
 ```
 
 Best Practices

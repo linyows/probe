@@ -44,7 +44,7 @@ jobs:
 ```
 
 ```bash
-probe --workflow health-check.yml
+probe health-check.yml
 ```
 
 機能
@@ -83,17 +83,17 @@ go build -o probe ./cmd/probe
 ### 基本的な使用方法
 ```bash
 # ワークフローを実行
-probe --workflow ./workflow.yml
+probe ./workflow.yml
 
 # 詳細出力
-probe --workflow ./workflow.yml --verbose
+probe ./workflow.yml --verbose
 
 # レスポンス時間を表示
-probe --workflow ./workflow.yml --rt
+probe ./workflow.yml --rt
 ```
 
 ### CLIオプション
-- `--workflow <path>`: YAMLワークフローファイルを指定
+- `<workflow>`: YAMLワークフローファイルパスを指定
 - `--verbose`: 詳細出力を有効化
 - `--rt`: レスポンス時間を表示
 - `--help`: ヘルプ情報を表示
@@ -564,7 +564,7 @@ jobs:
 ### デバッグ出力
 詳細な実行情報には`--verbose`フラグを使用：
 ```bash
-probe --workflow test.yml --verbose
+probe test.yml --verbose
 ```
 
 ベストプラクティス
