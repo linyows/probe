@@ -83,7 +83,7 @@ func ParseRequest(with map[string]string) (*Req, string, time.Duration, error) {
 
 const (
 	defaultTimeout   = 30
-	sqliteScheme     = "sqlite://"
+	sqliteScheme     = "file:"
 	mysqlScheme      = "mysql://"
 	postgresqlScheme = "postgresql://"
 )
@@ -133,7 +133,7 @@ func parseDSN(dsn string) (driver, driverDSN string, err error) {
 		}
 		return "postgres", driverDSN, nil
 
-	case "sqlite", "sqlite3":
+	case "file", "":
 		// Handle file paths for SQLite
 		abs, err := filepath.Abs(strings.TrimPrefix(dsn, sqliteScheme))
 		if err != nil {
