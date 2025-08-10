@@ -153,10 +153,31 @@ func (p *Printer) AddSpinnerSuffix(txt string) {
 	}
 }
 
+func (p *Printer) Fprint(w io.Writer, a ...any) {
+	_, err := fmt.Fprint(w, a...)
+	if err != nil {
+		fmt.Printf("Fprint: %v\n", err)
+	}
+}
+
+func (p *Printer) Fprintf(w io.Writer, f string, a ...any) {
+	_, err := fmt.Fprintf(w, f, a...)
+	if err != nil {
+		fmt.Printf("Fprintf: %v\n", err)
+	}
+}
+
+func (p *Printer) Fprintln(w io.Writer, a ...any) {
+	_, err := fmt.Fprintln(w, a...)
+	if err != nil {
+		fmt.Printf("Fprintln: %v\n", err)
+	}
+}
+
 // printStepRepeatStart prints the start of a repeated step execution
 func (p *Printer) printStepRepeatStart(stepIdx int, stepName string, repeatCount int, output *strings.Builder) {
 	num := colorDim().Sprintf("%2d.", stepIdx)
-	fmt.Fprintf(output, "%s %s (repeating %d times)\n", num, stepName, repeatCount)
+	p.Fprintf(output, "%s %s (repeating %d times)\n", num, stepName, repeatCount)
 }
 
 // printStepRepeatResult prints the final result of a repeated step execution
@@ -173,14 +194,14 @@ func (p *Printer) printStepRepeatResult(counter *StepRepeatCounter, hasTest bool
 			}
 		}
 
-		fmt.Fprintf(output, "    %s %d/%d success (%.1f%%)\n",
+		p.Fprintf(output, "    %s %d/%d success (%.1f%%)\n",
 			statusIcon,
 			counter.SuccessCount,
 			totalCount,
 			successRate)
 	} else {
 		totalCount := counter.SuccessCount + counter.FailureCount
-		fmt.Fprintf(output, "    %s %d/%d completed (no test)\n",
+		p.Fprintf(output, "    %s %d/%d completed (no test)\n",
 			colorInfo().Sprintf(IconWarning),
 			totalCount,
 			totalCount)
@@ -195,9 +216,9 @@ func (p *Printer) generateJobResults(jobID string, input string, output *strings
 		for i, line := range lines {
 			if strings.TrimSpace(line) != "" {
 				if i == 0 {
-					fmt.Fprintf(output, "  ⎿ %s\n", line)
+					p.Fprintf(output, "  ⎿ %s\n", line)
 				} else {
-					fmt.Fprintf(output, "    %s\n", line)
+					p.Fprintf(output, "    %s\n", line)
 				}
 			}
 		}
@@ -209,12 +230,12 @@ func (p *Printer) generateJobResults(jobID string, input string, output *strings
 // generateFooter generates the workflow execution summary as string
 func (p *Printer) generateFooter(totalTime float64, successCount, totalJobs int, output *strings.Builder) {
 	if successCount == totalJobs {
-		fmt.Fprintf(output, "Total workflow time: %.2fs %s\n",
+		p.Fprintf(output, "Total workflow time: %.2fs %s\n",
 			totalTime,
 			colorSuccess().Sprintf(IconSuccess+"All jobs succeeded"))
 	} else {
 		failedCount := totalJobs - successCount
-		fmt.Fprintf(output, "Total workflow time: %.2fs %s\n",
+		p.Fprintf(output, "Total workflow time: %.2fs %s\n",
 			totalTime,
 			colorError().Sprintf(IconError+"%d job(s) failed", failedCount))
 	}
@@ -247,12 +268,12 @@ func (p *Printer) generateJobStatus(jobID, jobName string, status StatusType, du
 
 	// For skipped jobs, make the entire line gray
 	if status == StatusSkipped {
-		fmt.Fprintf(output, "%s %s %s\n",
+		p.Fprintf(output, "%s %s %s\n",
 			colorFunc().Sprint(icon),
 			colorFunc().Sprint(jobName),
 			colorFunc().Sprint(statusText))
 	} else {
-		fmt.Fprintf(output, "%s %s (%s)\n",
+		p.Fprintf(output, "%s %s (%s)\n",
 			colorFunc().Sprint(icon),
 			jobName,
 			statusText)
@@ -329,7 +350,7 @@ func (p *Printer) GenerateReportOnlySteps(rs *Result) string {
 func (p *Printer) PrintReport(rs *Result) {
 	reportOutput := p.GenerateReport(rs)
 	if reportOutput != "" {
-		fmt.Fprint(p.outWriter, reportOutput)
+		p.Fprint(p.outWriter, reportOutput)
 	}
 }
 
@@ -364,17 +385,17 @@ func (p *Printer) generateJobResultsFromStepResults(stepResults []StepResult) st
 
 			switch stepResult.Status {
 			case StatusSuccess:
-				fmt.Fprintf(&output, "%s %s %s%s%s\n", num, colorSuccess().Sprintf(IconSuccess), waitPrefix, stepResult.Name, ps)
+				p.Fprintf(&output, "%s %s %s%s%s\n", num, colorSuccess().Sprintf(IconSuccess), waitPrefix, stepResult.Name, ps)
 			case StatusError:
 				if stepResult.TestOutput != "" {
-					fmt.Fprintf(&output, "%s %s %s%s%s\n%s\n", num, colorError().Sprintf(IconError), waitPrefix, stepResult.Name, ps, stepResult.TestOutput)
+					p.Fprintf(&output, "%s %s %s%s%s\n%s\n", num, colorError().Sprintf(IconError), waitPrefix, stepResult.Name, ps, stepResult.TestOutput)
 				} else {
-					fmt.Fprintf(&output, "%s %s %s%s%s\n", num, colorError().Sprintf(IconError), waitPrefix, stepResult.Name, ps)
+					p.Fprintf(&output, "%s %s %s%s%s\n", num, colorError().Sprintf(IconError), waitPrefix, stepResult.Name, ps)
 				}
 			case StatusWarning:
-				fmt.Fprintf(&output, "%s %s %s%s%s\n", num, colorInfo().Sprintf(IconWarning), waitPrefix, stepResult.Name, ps)
+				p.Fprintf(&output, "%s %s %s%s%s\n", num, colorInfo().Sprintf(IconWarning), waitPrefix, stepResult.Name, ps)
 			case StatusSkipped:
-				fmt.Fprintf(&output, "%s %s %s%s%s\n", num, colorInfo().Sprintf(IconSkip), waitPrefix, colorDim().Sprintf("%s", stepResult.Name), ps)
+				p.Fprintf(&output, "%s %s %s%s%s\n", num, colorInfo().Sprintf(IconSkip), waitPrefix, colorDim().Sprintf("%s", stepResult.Name), ps)
 			}
 
 			if stepResult.Report != "" {
@@ -413,7 +434,7 @@ func (p *Printer) generateHeader(name, description string) string {
 func (p *Printer) PrintHeader(name, description string) {
 	header := p.generateHeader(name, description)
 	if header != "" {
-		fmt.Fprint(p.outWriter, header)
+		p.Fprint(p.outWriter, header)
 	}
 }
 
@@ -424,20 +445,20 @@ func (p *Printer) generateError(format string, args ...interface{}) string {
 
 // PrintError prints an error message
 func (p *Printer) PrintError(format string, args ...interface{}) {
-	fmt.Fprint(p.errWriter, p.generateError(format, args...))
+	p.Fprint(p.errWriter, p.generateError(format, args...))
 }
 
 // PrintVerbose prints verbose output (only if verbose mode is enabled)
 func (p *Printer) PrintVerbose(format string, args ...interface{}) {
 	if p.verbose {
-		fmt.Fprintf(p.errWriter, format, args...)
+		p.Fprintf(p.errWriter, format, args...)
 	}
 }
 
 // PrintSeparator prints a separator line for verbose output
 func (p *Printer) PrintSeparator() {
 	if p.verbose {
-		fmt.Fprintln(p.errWriter, "- - -")
+		p.Fprintln(p.errWriter, "- - -")
 	}
 }
 
@@ -449,7 +470,7 @@ func (p *Printer) generateLogDebug(format string, args ...interface{}) string {
 // LogDebug prints debug messages (only in verbose mode)
 func (p *Printer) LogDebug(format string, args ...interface{}) {
 	if p.verbose {
-		fmt.Fprint(p.errWriter, p.generateLogDebug(format, args...))
+		p.Fprint(p.errWriter, p.generateLogDebug(format, args...))
 	}
 }
 
@@ -460,7 +481,7 @@ func (p *Printer) generateLogError(format string, args ...interface{}) string {
 
 // LogError prints error messages to stderr
 func (p *Printer) LogError(format string, args ...interface{}) {
-	fmt.Fprint(os.Stderr, p.generateLogError(format, args...))
+	p.Fprint(os.Stderr, p.generateLogError(format, args...))
 }
 
 // Step Output Formatting Functions
