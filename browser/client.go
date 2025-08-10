@@ -185,6 +185,65 @@ func Request(data map[string]string, opts ...Option) (map[string]string, error) 
 			var buf []byte
 			tasks = append(tasks, chromedp.Screenshot(action.Selector, &buf, chromedp.NodeVisible))
 			action.reBuf = &buf
+		case "wait_ready":
+			tasks = append(tasks, chromedp.WaitReady("body"))
+		case "wait_not_visible":
+			tasks = append(tasks, chromedp.WaitNotVisible(action.Selector, chromedp.ByQuery))
+		case "submit":
+			tasks = append(tasks, chromedp.Submit(action.Selector, chromedp.NodeVisible))
+		case "select":
+			tasks = append(tasks, chromedp.SetAttributeValue(action.Selector, "value", action.Value, chromedp.NodeVisible))
+		case "scroll":
+			tasks = append(tasks, chromedp.ScrollIntoView(action.Selector, chromedp.NodeVisible))
+		case "get_attribute":
+			if len(action.Attribute) > 0 {
+				var value string
+				var ok bool
+				tasks = append(tasks, chromedp.AttributeValue(action.Selector, action.Attribute[0], &value, &ok, chromedp.NodeVisible))
+				action.reText = &value
+			} else {
+				return nil, fmt.Errorf("attribute parameter is required for get_attribute action")
+			}
+		case "wait_text":
+			tasks = append(tasks, chromedp.WaitVisible(action.Selector, chromedp.ByQuery))
+			var text string
+			tasks = append(tasks, chromedp.Text(action.Selector, &text, chromedp.ByQuery))
+			action.reText = &text
+		case "hover":
+			tasks = append(tasks, chromedp.EvaluateAsDevTools(fmt.Sprintf(`
+				const el = document.querySelector('%s');
+				if (el) {
+					const event = new MouseEvent('mouseover', {
+						view: window,
+						bubbles: true,
+						cancelable: true
+					});
+					el.dispatchEvent(event);
+				}
+			`, action.Selector), nil))
+		case "focus":
+			tasks = append(tasks, chromedp.Focus(action.Selector, chromedp.NodeVisible))
+		case "get_html":
+			var html string
+			tasks = append(tasks, chromedp.OuterHTML(action.Selector, &html, chromedp.NodeVisible))
+			action.reText = &html
+		case "wait_enabled":
+			tasks = append(tasks, chromedp.WaitEnabled(action.Selector, chromedp.NodeVisible))
+		case "double_click":
+			tasks = append(tasks, chromedp.DoubleClick(action.Selector, chromedp.NodeVisible))
+		case "right_click":
+			tasks = append(tasks, chromedp.EvaluateAsDevTools(fmt.Sprintf(`
+				const el = document.querySelector('%s');
+				if (el) {
+					const event = new MouseEvent('contextmenu', {
+						view: window,
+						bubbles: true,
+						cancelable: true,
+						button: 2
+					});
+					el.dispatchEvent(event);
+				}
+			`, action.Selector), nil))
 		default:
 			return nil, fmt.Errorf("unsupported action type: %s", action.Name)
 		}
@@ -203,14 +262,16 @@ func Request(data map[string]string, opts ...Option) (map[string]string, error) 
 
 	for _, action := range req.Actions {
 		switch action.Name {
-		case "text", "value":
+		case "text", "value", "get_attribute", "wait_text", "get_html":
 			key := action.Name
 			if action.ID != "" {
 				key = action.ID
 			}
-			results[key] = *action.reText
+			if action.reText != nil {
+				results[key] = *action.reText
+			}
 		case "full_screenshot", "capture_screenshot", "screenshot":
-			if len(*action.reBuf) > 0 {
+			if action.reBuf != nil && len(*action.reBuf) > 0 {
 				if err := ioutil.WriteFile(action.Path, *action.reBuf, 0644); err != nil {
 					return map[string]string{}, err
 				}
@@ -258,230 +319,3 @@ func WithAfter(f func(res *Res)) Option {
 		c.after = f
 	}
 }
-
-/*
-func (a *Action) getAttribute(ctx context.Context, selector, attribute string) (map[string]string, error) {
-	if selector == "" {
-		return nil, fmt.Errorf("selector parameter is required for get_attribute action")
-	}
-	if attribute == "" {
-		return nil, fmt.Errorf("attribute parameter is required for get_attribute action")
-	}
-
-	var value string
-	var ok bool
-	err := chromedp.Run(ctx, chromedp.AttributeValue(selector, attribute, &value, &ok, chromedp.NodeVisible))
-
-	result := map[string]string{
-		"selector":  selector,
-		"attribute": attribute,
-		"value":     value,
-		"exists":    strconv.FormatBool(ok),
-		"success":   strconv.FormatBool(err == nil),
-	}
-
-	if err != nil {
-		result["error"] = err.Error()
-		return result, err
-	}
-
-	return result, nil
-}
-
-func (a *Action) getHTML(ctx context.Context, selector string) (map[string]string, error) {
-	if selector == "" {
-		return nil, fmt.Errorf("selector parameter is required for get_html action")
-	}
-
-	var html string
-	err := chromedp.Run(ctx, chromedp.OuterHTML(selector, &html, chromedp.NodeVisible))
-
-	result := map[string]string{
-		"selector": selector,
-		"html":     html,
-		"success":  strconv.FormatBool(err == nil),
-	}
-
-	if err != nil {
-		result["error"] = err.Error()
-		return result, err
-	}
-
-	return result, nil
-}
-
-func (a *Action) click(ctx context.Context, selector string) (map[string]string, error) {
-	if selector == "" {
-		return nil, fmt.Errorf("selector parameter is required for click action")
-	}
-
-	start := time.Now()
-	err := chromedp.Run(ctx, chromedp.Click(selector, chromedp.NodeVisible))
-	duration := time.Since(start)
-
-	result := map[string]string{
-		"selector": selector,
-		"time_ms":  fmt.Sprintf("%d", duration.Milliseconds()),
-		"success":  strconv.FormatBool(err == nil),
-	}
-
-	if err != nil {
-		result["error"] = err.Error()
-		return result, err
-	}
-
-	return result, nil
-}
-
-func (a *Action) typeText(ctx context.Context, selector, value string) (map[string]string, error) {
-	if selector == "" {
-		return nil, fmt.Errorf("selector parameter is required for type action")
-	}
-	if value == "" {
-		return nil, fmt.Errorf("value parameter is required for type action")
-	}
-
-	err := chromedp.Run(ctx,
-		chromedp.Clear(selector),
-		chromedp.SendKeys(selector, value, chromedp.NodeVisible),
-	)
-
-	result := map[string]string{
-		"selector": selector,
-		"value":    value,
-		"success":  strconv.FormatBool(err == nil),
-	}
-
-	if err != nil {
-		result["error"] = err.Error()
-		return result, err
-	}
-
-	return result, nil
-}
-
-func (a *Action) submit(ctx context.Context, selector string) (map[string]string, error) {
-	if selector == "" {
-		return nil, fmt.Errorf("selector parameter is required for submit action")
-	}
-
-	start := time.Now()
-	err := chromedp.Run(ctx, chromedp.Submit(selector, chromedp.NodeVisible))
-	duration := time.Since(start)
-
-	result := map[string]string{
-		"selector": selector,
-		"time_ms":  fmt.Sprintf("%d", duration.Milliseconds()),
-		"success":  strconv.FormatBool(err == nil),
-	}
-
-	if err != nil {
-		result["error"] = err.Error()
-		return result, err
-	}
-
-	return result, nil
-}
-
-func (a *Action) waitVisible(ctx context.Context, selector string) (map[string]string, error) {
-	if selector == "" {
-		return nil, fmt.Errorf("selector parameter is required for wait_visible action")
-	}
-
-	start := time.Now()
-	err := chromedp.Run(ctx, chromedp.WaitVisible(selector))
-	duration := time.Since(start)
-
-	result := map[string]string{
-		"selector": selector,
-		"time_ms":  fmt.Sprintf("%d", duration.Milliseconds()),
-		"success":  strconv.FormatBool(err == nil),
-	}
-
-	if err != nil {
-		result["error"] = err.Error()
-		return result, err
-	}
-
-	return result, nil
-}
-
-func (a *Action) waitText(ctx context.Context, selector, expectedText string) (map[string]string, error) {
-	if selector == "" {
-		return nil, fmt.Errorf("selector parameter is required for wait_text action")
-	}
-	if expectedText == "" {
-		return nil, fmt.Errorf("value parameter is required for wait_text action")
-	}
-
-	start := time.Now()
-
-	// Wait for element to be visible first, then check text content
-	var text string
-	err := chromedp.Run(ctx,
-		chromedp.WaitVisible(selector),
-		chromedp.Text(selector, &text, chromedp.NodeVisible),
-	)
-
-	// Check if text matches expected
-	if err == nil && text != expectedText {
-		err = fmt.Errorf("text mismatch: expected '%s', got '%s'", expectedText, text)
-	}
-
-	duration := time.Since(start)
-
-	result := map[string]string{
-		"selector":      selector,
-		"expected_text": expectedText,
-		"actual_text":   text,
-		"time_ms":       fmt.Sprintf("%d", duration.Milliseconds()),
-		"success":       strconv.FormatBool(err == nil),
-	}
-
-	if err != nil {
-		result["error"] = err.Error()
-		return result, err
-	}
-
-	return result, nil
-}
-
-func (a *Action) getElements(ctx context.Context, selector string) (map[string]string, error) {
-	if selector == "" {
-		return nil, fmt.Errorf("selector parameter is required for get_elements action")
-	}
-
-	var nodes []*runtime.RemoteObject
-	err := chromedp.Run(ctx, chromedp.Evaluate(fmt.Sprintf(`
-		Array.from(document.querySelectorAll('%s')).map((el, index) => ({
-			index: index,
-			tagName: el.tagName,
-			text: el.textContent.trim(),
-			html: el.outerHTML,
-			id: el.id,
-			className: el.className
-		}))
-	`, selector), &nodes))
-
-	result := map[string]string{
-		"selector": selector,
-		"success":  strconv.FormatBool(err == nil),
-	}
-
-	if err != nil {
-		result["error"] = err.Error()
-		return result, err
-	}
-
-	// Convert nodes to string representation
-	if len(nodes) > 0 {
-		result["count"] = strconv.Itoa(len(nodes))
-		// For simplicity, just return the count. In a real implementation,
-		// you might want to return more detailed information about each element.
-	} else {
-		result["count"] = "0"
-	}
-
-	return result, nil
-}
-*/

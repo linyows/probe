@@ -1,6 +1,7 @@
 package browser
 
 import (
+	"fmt"
 	"reflect"
 	"testing"
 	"time"
@@ -253,6 +254,202 @@ func TestChromeDPActionMapping(t *testing.T) {
 
 			if !reflect.DeepEqual(*action, tc.expected) {
 				t.Errorf("\nExpected:\n%#v\nGot:\n%#v", tc.expected, *action)
+			}
+		})
+	}
+}
+
+func TestNewActionTypes(t *testing.T) {
+	testCases := []struct {
+		name        string
+		actionName  string
+		expectError bool
+	}{
+		{"wait_ready action", "wait_ready", false},
+		{"wait_not_visible action", "wait_not_visible", false},
+		{"submit action", "submit", false},
+		{"select action", "select", false},
+		{"scroll action", "scroll", false},
+		{"get_attribute action", "get_attribute", true},
+		{"wait_text action", "wait_text", false},
+		{"invalid action", "invalid_action", true},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			data := map[string]string{
+				"actions__0__name":     tc.actionName,
+				"actions__0__selector": "#test",
+				"actions__0__url":      "http://example.com",
+			}
+
+			// Add specific parameters for certain actions
+			switch tc.actionName {
+			case "select":
+				data["actions__0__value"] = "option1"
+			case "wait_text":
+				data["actions__0__value"] = "expected text"
+			}
+
+			_, err := Request(data)
+
+			if tc.expectError && err == nil {
+				t.Errorf("Expected error for action %s, but got none", tc.actionName)
+			}
+
+			if !tc.expectError && err != nil {
+				// For non-error cases, we expect chromedp context errors since we're not running a real browser
+				// Just check that the action was recognized (not "unsupported action type" error)
+				if err.Error() == fmt.Sprintf("unsupported action type: %s", tc.actionName) {
+					t.Errorf("Action %s should be supported but got unsupported error", tc.actionName)
+				}
+			}
+		})
+	}
+}
+
+func TestGetAttributeActionMapping(t *testing.T) {
+	action := NewChromeDPAction()
+	testData := map[string]any{
+		"name":        "get_attribute",
+		"selector":    "#link",
+		"attribute":   []string{"href"},
+	}
+
+	err := probe.MapToStructByTags(testData, action)
+	if err != nil {
+		t.Errorf("MapToStructByTags failed: %v", err)
+	}
+
+	if action.Name != "get_attribute" {
+		t.Errorf("Expected action name 'get_attribute', got '%s'", action.Name)
+	}
+
+	if action.Selector != "#link" {
+		t.Errorf("Expected selector '#link', got '%s'", action.Selector)
+	}
+
+	if len(action.Attribute) != 1 || action.Attribute[0] != "href" {
+		t.Errorf("Expected attribute ['href'], got %v", action.Attribute)
+	}
+}
+
+func TestSelectActionMapping(t *testing.T) {
+	action := NewChromeDPAction()
+	testData := map[string]any{
+		"name":     "select",
+		"selector": "select#dropdown",
+		"value":    "option2",
+	}
+
+	err := probe.MapToStructByTags(testData, action)
+	if err != nil {
+		t.Errorf("MapToStructByTags failed: %v", err)
+	}
+
+	if action.Name != "select" {
+		t.Errorf("Expected action name 'select', got '%s'", action.Name)
+	}
+
+	if action.Value != "option2" {
+		t.Errorf("Expected value 'option2', got '%s'", action.Value)
+	}
+}
+
+func TestMediumPriorityActions(t *testing.T) {
+	testCases := []struct {
+		name        string
+		actionName  string
+		expectError bool
+	}{
+		{"hover action", "hover", false},
+		{"focus action", "focus", false},
+		{"get_html action", "get_html", false},
+		{"wait_enabled action", "wait_enabled", false},
+		{"double_click action", "double_click", false},
+		{"right_click action", "right_click", false},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			data := map[string]string{
+				"actions__0__name":     tc.actionName,
+				"actions__0__selector": "#test-element",
+			}
+
+			_, err := Request(data)
+
+			if tc.expectError && err == nil {
+				t.Errorf("Expected error for action %s, but got none", tc.actionName)
+			}
+
+			if !tc.expectError && err != nil {
+				// For non-error cases, we expect chromedp context errors since we're not running a real browser
+				// Just check that the action was recognized (not "unsupported action type" error)
+				if err.Error() == fmt.Sprintf("unsupported action type: %s", tc.actionName) {
+					t.Errorf("Action %s should be supported but got unsupported error", tc.actionName)
+				}
+			}
+		})
+	}
+}
+
+func TestGetHtmlActionMapping(t *testing.T) {
+	action := NewChromeDPAction()
+	testData := map[string]any{
+		"id":       "html1",
+		"name":     "get_html",
+		"selector": ".content",
+	}
+
+	err := probe.MapToStructByTags(testData, action)
+	if err != nil {
+		t.Errorf("MapToStructByTags failed: %v", err)
+	}
+
+	if action.ID != "html1" {
+		t.Errorf("Expected ID 'html1', got '%s'", action.ID)
+	}
+
+	if action.Name != "get_html" {
+		t.Errorf("Expected action name 'get_html', got '%s'", action.Name)
+	}
+
+	if action.Selector != ".content" {
+		t.Errorf("Expected selector '.content', got '%s'", action.Selector)
+	}
+}
+
+func TestMouseActionMapping(t *testing.T) {
+	testCases := []struct {
+		name       string
+		actionName string
+		selector   string
+	}{
+		{"hover mapping", "hover", "#hover-target"},
+		{"double_click mapping", "double_click", "#double-click-target"},
+		{"right_click mapping", "right_click", "#right-click-target"},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			action := NewChromeDPAction()
+			testData := map[string]any{
+				"name":     tc.actionName,
+				"selector": tc.selector,
+			}
+
+			err := probe.MapToStructByTags(testData, action)
+			if err != nil {
+				t.Errorf("MapToStructByTags failed: %v", err)
+			}
+
+			if action.Name != tc.actionName {
+				t.Errorf("Expected action name '%s', got '%s'", tc.actionName, action.Name)
+			}
+
+			if action.Selector != tc.selector {
+				t.Errorf("Expected selector '%s', got '%s'", tc.selector, action.Selector)
 			}
 		})
 	}
