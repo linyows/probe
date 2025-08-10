@@ -345,13 +345,27 @@ test: |
 
 対応アクション:
 - **navigate**: URLへのナビゲーション
-- **get_text**: 要素からのテキスト内容抽出
+- **text**: 要素からのテキスト内容抽出
+- **value**: 入力フィールドの値取得
 - **get_attribute**: 要素の属性値取得
+- **get_html**: 要素からのHTML内容抽出
 - **click**: 要素のクリック
-- **type**: 入力フィールドへのテキスト入力
+- **double_click**: 要素のダブルクリック
+- **right_click**: 要素の右クリック
+- **hover**: 要素へのホバー
+- **focus**: 要素へのフォーカス設定
+- **type** / **send_keys**: 入力フィールドへのテキスト入力
+- **select**: ドロップダウンオプションの選択
 - **submit**: フォーム送信
-- **screenshot**: ページのスクリーンショット撮影
+- **scroll**: 要素をビューにスクロール
+- **screenshot**: 要素のスクリーンショット撮影
+- **capture_screenshot**: ページ全体のスクリーンショット撮影
+- **full_screenshot**: 品質設定付きページ全体のスクリーンショット撮影
 - **wait_visible**: 要素が表示されるまで待機
+- **wait_not_visible**: 要素が非表示になるまで待機
+- **wait_ready**: ページ準備完了まで待機
+- **wait_text**: 特定テキスト表示まで待機
+- **wait_enabled**: 要素が有効になるまで待機
 
 ### SMTPアクション
 ```yaml

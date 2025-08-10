@@ -668,7 +668,7 @@ steps:
       url: "https://example.com"
       headless: true
       timeout: 30s
-    test: res.success == "true"
+    test: res.code == 0
 ```
 
 ### Parameters
@@ -677,7 +677,16 @@ steps:
 
 **Type:** String  
 **Description:** The browser action to perform  
-**Values:** `navigate`, `get_text`, `get_attribute`, `get_html`, `click`, `type`, `submit`, `screenshot`, `wait_visible`, `wait_text`, `get_elements`
+**Values:** 
+- **Navigation:** `navigate`
+- **Text/Content:** `text`, `value`, `get_html`
+- **Attributes:** `get_attribute`
+- **Interactions:** `click`, `double_click`, `right_click`, `hover`, `focus`
+- **Input:** `type`, `send_keys`, `select`
+- **Forms:** `submit`
+- **Scrolling:** `scroll`
+- **Screenshots:** `screenshot`, `capture_screenshot`, `full_screenshot`
+- **Waiting:** `wait_visible`, `wait_not_visible`, `wait_ready`, `wait_text`, `wait_enabled`
 
 #### `url` (optional)
 
@@ -766,8 +775,8 @@ The browser action provides a `res` object with action-specific properties:
 
 | Property | Type | Description |
 |----------|------|-------------|
-| `success` | String | "true" if action succeeded, "false" otherwise |
-| `error` | String | Error message if action failed |
+| `code` | Integer | Result code (0 = success, non-zero = error) |
+| `results` | Object | Action-specific results (text, values, etc.) |
 
 #### Navigation Response
 
@@ -804,7 +813,7 @@ The browser action provides a `res` object with action-specific properties:
     action: navigate
     url: "https://example.com"
     headless: true
-  test: res.success == "true"
+  test: res.code == 0
   outputs:
     load_time: res.time_ms
 ```
@@ -815,11 +824,29 @@ The browser action provides a `res` object with action-specific properties:
 - name: "Get Page Title"
   uses: browser
   with:
-    action: get_text
+    action: text
     selector: "h1"
-  test: res.success == "true" && res.text != ""
+  test: res.code == 0 && res.results.text != ""
   outputs:
-    page_title: res.text
+    page_title: res.results.text
+
+- name: "Get Input Value"
+  uses: browser
+  with:
+    action: value
+    selector: "#username"
+  test: res.code == 0
+  outputs:
+    current_username: res.results.value
+
+- name: "Get Element HTML"
+  uses: browser
+  with:
+    action: get_html
+    selector: ".article-content"
+  test: res.code == 0
+  outputs:
+    article_html: res.results.get_html
 ```
 
 #### Get Element Attributes
@@ -831,9 +858,9 @@ The browser action provides a `res` object with action-specific properties:
     action: get_attribute
     selector: "a.download-link"
     attribute: "href"
-  test: res.success == "true" && res.exists == "true"
+  test: res.code == 0 && res.exists == "true"
   outputs:
-    download_url: res.value
+    download_url: res.results.value
 ```
 
 #### Form Interactions
@@ -846,7 +873,7 @@ The browser action provides a `res` object with action-specific properties:
     action: type
     selector: "#email"
     value: "user@example.com"
-  test: res.success == "true"
+  test: res.code == 0
 
 # Click buttons
 - name: "Click Submit"
@@ -854,7 +881,7 @@ The browser action provides a `res` object with action-specific properties:
   with:
     action: click
     selector: "#submit-btn"
-  test: res.success == "true"
+  test: res.code == 0
 
 # Submit forms
 - name: "Submit Form"
@@ -862,7 +889,7 @@ The browser action provides a `res` object with action-specific properties:
   with:
     action: submit
     selector: "form"
-  test: res.success == "true"
+  test: res.code == 0
 ```
 
 #### Wait for Elements
@@ -875,7 +902,7 @@ The browser action provides a `res` object with action-specific properties:
     action: wait_visible
     selector: ".search-results"
     timeout: "10s"
-  test: res.success == "true"
+  test: res.code == 0
 
 # Wait for specific text
 - name: "Wait for Success Message"
@@ -884,7 +911,7 @@ The browser action provides a `res` object with action-specific properties:
     action: wait_text
     selector: ".status"
     value: "Success"
-  test: res.success == "true"
+  test: res.code == 0
 ```
 
 #### Capture Screenshots
@@ -894,7 +921,7 @@ The browser action provides a `res` object with action-specific properties:
   uses: browser
   with:
     action: screenshot
-  test: res.success == "true"
+  test: res.code == 0
   outputs:
     screenshot_data: res.screenshot
     screenshot_size: res.size_bytes
@@ -916,7 +943,7 @@ steps:
     with:
       action: navigate
       url: "{{vars.login_url}}"
-    test: res.success == "true"
+    test: res.code == 0
 
   - name: "Enter Username"
     uses: browser
@@ -924,7 +951,7 @@ steps:
       action: type
       selector: "#username"
       value: "{{vars.username}}"
-    test: res.success == "true"
+    test: res.code == 0
 
   - name: "Enter Password"
     uses: browser
@@ -932,14 +959,14 @@ steps:
       action: type
       selector: "#password"
       value: "{{vars.password}}"
-    test: res.success == "true"
+    test: res.code == 0
 
   - name: "Submit Login"
     uses: browser
     with:
       action: click
       selector: "#login-button"
-    test: res.success == "true"
+    test: res.code == 0
 
   - name: "Wait for Dashboard"
     uses: browser
@@ -947,7 +974,7 @@ steps:
       action: wait_visible
       selector: ".dashboard"
       timeout: "15s"
-    test: res.success == "true"
+    test: res.code == 0
 ```
 
 #### Data Extraction
@@ -959,21 +986,21 @@ steps:
     with:
       action: navigate
       url: "https://example.com/data"
-    test: res.success == "true"
+    test: res.code == 0
 
   - name: "Wait for Table"
     uses: browser
     with:
       action: wait_visible
       selector: "table"
-    test: res.success == "true"
+    test: res.code == 0
 
   - name: "Count Rows"
     uses: browser
     with:
       action: get_elements
       selector: "table tr"
-    test: res.success == "true" && res.count != "0"
+    test: res.code == 0 && res.count != "0"
     outputs:
       row_count: res.count
 
@@ -982,9 +1009,9 @@ steps:
     with:
       action: get_text
       selector: "table tr:first-child td:first-child"
-    test: res.success == "true"
+    test: res.code == 0
     outputs:
-      first_cell: res.text
+      first_cell: res.results.text
 ```
 
 #### E2E Testing
@@ -996,7 +1023,7 @@ steps:
     with:
       action: navigate
       url: "https://app.example.com"
-    test: res.success == "true"
+    test: res.code == 0
 
   - name: "Fill Contact Form"
     uses: browser
@@ -1004,7 +1031,7 @@ steps:
       action: type
       selector: "#contact-name"
       value: "John Doe"
-    test: res.success == "true"
+    test: res.code == 0
 
   - name: "Fill Email"
     uses: browser
@@ -1012,7 +1039,7 @@ steps:
       action: type
       selector: "#contact-email"
       value: "john@example.com"
-    test: res.success == "true"
+    test: res.code == 0
 
   - name: "Fill Message"
     uses: browser
@@ -1020,14 +1047,14 @@ steps:
       action: type
       selector: "#contact-message"
       value: "Hello from automated test"
-    test: res.success == "true"
+    test: res.code == 0
 
   - name: "Submit Form"
     uses: browser
     with:
       action: submit
       selector: "#contact-form"
-    test: res.success == "true"
+    test: res.code == 0
 
   - name: "Verify Success"
     uses: browser
@@ -1036,13 +1063,13 @@ steps:
       selector: ".success-message"
       value: "Thank you"
       timeout: "10s"
-    test: res.success == "true"
+    test: res.code == 0
 
   - name: "Take Success Screenshot"
     uses: browser
     with:
       action: screenshot
-    test: res.success == "true"
+    test: res.code == 0
 ```
 
 ### Error Handling
@@ -1054,12 +1081,12 @@ steps:
     action: click
     selector: "#may-not-exist"
     timeout: "5s"
-  test: res.success == "true" || (res.success == "false" && res.error | contains("not found"))
+  test: res.code == 0 || (res.success == "false" && res.error | contains("not found"))
   continue_on_error: true
   outputs:
-    click_success: res.success == "true"
+    click_success: res.code == 0
     error_type: |
-      {{res.success == "true" ? "none" :
+      {{res.code == 0 ? "none" :
         res.error | contains("timeout") ? "timeout" :
         res.error | contains("not found") ? "element_not_found" :
         "unknown"}}

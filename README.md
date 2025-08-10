@@ -334,13 +334,27 @@ Supported databases:
 
 Supported actions:
 - **navigate**: Navigate to URL
-- **get_text**: Extract text content from elements
+- **text**: Extract text content from elements
+- **value**: Get input field values
 - **get_attribute**: Get element attribute values
+- **get_html**: Extract HTML content from elements
 - **click**: Click on elements
-- **type**: Type text into input fields
+- **double_click**: Double-click on elements
+- **right_click**: Right-click on elements
+- **hover**: Hover over elements
+- **focus**: Set focus to elements
+- **type** / **send_keys**: Type text into input fields
+- **select**: Select dropdown options
 - **submit**: Submit forms
-- **screenshot**: Capture page screenshots
+- **scroll**: Scroll elements into view
+- **screenshot**: Capture element screenshots
+- **capture_screenshot**: Capture full page screenshots
+- **full_screenshot**: Capture full page screenshots with quality settings
 - **wait_visible**: Wait for elements to become visible
+- **wait_not_visible**: Wait for elements to become invisible
+- **wait_ready**: Wait for page to be ready
+- **wait_text**: Wait for specific text to appear
+- **wait_enabled**: Wait for elements to become enabled
 
 ### Shell Action
 ```yaml
