@@ -15,7 +15,7 @@ jobs:
   needs: [setup]
   defaults:
     db:
-      dsn: sqlite://./testdata/sqlite.db
+      dsn: file:./testdata/sqlite.db
 
   steps:
   - name: Create SQLite table
