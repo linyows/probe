@@ -88,8 +88,3 @@ jobs:
           email TEXT UNIQUE
         )
     test: res.code == 0
-  - name: Drop table
-    uses: db
-    with:
-      query: DROP TABLE users
-    test: res.code == 0

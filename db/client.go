@@ -134,12 +134,14 @@ func parseDSN(dsn string) (driver, driverDSN string, err error) {
 		return "postgres", driverDSN, nil
 
 	case "file", "":
-		// Handle file paths for SQLite
+		if strings.Contains(dsn, ":memory:") {
+			return "sqlite3", dsn, nil
+		}
+
 		abs, err := filepath.Abs(strings.TrimPrefix(dsn, sqliteScheme))
 		if err != nil {
 			return "", "", fmt.Errorf("failed to resolve SQLite file path: %w", err)
 		}
-
 		// Check if file exists or can be created
 		dir := filepath.Dir(abs)
 		if _, err := os.Stat(dir); os.IsNotExist(err) {
