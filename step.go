@@ -8,21 +8,22 @@ import (
 )
 
 type Step struct {
-	Name    string            `yaml:"name"`
-	ID      string            `yaml:"id,omitempty"`
-	Uses    string            `yaml:"uses" validate:"required"`
-	With    map[string]any    `yaml:"with"`
-	Test    string            `yaml:"test"`
-	Echo    string            `yaml:"echo"`
-	Vars    map[string]any    `yaml:"vars"`
-	Iter    []map[string]any  `yaml:"iter"`
-	Wait    string            `yaml:"wait,omitempty"`
-	SkipIf  string            `yaml:"skipif,omitempty"`
-	Outputs map[string]string `yaml:"outputs,omitempty"`
-	err     error
-	ctx     StepContext
-	Idx     int   `yaml:"-"`
-	Expr    *Expr `yaml:"-"`
+	Name         string            `yaml:"name"`
+	ID           string            `yaml:"id,omitempty"`
+	Uses         string            `yaml:"uses" validate:"required"`
+	With         map[string]any    `yaml:"with"`
+	Test         string            `yaml:"test"`
+	Echo         string            `yaml:"echo"`
+	Vars         map[string]any    `yaml:"vars"`
+	Iter         []map[string]any  `yaml:"iter"`
+	Wait         string            `yaml:"wait,omitempty"`
+	SkipIf       string            `yaml:"skipif,omitempty"`
+	Outputs      map[string]string `yaml:"outputs,omitempty"`
+	err          error
+	ctx          StepContext
+	Idx          int           `yaml:"-"`
+	Expr         *Expr         `yaml:"-"`
+	actionRunner ActionRunner  `yaml:"-"`
 }
 
 func (st *Step) Do(jCtx *JobContext) {
@@ -79,7 +80,13 @@ func (st *Step) prepare(jCtx *JobContext) (string, bool) {
 // executeAction executes the step action and returns the result
 func (st *Step) executeAction(name string, jCtx *JobContext) (map[string]any, error) {
 	expW := st.Expr.EvalTemplateMap(st.With, st.ctx)
-	ret, err := RunActions(st.Uses, []string{}, expW, jCtx.Config.Verbose)
+	
+	runner := st.actionRunner
+	if runner == nil {
+		runner = &PluginActionRunner{} // Default to plugin execution
+	}
+	
+	ret, err := runner.RunActions(st.Uses, []string{}, expW, jCtx.Config.Verbose)
 	if err != nil {
 		return nil, err
 	}

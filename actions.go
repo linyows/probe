@@ -65,18 +65,25 @@ func (m *ActionsServer) Run(ctx context.Context, req *pb.RunRequest) (*pb.RunRes
 	return &pb.RunResponse{Result: v}, err
 }
 
-func RunActions(name string, args []string, with map[string]any, verbose bool) (map[string]any, error) {
+// ActionRunner defines the interface for running actions
+type ActionRunner interface {
+	RunActions(name string, args []string, with map[string]any, verbose bool) (map[string]any, error)
+}
+
+// PluginActionRunner implements ActionRunner using the plugin system
+type PluginActionRunner struct{}
+
+// RunActions executes an action using the plugin system
+func (p *PluginActionRunner) RunActions(name string, args []string, with map[string]any, verbose bool) (map[string]any, error) {
 	loglevel := hclog.Warn
 	if verbose {
 		loglevel = hclog.Debug
 	}
-
 	log := hclog.New(&hclog.LoggerOptions{
 		Name:   "actions",
-		Output: os.Stderr, // Plugin logs to stderr to avoid mixing with application output
+		Output: os.Stderr,
 		Level:  loglevel,
 	})
-
 	cl := plugin.NewClient(&plugin.ClientConfig{
 		HandshakeConfig:  Handshake,
 		Plugins:          PluginMap,
@@ -100,13 +107,55 @@ func RunActions(name string, args []string, with map[string]any, verbose bool) (
 	}
 
 	actions := raw.(Actions)
-
 	flatW := FlattenInterface(with)
 	result, err := actions.Run(args, flatW)
 	if err != nil {
 		return nil, err
 	}
 	unflatR := UnflattenInterface(result)
-
 	return unflatR, nil
+}
+
+// MockActionRunner implements ActionRunner for testing
+type MockActionRunner struct {
+	Results map[string]map[string]any
+	Errors  map[string]error
+}
+
+// NewMockActionRunner creates a new mock action runner
+func NewMockActionRunner() *MockActionRunner {
+	return &MockActionRunner{
+		Results: make(map[string]map[string]any),
+		Errors:  make(map[string]error),
+	}
+}
+
+// SetResult sets the expected result for an action
+func (m *MockActionRunner) SetResult(actionName string, result map[string]any) {
+	m.Results[actionName] = result
+}
+
+// SetError sets the expected error for an action
+func (m *MockActionRunner) SetError(actionName string, err error) {
+	m.Errors[actionName] = err
+}
+
+// RunActions returns the mocked result or error for the given action
+func (m *MockActionRunner) RunActions(name string, args []string, with map[string]any, verbose bool) (map[string]any, error) {
+	if err, exists := m.Errors[name]; exists {
+		return nil, err
+	}
+	
+	if result, exists := m.Results[name]; exists {
+		return result, nil
+	}
+	
+	// Default mock response
+	return map[string]any{
+		"code":    0,
+		"mock":    true,
+		"action":  name,
+		"with":    with,
+		"results": map[string]any{},
+	}, nil
 }
