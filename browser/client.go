@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/chromedp/chromedp"
@@ -18,6 +19,78 @@ const (
 	// Actions
 	defaultQuality = 90
 )
+
+// BrowserRunner defines the interface for running browser actions
+type BrowserRunner interface {
+	Run(ctx context.Context, actions ...chromedp.Action) error
+}
+
+// ChromeDPRunner implements BrowserRunner using the actual ChromeDP
+type ChromeDPRunner struct{}
+
+// Run executes actions using ChromeDP
+func (r *ChromeDPRunner) Run(ctx context.Context, actions ...chromedp.Action) error {
+	return chromedp.Run(ctx, actions...)
+}
+
+// MockRunner implements BrowserRunner for testing
+type MockRunner struct {
+	RunFunc     func(ctx context.Context, actions ...chromedp.Action) error
+	CallHistory [][]chromedp.Action
+	mu          sync.Mutex
+}
+
+// NewMockRunner creates a new mock browser runner
+func NewMockRunner() *MockRunner {
+	return &MockRunner{
+		CallHistory: make([][]chromedp.Action, 0),
+	}
+}
+
+// Run records the call and optionally executes a custom function
+func (m *MockRunner) Run(ctx context.Context, actions ...chromedp.Action) error {
+	m.mu.Lock()
+	m.CallHistory = append(m.CallHistory, actions)
+	m.mu.Unlock()
+
+	if m.RunFunc != nil {
+		return m.RunFunc(ctx, actions...)
+	}
+	return nil // Default success
+}
+
+// GetCallCount returns the number of Run calls made
+func (m *MockRunner) GetCallCount() int {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return len(m.CallHistory)
+}
+
+// GetLastCall returns the actions from the most recent Run call
+func (m *MockRunner) GetLastCall() []chromedp.Action {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if len(m.CallHistory) == 0 {
+		return nil
+	}
+	return m.CallHistory[len(m.CallHistory)-1]
+}
+
+// GetAllCalls returns all recorded Run calls
+func (m *MockRunner) GetAllCalls() [][]chromedp.Action {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	result := make([][]chromedp.Action, len(m.CallHistory))
+	copy(result, m.CallHistory)
+	return result
+}
+
+// SetRunFunc sets a custom function to execute when Run is called
+func (m *MockRunner) SetRunFunc(fn func(ctx context.Context, actions ...chromedp.Action) error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.RunFunc = fn
+}
 
 type Option func(*Callback)
 
@@ -47,20 +120,22 @@ func NewChromeDPAction() *ChromeDPAction {
 }
 
 type Req struct {
-	Actions  []*ChromeDPAction
-	Headless bool `map:"headless"`
-	WindowW  int  `map:"window_w"`
-	WindowH  int  `map:"window_h"`
-	Timeout  time.Duration
-	cb       *Callback
+	Actions       []*ChromeDPAction
+	Headless      bool `map:"headless"`
+	WindowW       int  `map:"window_w"`
+	WindowH       int  `map:"window_h"`
+	Timeout       time.Duration
+	cb            *Callback
+	browserRunner BrowserRunner
 }
 
 func NewReq() *Req {
 	return &Req{
-		Timeout:  defaultTimeout,
-		WindowW:  defaultWindowWidth,
-		WindowH:  defaultWindowHeight,
-		Headless: true,
+		Timeout:       defaultTimeout,
+		WindowW:       defaultWindowWidth,
+		WindowH:       defaultWindowHeight,
+		Headless:      true,
+		browserRunner: &ChromeDPRunner{},
 	}
 }
 
@@ -312,7 +387,7 @@ func (req *Req) do() (*Result, error) {
 		req.cb.before(req)
 	}
 
-	if err := chromedp.Run(ctx, tasks); err != nil {
+	if err := req.browserRunner.Run(ctx, tasks...); err != nil {
 		return nil, err
 	}
 
