@@ -443,4 +443,3 @@ func TestStepWithMockRunner(t *testing.T) {
 		}
 	}
 }
-

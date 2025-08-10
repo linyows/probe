@@ -145,11 +145,11 @@ func (m *MockActionRunner) RunActions(name string, args []string, with map[strin
 	if err, exists := m.Errors[name]; exists {
 		return nil, err
 	}
-	
+
 	if result, exists := m.Results[name]; exists {
 		return result, nil
 	}
-	
+
 	// Default mock response
 	return map[string]any{
 		"code":    0,

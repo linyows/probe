@@ -21,9 +21,9 @@ type Step struct {
 	Outputs      map[string]string `yaml:"outputs,omitempty"`
 	err          error
 	ctx          StepContext
-	Idx          int           `yaml:"-"`
-	Expr         *Expr         `yaml:"-"`
-	actionRunner ActionRunner  `yaml:"-"`
+	Idx          int          `yaml:"-"`
+	Expr         *Expr        `yaml:"-"`
+	actionRunner ActionRunner `yaml:"-"`
 }
 
 func (st *Step) Do(jCtx *JobContext) {
@@ -80,12 +80,12 @@ func (st *Step) prepare(jCtx *JobContext) (string, bool) {
 // executeAction executes the step action and returns the result
 func (st *Step) executeAction(name string, jCtx *JobContext) (map[string]any, error) {
 	expW := st.Expr.EvalTemplateMap(st.With, st.ctx)
-	
+
 	runner := st.actionRunner
 	if runner == nil {
 		runner = &PluginActionRunner{} // Default to plugin execution
 	}
-	
+
 	ret, err := runner.RunActions(st.Uses, []string{}, expW, jCtx.Config.Verbose)
 	if err != nil {
 		return nil, err

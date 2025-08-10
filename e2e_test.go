@@ -9,7 +9,7 @@ func TestEndToEndExitCodes(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping end-to-end test in short mode")
 	}
-	
+
 	tests := []struct {
 		name         string
 		workflowPath string

@@ -358,7 +358,7 @@ func TestJob_RunIndependently_Failure(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping timeout test in short mode")
 	}
-	
+
 	// Test with invalid step configuration - should fail
 	job := &Job{
 		Name: "Invalid Test Job",
