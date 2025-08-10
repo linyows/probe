@@ -1,5 +1,5 @@
-name: Database Action Examples
-description: Test database actions with different drivers
+name: SQLite Database Examples
+description: Examples for using the db action with SQLite
 
 jobs:
 - name: Setup SQLite database file
@@ -71,4 +71,20 @@ jobs:
     uses: db
     with:
       query: DROP TABLE users
+    test: res.code == 0
+
+- name: Use in-memory
+  defaults:
+    db:
+      dsn: "file::memory:"
+  steps:
+  - name: Create SQLite table
+    uses: db
+    with:
+      query: |
+        CREATE TABLE users (
+          id INTEGER PRIMARY KEY,
+          name TEXT NOT NULL,
+          email TEXT UNIQUE
+        )
     test: res.code == 0

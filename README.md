@@ -318,7 +318,7 @@ Built-in Actions
 Supported databases:
 - **MySQL**: `mysql://user:pass@host:port/database`
 - **PostgreSQL**: `postgres://user:pass@host:port/database?sslmode=disable`
-- **SQLite**: `sqlite://./testdata/sqlite.db` or `sqlite:///absolute/path/database.db`
+- **SQLite**: `file:./testdata/sqlite.db` or `/absolute/path/database`
 
 ### Browser Action
 ```yaml
