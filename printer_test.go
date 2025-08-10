@@ -1172,48 +1172,48 @@ func TestPrinter_PrintTestResult(t *testing.T) {
 	defer func() { color.NoColor = false }()
 
 	tests := []struct {
-		name      string
-		success   bool
-		testExpr  string
-		context   interface{}
-		verbose   bool
-		expectLog bool
+		name     string
+		success  bool
+		testExpr string
+		context  interface{}
+		verbose  bool
+		expected string
 	}{
 		{
-			name:      "successful test in verbose mode",
-			success:   true,
-			testExpr:  "res.status == 200",
-			context:   map[string]any{"status": 200},
-			verbose:   true,
-			expectLog: true,
+			name:     "successful test in verbose mode",
+			success:  true,
+			testExpr: "res.status == 200",
+			context:  map[string]any{"status": 200},
+			verbose:  true,
+			expected: "[DEBUG] Test: Success (input: res.status == 200, env: map[string]interface {}{\"status\":200})\n",
 		},
 		{
-			name:      "failed test in verbose mode",
-			success:   false,
-			testExpr:  "res.status == 200",
-			context:   map[string]any{"status": 404},
-			verbose:   true,
-			expectLog: true,
+			name:     "failed test in verbose mode",
+			success:  false,
+			testExpr: "res.status == 200",
+			context:  map[string]any{"status": 404},
+			verbose:  true,
+			expected: "[DEBUG] Test: Failure (input: res.status == 200, env: map[string]interface {}{\"status\":404})\n",
 		},
 		{
-			name:      "test in non-verbose mode",
-			success:   true,
-			testExpr:  "res.status == 200",
-			context:   map[string]any{"status": 200},
-			verbose:   false,
-			expectLog: false,
+			name:     "test in non-verbose mode",
+			success:  true,
+			testExpr: "res.status == 200",
+			context:  map[string]any{"status": 200},
+			verbose:  false,
+			expected: "",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			printer := NewPrinter(tt.verbose, []string{})
-
-			// This method prints debug output, we mainly test it doesn't panic
-			// and the method signature is correct
-			printer.PrintTestResult(tt.success, tt.testExpr, tt.context)
-
-			// Test passes if no panic occurs
+			pr := newBufferPrinter()
+			pr.verbose = tt.verbose
+			pr.PrintTestResult(tt.success, tt.testExpr, tt.context)
+			result := fmt.Sprintf("%s", pr.errWriter)
+			if result != tt.expected {
+				t.Errorf("PrintTestResult()\ngot  %q\nwant %q", result, tt.expected)
+			}
 		})
 	}
 }

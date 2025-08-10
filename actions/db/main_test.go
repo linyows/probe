@@ -88,7 +88,7 @@ func TestParseParams(t *testing.T) {
 				t.Errorf("ParseRequest() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
-			
+
 			if !tt.wantErr && req == nil {
 				t.Error("ParseRequest() returned nil request for valid input")
 			}

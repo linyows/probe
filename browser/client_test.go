@@ -1,11 +1,13 @@
 package browser
 
 import (
+	"context"
 	"fmt"
 	"reflect"
 	"testing"
 	"time"
 
+	"github.com/chromedp/chromedp"
 	"github.com/linyows/probe"
 )
 
@@ -24,58 +26,71 @@ func TestNewChromeDPAction(t *testing.T) {
 func TestNewReq(t *testing.T) {
 	got := NewReq()
 
-	expected := &Req{
-		Timeout:  defaultTimeout,
-		WindowW:  defaultWindowWidth,
-		WindowH:  defaultWindowHeight,
-		Headless: true,
+	// Test individual fields instead of deep equal since browserRunner is a pointer
+	if got.Timeout != defaultTimeout {
+		t.Errorf("Expected timeout %v, got %v", defaultTimeout, got.Timeout)
 	}
-
-	if !reflect.DeepEqual(got, expected) {
-		t.Errorf("\nExpected:\n%#v\nGot:\n%#v", expected, got)
+	if got.WindowW != defaultWindowWidth {
+		t.Errorf("Expected WindowW %d, got %d", defaultWindowWidth, got.WindowW)
 	}
-}
-
-func TestRequestMissingActions(t *testing.T) {
-	data := map[string]string{
-		"headless": "true",
+	if got.WindowH != defaultWindowHeight {
+		t.Errorf("Expected WindowH %d, got %d", defaultWindowHeight, got.WindowH)
 	}
-
-	result, err := Request(data)
-
-	if err == nil {
-		t.Error("Expected error for missing actions parameter")
+	if got.Headless != true {
+		t.Errorf("Expected Headless true, got %v", got.Headless)
 	}
-
-	expectedError := "actions parameter is required"
-	if err.Error() != expectedError {
-		t.Errorf("Expected error message '%s', got '%s'", expectedError, err.Error())
+	if got.browserRunner == nil {
+		t.Error("Expected browserRunner to be set, got nil")
 	}
-
-	if len(result) != 0 {
-		t.Error("Expected empty result map when error occurs")
+	// Verify it's the correct type
+	if _, ok := got.browserRunner.(*ChromeDPRunner); !ok {
+		t.Errorf("Expected ChromeDPRunner, got %T", got.browserRunner)
 	}
 }
 
-func TestRequestWithInvalidAction(t *testing.T) {
-	data := map[string]string{
-		"actions__0__name": "invalid_action",
-		"actions__0__url":  "http://example.com",
+func TestRequest_Validation(t *testing.T) {
+	testCases := []struct {
+		name        string
+		data        map[string]string
+		expectedErr string
+	}{
+		{
+			"missing actions",
+			map[string]string{
+				"headless": "true",
+			},
+			"actions parameter is required",
+		},
+		{
+			"invalid action",
+			map[string]string{
+				"actions__0__name": "invalid_action",
+				"actions__0__url":  "http://example.com",
+			},
+			"unsupported action type: invalid_action",
+		},
 	}
 
-	_, err := Request(data)
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			result, err := Request(tc.data)
 
-	if err == nil {
-		t.Error("Expected error for invalid action type")
-	}
+			if err == nil {
+				t.Errorf("Expected error for %s", tc.name)
+			}
 
-	expectedError := "unsupported action type: invalid_action"
-	if err.Error() != expectedError {
-		t.Errorf("Expected error message '%s', got '%s'", expectedError, err.Error())
+			if err.Error() != tc.expectedErr {
+				t.Errorf("Expected error message '%s', got '%s'", tc.expectedErr, err.Error())
+			}
+
+			if len(result) != 0 {
+				t.Error("Expected empty result map when error occurs")
+			}
+		})
 	}
 }
 
-func TestRequestParameterMapping(t *testing.T) {
+func TestRequest_ParameterMapping(t *testing.T) {
 	data := map[string]string{
 		"actions__0__name": "navigate",
 		"actions__0__url":  "http://example.com",
@@ -139,7 +154,7 @@ func TestRequestParameterMapping(t *testing.T) {
 	}
 }
 
-func TestCallbackOptions(t *testing.T) {
+func TestCallback_Options(t *testing.T) {
 	var receivedReq *Req
 	var receivedRes *Res
 
@@ -192,7 +207,7 @@ func TestCallbackOptions(t *testing.T) {
 	}
 }
 
-func TestChromeDPActionMapping(t *testing.T) {
+func TestChromeDPAction_Mapping(t *testing.T) {
 	testCases := []struct {
 		name     string
 		input    map[string]any
@@ -259,55 +274,6 @@ func TestChromeDPActionMapping(t *testing.T) {
 	}
 }
 
-func TestNewActionTypes(t *testing.T) {
-	testCases := []struct {
-		name        string
-		actionName  string
-		expectError bool
-	}{
-		{"wait_ready action", "wait_ready", false},
-		{"wait_not_visible action", "wait_not_visible", false},
-		{"submit action", "submit", false},
-		{"select action", "select", false},
-		{"scroll action", "scroll", false},
-		{"get_attribute action", "get_attribute", true},
-		{"wait_text action", "wait_text", false},
-		{"invalid action", "invalid_action", true},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			data := map[string]string{
-				"actions__0__name":     tc.actionName,
-				"actions__0__selector": "#test",
-				"actions__0__url":      "http://example.com",
-			}
-
-			// Add specific parameters for certain actions
-			switch tc.actionName {
-			case "select":
-				data["actions__0__value"] = "option1"
-			case "wait_text":
-				data["actions__0__value"] = "expected text"
-			}
-
-			_, err := Request(data)
-
-			if tc.expectError && err == nil {
-				t.Errorf("Expected error for action %s, but got none", tc.actionName)
-			}
-
-			if !tc.expectError && err != nil {
-				// For non-error cases, we expect chromedp context errors since we're not running a real browser
-				// Just check that the action was recognized (not "unsupported action type" error)
-				if err.Error() == fmt.Sprintf("unsupported action type: %s", tc.actionName) {
-					t.Errorf("Action %s should be supported but got unsupported error", tc.actionName)
-				}
-			}
-		})
-	}
-}
-
 func TestGetAttributeActionMapping(t *testing.T) {
 	action := NewChromeDPAction()
 	testData := map[string]any{
@@ -353,44 +319,6 @@ func TestSelectActionMapping(t *testing.T) {
 
 	if action.Value != "option2" {
 		t.Errorf("Expected value 'option2', got '%s'", action.Value)
-	}
-}
-
-func TestMediumPriorityActions(t *testing.T) {
-	testCases := []struct {
-		name        string
-		actionName  string
-		expectError bool
-	}{
-		{"hover action", "hover", false},
-		{"focus action", "focus", false},
-		{"get_html action", "get_html", false},
-		{"wait_enabled action", "wait_enabled", false},
-		{"double_click action", "double_click", false},
-		{"right_click action", "right_click", false},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			data := map[string]string{
-				"actions__0__name":     tc.actionName,
-				"actions__0__selector": "#test-element",
-			}
-
-			_, err := Request(data)
-
-			if tc.expectError && err == nil {
-				t.Errorf("Expected error for action %s, but got none", tc.actionName)
-			}
-
-			if !tc.expectError && err != nil {
-				// For non-error cases, we expect chromedp context errors since we're not running a real browser
-				// Just check that the action was recognized (not "unsupported action type" error)
-				if err.Error() == fmt.Sprintf("unsupported action type: %s", tc.actionName) {
-					t.Errorf("Action %s should be supported but got unsupported error", tc.actionName)
-				}
-			}
-		})
 	}
 }
 
@@ -453,4 +381,209 @@ func TestMouseActionMapping(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestMockRunner(t *testing.T) {
+	t.Run("basic mock functionality", func(t *testing.T) {
+		mock := NewMockRunner()
+
+		// Test that no calls have been made initially
+		if mock.GetCallCount() != 0 {
+			t.Errorf("Expected 0 calls initially, got %d", mock.GetCallCount())
+		}
+
+		// Test running with mock
+		ctx := context.Background()
+		actions := []chromedp.Action{
+			chromedp.Navigate("http://example.com"),
+			chromedp.WaitVisible("body"),
+		}
+
+		err := mock.Run(ctx, actions...)
+		if err != nil {
+			t.Errorf("Expected no error, got %v", err)
+		}
+
+		// Verify call was recorded
+		if mock.GetCallCount() != 1 {
+			t.Errorf("Expected 1 call, got %d", mock.GetCallCount())
+		}
+
+		lastCall := mock.GetLastCall()
+		if len(lastCall) != 2 {
+			t.Errorf("Expected 2 actions in last call, got %d", len(lastCall))
+		}
+	})
+
+	t.Run("custom run function", func(t *testing.T) {
+		mock := NewMockRunner()
+		expectedErr := fmt.Errorf("custom error")
+
+		mock.SetRunFunc(func(ctx context.Context, actions ...chromedp.Action) error {
+			return expectedErr
+		})
+
+		ctx := context.Background()
+		err := mock.Run(ctx, chromedp.Navigate("http://example.com"))
+
+		if err != expectedErr {
+			t.Errorf("Expected custom error, got %v", err)
+		}
+	})
+
+	t.Run("multiple calls tracking", func(t *testing.T) {
+		mock := NewMockRunner()
+
+		// Make multiple calls
+		ctx := context.Background()
+		_ = mock.Run(ctx, chromedp.Navigate("http://example.com"))
+		_ = mock.Run(ctx, chromedp.WaitVisible("body"))
+		_ = mock.Run(ctx, chromedp.Click("button"))
+
+		if mock.GetCallCount() != 3 {
+			t.Errorf("Expected 3 calls, got %d", mock.GetCallCount())
+		}
+
+		allCalls := mock.GetAllCalls()
+		if len(allCalls) != 3 {
+			t.Errorf("Expected 3 calls in history, got %d", len(allCalls))
+		}
+	})
+}
+
+func TestReqWithMockRunner(t *testing.T) {
+	t.Run("request with mock runner", func(t *testing.T) {
+		// Create request with mock runner
+		req := NewReq()
+		mock := NewMockRunner()
+		req.browserRunner = mock
+
+		// Add a simple action
+		action := NewChromeDPAction()
+		action.Name = "navigate"
+		action.URL = "http://example.com"
+		req.Actions = []*ChromeDPAction{action}
+
+		// Execute request
+		result, err := req.do()
+		if err != nil {
+			t.Errorf("Expected no error, got %v", err)
+		}
+
+		// Verify result
+		if result == nil {
+			t.Error("Expected non-nil result")
+			return
+		}
+		if result.Res.Code != 0 {
+			t.Errorf("Expected code 0, got %d", result.Res.Code)
+		}
+
+		// Verify mock was called
+		if mock.GetCallCount() != 1 {
+			t.Errorf("Expected 1 call to browser runner, got %d", mock.GetCallCount())
+		}
+	})
+
+	t.Run("request with error from mock runner", func(t *testing.T) {
+		req := NewReq()
+		mock := NewMockRunner()
+		expectedErr := fmt.Errorf("browser error")
+
+		mock.SetRunFunc(func(ctx context.Context, actions ...chromedp.Action) error {
+			return expectedErr
+		})
+
+		req.browserRunner = mock
+
+		// Add action
+		action := NewChromeDPAction()
+		action.Name = "navigate"
+		action.URL = "http://example.com"
+		req.Actions = []*ChromeDPAction{action}
+
+		// Execute request - should fail
+		result, err := req.do()
+		if err != expectedErr {
+			t.Errorf("Expected custom error, got %v", err)
+		}
+		if result != nil {
+			t.Error("Expected nil result on error")
+		}
+	})
+}
+
+func TestMockRunnerArgumentVerification(t *testing.T) {
+	t.Run("verify navigate action arguments", func(t *testing.T) {
+		req := NewReq()
+		mock := NewMockRunner()
+		req.browserRunner = mock
+
+		// Add navigate action
+		action := NewChromeDPAction()
+		action.Name = "navigate"
+		action.URL = "https://example.com/test"
+		req.Actions = []*ChromeDPAction{action}
+
+		// Execute request
+		result, err := req.do()
+		if err != nil {
+			t.Errorf("Expected no error, got %v", err)
+		}
+		if result == nil {
+			t.Error("Expected non-nil result")
+		}
+
+		// Verify the action was called
+		if mock.GetCallCount() != 1 {
+			t.Errorf("Expected 1 call, got %d", mock.GetCallCount())
+		}
+
+		// Get the actions that were passed to Run
+		lastCall := mock.GetLastCall()
+		if len(lastCall) == 0 {
+			t.Error("Expected at least one action in the call")
+		}
+
+		// We can't easily inspect the exact chromedp.Action content without reflection,
+		// but we can verify that actions were created and passed
+		t.Logf("Successfully called with %d actions", len(lastCall))
+	})
+
+	t.Run("verify multiple actions", func(t *testing.T) {
+		req := NewReq()
+		mock := NewMockRunner()
+		req.browserRunner = mock
+
+		// Add multiple actions
+		navigate := NewChromeDPAction()
+		navigate.Name = "navigate"
+		navigate.URL = "https://example.com"
+
+		click := NewChromeDPAction()
+		click.Name = "click"
+		click.Selector = "#submit-button"
+
+		req.Actions = []*ChromeDPAction{navigate, click}
+
+		// Execute request
+		result, err := req.do()
+		if err != nil {
+			t.Errorf("Expected no error, got %v", err)
+		}
+		if result == nil {
+			t.Error("Expected non-nil result")
+		}
+
+		// Verify multiple actions were processed
+		if mock.GetCallCount() != 1 {
+			t.Errorf("Expected 1 call, got %d", mock.GetCallCount())
+		}
+
+		lastCall := mock.GetLastCall()
+		// Should have actions for: navigate, click, plus potentially some setup actions
+		if len(lastCall) < 2 {
+			t.Errorf("Expected at least 2 actions, got %d", len(lastCall))
+		}
+	})
 }

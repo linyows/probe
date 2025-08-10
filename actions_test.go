@@ -351,22 +351,95 @@ func TestActionsInterface(t *testing.T) {
 	}
 }
 
-// Note: RunActions function is complex to test because it:
-// 1. Creates actual plugin clients
-// 2. Executes external processes
-// 3. Uses GRPC communication
-//
-// For comprehensive testing of RunActions, you would need:
-// - Mock plugin system
-// - Test doubles for exec.Command
-// - Integration test environment
-//
-// This is typically tested through integration tests rather than unit tests.
-func TestRunActions_Structure(t *testing.T) {
-	// We can only test that the function signature exists and compiles
-	var _ = RunActions
+func TestMockActionRunner(t *testing.T) {
+	mock := NewMockActionRunner()
 
-	// Test that the function handles the basic parameter transformation
-	// In a real scenario, this would require a full plugin setup
-	t.Log("RunActions function signature verified")
+	// Test default behavior
+	result, err := mock.RunActions("test", []string{}, map[string]any{"key": "value"}, false)
+	if err != nil {
+		t.Errorf("Expected no error, got %v", err)
+	}
+	if result["mock"] != true {
+		t.Errorf("Expected mock=true in default result")
+	}
+	if result["action"] != "test" {
+		t.Errorf("Expected action='test', got %v", result["action"])
+	}
+
+	// Test custom result
+	customResult := map[string]any{
+		"code":    0,
+		"results": map[string]any{"text": "Hello World"},
+	}
+	mock.SetResult("http", customResult)
+
+	result, err = mock.RunActions("http", []string{}, map[string]any{}, false)
+	if err != nil {
+		t.Errorf("Expected no error, got %v", err)
+	}
+	if result["code"] != 0 {
+		t.Errorf("Expected code=0, got %v", result["code"])
+	}
+
+	// Test error behavior
+	testErr := errors.New("test error")
+	mock.SetError("failing-action", testErr)
+
+	result, err = mock.RunActions("failing-action", []string{}, map[string]any{}, false)
+	if err != testErr {
+		t.Errorf("Expected test error, got %v", err)
+	}
+	if result != nil {
+		t.Errorf("Expected nil result on error, got %v", result)
+	}
+}
+
+func TestStepWithMockRunner(t *testing.T) {
+	// Create a step with mock runner
+	step := &Step{
+		Name: "Test Step",
+		Uses: "http",
+		With: map[string]any{"url": "http://example.com"},
+	}
+
+	// Set up mock runner
+	mock := NewMockActionRunner()
+	mock.SetResult("http", map[string]any{
+		"code": 0,
+		"results": map[string]any{
+			"status": 200,
+			"body":   "OK",
+		},
+	})
+
+	// Set the mock runner directly on the step
+	step.actionRunner = mock
+
+	// Create minimal job context for testing
+	jCtx := &JobContext{
+		Config: Config{Verbose: false},
+	}
+
+	// Initialize expression evaluator
+	step.Expr = &Expr{}
+	step.ctx = StepContext{}
+
+	// Execute action
+	result, err := step.executeAction("Test Step", jCtx)
+	if err != nil {
+		t.Errorf("Expected no error, got %v", err)
+	}
+
+	if result["code"] != 0 {
+		t.Errorf("Expected code=0, got %v", result["code"])
+	}
+
+	results, ok := result["results"].(map[string]any)
+	if !ok {
+		t.Errorf("Expected results to be map[string]any")
+	} else {
+		if results["status"] != 200 {
+			t.Errorf("Expected status=200, got %v", results["status"])
+		}
+	}
 }
