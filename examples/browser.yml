@@ -1,0 +1,52 @@
+name: Browser Examples
+description: Minimal test to verify browser can start
+
+jobs:
+- name: Get element text
+  steps:
+  - name: Simple Navigation Test
+    uses: browser
+    with:
+      headless: true
+      timeout: 10s
+      actions:
+      - name: navigate
+        url: https://pkg.go.dev/time
+      - name: wait_visible
+        selector: body > footer
+      - name: text
+        id: overview
+        selector: ".Documentation-overview > pre"
+      - name: click
+        selector: "#example-After"
+      - name: value
+        id: area
+        selector: "#example-After textarea"
+    test: res.code == 0
+    echo: |
+      Overview Pre:
+      {{res.results.overview}}
+      -----
+
+      TextArea:
+      {{res.results.area}}
+      -----
+    outputs:
+      load_time: res.time_ms
+
+- name: Capture screenshot
+  steps:
+  - name: Get google
+    uses: browser
+    with:
+      window_w: 1280
+      window_h: 800
+      headless: false
+      timeout: 30s
+      actions:
+      - name: navigate
+        url: https://www.google.com/
+      - name: capture_screenshot
+        path: ./testdata/capture_screenshot.png
+        quality: 80
+    test: res.code == 0

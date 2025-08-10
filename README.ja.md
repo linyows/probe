@@ -51,7 +51,7 @@ probe --workflow health-check.yml
 --------
 
 - **シンプルなYAML構文**: 読みやすいワークフロー定義
-- **プラグインアーキテクチャ**: HTTP、データベース、Shell、SMTP、Helloアクションが組み込まれており、拡張可能
+- **プラグインアーキテクチャ**: HTTP、データベース、ブラウザ、Shell、SMTP、Helloアクションが組み込まれており、拡張可能
 - **ジョブ依存関係**: `needs`で実行順序を制御
 - **ステップアウトプット**: `outputs`を使用してステップとジョブ間でデータを共有
 - **繰り返し実行**: 設定可能な間隔でジョブを繰り返し
@@ -330,6 +330,42 @@ test: |
 - **MySQL**: `mysql://user:pass@host:port/database`
 - **PostgreSQL**: `postgres://user:pass@host:port/database?sslmode=disable`
 - **SQLite**: `sqlite://./testdata/sqlite.db` または `sqlite:///absolute/path/database.db`
+
+### ブラウザアクション
+```yaml
+- name: ウェブ自動化
+  uses: browser
+  with:
+    action: navigate
+    url: "https://example.com"
+    headless: true
+    timeout: 30s
+  test: res.success == "true"
+```
+
+対応アクション:
+- **navigate**: URLへのナビゲーション
+- **text**: 要素からのテキスト内容抽出
+- **value**: 入力フィールドの値取得
+- **get_attribute**: 要素の属性値取得
+- **get_html**: 要素からのHTML内容抽出
+- **click**: 要素のクリック
+- **double_click**: 要素のダブルクリック
+- **right_click**: 要素の右クリック
+- **hover**: 要素へのホバー
+- **focus**: 要素へのフォーカス設定
+- **type** / **send_keys**: 入力フィールドへのテキスト入力
+- **select**: ドロップダウンオプションの選択
+- **submit**: フォーム送信
+- **scroll**: 要素をビューにスクロール
+- **screenshot**: 要素のスクリーンショット撮影
+- **capture_screenshot**: ページ全体のスクリーンショット撮影
+- **full_screenshot**: 品質設定付きページ全体のスクリーンショット撮影
+- **wait_visible**: 要素が表示されるまで待機
+- **wait_not_visible**: 要素が非表示になるまで待機
+- **wait_ready**: ページ準備完了まで待機
+- **wait_text**: 特定テキスト表示まで待機
+- **wait_enabled**: 要素が有効になるまで待機
 
 ### SMTPアクション
 ```yaml

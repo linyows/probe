@@ -240,7 +240,7 @@ func (p *Printer) generateJobStatus(jobID, jobName string, status StatusType, du
 			colorFunc().Sprint(statusText))
 	} else {
 		fmt.Fprintf(output, "%s %s (%s)\n",
-			colorFunc().Sprintf(icon),
+			colorFunc().Sprint(icon),
 			jobName,
 			statusText)
 	}

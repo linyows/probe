@@ -51,7 +51,7 @@ Features
 --------
 
 - **Simple YAML Syntax**: Easy-to-read workflow definitions
-- **Plugin Architecture**: Built-in HTTP, Database, Shell, SMTP, and Hello actions with extensibility
+- **Plugin Architecture**: Built-in HTTP, Database, Browser, Shell, SMTP, and Hello actions with extensibility
 - **Job Dependencies**: Control execution order with `needs`
 - **Step Outputs**: Share data between steps and jobs using `outputs`
 - **Repetition**: Repeat jobs with configurable intervals
@@ -319,6 +319,42 @@ Supported databases:
 - **MySQL**: `mysql://user:pass@host:port/database`
 - **PostgreSQL**: `postgres://user:pass@host:port/database?sslmode=disable`
 - **SQLite**: `sqlite://./testdata/sqlite.db` or `sqlite:///absolute/path/database.db`
+
+### Browser Action
+```yaml
+- name: Web Automation
+  uses: browser
+  with:
+    action: navigate
+    url: "https://example.com"
+    headless: true
+    timeout: 30s
+  test: res.success == "true"
+```
+
+Supported actions:
+- **navigate**: Navigate to URL
+- **text**: Extract text content from elements
+- **value**: Get input field values
+- **get_attribute**: Get element attribute values
+- **get_html**: Extract HTML content from elements
+- **click**: Click on elements
+- **double_click**: Double-click on elements
+- **right_click**: Right-click on elements
+- **hover**: Hover over elements
+- **focus**: Set focus to elements
+- **type** / **send_keys**: Type text into input fields
+- **select**: Select dropdown options
+- **submit**: Submit forms
+- **scroll**: Scroll elements into view
+- **screenshot**: Capture element screenshots
+- **capture_screenshot**: Capture full page screenshots
+- **full_screenshot**: Capture full page screenshots with quality settings
+- **wait_visible**: Wait for elements to become visible
+- **wait_not_visible**: Wait for elements to become invisible
+- **wait_ready**: Wait for page to be ready
+- **wait_text**: Wait for specific text to appear
+- **wait_enabled**: Wait for elements to become enabled
 
 ### Shell Action
 ```yaml
