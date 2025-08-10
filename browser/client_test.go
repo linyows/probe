@@ -436,9 +436,9 @@ func TestMockRunner(t *testing.T) {
 
 		// Make multiple calls
 		ctx := context.Background()
-		mock.Run(ctx, chromedp.Navigate("http://example.com"))
-		mock.Run(ctx, chromedp.WaitVisible("body"))
-		mock.Run(ctx, chromedp.Click("button"))
+		_ = mock.Run(ctx, chromedp.Navigate("http://example.com"))
+		_ = mock.Run(ctx, chromedp.WaitVisible("body"))
+		_ = mock.Run(ctx, chromedp.Click("button"))
 
 		if mock.GetCallCount() != 3 {
 			t.Errorf("Expected 3 calls, got %d", mock.GetCallCount())
@@ -473,6 +473,7 @@ func TestReqWithMockRunner(t *testing.T) {
 		// Verify result
 		if result == nil {
 			t.Error("Expected non-nil result")
+			return
 		}
 		if result.Res.Code != 0 {
 			t.Errorf("Expected code 0, got %d", result.Res.Code)
