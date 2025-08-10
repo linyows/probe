@@ -75,10 +75,9 @@ type Result struct {
 	RT  time.Duration `map:"rt"`
 }
 
-func Request(data map[string]string, opts ...Option) (map[string]string, error) {
+func (req *Req) parseData(data map[string]string, opts []Option) error {
 	unflattened := probe.UnflattenInterface(data)
 
-	req := NewReq()
 	cb := &Callback{}
 	for _, opt := range opts {
 		opt(cb)
@@ -87,7 +86,7 @@ func Request(data map[string]string, opts ...Option) (map[string]string, error) 
 
 	actions, exists := unflattened["actions"]
 	if !exists || actions == "" {
-		return map[string]string{}, fmt.Errorf("actions parameter is required")
+		return fmt.Errorf("actions parameter is required")
 	}
 	if sl, ok := actions.([]interface{}); ok {
 		for _, cdpa := range sl {
@@ -95,7 +94,7 @@ func Request(data map[string]string, opts ...Option) (map[string]string, error) 
 				a := NewChromeDPAction()
 				err := probe.MapToStructByTags(ma, a)
 				if err != nil {
-					return map[string]string{"error": "MapToStructByTags failed"}, err
+					return fmt.Errorf("MapToStructByTags failed: %w", err)
 				}
 				req.Actions = append(req.Actions, a)
 			}
@@ -127,10 +126,11 @@ func Request(data map[string]string, opts ...Option) (map[string]string, error) 
 		}
 	}
 
-	start := time.Now()
+	return nil
+}
 
-	// Setup chromedp options
-	cdpOpts := []chromedp.ExecAllocatorOption{
+func (req *Req) buildChromeDPOptions() []chromedp.ExecAllocatorOption {
+	return []chromedp.ExecAllocatorOption{
 		chromedp.NoFirstRun,
 		chromedp.NoDefaultBrowserCheck,
 		chromedp.DisableGPU,
@@ -142,10 +142,13 @@ func Request(data map[string]string, opts ...Option) (map[string]string, error) 
 		chromedp.Flag("disable-backgrounding-occluded-windows", true),
 		chromedp.Flag("disable-renderer-backgrounding", true),
 	}
+}
+
+func (req *Req) createBrowserContext() (context.Context, context.CancelFunc, error) {
+	cdpOpts := req.buildChromeDPOptions()
 
 	// Create allocator context
 	allocCtx, allocCancel := chromedp.NewExecAllocator(context.Background(), cdpOpts...)
-	defer allocCancel()
 	// Create context with timeout
 	ctx, cancel := chromedp.NewContext(allocCtx, chromedp.WithDebugf(func(s string, i ...interface{}) {
 		// Callback
@@ -153,10 +156,19 @@ func Request(data map[string]string, opts ...Option) (map[string]string, error) 
 			req.cb.withInBrowser(s, i)
 		}
 	}))
-	defer cancel()
 	ctx, timeoutCancel := context.WithTimeout(ctx, req.Timeout)
-	defer timeoutCancel()
 
+	// Combine cancellation functions
+	cancelFunc := func() {
+		timeoutCancel()
+		cancel()
+		allocCancel()
+	}
+
+	return ctx, cancelFunc, nil
+}
+
+func (req *Req) buildActionTasks() (chromedp.Tasks, error) {
 	tasks := chromedp.Tasks{}
 
 	for _, action := range req.Actions {
@@ -253,15 +265,10 @@ func Request(data map[string]string, opts ...Option) (map[string]string, error) 
 		}
 	}
 
-	// Callback
-	if req.cb != nil && req.cb.before != nil {
-		req.cb.before(req)
-	}
+	return tasks, nil
+}
 
-	if err := chromedp.Run(ctx, tasks); err != nil {
-		return map[string]string{}, err
-	}
-
+func (req *Req) collectResults() (map[string]string, error) {
 	results := make(map[string]string)
 
 	for _, action := range req.Actions {
@@ -277,17 +284,48 @@ func Request(data map[string]string, opts ...Option) (map[string]string, error) 
 		case "full_screenshot", "capture_screenshot", "screenshot":
 			if action.reBuf != nil && len(*action.reBuf) > 0 {
 				if err := os.WriteFile(action.Path, *action.reBuf, 0644); err != nil {
-					return map[string]string{}, err
+					return nil, err
 				}
 			}
 		}
+	}
+
+	return results, nil
+}
+
+func (req *Req) do() (*Result, error) {
+	start := time.Now()
+
+	ctx, cancel, err := req.createBrowserContext()
+	if err != nil {
+		return nil, err
+	}
+	defer cancel()
+
+	tasks, err := req.buildActionTasks()
+	if err != nil {
+		return nil, err
+	}
+
+	// Callback
+	if req.cb != nil && req.cb.before != nil {
+		req.cb.before(req)
+	}
+
+	if err := chromedp.Run(ctx, tasks); err != nil {
+		return nil, err
+	}
+
+	results, err := req.collectResults()
+	if err != nil {
+		return nil, err
 	}
 
 	res := &Res{
 		Code:    0,
 		Results: results,
 	}
-	ret := Result{
+	ret := &Result{
 		Req: *req,
 		Res: *res,
 		RT:  time.Since(start),
@@ -298,9 +336,23 @@ func Request(data map[string]string, opts ...Option) (map[string]string, error) 
 		req.cb.after(res)
 	}
 
-	mapRet, err := probe.StructToMapByTags(ret)
+	return ret, nil
+}
+
+func Request(data map[string]string, opts ...Option) (map[string]string, error) {
+	req := NewReq()
+	if err := req.parseData(data, opts); err != nil {
+		return nil, err
+	}
+
+	result, err := req.do()
 	if err != nil {
-		return map[string]string{}, err
+		return nil, err
+	}
+
+	mapRet, err := probe.StructToMapByTags(result)
+	if err != nil {
+		return nil, err
 	}
 
 	return probe.FlattenInterface(mapRet), nil
