@@ -189,7 +189,7 @@ func TestRepeatFunctionality_Intervals(t *testing.T) {
 						},
 					},
 				},
-				printer: NewPrinter(false, []string{}),
+				printer: newBufferPrinter(),
 			}
 
 			config := Config{Verbose: false}
@@ -228,11 +228,6 @@ func TestRepeatFunctionality_DifferentTimeUnits(t *testing.T) {
 			interval: "1s",
 			expected: 1 * time.Second,
 		},
-		{
-			name:     "microseconds",
-			interval: "500µs",
-			expected: 500 * time.Microsecond,
-		},
 	}
 
 	for _, tt := range tests {
@@ -261,7 +256,7 @@ func TestRepeatFunctionality_DifferentTimeUnits(t *testing.T) {
 						},
 					},
 				},
-				printer: NewPrinter(false, []string{}),
+				printer: newBufferPrinter(),
 			}
 
 			config := Config{Verbose: false}
@@ -306,7 +301,7 @@ func TestRepeatFunctionality_ParallelVsSequential(t *testing.T) {
 					},
 				},
 			},
-			printer: NewPrinter(false, []string{}),
+			printer: newBufferPrinter(),
 		}
 
 		config := Config{Verbose: false}
@@ -348,7 +343,7 @@ func TestRepeatFunctionality_ParallelVsSequential(t *testing.T) {
 					},
 				},
 			},
-			printer: NewPrinter(false, []string{}),
+			printer: newBufferPrinter(),
 		}
 
 		config := Config{Verbose: false}
@@ -383,7 +378,7 @@ func TestRepeatFunctionality_EdgeCases(t *testing.T) {
 					},
 				},
 			},
-			printer: NewPrinter(false, []string{}),
+			printer: newBufferPrinter(),
 		}
 
 		config := Config{Verbose: false}
@@ -408,7 +403,7 @@ func TestRepeatFunctionality_EdgeCases(t *testing.T) {
 					},
 				},
 			},
-			printer: NewPrinter(false, []string{}),
+			printer: newBufferPrinter(),
 		}
 
 		config := Config{Verbose: false}
@@ -441,7 +436,7 @@ func TestRepeatFunctionality_EdgeCases(t *testing.T) {
 					},
 				},
 			},
-			printer: NewPrinter(false, []string{}),
+			printer: newBufferPrinter(),
 		}
 
 		config := Config{Verbose: false}

@@ -1,7 +1,9 @@
 package probe
 
 import (
+	"bytes"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 	"time"
@@ -98,6 +100,8 @@ type Printer struct {
 	Buffer    map[string]*strings.Builder
 	BufferIDs []string // Order preservation
 	spinner   *spinner.Spinner
+	outWriter io.Writer
+	errWriter io.Writer
 }
 
 // NewPrinter creates a new console print writer
@@ -119,7 +123,16 @@ func NewPrinter(verbose bool, bufferIDs []string) *Printer {
 		Buffer:    buffer,
 		BufferIDs: bufferIDs, // Store order information
 		spinner:   s,
+		outWriter: os.Stdout,
+		errWriter: os.Stderr,
 	}
+}
+
+func newBufferPrinter() *Printer {
+	pr := NewPrinter(false, []string{})
+	pr.outWriter = new(bytes.Buffer)
+	pr.errWriter = new(bytes.Buffer)
+	return pr
 }
 
 func (p *Printer) StartSpinner() {
@@ -316,7 +329,7 @@ func (p *Printer) GenerateReportOnlySteps(rs *Result) string {
 func (p *Printer) PrintReport(rs *Result) {
 	reportOutput := p.GenerateReport(rs)
 	if reportOutput != "" {
-		fmt.Print(reportOutput)
+		fmt.Fprint(p.outWriter, reportOutput)
 	}
 }
 
@@ -400,7 +413,7 @@ func (p *Printer) generateHeader(name, description string) string {
 func (p *Printer) PrintHeader(name, description string) {
 	header := p.generateHeader(name, description)
 	if header != "" {
-		fmt.Print(header)
+		fmt.Fprint(p.outWriter, header)
 	}
 }
 
@@ -411,20 +424,20 @@ func (p *Printer) generateError(format string, args ...interface{}) string {
 
 // PrintError prints an error message
 func (p *Printer) PrintError(format string, args ...interface{}) {
-	fmt.Print(p.generateError(format, args...))
+	fmt.Fprint(p.errWriter, p.generateError(format, args...))
 }
 
 // PrintVerbose prints verbose output (only if verbose mode is enabled)
 func (p *Printer) PrintVerbose(format string, args ...interface{}) {
 	if p.verbose {
-		fmt.Printf(format, args...)
+		fmt.Fprintf(p.errWriter, format, args...)
 	}
 }
 
 // PrintSeparator prints a separator line for verbose output
 func (p *Printer) PrintSeparator() {
 	if p.verbose {
-		fmt.Println("- - -")
+		fmt.Fprintln(p.errWriter, "- - -")
 	}
 }
 
@@ -436,7 +449,7 @@ func (p *Printer) generateLogDebug(format string, args ...interface{}) string {
 // LogDebug prints debug messages (only in verbose mode)
 func (p *Printer) LogDebug(format string, args ...interface{}) {
 	if p.verbose {
-		fmt.Print(p.generateLogDebug(format, args...))
+		fmt.Fprint(p.errWriter, p.generateLogDebug(format, args...))
 	}
 }
 

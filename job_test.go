@@ -229,7 +229,7 @@ func TestJob_shouldSkip(t *testing.T) {
 			ctx := JobContext{
 				Vars:    tt.vars,
 				Outputs: NewOutputs(),
-				Printer: NewPrinter(false, []string{}),
+				Printer: newBufferPrinter(),
 			}
 			job.ctx = &ctx
 
@@ -276,7 +276,7 @@ func TestJob_shouldSkip_errorHandling(t *testing.T) {
 			ctx := JobContext{
 				Vars:    map[string]any{},
 				Outputs: NewOutputs(),
-				Printer: NewPrinter(false, []string{}),
+				Printer: newBufferPrinter(),
 			}
 			job.ctx = &ctx
 
@@ -308,7 +308,7 @@ func TestJob_handleSkip(t *testing.T) {
 
 	ctx := JobContext{
 		Result:  result,
-		Printer: NewPrinter(false, []string{}),
+		Printer: newBufferPrinter(),
 		Config:  Config{Verbose: false},
 	}
 	job.ctx = &ctx

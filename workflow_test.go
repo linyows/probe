@@ -77,7 +77,7 @@ func TestWorkflowExecutor_DependencyManagement(t *testing.T) {
 			workflow := &Workflow{
 				Name:    "test-workflow",
 				Jobs:    tt.jobs,
-				printer: NewPrinter(false, []string{}),
+				printer: newBufferPrinter(),
 			}
 
 			config := Config{Verbose: false}
@@ -111,7 +111,7 @@ func TestWorkflowExecutor_ParallelExecution(t *testing.T) {
 					Steps: []*Step{},
 				},
 			},
-			printer: NewPrinter(false, []string{}),
+			printer: newBufferPrinter(),
 		}
 
 		config := Config{Verbose: false}
@@ -151,7 +151,7 @@ func TestWorkflowExecutor_SequentialWithDependencies(t *testing.T) {
 					Steps: []*Step{},
 				},
 			},
-			printer: NewPrinter(false, []string{}),
+			printer: newBufferPrinter(),
 		}
 
 		config := Config{Verbose: false}
@@ -178,7 +178,7 @@ func TestWorkflowExecutor_BufferedOutput(t *testing.T) {
 					Steps: []*Step{},
 				},
 			},
-			printer: NewPrinter(false, []string{}),
+			printer: newBufferPrinter(),
 		}
 
 		config := Config{Verbose: false}
@@ -207,7 +207,7 @@ func TestWorkflowExecutor_RepeatJobs(t *testing.T) {
 					},
 				},
 			},
-			printer: NewPrinter(false, []string{}),
+			printer: newBufferPrinter(),
 		}
 
 		config := Config{Verbose: false}
@@ -256,7 +256,7 @@ func TestWorkflowExecutor_MixedScenarios(t *testing.T) {
 					Steps: []*Step{},
 				},
 			},
-			printer: NewPrinter(false, []string{}),
+			printer: newBufferPrinter(),
 		}
 
 		config := Config{Verbose: false}
@@ -285,7 +285,7 @@ func TestWorkflowExecutor_ErrorHandling(t *testing.T) {
 					Steps: []*Step{},
 				},
 			},
-			printer: NewPrinter(false, []string{}),
+			printer: newBufferPrinter(),
 		}
 
 		config := Config{Verbose: false}
@@ -308,7 +308,7 @@ func TestWorkflowExecutor_PrintDetailedResults(t *testing.T) {
 					Steps: []*Step{},
 				},
 			},
-			printer: NewPrinter(false, []string{}),
+			printer: newBufferPrinter(),
 		}
 
 		// Create workflow buffer
@@ -335,7 +335,7 @@ func TestParallelExecution_EdgeCases(t *testing.T) {
 		workflow := &Workflow{
 			Name:    "empty-workflow",
 			Jobs:    []Job{},
-			printer: NewPrinter(false, []string{}),
+			printer: newBufferPrinter(),
 		}
 
 		config := Config{Verbose: false}
@@ -355,7 +355,7 @@ func TestParallelExecution_EdgeCases(t *testing.T) {
 					Steps: []*Step{},
 				},
 			},
-			printer: NewPrinter(false, []string{}),
+			printer: newBufferPrinter(),
 		}
 
 		config := Config{Verbose: false}
@@ -379,7 +379,7 @@ func TestParallelExecution_EdgeCases(t *testing.T) {
 		workflow := &Workflow{
 			Name:    "many-jobs",
 			Jobs:    jobs,
-			printer: NewPrinter(false, []string{}),
+			printer: newBufferPrinter(),
 		}
 
 		config := Config{Verbose: false}
@@ -409,7 +409,7 @@ func TestBufferedExecution_EdgeCases(t *testing.T) {
 					Steps: []*Step{},
 				},
 			},
-			printer: NewPrinter(false, []string{}),
+			printer: newBufferPrinter(),
 		}
 
 		config := Config{Verbose: false}
@@ -439,7 +439,7 @@ func TestBufferedExecution_EdgeCases(t *testing.T) {
 					Steps: []*Step{},
 				},
 			},
-			printer: NewPrinter(false, []string{}),
+			printer: newBufferPrinter(),
 		}
 
 		config := Config{Verbose: false}
@@ -465,7 +465,7 @@ func TestRepeatExecution_EdgeCases(t *testing.T) {
 					},
 				},
 			},
-			printer: NewPrinter(false, []string{}),
+			printer: newBufferPrinter(),
 		}
 
 		config := Config{Verbose: false}
@@ -496,7 +496,7 @@ func TestRepeatExecution_EdgeCases(t *testing.T) {
 					},
 				},
 			},
-			printer: NewPrinter(false, []string{}),
+			printer: newBufferPrinter(),
 		}
 
 		config := Config{Verbose: false}
@@ -528,7 +528,7 @@ func TestRepeatExecution_EdgeCases(t *testing.T) {
 					},
 				},
 			},
-			printer: NewPrinter(false, []string{}),
+			printer: newBufferPrinter(),
 		}
 
 		config := Config{Verbose: false}
@@ -554,7 +554,7 @@ func TestExecutor_ConcurrencyEdgeCases(t *testing.T) {
 				{Name: "level2-b", Needs: []string{"level1-b", "level1-c"}, Steps: []*Step{}},
 				{Name: "final", Needs: []string{"level2-a", "level2-b"}, Steps: []*Step{}},
 			},
-			printer: NewPrinter(false, []string{}),
+			printer: newBufferPrinter(),
 		}
 
 		config := Config{Verbose: false}
@@ -586,7 +586,7 @@ func TestExecutor_ConcurrencyEdgeCases(t *testing.T) {
 					Steps: []*Step{},
 				},
 			},
-			printer: NewPrinter(false, []string{}),
+			printer: newBufferPrinter(),
 		}
 
 		config := Config{Verbose: false}
@@ -730,7 +730,7 @@ func TestJobContextRepeatTracking(t *testing.T) {
 		RepeatCurrent: 5,
 		RepeatTotal:   10,
 		StepCounters:  make(map[int]StepRepeatCounter),
-		Printer:       NewPrinter(false, []string{}),
+		Printer:       newBufferPrinter(),
 	}
 
 	// Test initial state
@@ -772,7 +772,7 @@ func TestStepRepeatCounterUpdate(t *testing.T) {
 		RepeatCurrent: 3,
 		RepeatTotal:   10,
 		StepCounters:  make(map[int]StepRepeatCounter),
-		Printer:       NewPrinter(false, []string{}),
+		Printer:       newBufferPrinter(),
 	}
 
 	step := &Step{
