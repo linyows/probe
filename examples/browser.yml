@@ -1,8 +1,8 @@
-name: Browser Test
+name: Browser Examples
 description: Minimal test to verify browser can start
 
 jobs:
-- name: Browser Startup Test
+- name: Get element text
   steps:
   - name: Simple Navigation Test
     uses: browser
@@ -16,7 +16,7 @@ jobs:
         selector: body > footer
       - name: text
         id: overview
-        selector: .Documentation-overview
+        selector: ".Documentation-overview > pre"
       - name: click
         selector: "#example-After"
       - name: value
@@ -24,12 +24,12 @@ jobs:
         selector: "#example-After textarea"
     test: res.code == 0
     echo: |
-      TextArea:
-      {{res.results.area}}
+      Overview Pre:
+      {{res.results.overview}}
       -----
 
-      Overview:
-      {{res.results.overview}}
+      TextArea:
+      {{res.results.area}}
       -----
     outputs:
       load_time: res.time_ms
