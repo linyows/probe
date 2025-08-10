@@ -215,7 +215,7 @@ func (j *Job) RunIndependently(vars map[string]any, verbose bool, jobID string) 
 
 	success := true
 	errorMsg := ""
-	
+
 	if err := j.Start(ctx); err != nil {
 		success = false
 		errorMsg = err.Error()
@@ -230,12 +230,12 @@ func (j *Job) RunIndependently(vars map[string]any, verbose bool, jobID string) 
 		jr.Status = "Completed"
 		jr.Success = true
 	}
-	
+
 	duration := time.Since(start)
 	jr.EndTime = jr.StartTime.Add(duration)
 
 	outputs := ctx.Outputs.GetAll()
 	report := ctx.Printer.GenerateReportOnlySteps(result)
-	
+
 	return success, outputs, report, errorMsg, duration
 }

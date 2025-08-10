@@ -344,7 +344,7 @@ func (st *Step) updateCtx(logs []map[string]any, req, res map[string]any, rt str
 	st.ctx.Req = req
 	st.ctx.Res = res
 	st.ctx.RT = rt
-	
+
 	// Parse RT string to calculate RTSec
 	if rt != "" {
 		if duration, err := time.ParseDuration(rt); err == nil {
