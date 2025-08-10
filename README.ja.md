@@ -329,7 +329,7 @@ test: |
 対応データベース:
 - **MySQL**: `mysql://user:pass@host:port/database`
 - **PostgreSQL**: `postgres://user:pass@host:port/database?sslmode=disable`
-- **SQLite**: `sqlite://./testdata/sqlite.db` または `sqlite:///absolute/path/database.db`
+- **SQLite**: `file:./testdata/sqlite.db` または `/absolute/path/database`
 
 ### ブラウザアクション
 ```yaml
