@@ -311,9 +311,9 @@ func TestNewActionTypes(t *testing.T) {
 func TestGetAttributeActionMapping(t *testing.T) {
 	action := NewChromeDPAction()
 	testData := map[string]any{
-		"name":        "get_attribute",
-		"selector":    "#link",
-		"attribute":   []string{"href"},
+		"name":      "get_attribute",
+		"selector":  "#link",
+		"attribute": []string{"href"},
 	}
 
 	err := probe.MapToStructByTags(testData, action)

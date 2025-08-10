@@ -3,7 +3,7 @@ package browser
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"time"
 
 	"github.com/chromedp/chromedp"
@@ -102,25 +102,29 @@ func Request(data map[string]string, opts ...Option) (map[string]string, error) 
 		}
 	}
 
-	headless, exists := unflattened["headless"]
-	if bo, ok := headless.(bool); ok {
-		req.Headless = bo
-	}
-
-	timeout, exists := unflattened["timeout"]
-	if st, ok := timeout.(string); ok {
-		if parsed, err := time.ParseDuration(st); err == nil {
-			req.Timeout = parsed
+	if headless, exists := unflattened["headless"]; exists {
+		if bo, ok := headless.(bool); ok {
+			req.Headless = bo
 		}
 	}
 
-	ww, exists := unflattened["window_w"]
-	if in, ok := ww.(int); ok {
-		req.WindowW = in
+	if timeout, exists := unflattened["timeout"]; exists {
+		if st, ok := timeout.(string); ok {
+			if parsed, err := time.ParseDuration(st); err == nil {
+				req.Timeout = parsed
+			}
+		}
 	}
-	wh, exists := unflattened["window_h"]
-	if in, ok := wh.(int); ok {
-		req.WindowH = in
+
+	if ww, exists := unflattened["window_w"]; exists {
+		if in, ok := ww.(int); ok {
+			req.WindowW = in
+		}
+	}
+	if wh, exists := unflattened["window_h"]; exists {
+		if in, ok := wh.(int); ok {
+			req.WindowH = in
+		}
 	}
 
 	start := time.Now()
@@ -272,7 +276,7 @@ func Request(data map[string]string, opts ...Option) (map[string]string, error) 
 			}
 		case "full_screenshot", "capture_screenshot", "screenshot":
 			if action.reBuf != nil && len(*action.reBuf) > 0 {
-				if err := ioutil.WriteFile(action.Path, *action.reBuf, 0644); err != nil {
+				if err := os.WriteFile(action.Path, *action.reBuf, 0644); err != nil {
 					return map[string]string{}, err
 				}
 			}
