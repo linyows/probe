@@ -787,7 +787,7 @@ func TestStep_executeAction(t *testing.T) {
 		// We can't actually test plugin execution, but we can verify
 		// the method handles the default case without panicking
 		// This will timeout in CI/CD, but verifies the code path exists
-		var methodFunc func(string, *JobContext) (map[string]any, error) = step.executeAction
+		var methodFunc = step.executeAction
 		_ = methodFunc
 
 		t.Logf("executeAction() default case verified successfully")

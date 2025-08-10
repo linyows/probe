@@ -86,7 +86,7 @@ func (st *Step) executeAction(name string, jCtx *JobContext) (map[string]any, er
 		runner = &PluginActionRunner{} // Default to plugin execution
 	}
 
-	ret, err := runner.RunActions(st.Uses, []string{}, expW, jCtx.Config.Verbose)
+	ret, err := runner.RunActions(st.Uses, []string{}, expW, jCtx.Verbose)
 	if err != nil {
 		return nil, err
 	}
