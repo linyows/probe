@@ -366,9 +366,9 @@ with:
 
 # SQLite
 with:
-  dsn: "sqlite://./testdata/sqlite.db"
-  dsn: "sqlite:///absolute/path/to/database.db"
-  dsn: "sqlite://{{vars.data_dir}}/app.db"
+  dsn: "file:./testdata/sqlite.db"
+  dsn: "file:/absolute/path/to/database.db"
+  dsn: "file:{{vars.data_dir}}/app.db"
 ```
 
 #### `query` (required)
@@ -511,7 +511,7 @@ steps:
 - name: "SQLite Query"
   uses: db
   with:
-    dsn: "sqlite://./testdata/sqlite.db"
+    dsn: "file:./testdata/sqlite.db"
     query: |
       CREATE TABLE IF NOT EXISTS users (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -525,7 +525,7 @@ steps:
 - name: "Memory Database"
   uses: db
   with:
-    dsn: "sqlite://:memory:"
+    dsn: "file::memory:"
     query: "CREATE TABLE temp_data (id INTEGER, value TEXT)"
   test: res.code == 0
 ```
