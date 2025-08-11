@@ -192,7 +192,7 @@ func (j *Job) handleSkip(ctx JobContext) {
 
 // RunIndependently executes a job independently with its own context and result tracking
 // Returns success/failure status, outputs, report, error message, and duration
-func (j *Job) RunIndependently(vars map[string]any, verbose bool, jobID string) (bool, map[string]any, string, string, time.Duration) {
+func (j *Job) RunIndependently(vars map[string]any, printer *Printer, jobID string) (bool, map[string]any, string, string, time.Duration) {
 	start := time.Now()
 	j.ID = jobID
 	result := NewResult()
@@ -208,9 +208,9 @@ func (j *Job) RunIndependently(vars map[string]any, verbose bool, jobID string) 
 		Outputs: NewOutputs(),
 		Result:  result,
 		Config: Config{
-			Verbose: verbose,
+			Verbose: printer.verbose,
 		},
-		Printer: NewPrinter(verbose, []string{jobID}),
+		Printer: printer,
 	}
 
 	success := true

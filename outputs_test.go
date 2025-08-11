@@ -1,6 +1,7 @@
 package probe
 
 import (
+	"reflect"
 	"testing"
 )
 
@@ -49,9 +50,21 @@ func TestOutputsFlatAccess(t *testing.T) {
 		t.Errorf("Expected conflict error but got none")
 	}
 
-	// Debug: Check all data
+	// Verify all data structure after conflict
 	allData := outputs.GetAll()
-	t.Logf("All data after setting step 'token': %+v", allData)
+	expected := map[string]any{
+		"auth": map[string]any{
+			"token":   "secret123",
+			"user_id": "user456",
+		},
+		"token":   "secret123",
+		"user_id": "user456",
+		"value":   "different_token",
+	}
+
+	if !reflect.DeepEqual(allData, expected) {
+		t.Errorf("GetAll() data mismatch.\nExpected: %+v\nGot: %+v", expected, allData)
+	}
 
 	// Flat access for "token" should still point to original
 	flatToken, exists = outputs.GetFlat("token")

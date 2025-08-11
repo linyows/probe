@@ -1,217 +1,376 @@
 package main
 
 import (
-	"flag"
-	"os"
+	"fmt"
+	"strings"
 	"testing"
 )
 
-// Test that main function doesn't panic and handles basic cases
-func TestMain(t *testing.T) {
-	// We can't easily test main() directly since it calls os.Exit()
-	// But we can test the components that main() uses
+func TestCmd_isValid(t *testing.T) {
+	c := newBufferCmd()
 
-	// Test that version and commit variables are accessible
-	if version == "" {
-		version = "test-version" // Set for testing
-	}
-	if commit == "" {
-		commit = "test-commit" // Set for testing
-	}
-
-	// Test newCmd with different argument scenarios
 	tests := []struct {
-		name      string
-		args      []string
-		expectNil bool
+		name     string
+		flag     string
+		expected bool
 	}{
 		{
-			name:      "help argument",
-			args:      []string{"probe", "--help"},
-			expectNil: false,
+			name:     "valid short flag",
+			flag:     "-help",
+			expected: true,
 		},
 		{
-			name:      "no arguments",
-			args:      []string{"probe"},
-			expectNil: false,
+			name:     "valid long flag",
+			flag:     "--help",
+			expected: true,
 		},
-		// Note: Builtin command test commented out because it tries to start actual servers
-		// {
-		// 	name: "builtin command",
-		// 	args: []string{"probe", "action", "hello"},
-		// 	expectNil: true,
-		// },
+		{
+			name:     "invalid flag",
+			flag:     "--invalid",
+			expected: false,
+		},
+		{
+			name:     "invalid short flag",
+			flag:     "-invalid",
+			expected: false,
+		},
+		{
+			name:     "valid verbose flag",
+			flag:     "--verbose",
+			expected: true,
+		},
+		{
+			name:     "valid rt flag",
+			flag:     "--rt",
+			expected: true,
+		},
+		{
+			name:     "valid v flag (shorthand)",
+			flag:     "-v",
+			expected: true,
+		},
+		{
+			name:     "valid h flag (shorthand)",
+			flag:     "-h",
+			expected: true,
+		},
+		{
+			name:     "valid version flag",
+			flag:     "--version",
+			expected: true,
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Save and restore original flag state
-			originalCommandLine := flag.CommandLine
-			originalArgs := os.Args
-			defer func() {
-				flag.CommandLine = originalCommandLine
-				os.Args = originalArgs
-			}()
-
-			// Reset flag.CommandLine for each test
-			flag.CommandLine = flag.NewFlagSet(os.Args[0], flag.ContinueOnError)
-			flag.CommandLine.SetOutput(os.Stderr)
-			os.Args = tt.args
-
-			cmd := newCmd(tt.args)
-
-			if tt.expectNil && cmd != nil {
-				t.Errorf("newCmd(%v) should return nil", tt.args)
-			}
-
-			if !tt.expectNil && cmd == nil {
-				t.Errorf("newCmd(%v) should not return nil", tt.args)
+			result := c.isValid(tt.flag)
+			if result != tt.expected {
+				t.Errorf("isValid(%q) = %v, want %v", tt.flag, result, tt.expected)
 			}
 		})
 	}
 }
 
-// Test that the main function's logic flow works correctly
-func TestMainLogic(t *testing.T) {
-	// Save original os.Args
-	originalArgs := os.Args
-	defer func() {
-		os.Args = originalArgs
-	}()
+func TestCmd_usage(t *testing.T) {
+	c := newBufferCmd()
+	c.ver = "test-version"
+	c.rev = "test-commit"
+	c.usage()
+	output := fmt.Sprintf("%s", c.errWriter)
 
-	// Test help case
-	t.Run("help case", func(t *testing.T) {
-		// Save and restore original flag state
-		originalCommandLine := flag.CommandLine
-		originalArgs := os.Args
-		defer func() {
-			flag.CommandLine = originalCommandLine
-			os.Args = originalArgs
-		}()
-
-		// Reset flag.CommandLine for each test
-		flag.CommandLine = flag.NewFlagSet(os.Args[0], flag.ContinueOnError)
-		flag.CommandLine.SetOutput(os.Stderr)
-
-		os.Args = []string{"probe", "--help"}
-		cmd := newCmd(os.Args)
-
-		if cmd == nil {
-			t.Fatal("newCmd should return a command for help")
-		}
-
-		// Test that start() can be called (it will return 1 for help)
-		exitCode := cmd.start()
-		if exitCode != 1 {
-			t.Errorf("Help command should return exit code 1, got %d", exitCode)
-		}
-	})
-
-	// Test no workflow case
-	t.Run("no workflow case", func(t *testing.T) {
-		// Save and restore original flag state
-		originalCommandLine := flag.CommandLine
-		originalArgs := os.Args
-		defer func() {
-			flag.CommandLine = originalCommandLine
-			os.Args = originalArgs
-		}()
-
-		// Reset flag.CommandLine for each test
-		flag.CommandLine = flag.NewFlagSet(os.Args[0], flag.ContinueOnError)
-		flag.CommandLine.SetOutput(os.Stderr)
-
-		os.Args = []string{"probe"}
-		cmd := newCmd(os.Args)
-
-		if cmd == nil {
-			t.Fatal("newCmd should return a command")
-		}
-
-		// Test that start() returns 1 for missing workflow
-		exitCode := cmd.start()
-		if exitCode != 1 {
-			t.Errorf("Missing workflow should return exit code 1, got %d", exitCode)
-		}
-	})
-
-	// Note: Builtin command test commented out because it tries to start actual servers
-	// t.Run("builtin command case", func(t *testing.T) {
-	// 	os.Args = []string{"probe", "action", "hello"}
-	// 	cmd := newCmd(os.Args)
-	//
-	// 	// Should return nil for builtin commands
-	// 	if cmd != nil {
-	// 		t.Error("Builtin commands should return nil from newCmd")
-	// 	}
-	// })
-}
-
-// Test global variables
-func TestGlobalVariables(t *testing.T) {
-	// Test that version and commit are defined
-	if version != "dev" && version == "" {
-		t.Error("version should be set to 'dev' or another value")
+	// Check that output contains expected elements
+	expectedElements := []string{
+		"Probe - A YAML-based workflow automation tool",
+		"https://github.com/linyows/probe",
+		"test-version",
+		"test-commit",
+		"Usage: probe [options] <workflow-file>",
+		"Options:",
 	}
 
-	if commit != "unknown" && commit == "" {
-		t.Error("commit should be set to 'unknown' or another value")
+	for _, element := range expectedElements {
+		if !strings.Contains(output, element) {
+			t.Errorf("usage() output should contain %q, but it doesn't. Output: %s", element, output)
+		}
+	}
+
+	// Check ASCII art is present (note: colors may not be in output during testing)
+	if !strings.Contains(output, "__  __  __  __  __") {
+		t.Errorf("usage() output should contain ASCII art")
 	}
 }
 
-// Test that we can simulate the main function logic without calling os.Exit
-func TestMainSimulation(t *testing.T) {
+func TestCmd_start(t *testing.T) {
+	help := strings.TrimLeft(`
+ __  __  __  __  __
+|  ||  ||  ||  || _|
+|  ||  /| |||  /|  |
+| | |  \| |||  \| _|
+|_| |_\_|__||__||__|
+
+Probe - A YAML-based workflow automation tool.
+https://github.com/linyows/probe (ver: dev, rev: unknown)
+
+Usage: probe [options] <workflow-file>
+
+Arguments:
+  workflow-file    Path to YAML workflow file(s). Multiple files can be 
+                   specified with comma-separated paths (e.g., "base.yml,override.yml")
+                   to merge configurations.
+
+Options:
+  -h, --help       Show command usage
+      --version    Show version information
+      --rt         Show response time
+  -v, --verbose    Show verbose log
+`, "\n")
+
 	tests := []struct {
 		name           string
 		args           []string
-		expectExitCall bool
+		expectCode     int
+		expectWorkflow string
+		expectVerbose  bool
+		expectRT       bool
+		expectHelp     bool
+		expectOutput   string
 	}{
 		{
-			name:           "valid help command",
+			name:           "help flag",
 			args:           []string{"probe", "--help"},
-			expectExitCall: true,
+			expectCode:     1,
+			expectHelp:     true,
+			expectWorkflow: "",
+			expectVerbose:  false,
+			expectRT:       false,
+			expectOutput:   help,
 		},
-		// Note: Builtin command test commented out
-		// {
-		// 	name:     "builtin command",
-		// 	args:     []string{"probe", "action", "hello"},
-		// 	expectExitCall: false,
-		// },
+		{
+			name:           "version command",
+			args:           []string{"probe", "--version"},
+			expectCode:     0,
+			expectHelp:     false,
+			expectWorkflow: "",
+			expectVerbose:  false,
+			expectRT:       false,
+			expectOutput:   "",
+		},
+		{
+			name:           "no workflow specified",
+			args:           []string{"probe"},
+			expectCode:     1,
+			expectHelp:     false,
+			expectWorkflow: "",
+			expectVerbose:  false,
+			expectRT:       false,
+			expectOutput:   "[ERROR] workflow is required\n",
+		},
+		{
+			name:           "workflow argument",
+			args:           []string{"probe", "test.yml"},
+			expectCode:     0,
+			expectHelp:     false,
+			expectWorkflow: "test.yml",
+			expectVerbose:  false,
+			expectRT:       false,
+			expectOutput:   "",
+		},
+		{
+			name:           "verbose flag without workflow",
+			args:           []string{"probe", "--verbose"},
+			expectCode:     1,
+			expectHelp:     false,
+			expectWorkflow: "",
+			expectVerbose:  true,
+			expectRT:       false,
+			expectOutput:   "[ERROR] workflow is required\n",
+		},
+		{
+			name:           "rt flag without workflow",
+			args:           []string{"probe", "--rt"},
+			expectCode:     1,
+			expectHelp:     false,
+			expectWorkflow: "",
+			expectVerbose:  false,
+			expectRT:       true,
+			expectOutput:   "[ERROR] workflow is required\n",
+		},
+		{
+			name:           "multiple flags with workflow argument",
+			args:           []string{"probe", "--verbose", "--rt", "test.yml"},
+			expectCode:     0,
+			expectHelp:     false,
+			expectWorkflow: "test.yml",
+			expectVerbose:  true,
+			expectRT:       true,
+			expectOutput:   "",
+		},
+		{
+			name:           "v shorthand flag with workflow argument",
+			args:           []string{"probe", "-v", "test.yml"},
+			expectCode:     0,
+			expectHelp:     false,
+			expectWorkflow: "test.yml",
+			expectVerbose:  true,
+			expectRT:       false,
+			expectOutput:   "",
+		},
+		{
+			name:           "h shorthand flag",
+			args:           []string{"probe", "-h"},
+			expectCode:     1,
+			expectHelp:     true,
+			expectWorkflow: "",
+			expectVerbose:  false,
+			expectRT:       false,
+			expectOutput:   help,
+		},
+		{
+			name:           "options after argument",
+			args:           []string{"probe", "test.yml", "--verbose"},
+			expectCode:     0,
+			expectHelp:     false,
+			expectWorkflow: "test.yml",
+			expectVerbose:  true,
+			expectRT:       false,
+			expectOutput:   "",
+		},
+		{
+			name:           "options after argument with multiple flags",
+			args:           []string{"probe", "test.yml", "--verbose", "--rt"},
+			expectCode:     0,
+			expectHelp:     false,
+			expectWorkflow: "test.yml",
+			expectVerbose:  true,
+			expectRT:       true,
+			expectOutput:   "",
+		},
+		{
+			name:           "mixed options before and after argument",
+			args:           []string{"probe", "--verbose", "test.yml", "--rt"},
+			expectCode:     0,
+			expectHelp:     false,
+			expectWorkflow: "test.yml",
+			expectVerbose:  true,
+			expectRT:       true,
+			expectOutput:   "",
+		},
+		{
+			name:           "shorthand option after argument",
+			args:           []string{"probe", "test.yml", "-v"},
+			expectCode:     0,
+			expectHelp:     false,
+			expectWorkflow: "test.yml",
+			expectVerbose:  true,
+			expectRT:       false,
+			expectOutput:   "",
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Save and restore original flag state
-			originalCommandLine := flag.CommandLine
-			originalArgs := os.Args
-			defer func() {
-				flag.CommandLine = originalCommandLine
-				os.Args = originalArgs
-			}()
+			c := newBufferCmd()
+			code := c.start(tt.args)
+			output := fmt.Sprintf("%s", c.errWriter)
 
-			// Reset flag.CommandLine for each test
-			flag.CommandLine = flag.NewFlagSet(os.Args[0], flag.ContinueOnError)
-			flag.CommandLine.SetOutput(os.Stderr)
-			os.Args = tt.args
+			if code != tt.expectCode {
+				t.Errorf("start(%v) = %d, want %d", tt.args, code, tt.expectCode)
+			}
 
-			cmd := newCmd(tt.args)
+			if c.WorkflowPath != tt.expectWorkflow {
+				t.Errorf("start(%v).WorkflowPath = %q, want %q", tt.args, c.WorkflowPath, tt.expectWorkflow)
+			}
 
-			if tt.expectExitCall {
-				if cmd == nil {
-					t.Error("Expected command to be created, but got nil")
-				} else {
-					// If cmd is not nil, main would call os.Exit(cmd.start())
-					exitCode := cmd.start()
-					if exitCode < 0 {
-						t.Errorf("start() should return non-negative exit code, got %d", exitCode)
-					}
-				}
-			} else {
-				// If cmd is nil, main would not call os.Exit
-				if cmd != nil {
-					t.Error("Expected nil command, but got non-nil")
-				}
+			if c.Verbose != tt.expectVerbose {
+				t.Errorf("start(%v).Verbose = %v, want %v", tt.args, c.Verbose, tt.expectVerbose)
+			}
+
+			if c.RT != tt.expectRT {
+				t.Errorf("start(%v).RT = %v, want %v", tt.args, c.RT, tt.expectRT)
+			}
+
+			if c.Help != tt.expectHelp {
+				t.Errorf("start(%v).Help = %v, want %v", tt.args, c.Help, tt.expectHelp)
+			}
+
+			// Check that version and commit are set
+			if c.ver != version {
+				t.Errorf("start(%v).ver = %q, want %q", tt.args, c.ver, version)
+			}
+
+			if c.rev != commit {
+				t.Errorf("start(%v).rev = %q, want %q", tt.args, c.rev, commit)
+			}
+
+			if output != tt.expectOutput {
+				t.Errorf("start(%v) output to %q, want %q", tt.args, output, tt.expectOutput)
+			}
+
+			// Check validFlags
+			expectedFlags := []string{"help", "h", "version", "rt", "verbose", "v"}
+			if len(c.validFlags) != len(expectedFlags) {
+				t.Errorf("start(%v) validFlags length = %d, want %d", tt.args, len(c.validFlags), len(expectedFlags))
 			}
 		})
+	}
+}
+
+func TestCmd_InvalidFlags(t *testing.T) {
+	args := []string{"probe", "--invalid-flag"}
+	cmd := newBufferCmd()
+	n := cmd.start(args)
+	output := fmt.Sprintf("%s", cmd.errWriter)
+	expected := strings.TrimLeft(`
+[ERROR] unknown flag: --invalid-flag
+try --help to know more
+`, "\n")
+
+	if n != 1 {
+		t.Errorf("Cmd.start(%v) should return 1 for invalid flags", args)
+	}
+
+	if expected != output {
+		t.Errorf("Expected error message about unknown flag, got: %s", output)
+	}
+}
+
+func TestCmd_runBuiltinActions(t *testing.T) {
+	tests := []struct {
+		name     string
+		expected string
+	}{
+		{name: "hello", expected: ""},
+		{name: "http", expected: ""},
+		{name: "smtp", expected: ""},
+		{name: "db", expected: ""},
+		{name: "shell", expected: ""},
+		{name: "browser", expected: ""},
+		{name: "embedded", expected: ""},
+		{name: "unknown", expected: "[ERROR] not supported plugin: unknown\n"},
+	}
+
+	cmd := newBufferCmd()
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cmd.runBuiltinActions(tt.name)
+			got := fmt.Sprintf("%s", cmd.errWriter)
+			if got != tt.expected {
+				t.Errorf("runBuiltinActions got: %s, expected: %s", got, tt.expected)
+			}
+		})
+	}
+}
+
+func TestCmd_printVersion(t *testing.T) {
+	c := newBufferCmd()
+	c.ver = "1.0.0"
+	c.rev = "abc123"
+	c.printVersion()
+	got := fmt.Sprintf("%s", c.outWriter)
+	expected := "Probe Version 1.0.0 (commit: abc123)\n"
+
+	if got != expected {
+		t.Errorf("printVersion() output = %q, want %q", got, expected)
 	}
 }

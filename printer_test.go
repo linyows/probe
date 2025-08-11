@@ -1243,9 +1243,10 @@ func TestPrinter_PrintEchoContent(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			printer := NewPrinter(tt.verbose, []string{})
+			printer := newBufferPrinter()
+			printer.verbose = tt.verbose
 
-			// This method prints debug output, we mainly test it doesn't panic
+			// This method prints debug output to buffer, we mainly test it doesn't panic
 			printer.PrintEchoContent(tt.content)
 
 			// Test passes if no panic occurs
@@ -1298,9 +1299,10 @@ func TestPrinter_PrintRequestResponse(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			printer := NewPrinter(tt.verbose, []string{})
+			printer := newBufferPrinter()
+			printer.verbose = tt.verbose
 
-			// This method prints debug output, we mainly test it doesn't panic
+			// This method prints debug output to buffer, we mainly test it doesn't panic
 			printer.PrintRequestResponse(tt.stepIdx, tt.stepName, tt.req, tt.res, tt.rt)
 
 			// Test passes if no panic occurs
@@ -1350,9 +1352,10 @@ func TestPrinter_PrintMapData(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			printer := NewPrinter(tt.verbose, []string{})
+			printer := newBufferPrinter()
+			printer.verbose = tt.verbose
 
-			// This method prints debug output, we mainly test it doesn't panic
+			// This method prints debug output to buffer, we mainly test it doesn't panic
 			printer.PrintMapData(tt.data)
 
 			// Test passes if no panic occurs
