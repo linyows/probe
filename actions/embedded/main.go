@@ -91,8 +91,8 @@ func executeEmbeddedSteps(req *Req, log hclog.Logger) (map[string]string, error)
 
 	// Execute job independently using the refactored function
 	jobID := "embedded"
-	verbose := true
-	success, outputs, report, errorMsg, duration := job.RunIndependently(req.Vars, verbose, jobID)
+	printer := probe.NewPrinter(true, []string{jobID})
+	success, outputs, report, errorMsg, duration := job.RunIndependently(req.Vars, printer, jobID)
 
 	code := 0
 	if !success {
