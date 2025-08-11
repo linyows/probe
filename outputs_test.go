@@ -61,7 +61,7 @@ func TestOutputsFlatAccess(t *testing.T) {
 		"user_id": "user456",
 		"value":   "different_token",
 	}
-	
+
 	if !reflect.DeepEqual(allData, expected) {
 		t.Errorf("GetAll() data mismatch.\nExpected: %+v\nGot: %+v", expected, allData)
 	}

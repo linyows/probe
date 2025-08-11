@@ -404,13 +404,13 @@ func TestJob_RunIndependently_Failure(t *testing.T) {
 		if errorOutput == "" {
 			t.Errorf("Expected error output in printer buffer, but got empty string")
 		}
-		
+
 		// Verify the error message contains expected content
 		expectedContent := "mock action execution failed"
 		if !strings.Contains(errorOutput, expectedContent) {
 			t.Errorf("Expected error output to contain '%s', but got: %s", expectedContent, errorOutput)
 		}
-		
+
 		// Verify it contains error formatting
 		if !strings.Contains(errorOutput, "Error:") {
 			t.Errorf("Expected error output to contain 'Error:' prefix, but got: %s", errorOutput)

@@ -1069,7 +1069,7 @@ func TestSleepWithMessage(t *testing.T) {
 			expectFnCalled: false,
 		},
 		{
-			name:           "1.25s duration - expect 1 to 2 calls", 
+			name:           "1.25s duration - expect 1 to 2 calls",
 			duration:       1250 * time.Millisecond,
 			message:        "hello",
 			expectFnCalled: true,
