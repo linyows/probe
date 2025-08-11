@@ -48,15 +48,9 @@ func TestDo(t *testing.T) {
 		t.Errorf("\nExpected:\n%s\nGot:\n%s", expects, got.Res.Body)
 	}
 
-	// Check that RTSec field is populated
-	if got.RTSec <= 0 {
-		t.Errorf("RTSec should be greater than 0, got: %f", got.RTSec)
-	}
-
-	// Check that RTSec matches RT.Seconds()
-	expectedRTSec := got.RT.Seconds()
-	if got.RTSec != expectedRTSec {
-		t.Errorf("RTSec = %f, want %f", got.RTSec, expectedRTSec)
+	// Check that RT field is populated
+	if got.RT <= 0 {
+		t.Errorf("RT should be greater than 0, got: %v", got.RT)
 	}
 }
 

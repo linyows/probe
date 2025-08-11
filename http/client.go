@@ -33,10 +33,9 @@ type Res struct {
 }
 
 type Result struct {
-	Req   Req           `map:"req"`
-	Res   Res           `map:"res"`
-	RT    time.Duration `map:"rt"`
-	RTSec float64       `map:"rt_sec"`
+	Req Req           `map:"req"`
+	Res Res           `map:"res"`
+	RT  time.Duration `map:"rt"`
 }
 
 func NewReq() *Req {
@@ -75,7 +74,6 @@ func (r *Req) Do() (*Result, error) {
 	start := time.Now()
 	res, err := cl.Do(req)
 	result.RT = time.Since(start)
-	result.RTSec = result.RT.Seconds()
 	if err != nil {
 		return result, err
 	}
