@@ -160,18 +160,9 @@ Options:`
 	blue := color.New(color.FgBlue)
 	grey := color.New(color.FgHiBlack)
 
-	_, err := blue.Fprintln(c.errWriter, strings.TrimLeft(logo, "\n"))
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "[ERROR] %v\n", err)
-	}
-	_, err = grey.Fprintf(c.errWriter, strings.TrimLeft(desc, "\n"), c.ver, c.rev)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "[ERROR] %v\n", err)
-	}
-	_, err = fmt.Fprintln(c.errWriter, head)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "[ERROR] %v\n", err)
-	}
+	_, _ = blue.Fprintln(c.errWriter, strings.TrimLeft(logo, "\n"))
+	_, _ = grey.Fprintf(c.errWriter, strings.TrimLeft(desc, "\n"), c.ver, c.rev)
+	_, _ = fmt.Fprintln(c.errWriter, head)
 	c.printOptions()
 }
 
@@ -187,15 +178,9 @@ func (c *Cmd) printOptions() {
 
 	for _, opt := range options {
 		if opt.short != "" {
-			_, err := fmt.Fprintf(c.errWriter, "  %s, %-12s %s\n", opt.short, opt.long, opt.description)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "[ERROR] %v\n", err)
-			}
+			_, _ = fmt.Fprintf(c.errWriter, "  %s, %-12s %s\n", opt.short, opt.long, opt.description)
 		} else {
-			_, err := fmt.Fprintf(c.errWriter, "      %-12s %s\n", opt.long, opt.description)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "[ERROR] %v\n", err)
-			}
+			_, _ = fmt.Fprintf(c.errWriter, "      %-12s %s\n", opt.long, opt.description)
 		}
 	}
 }
@@ -208,7 +193,7 @@ func (c *Cmd) start(args []string) int {
 
 	// Parse arguments manually to allow options after arguments
 	if err := c.parseArgs(args[1:]); err != nil {
-		fmt.Fprintf(c.errWriter, "[ERROR] %v\ntry --help to know more\n", err)
+		_, _ = fmt.Fprintf(c.errWriter, "[ERROR] %v\ntry --help to know more\n", err)
 		return 1
 	}
 
@@ -222,7 +207,7 @@ func (c *Cmd) start(args []string) int {
 		return 0
 
 	case c.WorkflowPath == "":
-		fmt.Fprintf(c.errWriter, "[ERROR] workflow is required\n")
+		_, _ = fmt.Fprintf(c.errWriter, "[ERROR] workflow is required\n")
 		return 1
 
 	default:
@@ -240,13 +225,13 @@ func (c *Cmd) runProbe() int {
 	}
 
 	if err := p.Do(); err != nil {
-		fmt.Fprintf(c.errWriter, "[ERROR] %v\n", err)
+		_, _ = fmt.Fprintf(c.errWriter, "[ERROR] %v\n", err)
 	}
 	return p.ExitStatus()
 }
 
 func (c *Cmd) printVersion() {
-	fmt.Fprintf(c.outWriter, "Probe Version %s (commit: %s)\n", c.ver, c.rev)
+	_, _ = fmt.Fprintf(c.outWriter, "Probe Version %s (commit: %s)\n", c.ver, c.rev)
 }
 
 func (c *Cmd) runBuiltinActions(name string) {
@@ -281,6 +266,6 @@ func (c *Cmd) runBuiltinActions(name string) {
 		}
 
 	default:
-		fmt.Fprintf(c.errWriter, "[ERROR] not supported plugin: %s\n", name)
+		_, _ = fmt.Fprintf(c.errWriter, "[ERROR] not supported plugin: %s\n", name)
 	}
 }
