@@ -7,6 +7,8 @@ Probeは、YAMLでワークフローを宣言的に定義できる無料のオ�
 Probeは以下のような用途で活用できます：
 
 - **APIテスト**: REST APIのエンドツーエンドテストの自動化
+- **シナリオテスト**: サービスに対する複合的な操作検証
+- **実験定義**: 情報工学やソフトウェア工学などの研究実験の再現性向上
 - **ウェブサイト監視**: サイトの稼働状況やパフォーマンスの監視
 - **ヘルスチェック**: システムやサービスの健全性チェック
 - **データ処理**: 定期的なデータ取得や変換処理
@@ -41,28 +43,30 @@ Go言語で開発された単一バイナリで、依存関係なしに動作し
 まずは最もシンプルな例から始めましょう。以下のYAMLファイルを作成します：
 
 ```yaml
-name: Hello World Workflow
+name: My Workflow
 
 jobs:
 - name: My First Job
   steps:
   - name: Say Hello
-    uses: hello
-    wait: 1s
-    echo: "Hello, World!"
+    uses: shell
+    with:
+      cmd: echo "Hello, World!"
+    test: res.code == 0
+    echo: {{ res.stdout }}
 ```
 
 このワークフローをファイルに保存して実行します：
 
 ```bash
 $ probe hello-world.yml
-Hello World Workflow
+My Workflow
 
-⏺ My First Job (Completed in 1.04s)
-  ⎿  0. ▲  1s → Say Hello
+⏺ My First Job (Completed in 0.02s)
+  ⎿  0. ✔︎  Say Hello
            Hello, World!
 
-Total workflow time: 1.07s ✔︎ All jobs succeeded
+Total workflow time: 0.02s ✔︎ All jobs succeeded
 ```
 
 ### より実践的な例：API監視
@@ -70,26 +74,28 @@ Total workflow time: 1.07s ✔︎ All jobs succeeded
 実際の使用例として、APIの稼働状況を監視するワークフローです：
 
 ```yaml
-name: API Health Check
-
-defaults:
-  http:
-    url: https://httpbin.org
+name: GitHub API
 
 jobs:
-- name: Monitor API Health
-  steps:
-  - name: Check Homepage
-    uses: http
-    with:
-      get: /status/200
-    test: res.status == 200
+- name: Check APIs
+  defaults:
+    http:
+      url: https://api.github.com
+      headers:
+        content_type: application/json
 
-  - name: Check API Response
+  steps:
+  - name: Check Repo API
     uses: http
     with:
-      get: /json
-    test: res.status == 200 && res.json != null
+      get: /repos/linyows/probe
+    test: res.status == "200 OK" && res.body.language == "Go"
+
+  - name: Check User API
+    uses: http
+    with:
+      get: /users/linyows
+    test: res.status == "200 OK" && res.body.id == 72049
 ```
 
 このように、Probeを使えば**簡単**で**迅速**、そして**楽しく**ワークフローを作成・実行できます。
@@ -109,6 +115,13 @@ REST APIの呼び出し、ウェブサイトの監視、APIテストなどに使
 - SMTPサーバー経由でのメール送信
 - HTML/テキストメールの対応
 - 添付ファイルの送信
+
+### Database Action
+データベースの操作をすることができます。
+- MySQL、PostgreSQL、SQLiteに対応
+- SELECT、INSERT、UPDATE、DELETE等のSQL実行
+- プリペアドステートメントによる安全なクエリ実行
+- 実行結果の行数、影響を受けた行数の取得
 
 ### Shell Action
 シェルコマンドの実行によって外部ソフトウェアとの連携ができます。
@@ -131,14 +144,7 @@ Jobを共通化し再利用することでWorkflowの運用を楽にします。
 - 複雑なワークフローの分割と再利用
 - DRY原則に基づく効率的なワークフロー設計
 
-### Database Action
-データベースの操作をすることができます。
-- MySQL、PostgreSQL、SQLiteに対応
-- SELECT、INSERT、UPDATE、DELETE等のSQL実行
-- プリペアドステートメントによる安全なクエリ実行
-- 実行結果の行数、影響を受けた行数の取得
-
-::: tip 開発予定のアクション：
+::: tip 💡　開発予定のアクション
 
 - **SSH Action** - リモートサーバーでのコマンド実行  
 - **gRPC Action** - gRPCサービスとの通信
@@ -154,9 +160,9 @@ Jobを共通化し再利用することでWorkflowの運用を楽にします。
 
 Probeを始めるのは簡単です。以下の3つのステップで、すぐにワークフローを作成・実行できます：
 
-1. **[インストール](../get-started/installation/)** - 環境に応じた方法でProbeをインストール
-2. **[クイックスタート](../get-started/quickstart/)** - 5分で最初のワークフローを作成・実行
-3. **[基本概念を理解](../get-started/understanding-probe/)** - ワークフロー、ジョブ、ステップの仕組みを学習
+1. **[インストール](./installation/)** - 環境に応じた方法でProbeをインストール
+2. **[クイックスタート](./quickstart/)** - 5分で最初のワークフローを作成・実行
+3. **[基本概念を理解](./understanding-probe/)** - ワークフロー、ジョブ、ステップの仕組みを学習
 
 ## 適用シーン
 
@@ -184,7 +190,7 @@ Probeの使用中に問題が発生した場合や質問がある場合の、サ
 ### ドキュメント
 このウェブサイトには包括的なドキュメントが用意されています。基本的な使い方から高度な機能まで、すべてカバーしています。
 
-### コミュニティサポート  
+### コミュニティサポート
 質問、フィードバック、アイデアの議論には[GitHub Discussions](https://github.com/linyows/probe/discussions)をご利用ください。お気軽にディスカッションを始めてください。
 
 ### バグ報告

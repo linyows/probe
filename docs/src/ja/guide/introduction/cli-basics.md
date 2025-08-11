@@ -1,9 +1,3 @@
----
-title: CLI基本
-description: Probeコマンドライン・インターフェースをマスターする
-weight: 50
----
-
 # CLI基本
 
 Probeコマンドライン・インターフェース（CLI）は、Probeと対話する主要な方法です。このガイドでは、マスターする必要があるすべての基本的なコマンド、オプション、技術をカバーします。
@@ -13,36 +7,37 @@ Probeコマンドライン・インターフェース（CLI）は、Probeと対�
 Probeを実行する最も基本的な方法は：
 
 ```bash
-probe workflow.yml
+$ probe workflow.yml
 ```
 
 これは`workflow.yml`で定義されたワークフローを実行し、結果を表示します。
 
-## コマンド構文
+### コマンド構文
 
 ```bash
-probe [options] <workflow-file>
+$ probe [options] <workflow-file>
 ```
 
 - **`workflow-file`**: YAMLワークフローファイルへのパス（必須）
 - **`options`**: 動作を変更するさまざまなフラグ（オプション）
 
-## 核となるオプション
+## オプション
+
+Probe実行時のオプションを説明します。
 
 ### ヘルプと情報
 
 利用可能なオプションについてのヘルプを取得：
 
 ```bash
-probe --help
-# または
-probe -h
+$ probe --help
+# あるいは -h
 ```
 
 インストールされたバージョンを確認：
 
 ```bash
-probe --version
+$ probe --version
 ```
 
 ### 詳細出力
@@ -50,9 +45,8 @@ probe --version
 詳細なログを有効にして、内部で何が起こっているかを確認：
 
 ```bash
-probe --verbose workflow.yml
-# または
-probe -v workflow.yml
+$ probe workflow.yml --verbose
+# あるいは -v
 ```
 
 詳細モードでは以下が表示されます：
@@ -79,7 +73,7 @@ probe -v workflow.yml
 HTTPリクエストのレスポンス時間を表示：
 
 ```bash
-probe --rt workflow.yml
+$ probe workflow.yml --rt
 ```
 
 これにより、`--verbose`の完全な詳細さなしにタイミング情報が出力に追加されます。
@@ -89,7 +83,7 @@ probe --rt workflow.yml
 複数のオプションを組み合わせることができます：
 
 ```bash
-probe -v --rt workflow.yml
+$ probe -v --rt workflow.yml
 ```
 
 ## 複数ファイルマージ
@@ -97,7 +91,7 @@ probe -v --rt workflow.yml
 Probeの強力な機能の一つは、複数のYAMLファイルをマージできることです：
 
 ```bash
-probe base.yml,overrides.yml
+$ probe base.yml,overrides.yml
 ```
 
 ### ファイルマージの使用例
@@ -108,37 +102,39 @@ probe base.yml,overrides.yml
 ```yaml
 name: API Health Check
 jobs:
-  health-check:
-    steps:
-      - name: Check API
-        action: http
-        with:
-          url: "{{env.API_URL}}"
-          method: GET
-        test: res.status == 200
+- name: API
+  defaults:
+    http:
+      url: *endpoint
+  steps:
+  - name: Check API
+    action: http
+    with:
+      get: /foo/bar
+    test: res.code == 200
 ```
 
 **production.yml:**
 ```yaml
 # 本番環境固有の設定
-env:
-  API_URL: https://api.production.example.com
+x_alias:
+  x_endpoint: &endpoint "https://api.production.example.com"
 ```
 
 **staging.yml:**
 ```yaml
 # ステージング環境固有の設定
-env:
-  API_URL: https://api.staging.example.com
+x_alias:
+  x_endpoint: &endpoint "https://api.staging.example.com"
 ```
 
 異なる環境で実行：
 ```bash
 # 本番環境
-probe base-workflow.yml,production.yml
+$ probe base-workflow.yml,production.yml
 
 # ステージング環境
-probe base-workflow.yml,staging.yml
+$ probe base-workflow.yml,staging.yml
 ```
 
 **2. 共有設定:**
@@ -162,37 +158,47 @@ jobs:
 ```
 
 ```bash
-probe common-config.yml,api-check.yml
+$ probe common-config.yml,api-check.yml
 ```
 
 **3. 特定の値をオーバーライド:**
 
 ```bash
-probe workflow.yml,local-overrides.yml
+$ probe workflow.yml,local-overrides.yml
 ```
 
 マージ順序が重要です - 後のファイルが前のファイルの値を上書きします。
 
 ## 環境変数の使用
 
-Probeは`env`オブジェクトを使用してワークフロー内で環境変数にアクセスできます：
+Probeはworkflow wideの`vars`オブジェクトを使用して環境変数を変数に設定することができます：
 
 ```yaml
-steps:
-  - name: Connect to Database
-    action: http
+name: Database Test
+
+vars:
+  db_host: "{{DB_HOST ?? 'localhost'}}"
+  db_pass: "{{DB_PASS ?? 'secret!!!'}}"
+
+jobs:
+- name: DB Operations
+  defaults:
+    db:
+      dsn: mysql://foobar:{{vars.db_pass}}@{{vars.db_host}}:3306/probetest
+  steps:
+  - name: Test MySQL Connection
+    uses: db
     with:
-      url: "{{env.DATABASE_URL}}"
-      headers:
-        Authorization: "Bearer {{env.API_TOKEN}}"
+      query: SELECT 1 as connection_test, NOW() as server_time
+    test: res.code == 0
 ```
 
 実行前に環境変数を設定：
 
 ```bash
-export DATABASE_URL="https://db.example.com"
-export API_TOKEN="your-secret-token"
-probe workflow.yml
+export DB_HOST="https://db.example.com"
+export DB_PASS="****************"
+$ probe workflow.yml
 ```
 
 ## 終了コード
@@ -241,14 +247,7 @@ fi
 
 ```bash
 # 開発中のクイックテスト
-probe -v api-tests.yml,local-config.yml
-```
-
-### 4. 負荷テスト
-
-```bash
-# タイミングでパフォーマンステストを実行
-probe --rt --verbose load-test.yml
+$ probe -v api-tests.yml,local-config.yml
 ```
 
 ## 出力の解釈
@@ -321,7 +320,7 @@ Total workflow time: 2.34s ✘ 1 job(s) failed
 
 **解決策:** 有効なファイルパスを提供していることを確認：
 ```bash
-probe ./workflows/health-check.yml
+$ probe ./workflows/health-check.yml
 ```
 
 ### YAML構文エラー
@@ -359,21 +358,21 @@ chmod +r workflow.yml
 
 ```bash
 # 良い
-probe api-health-check.yml
-probe database-migration-test.yml
+$ probe api-health-check.yml
+$ probe database-migration-test.yml
 
 # そうでもない
-probe test.yml
-probe workflow.yml
+$ probe test.yml
+$ probe workflow.yml
 ```
 
 ### 2. ディレクトリで整理
 
 ```bash
 # 目的別にワークフローを整理
-probe monitoring/health-check.yml
-probe deployment/smoke-tests.yml
-probe maintenance/cleanup.yml
+$ probe monitoring/health-check.yml
+$ probe deployment/smoke-tests.yml
+$ probe maintenance/cleanup.yml
 ```
 
 ### 3. 設定ファイルを使用
@@ -381,7 +380,7 @@ probe maintenance/cleanup.yml
 シークレットと環境固有の値は別ファイルに保管：
 
 ```bash
-probe workflow.yml,configs/production.yml
+$ probe workflow.yml,configs/production.yml
 ```
 
 ### 4. 本番環境前に検証
@@ -390,18 +389,18 @@ probe workflow.yml,configs/production.yml
 
 ```bash
 # 徹底的にテスト
-probe -v new-workflow.yml,test-config.yml
+$ probe -v new-workflow.yml,test-config.yml
 
 # 本番環境にデプロイ
-probe new-workflow.yml,production-config.yml
+$ probe new-workflow.yml,production-config.yml
 ```
 
 ## 次のステップ
 
 CLI基本をマスターしたので、次の内容に進むことができます：
 
-1. **[How-tosを探る](../../how-tos/)** - 具体的なパターンと使用例を学ぶ
-2. **[リファレンスを確認](../../reference/)** - 利用可能なすべてのオプションを深く理解
-3. **[チュートリアルを試す](../../tutorials/)** - 一般的なシナリオのステップバイステップガイドに従う
+1. **[クイックスタート](./quickstart/)** - 5分で最初のワークフローを作成・実行
+2. **[最初のワークフロー](./your-first-workflow/)** - 簡単な例から始める
+3. **[リファレンスを確認](../reference/)** - 利用可能なすべてのオプションを深く理解
 
 CLIはProbeの力への入り口です。これらの基本をマスターしたので、高度な監視と自動化ワークフローを構築する準備が整いました。
