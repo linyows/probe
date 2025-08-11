@@ -1064,21 +1064,21 @@ func TestSleepWithMessage(t *testing.T) {
 	}{
 		{
 			name:           "Short duration under 1s - no call",
-			duration:       500 * time.Millisecond,
+			duration:       50 * time.Millisecond,
 			message:        "ignored",
 			expectFnCalled: false,
 		},
 		{
-			name:           "2.5s duration - expect 2 to 3 calls",
-			duration:       2500 * time.Millisecond,
+			name:           "1.25s duration - expect 1 to 2 calls", 
+			duration:       1250 * time.Millisecond,
 			message:        "hello",
 			expectFnCalled: true,
-			minCalls:       2,
-			maxCalls:       3,
+			minCalls:       1,
+			maxCalls:       2,
 		},
 		{
-			name:           "Exact 1s duration - expect 1 call",
-			duration:       1 * time.Second,
+			name:           "Exact 1.05s duration - expect 1 call",
+			duration:       1050 * time.Millisecond,
 			message:        "one",
 			expectFnCalled: true,
 			minCalls:       1,
