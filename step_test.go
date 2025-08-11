@@ -239,7 +239,7 @@ func TestStep_SkipIfWithWaitTiming(t *testing.T) {
 			}
 
 			jCtx := &JobContext{
-				Printer: NewPrinter(false, []string{}), // Silent printer
+				Printer: newBufferPrinter(), // Silent printer
 				Config:  Config{},
 			}
 
@@ -440,7 +440,7 @@ func TestStep_createStepResult_WithRepeatCounter(t *testing.T) {
 	}
 	jCtx := &JobContext{
 		Config:  Config{RT: true},
-		Printer: NewPrinter(false, []string{}),
+		Printer: newBufferPrinter(),
 	}
 	name := "Test Step"
 	counter := &StepRepeatCounter{
@@ -680,7 +680,7 @@ func TestStep_prepare(t *testing.T) {
 			}
 
 			jCtx := &JobContext{
-				Printer: NewPrinter(false, []string{}), // Use silent printer to avoid output during tests
+				Printer: newBufferPrinter(), // Use silent printer to avoid output during tests
 			}
 
 			name, shouldContinue := step.prepare(jCtx)
@@ -843,7 +843,7 @@ func TestStep_handleActionError(t *testing.T) {
 	}
 
 	jCtx := &JobContext{
-		Printer: NewPrinter(false, []string{}),
+		Printer: newBufferPrinter(),
 	}
 
 	originalErr := fmt.Errorf("test error")
@@ -926,7 +926,7 @@ func TestStep_finalize(t *testing.T) {
 					Verbose: tt.verbose,
 				},
 				IsRepeating:  tt.isRepeating,
-				Printer:      NewPrinter(false, []string{}),
+				Printer:      newBufferPrinter(),
 				StepCounters: make(map[int]StepRepeatCounter),
 			}
 
@@ -955,7 +955,7 @@ func TestStep_Do_Integration(t *testing.T) {
 		}
 
 		jobContext := JobContext{
-			Printer: NewPrinter(false, []string{}),
+			Printer: newBufferPrinter(),
 		}
 
 		// Execute the step (should be skipped)
@@ -993,7 +993,7 @@ func TestStep_Do_Integration(t *testing.T) {
 
 		jobContext := JobContext{
 			Config:  Config{Verbose: false},
-			Printer: NewPrinter(false, []string{}),
+			Printer: newBufferPrinter(),
 		}
 
 		// Execute the step
@@ -1035,7 +1035,7 @@ func TestStep_Do_Integration(t *testing.T) {
 
 		jobContext := JobContext{
 			Config:  Config{Verbose: false},
-			Printer: NewPrinter(false, []string{}),
+			Printer: newBufferPrinter(),
 		}
 
 		// Execute the step
@@ -1175,7 +1175,7 @@ func TestStep_getEchoOutput(t *testing.T) {
 				ctx:  tt.context,
 				Expr: &Expr{},
 			}
-			printer := NewPrinter(false, []string{})
+			printer := newBufferPrinter()
 
 			result := step.getEchoOutput(printer)
 
@@ -1192,7 +1192,7 @@ func TestStep_getEchoOutput_Error(t *testing.T) {
 		ctx:  StepContext{},
 		Expr: &Expr{},
 	}
-	printer := NewPrinter(false, []string{})
+	printer := newBufferPrinter()
 
 	result := step.getEchoOutput(printer)
 
