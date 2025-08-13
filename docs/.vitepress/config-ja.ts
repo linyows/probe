@@ -17,19 +17,19 @@ const guide = [
     base: '/ja/guide/concepts/',
     collapsed: false,
     items: [
-      { text: 'Workflows', link: 'workflows' },
-      { text: 'Jobs and Steps', link: 'jobs-and-steps' },
-      { text: 'Actions', link: 'actions' },
-      { text: 'Data Flow', link: 'data-flow' },
-      { text: 'Expressions and Templates', link: 'expressions-and-templates' },
-      { text: 'File Merging', link: 'file-merging' },
-      { text: 'Execution Model', link: 'execution-model' },
-      { text: 'Testing and Assertions', link: 'testing-and-assertions' },
-      { text: 'Error Handling', link: 'error-handling' }
+      { text: 'ワークフロー', link: 'workflows' },
+      { text: 'ジョブとステップ', link: 'jobs-and-steps' },
+      { text: 'アクション', link: 'actions' },
+      { text: 'データフロー', link: 'data-flow' },
+      { text: '式とテンプレート', link: 'expressions-and-templates' },
+      { text: 'ファイルマージ', link: 'file-merging' },
+      { text: '実行モデル', link: 'execution-model' },
+      { text: 'テストとアサーション', link: 'testing-and-assertions' },
+      { text: 'エラーハンドリング', link: 'error-handling' }
     ]
   },
   {
-    text: 'How-tos',
+    text: 'やりかた',
     base: '/ja/guide/how-tos/',
     collapsed: false,
     items: [
