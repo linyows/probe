@@ -11,13 +11,13 @@ name: Workflow Name                    # 必須: 人間が読みやすい名前
 description: What this workflow does   # オプション: 詳細な説明
 vars:                                  # オプション: 変数
   API_BASE_URL: https://api.example.com
-defaults:                             # オプション: デフォルト設定
-  http:
-    timeout: 30s
-    headers:
-      User-Agent: "Probe Monitor"
 jobs:                                 # 必須: 一つ以上のジョブ
 - name: job-name                      # ジョブは配列形式
+  defaults:                           # オプション: ジョブレベルのデフォルト設定
+    http:
+      timeout: 30s
+      headers:
+        User-Agent: "Probe Monitor"
   # ジョブ定義...
 ```
 
@@ -61,18 +61,19 @@ vars:
   MAX_RETRY_COUNT: 3
 ```
 
-**デフォルト**: すべてのジョブとステップに適用される共通設定を設定します。
+**デフォルト**: 各ジョブ内でそのジョブのすべてのステップに適用される共通設定を設定します。
 
 ```yaml
-defaults:
-  http:
-    timeout: 30s
-    headers:
-      Accept: "application/json"
-      User-Agent: "Probe Health Monitor v1.0"
-  retry:
-    count: 3
-    delay: 5s
+jobs:
+- name: Example Job
+  defaults:
+    http:
+      timeout: 30s
+      headers:
+        Accept: "application/json"
+        User-Agent: "Probe Health Monitor v1.0"
+  steps:
+    # このジョブ内のすべてのステップに上記のdefaultsが適用されます
 ```
 
 ## ワークフロー設計パターン
@@ -342,6 +343,9 @@ description: Monitor critical services
 jobs:
 - name: API Check
   id: api-check
+  defaults:
+    http:
+      timeout: "{{vars.DEFAULT_TIMEOUT}}"
   steps:
   - name: Check API Health
     uses: http
@@ -354,18 +358,14 @@ jobs:
 ```yaml
 vars:
   API_BASE_URL: https://api.production.example.com
-defaults:
-  http:
-    timeout: 10s
+  DEFAULT_TIMEOUT: 10s
 ```
 
 **staging.yml:**
 ```yaml
 vars:
   API_BASE_URL: https://api.staging.example.com
-defaults:
-  http:
-    timeout: 30s
+  DEFAULT_TIMEOUT: 30s
 ```
 
 使用方法:

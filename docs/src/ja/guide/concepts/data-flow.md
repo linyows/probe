@@ -37,12 +37,16 @@ steps:
 
 **base-config.yml:**
 ```yaml
-defaults:
-  api:
-    timeout: 30s
-    retry_count: 3
 vars:
   API_BASE_URL: https://api.example.com
+  DEFAULT_TIMEOUT: 30s
+  RETRY_COUNT: 3
+
+jobs:
+- name: Base Job
+  defaults:
+    http:
+      timeout: "{{vars.DEFAULT_TIMEOUT}}"
 ```
 
 **production.yml:**
@@ -50,9 +54,7 @@ vars:
 vars:
   API_BASE_URL: https://api.production.example.com
   API_TOKEN: ${PROD_API_TOKEN}
-defaults:
-  api:
-    timeout: 10s  # プロダクション用のオーバーライド
+  DEFAULT_TIMEOUT: 10s  # プロダクション用のオーバーライド
 ```
 
 使用方法:

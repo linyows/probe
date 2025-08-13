@@ -23,21 +23,20 @@ vars:
   API_TIMEOUT: 30s
   RETRY_COUNT: 3
 
-defaults:
-  http:
-    timeout: 30s
-    headers:
-      User-Agent: "Probe Monitor"
-
 jobs:
-  health-check:
-    name: Health Check
-    steps:
-      - name: API Health
-        uses: http
-        with:
-          url: "{{vars.API_URL}}/health"
-        test: res.code == 200
+- name: Health Check
+  id: health-check
+  defaults:
+    http:
+      timeout: "{{vars.API_TIMEOUT}}"
+      headers:
+        User-Agent: "Probe Monitor"
+  steps:
+    - name: API Health
+      uses: http
+      with:
+        url: "{{vars.API_URL}}/health"
+      test: res.code == 200
 ```
 
 **production.yml:**
@@ -45,12 +44,15 @@ jobs:
 vars:
   API_URL: https://api.production.company.com
   API_TIMEOUT: 10s
+  PROD_API_TOKEN: prod_token_123
 
-defaults:
-  http:
-    timeout: 10s
-    headers:
-      Authorization: "Bearer {{vars.PROD_API_TOKEN}}"
+jobs:
+- name: Health Check  # 同じジョブ名でマージされる
+  defaults:
+    http:
+      timeout: 10s  # API_TIMEOUTで上書きされる
+      headers:
+        Authorization: "Bearer {{vars.PROD_API_TOKEN}}"  # 追加される
 ```
 
 **`probe base.yml,production.yml` の結果:**
@@ -62,23 +64,23 @@ vars:
   API_URL: https://api.production.company.com
   API_TIMEOUT: 10s                                  # 上書きされた
   RETRY_COUNT: 3                                    # 保持された
-
-defaults:
-  http:
-    timeout: 10s                                    # 上書きされた
-    headers:
-      User-Agent: "Probe Monitor"                   # 保持された
-      Authorization: "Bearer {{vars.PROD_API_TOKEN}}" # 追加された
+  PROD_API_TOKEN: prod_token_123                    # 追加された
 
 jobs:
-  health-check:                                     # base から保持
-    name: Health Check
-    steps:
-      - name: API Health
-        uses: http
-        with:
-          url: "{{vars.API_URL}}/health"             # マージされた env.API_URL を使用
-        test: res.code == 200
+- name: Health Check                                # base から保持
+  id: health-check
+  defaults:
+    http:
+      timeout: 10s                                  # 上書きされた
+      headers:
+        User-Agent: "Probe Monitor"                 # 保持された
+        Authorization: "Bearer {{vars.PROD_API_TOKEN}}" # 追加された
+  steps:
+    - name: API Health
+      uses: http
+      with:
+        url: "{{vars.API_URL}}/health"              # マージされた API_URL を使用
+      test: res.code == 200
 ```
 
 ## マージ戦略
