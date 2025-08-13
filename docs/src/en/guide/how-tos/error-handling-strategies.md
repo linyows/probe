@@ -1,9 +1,3 @@
----
-title: Error Handling Strategies
-description: Implement robust error handling patterns for resilient workflows
-weight: 30
----
-
 # Error Handling Strategies
 
 This guide shows you how to implement robust error handling in Probe workflows. You'll learn to handle failures gracefully, implement recovery patterns, and build resilient automation that can cope with unexpected conditions.

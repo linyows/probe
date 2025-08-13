@@ -1,9 +1,3 @@
----
-title: Monitoring Workflows
-description: Build comprehensive monitoring systems with Probe workflows
-weight: 10
----
-
 # Monitoring Workflows
 
 This guide shows you how to build comprehensive monitoring systems using Probe. You'll learn to create workflows that check service health, monitor performance, and alert on issues.

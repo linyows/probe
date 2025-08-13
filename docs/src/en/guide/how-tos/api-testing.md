@@ -1,9 +1,3 @@
----
-title: API Testing
-description: Comprehensive strategies for testing REST APIs with Probe
-weight: 20
----
-
 # API Testing
 
 This guide shows you how to build comprehensive API testing workflows with Probe. You'll learn to test REST APIs thoroughly, validate responses, handle authentication, and implement advanced testing patterns.

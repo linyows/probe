@@ -1,9 +1,3 @@
----
-title: Environment Management
-description: Manage configurations and workflows across multiple environments
-weight: 50
----
-
 # Environment Management
 
 This guide shows you how to manage Probe workflows across multiple environments (development, staging, production) using configuration composition, environment-specific settings, and deployment strategies.

@@ -1,9 +1,3 @@
----
-title: Performance Testing
-description: Implement load testing and performance validation with Probe
-weight: 40
----
-
 # Performance Testing
 
 This guide shows you how to implement performance testing and load testing with Probe. You'll learn to measure response times, validate performance thresholds, simulate load, and build comprehensive performance validation workflows.
