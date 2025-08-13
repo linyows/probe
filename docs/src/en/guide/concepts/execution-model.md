@@ -1,9 +1,3 @@
----
-title: Execution Model
-description: Understanding how Probe executes workflows, jobs, and steps with timing, parallelism, and state management
-weight: 80
----
-
 # Execution Model
 
 Understanding Probe's execution model is crucial for designing efficient workflows and troubleshooting execution issues. This guide explores how Probe schedules, executes, and manages workflow components from start to finish.

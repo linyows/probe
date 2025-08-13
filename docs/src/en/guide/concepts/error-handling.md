@@ -1,9 +1,3 @@
----
-title: Error Handling
-description: Master error handling strategies, recovery patterns, and resilient workflow design
-weight: 70
----
-
 # Error Handling
 
 Error handling is crucial for building resilient workflows that can gracefully manage failures and unexpected conditions. This guide explores error handling strategies, recovery patterns, and techniques for building fault-tolerant automation.

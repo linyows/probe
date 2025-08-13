@@ -1,9 +1,3 @@
----
-title: Testing and Assertions
-description: Master test conditions, assertion patterns, and validation strategies for robust workflows
-weight: 60
----
-
 # Testing and Assertions
 
 Testing and assertions are the quality gates of Probe workflows. They validate that your actions produce expected results and ensure system reliability. This guide explores test expressions, assertion patterns, and strategies for building robust validation into your workflows.

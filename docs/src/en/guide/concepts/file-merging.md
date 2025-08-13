@@ -1,9 +1,3 @@
----
-title: File Merging
-description: Master configuration composition through file merging for flexible, reusable workflows
-weight: 90
----
-
 # File Merging
 
 File merging is Probe's powerful feature for composing workflows from multiple configuration files. This enables configuration reuse, environment-specific customization, and modular workflow design. This guide explores merging strategies, patterns, and best practices.

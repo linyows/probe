@@ -1,9 +1,3 @@
----
-title: Workflows
-description: Understanding workflow structure, design patterns, and best practices
-weight: 10
----
-
 # Workflows
 
 A workflow is the top-level container in Probe that defines a complete automation or monitoring process. This guide explores workflow structure, design patterns, and best practices for creating maintainable and effective workflows.

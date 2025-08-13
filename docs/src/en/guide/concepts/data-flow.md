@@ -1,9 +1,3 @@
----
-title: Data Flow
-description: Understanding how data moves through workflows, outputs, and step communication
-weight: 50
----
-
 # Data Flow
 
 Data flow is the mechanism by which information moves through Probe workflows. Understanding data flow patterns enables you to build sophisticated workflows that pass information between steps, jobs, and even external systems. This guide explores the complete data flow system in Probe.

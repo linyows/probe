@@ -1,9 +1,3 @@
----
-title: Actions
-description: Understanding the action system, built-in actions, and plugin architecture
-weight: 30
----
-
 # Actions
 
 Actions are the core execution units in Probe that perform actual work. They are implemented as plugins, making Probe extensible and modular. This guide explores the action system, built-in actions, and how to work with the plugin architecture.

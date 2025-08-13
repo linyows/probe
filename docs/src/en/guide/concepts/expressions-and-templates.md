@@ -1,9 +1,3 @@
----
-title: Expressions and Templates
-description: Master dynamic configuration, testing conditions, and template expressions
-weight: 40
----
-
 # Expressions and Templates
 
 Expressions and templates are the dynamic heart of Probe workflows. They enable conditional logic, data transformation, and dynamic configuration. This guide explores the expression system, template syntax, and advanced usage patterns.

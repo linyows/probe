@@ -1,9 +1,3 @@
----
-title: Jobs and Steps
-description: Deep dive into job and step mechanics, execution flow, and advanced patterns
-weight: 20
----
-
 # Jobs and Steps
 
 Jobs and steps are the building blocks of Probe workflows. Understanding their mechanics, execution model, and interaction patterns is crucial for building effective automation. This guide explores the detailed behavior and advanced use cases.
