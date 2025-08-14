@@ -18,7 +18,7 @@ jobs:
     test: ""
     echo: ""
     vars: {}
-    iter: []
+    iteration: []
   repeat:
     count: 60
     interval: 10
@@ -41,7 +41,7 @@ jobs:
     test: ""
     echo: ""
     vars: {}
-    iter: []
+    iteration: []
   repeat:
     count: 60
     interval: 10
@@ -64,7 +64,7 @@ jobs:
     test: ""
     echo: ""
     vars: {}
-    iter: []
+    iteration: []
   repeat:
     count: 60
     interval: 10
