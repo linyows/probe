@@ -232,7 +232,7 @@ test: |
       name: "{{vars.name}}"
       role: "{{vars.role}}"
   test: res.code == 201
-  iter:
+  iteration:
   - {name: "Alice", role: "admin"}
   - {name: "Bob", role: "user"}
   - {name: "Carol", role: "editor"}
