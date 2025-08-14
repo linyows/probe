@@ -15,7 +15,7 @@ type Step struct {
 	Test         string            `yaml:"test"`
 	Echo         string            `yaml:"echo"`
 	Vars         map[string]any    `yaml:"vars"`
-	Iter         []map[string]any  `yaml:"iter"`
+	Iteration    []map[string]any  `yaml:"iteration"`
 	Wait         string            `yaml:"wait,omitempty"`
 	SkipIf       string            `yaml:"skipif,omitempty"`
 	Outputs      map[string]string `yaml:"outputs,omitempty"`
@@ -104,7 +104,7 @@ func (st *Step) handleActionError(err error, name string, jCtx *JobContext) {
 
 	// Create and add step result for failed action execution
 	if jCtx.Verbose {
-		jCtx.Printer.PrintRequestResponse(st.Idx, name, st.ctx.Req, st.ctx.Res, st.ctx.RT)
+		jCtx.Printer.PrintRequestResponse(st.Idx, name, st.ctx.Req, st.ctx.Res, st.ctx.RT.Duration)
 	}
 
 	// Handle repeat execution
@@ -148,7 +148,7 @@ func (st *Step) processActionResult(actionResult map[string]any, jCtx *JobContex
 // finalize handles the final phase: test, echo, output save, and result creation
 func (st *Step) finalize(name string, actionResult map[string]any, jCtx *JobContext) {
 	if jCtx.Config.Verbose {
-		jCtx.Printer.PrintRequestResponse(st.Idx, name, st.ctx.Req, st.ctx.Res, st.ctx.RT)
+		jCtx.Printer.PrintRequestResponse(st.Idx, name, st.ctx.Req, st.ctx.Res, st.ctx.RT.Duration)
 	}
 
 	// Handle repeat execution
@@ -182,9 +182,9 @@ func (st *Step) createStepResult(name string, jCtx *JobContext, repeatCounter *S
 		RepeatCounter: repeatCounter,
 	}
 
-	if jCtx.RT && st.ctx.RT != "" {
-		result.RT = st.ctx.RT
-		result.RTSec = st.ctx.RTSec
+	if jCtx.RT && st.ctx.RT.Duration != "" {
+		result.RT = st.ctx.RT.Duration
+		result.RTSec = st.ctx.RT.Sec
 	}
 	if v, ok := st.ctx.Res["report"]; ok {
 		if report, sok := v.(string); sok {
@@ -350,13 +350,17 @@ func (st *Step) SetCtx(j JobContext, override map[string]any) {
 func (st *Step) updateCtx(logs []map[string]any, req, res map[string]any, rt string) {
 	st.ctx.Req = req
 	st.ctx.Res = res
-	st.ctx.RT = rt
-
-	// Parse RT string to calculate RTSec
+	
+	// Parse RT string to populate RT structure
 	if rt != "" {
 		if duration, err := time.ParseDuration(rt); err == nil {
-			st.ctx.RTSec = duration.Seconds()
+			st.ctx.RT = ResponseTime{
+				Duration: rt,
+				Sec:      duration.Seconds(),
+			}
 		}
+	} else {
+		st.ctx.RT = ResponseTime{}
 	}
 }
 
@@ -545,9 +549,9 @@ func (st *Step) createFailedStepResult(name string, jCtx *JobContext, repeatCoun
 		RepeatCounter: repeatCounter,
 	}
 
-	if jCtx.RT && st.ctx.RT != "" {
-		result.RT = st.ctx.RT
-		result.RTSec = st.ctx.RTSec
+	if jCtx.RT && st.ctx.RT.Duration != "" {
+		result.RT = st.ctx.RT.Duration
+		result.RTSec = st.ctx.RT.Sec
 	}
 	if v, ok := st.ctx.Res["report"]; ok {
 		if report, sok := v.(string); sok {
