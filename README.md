@@ -281,7 +281,8 @@ Built-in Actions
   uses: http
   with:
     url: https://api.example.com
-    method: POST  # GET, POST, PUT, DELETE, etc.
+    # GET, POST, PUT, DELETE, etc.
+    post: /
     headers:
       content-type: application/json
       authorization: Bearer token
