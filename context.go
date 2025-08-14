@@ -1,12 +1,17 @@
 package probe
 
+// ResponseTime provides response time information for expressions
+type ResponseTime struct {
+	Duration string  `expr:"duration"`
+	Sec      float64 `expr:"sec"`
+}
+
 // StepContext provides context data for step expression evaluation
 type StepContext struct {
 	Vars    map[string]any `expr:"vars"`
 	Res     map[string]any `expr:"res"`
 	Req     map[string]any `expr:"req"`
-	RT      string         `expr:"rt"`
-	RTSec   float64        `expr:"rt_sec"`
+	RT      ResponseTime   `expr:"rt"`
 	Report  string         `expr:"report"`
 	Outputs map[string]any `expr:"outputs"`
 }

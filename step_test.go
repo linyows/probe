@@ -434,8 +434,10 @@ func TestStep_createStepResult_WithRepeatCounter(t *testing.T) {
 		Expr: &Expr{},
 		ctx: StepContext{
 			Res:   map[string]any{"status": 200},
-			RT:    "250ms",
-			RTSec: 0.25,
+			RT: ResponseTime{
+				Duration: "250ms",
+				Sec:      0.25,
+			},
 		},
 	}
 	jCtx := &JobContext{
@@ -477,8 +479,10 @@ func TestStep_createFailedStepResult(t *testing.T) {
 		Wait: "3s",
 		err:  testErr,
 		ctx: StepContext{
-			RT:    "500ms",
-			RTSec: 0.5,
+			RT: ResponseTime{
+				Duration: "500ms",
+				Sec:      0.5,
+			},
 			Res:   map[string]any{"report": "HTTP error occurred"},
 		},
 	}
@@ -529,7 +533,10 @@ func TestStep_createFailedStepResult_WithRepeatCounter(t *testing.T) {
 		Wait: "1s",
 		err:  testErr,
 		ctx: StepContext{
-			RT: "10s",
+			RT: ResponseTime{
+				Duration: "10s",
+				Sec:      10.0,
+			},
 		},
 	}
 	jCtx := &JobContext{
@@ -1011,8 +1018,8 @@ func TestStep_Do_Integration(t *testing.T) {
 		}
 
 		// Verify context was updated
-		if step.ctx.RT != "100ms" {
-			t.Errorf("Expected RT to be '100ms', got %v", step.ctx.RT)
+		if step.ctx.RT.Duration != "100ms" {
+			t.Errorf("Expected RT.Duration to be '100ms', got %v", step.ctx.RT.Duration)
 		}
 	})
 

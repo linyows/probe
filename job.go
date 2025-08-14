@@ -68,7 +68,7 @@ func (j *Job) executeSteps(expr *Expr, ctx JobContext) {
 	for _, st := range j.Steps {
 		st.Expr = expr
 
-		if len(st.Iter) == 0 {
+		if len(st.Iteration) == 0 {
 			j.executeStep(st, &idx, *j.ctx, nil)
 		} else {
 			j.executeStepWithIterations(st, &idx, *j.ctx)
@@ -86,7 +86,7 @@ func (j *Job) executeStep(st *Step, idx *int, ctx JobContext, vars map[string]an
 
 // executeStepWithIterations executes a step multiple times with different variable sets
 func (j *Job) executeStepWithIterations(st *Step, idx *int, ctx JobContext) {
-	for _, vars := range st.Iter {
+	for _, vars := range st.Iteration {
 		j.executeStep(st, idx, ctx, vars)
 	}
 }
