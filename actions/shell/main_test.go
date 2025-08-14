@@ -114,6 +114,42 @@ func TestParseParams(t *testing.T) {
 			expected: nil,
 			wantErr:  true,
 		},
+		{
+			name: "retry configuration",
+			input: map[string]string{
+				"cmd":                      "echo hello",
+				"retry__max_attempts":      "3",
+				"retry__interval":          "100ms",
+				"retry__initial_delay":     "50ms",
+			},
+			expected: &shellParams{
+				cmd:     "echo hello",
+				shell:   "/bin/sh",
+				timeout: 30 * time.Second,
+				env:     map[string]string{},
+				retry: &Retry{
+					MaxAttempts:  3,
+					Interval:     100 * time.Millisecond,
+					InitialDelay: 50 * time.Millisecond,
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "retry with invalid max_attempts",
+			input: map[string]string{
+				"cmd":                 "echo hello",
+				"retry__max_attempts": "invalid",
+			},
+			expected: &shellParams{
+				cmd:     "echo hello",
+				shell:   "/bin/sh",
+				timeout: 30 * time.Second,
+				env:     map[string]string{},
+				retry:   nil,
+			},
+			wantErr: false,
+		},
 	}
 
 	for _, tt := range tests {
@@ -155,6 +191,23 @@ func TestParseParams(t *testing.T) {
 			for k, v := range tt.expected.env {
 				if result.env[k] != v {
 					t.Errorf("env[%s]: expected %v, got %v", k, v, result.env[k])
+				}
+			}
+
+			// Compare retry configuration
+			if tt.expected.retry == nil && result.retry != nil {
+				t.Errorf("retry: expected nil, got %+v", result.retry)
+			} else if tt.expected.retry != nil && result.retry == nil {
+				t.Errorf("retry: expected %+v, got nil", tt.expected.retry)
+			} else if tt.expected.retry != nil && result.retry != nil {
+				if result.retry.MaxAttempts != tt.expected.retry.MaxAttempts {
+					t.Errorf("retry.MaxAttempts: expected %v, got %v", tt.expected.retry.MaxAttempts, result.retry.MaxAttempts)
+				}
+				if result.retry.Interval != tt.expected.retry.Interval {
+					t.Errorf("retry.Interval: expected %v, got %v", tt.expected.retry.Interval, result.retry.Interval)
+				}
+				if result.retry.InitialDelay != tt.expected.retry.InitialDelay {
+					t.Errorf("retry.InitialDelay: expected %v, got %v", tt.expected.retry.InitialDelay, result.retry.InitialDelay)
 				}
 			}
 		})
@@ -595,5 +648,203 @@ func TestActionRunIntegration(t *testing.T) {
 
 	if result["req__env__VAR2"] != "value2" {
 		t.Errorf("Expected env VAR2 to be 'value2', got: %v", result["req__env__VAR2"])
+	}
+}
+
+func TestRetryFunctionality(t *testing.T) {
+	logger := hclog.NewNullLogger()
+
+	tests := []struct {
+		name           string
+		params         *shellParams
+		expectAttempts int
+		expectSuccess  bool
+	}{
+		{
+			name: "no retry - success",
+			params: &shellParams{
+				cmd:     "echo 'success'",
+				shell:   "/bin/sh",
+				timeout: 5 * time.Second,
+				env:     map[string]string{},
+				retry:   nil,
+			},
+			expectAttempts: 1,
+			expectSuccess:  true,
+		},
+		{
+			name: "retry until success",
+			params: &shellParams{
+				cmd:     "echo 'success'",
+				shell:   "/bin/sh", 
+				timeout: 5 * time.Second,
+				env:     map[string]string{},
+				retry: &Retry{
+					MaxAttempts:  3,
+					Interval:     50 * time.Millisecond,
+					InitialDelay: 10 * time.Millisecond,
+				},
+			},
+			expectAttempts: 1, // Should succeed on first attempt
+			expectSuccess:  true,
+		},
+		{
+			name: "retry with failure",
+			params: &shellParams{
+				cmd:     "exit 1", // Always fails
+				shell:   "/bin/sh",
+				timeout: 5 * time.Second,
+				env:     map[string]string{},
+				retry: &Retry{
+					MaxAttempts:  3,
+					Interval:     50 * time.Millisecond,
+					InitialDelay: 10 * time.Millisecond,
+				},
+			},
+			expectAttempts: 3, // Should retry 3 times
+			expectSuccess:  false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			start := time.Now()
+			result, err := executeShellCommand(tt.params, logger)
+			elapsed := time.Since(start)
+
+			if tt.expectSuccess {
+				if err != nil {
+					t.Errorf("executeShellCommand() unexpected error = %v", err)
+					return
+				}
+				if result["res__code"] != "0" {
+					t.Errorf("expected success (exit code 0), got %v", result["res__code"])
+				}
+			} else {
+				// For failure cases, we don't expect an error from executeShellCommand
+				// but we expect a non-zero exit code
+				if result["res__code"] == "0" {
+					t.Errorf("expected failure (non-zero exit code), got success")
+				}
+			}
+
+			// Verify timing for retry scenarios
+			if tt.params.retry != nil {
+				expectedMinTime := tt.params.retry.InitialDelay
+				if tt.expectAttempts > 1 {
+					expectedMinTime += time.Duration(tt.expectAttempts-1) * tt.params.retry.Interval
+				}
+				
+				// Allow some tolerance for timing
+				if elapsed < expectedMinTime/2 {
+					t.Errorf("execution too fast: expected at least %v, got %v", expectedMinTime/2, elapsed)
+				}
+			}
+		})
+	}
+}
+
+func TestParseRetry(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    map[string]string
+		expected *Retry
+	}{
+		{
+			name:     "no retry parameters",
+			input:    map[string]string{"cmd": "echo test"},
+			expected: nil,
+		},
+		{
+			name: "basic retry configuration",
+			input: map[string]string{
+				"cmd":                 "echo test",
+				"retry__max_attempts": "5",
+			},
+			expected: &Retry{
+				MaxAttempts:  5,
+				Interval:     1 * time.Second, // default
+				InitialDelay: 0,               // default
+			},
+		},
+		{
+			name: "full retry configuration",
+			input: map[string]string{
+				"cmd":                      "echo test",
+				"retry__max_attempts":      "3",
+				"retry__interval":          "200ms",
+				"retry__initial_delay":     "100ms",
+			},
+			expected: &Retry{
+				MaxAttempts:  3,
+				Interval:     200 * time.Millisecond,
+				InitialDelay: 100 * time.Millisecond,
+			},
+		},
+		{
+			name: "invalid max_attempts",
+			input: map[string]string{
+				"cmd":                 "echo test",
+				"retry__max_attempts": "invalid",
+			},
+			expected: nil,
+		},
+		{
+			name: "max_attempts out of range (too high)",
+			input: map[string]string{
+				"cmd":                 "echo test",
+				"retry__max_attempts": "101",
+			},
+			expected: nil,
+		},
+		{
+			name: "max_attempts out of range (too low)",
+			input: map[string]string{
+				"cmd":                 "echo test", 
+				"retry__max_attempts": "0",
+			},
+			expected: nil,
+		},
+		{
+			name: "invalid interval format",
+			input: map[string]string{
+				"cmd":                 "echo test",
+				"retry__max_attempts": "3",
+				"retry__interval":     "invalid",
+			},
+			expected: &Retry{
+				MaxAttempts:  3,
+				Interval:     1 * time.Second, // default on parse error
+				InitialDelay: 0,
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := parseRetry(tt.input)
+
+			if tt.expected == nil && result != nil {
+				t.Errorf("expected nil, got %+v", result)
+				return
+			}
+
+			if tt.expected != nil && result == nil {
+				t.Errorf("expected %+v, got nil", tt.expected)
+				return
+			}
+
+			if tt.expected != nil && result != nil {
+				if result.MaxAttempts != tt.expected.MaxAttempts {
+					t.Errorf("MaxAttempts: expected %v, got %v", tt.expected.MaxAttempts, result.MaxAttempts)
+				}
+				if result.Interval != tt.expected.Interval {
+					t.Errorf("Interval: expected %v, got %v", tt.expected.Interval, result.Interval)
+				}
+				if result.InitialDelay != tt.expected.InitialDelay {
+					t.Errorf("InitialDelay: expected %v, got %v", tt.expected.InitialDelay, result.InitialDelay)
+				}
+			}
+		})
 	}
 }
