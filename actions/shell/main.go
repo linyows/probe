@@ -52,12 +52,20 @@ func (a *Action) Run(args []string, with map[string]string) (map[string]string, 
 	return result, nil
 }
 
+// Retry defines retry configuration for shell commands until exit code 0
+type Retry struct {
+	MaxAttempts  int           `map:"max_attempts"`
+	Interval     time.Duration `map:"interval"`
+	InitialDelay time.Duration `map:"initial_delay"`
+}
+
 type shellParams struct {
 	cmd     string
 	workdir string
 	shell   string
 	timeout time.Duration
 	env     map[string]string
+	retry   *Retry
 }
 
 func parseParams(with map[string]string) (*shellParams, error) {
@@ -107,6 +115,11 @@ func parseParams(with map[string]string) (*shellParams, error) {
 		if err := validateWorkdir(params.workdir); err != nil {
 			return nil, err
 		}
+	}
+
+	// Parse retry parameters
+	if retry := parseRetry(with); retry != nil {
+		params.retry = retry
 	}
 
 	return params, nil
@@ -165,6 +178,45 @@ func parseTimeout(timeoutStr string) (time.Duration, error) {
 	return time.ParseDuration(timeoutStr)
 }
 
+// parseRetry parses retry configuration from with parameters
+func parseRetry(with map[string]string) *Retry {
+	// Check if retry__max_attempts is specified
+	maxAttemptsStr, exists := with["retry__max_attempts"]
+	if !exists {
+		return nil
+	}
+
+	maxAttempts, err := strconv.Atoi(maxAttemptsStr)
+	if err != nil || maxAttempts < 1 || maxAttempts > 100 {
+		return nil
+	}
+
+	retry := &Retry{
+		MaxAttempts: maxAttempts,
+	}
+
+	// Parse interval (default: 1s)
+	if intervalStr := with["retry__interval"]; intervalStr != "" {
+		if interval, err := parseTimeout(intervalStr); err == nil {
+			retry.Interval = interval
+		} else {
+			retry.Interval = 1 * time.Second // Default on parse error
+		}
+	} else {
+		retry.Interval = 1 * time.Second // Default
+	}
+
+	// Parse initial_delay (optional)
+	if delayStr := with["retry__initial_delay"]; delayStr != "" {
+		if delay, err := parseTimeout(delayStr); err == nil {
+			retry.InitialDelay = delay
+		}
+		// If parsing fails, InitialDelay remains 0 (no delay)
+	}
+
+	return retry
+}
+
 type ShellReq struct {
 	Cmd     string            `map:"cmd"`
 	Shell   string            `map:"shell"`
@@ -186,6 +238,56 @@ type ShellResult struct {
 }
 
 func executeShellCommand(params *shellParams, log hclog.Logger) (map[string]string, error) {
+	// If no retry configuration, execute once
+	if params.retry == nil {
+		return executeSingleCommand(params, log)
+	}
+
+	retry := params.retry
+
+	// Initial delay if specified
+	if retry.InitialDelay > 0 {
+		log.Debug("initial delay before first attempt", "delay", retry.InitialDelay.String())
+		time.Sleep(retry.InitialDelay)
+	}
+
+	var lastResult map[string]string
+	var lastErr error
+
+	// Retry loop
+	for attempt := 1; attempt <= retry.MaxAttempts; attempt++ {
+		log.Debug("executing shell command with retry", 
+			"cmd", params.cmd, 
+			"attempt", attempt, 
+			"max_attempts", retry.MaxAttempts)
+
+		result, err := executeSingleCommand(params, log)
+		lastResult = result
+		lastErr = err
+
+		// Check for success (exit code 0)
+		if err == nil {
+			if exitCode, ok := result["res.code"]; ok && exitCode == "0" {
+				log.Debug("command succeeded", "attempt", attempt)
+				return result, nil
+			}
+		}
+
+		// If not the last attempt, wait for interval
+		if attempt < retry.MaxAttempts {
+			log.Debug("command failed, retrying after interval", 
+				"attempt", attempt, 
+				"interval", retry.Interval.String())
+			time.Sleep(retry.Interval)
+		}
+	}
+
+	// All attempts failed
+	log.Debug("all retry attempts failed", "max_attempts", retry.MaxAttempts)
+	return lastResult, lastErr
+}
+
+func executeSingleCommand(params *shellParams, log hclog.Logger) (map[string]string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), params.timeout)
 	defer cancel()
 
