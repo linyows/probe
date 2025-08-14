@@ -267,7 +267,7 @@ func executeShellCommand(params *shellParams, log hclog.Logger) (map[string]stri
 
 		// Check for success (exit code 0)
 		if err == nil {
-			if exitCode, ok := result["res.code"]; ok && exitCode == "0" {
+			if exitCode, ok := result["res__code"]; ok && exitCode == "0" {
 				log.Debug("command succeeded", "attempt", attempt)
 				return result, nil
 			}

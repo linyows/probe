@@ -16,8 +16,16 @@ jobs:
   - name: Retry with eventual success
     uses: shell
     with:
-      # This simulates a service that becomes available after some attempts
-      cmd: "if [ ! -f /tmp/ready.flag ]; then echo 'Service not ready' && touch /tmp/ready.flag && exit 1; else echo 'Service ready!' && exit 0; fi"
+      cmd: |
+        # This simulates a service that becomes available after some attempts
+        if [ ! -f /tmp/ready.flag ]; then
+          echo 'Service not ready'
+          touch /tmp/ready.flag
+          exit 1
+        else
+          echo 'Service ready!'
+          exit 0
+        fi
       retry:
         max_attempts: 3
         interval: "200ms"
@@ -38,8 +46,16 @@ jobs:
   - name: Wait for service startup (simulated)
     uses: shell
     with:
-      # Simulate waiting for a service to start
-      cmd: "if [ $(date +%s) -gt $(expr $(date +%s) + 0) ]; then echo 'Service started'; exit 0; else exit 1; fi"
+      cmd: |
+        # Simulate service that starts after 2 attempts
+        if [ ! -f /tmp/service_started ]; then
+          echo 'Service starting...'
+          touch /tmp/service_started
+          exit 1
+        else
+          echo 'Service started!'
+          exit 0
+        fi
       retry:
         max_attempts: 5
         interval: "500ms"
@@ -60,7 +76,10 @@ jobs:
     id: file_check
     uses: shell
     with:
-      cmd: "touch /tmp/probe-test-file && test -f /tmp/probe-test-file"
+      cmd: |
+        # Create and check for test file
+        touch /tmp/probe-test-file
+        test -f /tmp/probe-test-file
       retry:
         max_attempts: 5
         interval: "200ms"
@@ -79,5 +98,7 @@ jobs:
   - name: Clean up test files
     uses: shell
     with:
-      cmd: "rm -f /tmp/ready.flag /tmp/probe-test-file"
+      cmd: |
+        # Clean up all test files
+        rm -f /tmp/ready.flag /tmp/probe-test-file /tmp/service_started
     test: res.code == 0
