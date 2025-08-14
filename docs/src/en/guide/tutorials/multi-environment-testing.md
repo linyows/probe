@@ -1,9 +1,3 @@
----
-title: Multi-Environment Deployment Testing
-description: Test across development, staging, and production environments
-weight: 30
----
-
 # Multi-Environment Deployment Testing
 
 In this tutorial, you'll learn how to create a comprehensive multi-environment testing strategy using Probe. You'll build workflows that automatically validate deployments across development, staging, and production environments, ensuring consistency and reliability at every stage of your deployment pipeline.

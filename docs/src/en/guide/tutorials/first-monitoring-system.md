@@ -1,9 +1,3 @@
----
-title: Building Your First Monitoring System
-description: Create a complete monitoring workflow from scratch
-weight: 10
----
-
 # Building Your First Monitoring System
 
 In this tutorial, you'll build a complete monitoring system using Probe to monitor a web application's health, performance, and availability. By the end, you'll have a production-ready monitoring workflow that checks multiple endpoints, validates responses, and sends alerts when issues are detected.

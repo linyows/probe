@@ -1,9 +1,3 @@
----
-title: Built-in Functions Reference
-description: Complete reference for all built-in expression functions
-weight: 40
----
-
 # Built-in Functions Reference
 
 This page provides comprehensive documentation for all built-in functions available in Probe expressions and templates. These functions can be used in template expressions (`{{}}`) and test conditions throughout your workflows.

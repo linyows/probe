@@ -1,43 +1,43 @@
-# Actions Reference
+# アクションリファレンス
 
-This page provides comprehensive documentation for all built-in Probe actions, including their parameters, response formats, and usage examples.
+このページでは、すべての組み込みProbeアクションの包括的なドキュメントを提供します。パラメータ、レスポンス形式、使用例を含みます。
 
-## Overview
+## 概要
 
-Actions are the building blocks of Probe workflows. They perform specific tasks like making HTTP requests, sending emails, or executing custom logic. All actions return structured response data that can be used in tests and outputs.
+アクションはProbeワークフローの構成要素です。HTTPリクエストの送信、メールの送信、カスタムロジックの実行など、特定のタスクを実行します。すべてのアクションはテストと出力で使用できる構造化されたレスポンスデータを返します。
 
-### Built-in Actions
+### 組み込みアクション
 
-- **[http](#http-action)** - Make HTTP/HTTPS requests and validate responses
-- **[db](#database-action)** - Execute database queries on MySQL, PostgreSQL, and SQLite
-- **[browser](#browser-action)** - Automate web browsers using ChromeDP
-- **[shell](#shell-action)** - Execute shell commands and scripts securely
-- **[smtp](#smtp-action)** - Send email notifications and alerts  
-- **[hello](#hello-action)** - Simple test action for development and debugging
+- **[http](#httpアクション)** - HTTP/HTTPSリクエストの送信とレスポンスの検証
+- **[db](#データベースアクション)** - MySQL、PostgreSQL、SQLiteでのデータベースクエリの実行
+- **[browser](#ブラウザアクション)** - ChromeDPを使用したWebブラウザの自動化
+- **[shell](#シェルアクション)** - シェルコマンドとスクリプトの安全な実行
+- **[smtp](#smtpアクション)** - メール通知とアラートの送信
+- **[hello](#helloアクション)** - 開発とデバッグ用のシンプルなテストアクション
 
-## HTTP Action
+## HTTPアクション
 
-The `http` action performs HTTP/HTTPS requests and provides detailed response information for testing and validation.
+`http`アクションはHTTP/HTTPSリクエストを実行し、テストと検証のための詳細なレスポンス情報を提供します。
 
-### Basic Syntax
+### 基本的な構文
 
 ```yaml
 steps:
   - name: "API Request"
-    action: http
+    uses: http
     with:
       url: "https://api.example.com/endpoint"
       method: "GET"
-    test: res.status == 200
+    test: res.code == 200
 ```
 
-### Parameters
+### パラメータ
 
-#### `url` (required)
+#### `url` (必須)
 
-**Type:** String  
-**Description:** The URL to make the request to  
-**Supports:** Template expressions
+**型:** String  
+**説明:** リクエストを送信するURL  
+**サポート:** テンプレート式
 
 ```yaml
 vars:
@@ -49,11 +49,11 @@ with:
   url: "https://api.example.com/users/{{outputs.auth.user_id}}"
 ```
 
-#### `method` (optional)
+#### `method` (オプション)
 
-**Type:** String  
-**Default:** `GET`  
-**Values:** `GET`, `POST`, `PUT`, `PATCH`, `DELETE`, `HEAD`, `OPTIONS`
+**型:** String  
+**デフォルト:** `GET`  
+**値:** `GET`, `POST`, `PUT`, `PATCH`, `DELETE`, `HEAD`, `OPTIONS`
 
 ```yaml
 with:
@@ -61,11 +61,11 @@ with:
   method: "POST"
 ```
 
-#### `headers` (optional)
+#### `headers` (オプション)
 
-**Type:** Object  
-**Description:** HTTP headers to include with the request  
-**Supports:** Template expressions in values
+**型:** Object  
+**説明:** リクエストに含めるHTTPヘッダー  
+**サポート:** 値でのテンプレート式
 
 ```yaml
 vars:
@@ -80,14 +80,14 @@ with:
     X-Request-ID: "{{unixtime()}}"
 ```
 
-#### `body` (optional)
+#### `body` (オプション)
 
-**Type:** String  
-**Description:** Request body content  
-**Supports:** Template expressions and multi-line strings
+**型:** String  
+**説明:** リクエストボディコンテンツ  
+**サポート:** テンプレート式と複数行文字列
 
 ```yaml
-# JSON body
+# JSONボディ
 vars:
   user_name: "{{USER_NAME}}"
   user_email: "{{USER_EMAIL}}"
@@ -104,7 +104,7 @@ with:
       "active": true
     }
 
-# Form data
+# フォームデータ
 with:
   url: "https://api.example.com/form"
   method: "POST"
@@ -112,18 +112,18 @@ with:
     Content-Type: "application/x-www-form-urlencoded"
   body: "name={{vars.user_name}}&email={{vars.user_email}}"
 
-# Template expression
+# テンプレート式
 with:
   url: "https://api.example.com/users"
   method: "PUT"
   body: "{{outputs.user-data.json | tojson}}"
 ```
 
-#### `timeout` (optional)
+#### `timeout` (オプション)
 
-**Type:** Duration  
-**Default:** Inherits from `defaults.http.timeout` or `30s`  
-**Description:** Request timeout
+**型:** Duration  
+**デフォルト:** `defaults.http.timeout`を継承、または`30s`  
+**説明:** リクエストタイムアウト
 
 ```yaml
 with:
@@ -131,11 +131,11 @@ with:
   timeout: "60s"
 ```
 
-#### `follow_redirects` (optional)
+#### `follow_redirects` (オプション)
 
-**Type:** Boolean  
-**Default:** Inherits from `defaults.http.follow_redirects` or `true`  
-**Description:** Whether to follow HTTP redirects
+**型:** Boolean  
+**デフォルト:** `defaults.http.follow_redirects`を継承、または`true`  
+**説明:** HTTPリダイレクトに従うかどうか
 
 ```yaml
 with:
@@ -143,11 +143,11 @@ with:
   follow_redirects: false
 ```
 
-#### `verify_ssl` (optional)
+#### `verify_ssl` (オプション)
 
-**Type:** Boolean  
-**Default:** Inherits from `defaults.http.verify_ssl` or `true`  
-**Description:** Whether to verify SSL certificates
+**型:** Boolean  
+**デフォルト:** `defaults.http.verify_ssl`を継承、または`true`  
+**説明:** SSL証明書を検証するかどうか
 
 ```yaml
 with:
@@ -155,11 +155,11 @@ with:
   verify_ssl: false
 ```
 
-#### `max_redirects` (optional)
+#### `max_redirects` (オプション)
 
-**Type:** Integer  
-**Default:** Inherits from `defaults.http.max_redirects` or `10`  
-**Description:** Maximum number of redirects to follow
+**型:** Integer  
+**デフォルト:** `defaults.http.max_redirects`を継承、または`10`  
+**説明:** 従うリダイレクトの最大数
 
 ```yaml
 with:
@@ -167,43 +167,43 @@ with:
   max_redirects: 3
 ```
 
-### Response Object
+### レスポンスオブジェクト
 
-The HTTP action provides a `res` object with the following properties:
+HTTPアクションは次のプロパティを持つ`res`オブジェクトを提供します：
 
-| Property | Type | Description |
+| プロパティ | 型 | 説明 |
 |----------|------|-------------|
-| `status` | Integer | HTTP status code (200, 404, 500, etc.) |
-| `time` | Integer | Response time in milliseconds |
-| `body_size` | Integer | Response body size in bytes |
-| `headers` | Object | Response headers as key-value pairs |
-| `json` | Object | Parsed JSON response (only if valid JSON) |
-| `text` | String | Response body as text |
+| `code` | Integer | HTTPステータスコード (200, 404, 500など) |
+| `time` | Integer | レスポンス時間（ミリ秒） |
+| `body_size` | Integer | レスポンスボディサイズ（バイト） |
+| `headers` | Object | レスポンスヘッダーのキー値ペア |
+| `body.json` | Object | 解析されたJSONレスポンス（有効なJSONの場合のみ） |
+| `body.text` | String | レスポンスボディのテキスト |
 
-### Response Examples
+### レスポンス例
 
 ```yaml
 steps:
   - name: "API Test"
     id: api-test
-    action: http
+    uses: http
     with:
       url: "https://jsonplaceholder.typicode.com/users/1"
     test: |
-      res.status == 200 &&
+      res.code == 200 &&
       res.time < 2000 &&
-      res.json.id == 1 &&
-      res.json.name != ""
+      res.body.json.id == 1 &&
+      res.body.json.name != ""
     outputs:
-      user_id: res.json.id
-      user_name: res.json.name
+      user_id: res.body.json.id
+      user_name: res.body.json.name
       response_time: res.time
       content_type: res.headers["Content-Type"]
 ```
 
-### Common HTTP Patterns
+### 一般的なHTTPパターン
 
-#### Authentication
+#### 認証
 
 ```yaml
 vars:
@@ -213,7 +213,7 @@ vars:
   password: "{{PASSWORD}}"
   api_key: "{{API_KEY}}"
 
-# Bearer token
+# Bearerトークン
 steps:
   - name: "Authenticated Request"
     uses: http
@@ -222,7 +222,7 @@ steps:
       headers:
         Authorization: "Bearer {{vars.access_token}}"
 
-# Basic auth
+# Basic認証
   - name: "Basic Auth Request"
     uses: http
     with:
@@ -230,7 +230,7 @@ steps:
       headers:
         Authorization: "Basic {{encode_base64(vars.username + ':' + vars.password)}}"
 
-# API key
+# APIキー
   - name: "API Key Request"
     uses: http
     with:
@@ -239,7 +239,7 @@ steps:
         X-API-Key: "{{vars.api_key}}"
 ```
 
-#### Content Types
+#### コンテンツタイプ
 
 ```yaml
 vars:
@@ -250,7 +250,7 @@ vars:
 # JSON API
 steps:
   - name: "JSON Request"
-    action: http
+    uses: http
     with:
       url: "{{vars.api_url}}/json"
       method: "POST"
@@ -259,12 +259,12 @@ steps:
       body: |
         {
           "key": "value",
-          "timestamp": "{{iso8601()}}"
+          "timestamp": "{{unixtime()}}"
         }
 
-# XML Request
+# XMLリクエスト
   - name: "XML Request"
-    action: http
+    uses: http
     with:
       url: "{{vars.api_url}}/xml"
       method: "POST"
@@ -276,9 +276,9 @@ steps:
           <key>value</key>
         </data>
 
-# GraphQL Query
+# GraphQLクエリ
   - name: "GraphQL Query"
-    action: http
+    uses: http
     with:
       url: "{{vars.graphql_url}}"
       method: "POST"
@@ -290,7 +290,7 @@ steps:
         }
 ```
 
-#### File Upload
+#### ファイルアップロード
 
 ```yaml
 vars:
@@ -298,7 +298,7 @@ vars:
 
 steps:
   - name: "File Upload"
-    action: http
+    uses: http
     with:
       url: "{{vars.api_url}}/upload"
       method: "POST"
@@ -313,11 +313,11 @@ steps:
         --boundary123--
 ```
 
-## Database Action
+## データベースアクション
 
-The `db` action executes SQL queries on MySQL, PostgreSQL, and SQLite databases, providing comprehensive result handling and error reporting.
+`db`アクションはMySQL、PostgreSQL、SQLiteデータベースでSQLクエリを実行し、包括的な結果処理とエラーレポートを提供します。
 
-### Basic Syntax
+### 基本的な構文
 
 ```yaml
 steps:
@@ -330,13 +330,13 @@ steps:
     test: res.code == 0 && res.rows_affected > 0
 ```
 
-### Parameters
+### パラメータ
 
-#### `dsn` (required)
+#### `dsn` (必須)
 
-**Type:** String  
-**Description:** Database connection string with automatic driver detection  
-**Supports:** Template expressions
+**型:** String  
+**説明:** 自動ドライバー検出付きのデータベース接続文字列  
+**サポート:** テンプレート式
 
 ```yaml
 # MySQL
@@ -365,11 +365,11 @@ with:
   dsn: "file:{{vars.data_dir}}/app.db"
 ```
 
-#### `query` (required)
+#### `query` (必須)
 
-**Type:** String  
-**Description:** SQL query to execute  
-**Supports:** Template expressions and multi-line strings
+**型:** String  
+**説明:** 実行するSQLクエリ  
+**サポート:** テンプレート式と複数行文字列
 
 ```yaml
 with:
@@ -382,11 +382,11 @@ with:
     WHERE u.active = ? AND u.created_at > ?
 ```
 
-#### `params` (optional)
+#### `params` (オプション)
 
-**Type:** Array of mixed values (String, Number, Boolean)  
-**Description:** Query parameters for prepared statements  
-**Supports:** Template expressions
+**型:** 混合値の配列 (String, Number, Boolean)  
+**説明:** プリペアドステートメント用のクエリパラメータ  
+**サポート:** テンプレート式
 
 ```yaml
 with:
@@ -394,11 +394,11 @@ with:
   params: [123, true, "{{vars.user_email}}"]
 ```
 
-#### `timeout` (optional)
+#### `timeout` (オプション)
 
-**Type:** Duration  
-**Default:** `30s`  
-**Description:** Query execution timeout
+**型:** Duration  
+**デフォルト:** `30s`  
+**説明:** クエリ実行タイムアウト
 
 ```yaml
 with:
@@ -406,20 +406,20 @@ with:
   timeout: "60s"
 ```
 
-### Response Object
+### レスポンスオブジェクト
 
-The database action provides a `res` object with the following properties:
+データベースアクションは次のプロパティを持つ`res`オブジェクトを提供します：
 
-| Property | Type | Description |
+| プロパティ | 型 | 説明 |
 |----------|------|-------------|
-| `code` | Integer | Operation result (0 = success, 1 = error) |
-| `rows_affected` | Integer | Number of rows affected by the query |
-| `rows` | Array | Query results for SELECT statements (as objects) |
-| `error` | String | Error message if operation failed |
+| `code` | Integer | 操作結果 (0 = 成功, 1 = エラー) |
+| `rows_affected` | Integer | クエリによって影響を受けた行数 |
+| `rows` | Array | SELECTステートメントのクエリ結果（オブジェクトとして） |
+| `error` | String | 操作が失敗した場合のエラーメッセージ |
 
-### Response Examples
+### レスポンス例
 
-#### SELECT Query Response
+#### SELECTクエリレスポンス
 
 ```yaml
 steps:
@@ -433,11 +433,11 @@ steps:
     test: res.code == 0 && res.rows_affected > 0
     outputs:
       user_count: res.rows_affected
-      first_user_id: res.rows__0__id
-      first_user_name: res.rows__0__name
+      first_user_id: res.rows[0].id
+      first_user_name: res.rows[0].name
 ```
 
-#### INSERT/UPDATE Query Response
+#### INSERT/UPDATEクエリレスポンス
 
 ```yaml
 steps:
@@ -450,12 +450,12 @@ steps:
     test: res.code == 0 && res.rows_affected == 1
 ```
 
-### Database-Specific Features
+### データベース固有の機能
 
-#### MySQL Examples
+#### MySQL例
 
 ```yaml
-# MySQL with connection options
+# 接続オプション付きMySQL
 - name: "MySQL Query"
   uses: db
   with:
@@ -463,7 +463,7 @@ steps:
     query: "SELECT VERSION() as mysql_version, NOW() as current_time"
   test: res.code == 0
 
-# MySQL stored procedure
+# MySQLストアドプロシージャ
 - name: "Call Procedure"
   uses: db
   with:
@@ -473,10 +473,10 @@ steps:
   test: res.code == 0
 ```
 
-#### PostgreSQL Examples
+#### PostgreSQL例
 
 ```yaml
-# PostgreSQL with JSON operations
+# JSON操作付きPostgreSQL
 - name: "JSON Query"
   uses: db
   with:
@@ -488,7 +488,7 @@ steps:
     params: ["admin"]
   test: res.code == 0
 
-# PostgreSQL array operations
+# PostgreSQL配列操作
 - name: "Array Query"
   uses: db
   with:
@@ -498,10 +498,10 @@ steps:
   test: res.code == 0
 ```
 
-#### SQLite Examples
+#### SQLite例
 
 ```yaml
-# SQLite with file creation
+# ファイル作成付きSQLite
 - name: "SQLite Query"
   uses: db
   with:
@@ -515,7 +515,7 @@ steps:
       )
   test: res.code == 0
 
-# SQLite with in-memory database
+# インメモリデータベースSQLite
 - name: "Memory Database"
   uses: db
   with:
@@ -524,9 +524,9 @@ steps:
   test: res.code == 0
 ```
 
-### Common Query Patterns
+### 一般的なクエリパターン
 
-#### Data Validation Queries
+#### データ検証クエリ
 
 ```yaml
 - name: "Check Data Integrity"
@@ -541,11 +541,11 @@ steps:
       FROM users
   test: |
     res.code == 0 && 
-    res.rows__0__total_users > 0 && 
-    res.rows__0__missing_emails == 0
+    res.rows[0].total_users > 0 && 
+    res.rows[0].missing_emails == 0
 ```
 
-#### Performance Monitoring
+#### パフォーマンス監視
 
 ```yaml
 - name: "Database Performance Check"
@@ -568,7 +568,7 @@ steps:
     high_seq_scan_tables: res.rows_affected
 ```
 
-#### Batch Operations
+#### バッチ操作
 
 ```yaml
 - name: "Batch Insert"
@@ -583,19 +583,19 @@ steps:
   test: res.code == 0 && res.rows_affected == 3
 ```
 
-### Security Features
+### セキュリティ機能
 
-The database action implements several security measures:
+データベースアクションはいくつかのセキュリティ対策を実装しています：
 
-- **Prepared Statements**: All parameterized queries use prepared statements to prevent SQL injection
-- **Connection String Masking**: Passwords are masked in logs and output
-- **Timeout Protection**: Prevents long-running queries from hanging
-- **Driver Validation**: Only supports approved database drivers
-- **DSN Validation**: Validates connection string format before execution
+- **プリペアドステートメント**: すべてのパラメータ化クエリでプリペアドステートメントを使用してSQLインジェクションを防止
+- **接続文字列マスキング**: ログと出力でパスワードをマスク
+- **タイムアウト保護**: 長時間実行されるクエリのハングを防止
+- **ドライバー検証**: 承認されたデータベースドライバーのみをサポート
+- **DSN検証**: 実行前に接続文字列形式を検証
 
-### Error Handling
+### エラーハンドリング
 
-Common error scenarios and handling patterns:
+一般的なエラーシナリオと処理パターン：
 
 ```yaml
 - name: "Database with Error Handling"
@@ -618,12 +618,12 @@ Common error scenarios and handling patterns:
         "unknown"}}
 ```
 
-### Transaction Examples
+### トランザクション例
 
-While the action doesn't directly support transactions, you can use database-specific transaction syntax:
+アクションは直接トランザクションをサポートしませんが、データベース固有のトランザクション構文を使用できます：
 
 ```yaml
-# PostgreSQL transaction
+# PostgreSQLトランザクション
 - name: "Begin Transaction"
   uses: db
   with:
@@ -647,11 +647,11 @@ While the action doesn't directly support transactions, you can use database-spe
   test: res.code == 0
 ```
 
-## Browser Action
+## ブラウザアクション
 
-The `browser` action automates web browsers using ChromeDP, providing comprehensive web automation capabilities for testing, scraping, and interaction with web applications.
+`browser`アクションはChromeDPを使用してWebブラウザを自動化し、テスト、スクレイピング、Webアプリケーションとの相互作用のための包括的なWeb自動化機能を提供します。
 
-### Basic Syntax
+### 基本的な構文
 
 ```yaml
 steps:
@@ -665,28 +665,28 @@ steps:
     test: res.code == 0
 ```
 
-### Parameters
+### パラメータ
 
-#### `action` (required)
+#### `action` (必須)
 
-**Type:** String  
-**Description:** The browser action to perform  
-**Values:** 
-- **Navigation:** `navigate`
-- **Text/Content:** `text`, `value`, `get_html`
-- **Attributes:** `get_attribute`
-- **Interactions:** `click`, `double_click`, `right_click`, `hover`, `focus`
-- **Input:** `type`, `send_keys`, `select`
-- **Forms:** `submit`
-- **Scrolling:** `scroll`
-- **Screenshots:** `screenshot`, `capture_screenshot`, `full_screenshot`
-- **Waiting:** `wait_visible`, `wait_not_visible`, `wait_ready`, `wait_text`, `wait_enabled`
+**型:** String  
+**説明:** 実行するブラウザアクション  
+**値:** 
+- **ナビゲーション:** `navigate`
+- **テキスト/コンテンツ:** `text`, `value`, `get_html`
+- **属性:** `get_attribute`
+- **インタラクション:** `click`, `double_click`, `right_click`, `hover`, `focus`
+- **入力:** `type`, `send_keys`, `select`
+- **フォーム:** `submit`
+- **スクロール:** `scroll`
+- **スクリーンショット:** `screenshot`, `capture_screenshot`, `full_screenshot`
+- **待機:** `wait_visible`, `wait_not_visible`, `wait_ready`, `wait_text`, `wait_enabled`
 
-#### `url` (optional)
+#### `url` (オプション)
 
-**Type:** String  
-**Description:** URL to navigate to (required for navigate action)  
-**Supports:** Template expressions
+**型:** String  
+**説明:** ナビゲートするURL（navigateアクションに必須）  
+**サポート:** テンプレート式
 
 ```yaml
 with:
@@ -695,11 +695,11 @@ with:
   url: "{{vars.base_url}}/login"
 ```
 
-#### `selector` (optional)
+#### `selector` (オプション)
 
-**Type:** String  
-**Description:** CSS selector for targeting elements  
-**Supports:** Template expressions
+**型:** String  
+**説明:** 要素をターゲットするためのCSSセレクタ  
+**サポート:** テンプレート式
 
 ```yaml
 with:
@@ -709,11 +709,11 @@ with:
   selector: ".article-content p:first-child"
 ```
 
-#### `value` (optional)
+#### `value` (オプション)
 
-**Type:** String  
-**Description:** Value to type or text to wait for  
-**Supports:** Template expressions
+**型:** String  
+**説明:** タイプする値または待機するテキスト  
+**サポート:** テンプレート式
 
 ```yaml
 with:
@@ -723,10 +723,10 @@ with:
   value: "{{vars.username}}"
 ```
 
-#### `attribute` (optional)
+#### `attribute` (オプション)
 
-**Type:** String  
-**Description:** Attribute name to retrieve (required for get_attribute action)
+**型:** String  
+**説明:** 取得する属性名（get_attributeアクションに必須）
 
 ```yaml
 with:
@@ -735,24 +735,24 @@ with:
   attribute: "href"
 ```
 
-#### `headless` (optional)
+#### `headless` (オプション)
 
-**Type:** Boolean  
-**Default:** `true`  
-**Description:** Whether to run browser in headless mode
+**型:** Boolean  
+**デフォルト:** `true`  
+**説明:** ヘッドレスモードでブラウザを実行するかどうか
 
 ```yaml
 with:
   action: navigate
   url: "https://example.com"
-  headless: false  # Show browser window
+  headless: false  # ブラウザウィンドウを表示
 ```
 
-#### `timeout` (optional)
+#### `timeout` (オプション)
 
-**Type:** Duration  
-**Default:** `30s`  
-**Description:** Action timeout
+**型:** Duration  
+**デフォルト:** `30s`  
+**説明:** アクションタイムアウト
 
 ```yaml
 with:
@@ -761,44 +761,44 @@ with:
   timeout: "60s"
 ```
 
-### Response Object
+### レスポンスオブジェクト
 
-The browser action provides a `res` object with action-specific properties:
+ブラウザアクションはアクション固有のプロパティを持つ`res`オブジェクトを提供します：
 
-#### Common Properties
+#### 共通プロパティ
 
-| Property | Type | Description |
+| プロパティ | 型 | 説明 |
 |----------|------|-------------|
-| `code` | Integer | Result code (0 = success, non-zero = error) |
-| `results` | Object | Action-specific results (text, values, etc.) |
+| `code` | Integer | 結果コード (0 = 成功, 非ゼロ = エラー) |
+| `results` | Object | アクション固有の結果 (テキスト、値など) |
 
-#### Navigation Response
+#### ナビゲーションレスポンス
 
-| Property | Type | Description |
+| プロパティ | 型 | 説明 |
 |----------|------|-------------|
-| `url` | String | URL that was navigated to |
-| `time_ms` | String | Navigation time in milliseconds |
+| `url` | String | ナビゲートしたURL |
+| `time_ms` | String | ナビゲーション時間（ミリ秒） |
 
-#### Text/Attribute Response
+#### テキスト/属性レスポンス
 
-| Property | Type | Description |
+| プロパティ | 型 | 説明 |
 |----------|------|-------------|
-| `selector` | String | CSS selector used |
-| `text` | String | Extracted text content (get_text) |
-| `attribute` | String | Attribute name (get_attribute) |
-| `value` | String | Attribute value (get_attribute) |
-| `exists` | String | "true" if attribute exists |
+| `selector` | String | 使用されたCSSセレクタ |
+| `text` | String | 抽出されたテキストコンテンツ (get_text) |
+| `attribute` | String | 属性名 (get_attribute) |
+| `value` | String | 属性値 (get_attribute) |
+| `exists` | String | 属性が存在する場合"true" |
 
-#### Screenshot Response
+#### スクリーンショットレスポンス
 
-| Property | Type | Description |
+| プロパティ | 型 | 説明 |
 |----------|------|-------------|
-| `screenshot` | String | Base64-encoded screenshot |
-| `size_bytes` | String | Screenshot size in bytes |
+| `screenshot` | String | Base64エンコードされたスクリーンショット |
+| `size_bytes` | String | スクリーンショットサイズ（バイト） |
 
-### Browser Actions
+### ブラウザアクション
 
-#### Navigate to URL
+#### URLへのナビゲート
 
 ```yaml
 - name: "Open Website"
@@ -812,7 +812,7 @@ The browser action provides a `res` object with action-specific properties:
     load_time: res.time_ms
 ```
 
-#### Extract Text Content
+#### テキストコンテンツの抽出
 
 ```yaml
 - name: "Get Page Title"
@@ -843,7 +843,7 @@ The browser action provides a `res` object with action-specific properties:
     article_html: res.results.get_html
 ```
 
-#### Get Element Attributes
+#### 要素属性の取得
 
 ```yaml
 - name: "Extract Links"
@@ -857,10 +857,10 @@ The browser action provides a `res` object with action-specific properties:
     download_url: res.results.value
 ```
 
-#### Form Interactions
+#### フォームインタラクション
 
 ```yaml
-# Fill form fields
+# フォームフィールドの入力
 - name: "Enter Email"
   uses: browser
   with:
@@ -869,7 +869,7 @@ The browser action provides a `res` object with action-specific properties:
     value: "user@example.com"
   test: res.code == 0
 
-# Click buttons
+# ボタンのクリック
 - name: "Click Submit"
   uses: browser
   with:
@@ -877,7 +877,7 @@ The browser action provides a `res` object with action-specific properties:
     selector: "#submit-btn"
   test: res.code == 0
 
-# Submit forms
+# フォームの送信
 - name: "Submit Form"
   uses: browser
   with:
@@ -886,10 +886,10 @@ The browser action provides a `res` object with action-specific properties:
   test: res.code == 0
 ```
 
-#### Wait for Elements
+#### 要素の待機
 
 ```yaml
-# Wait for element to appear
+# 要素の表示を待機
 - name: "Wait for Results"
   uses: browser
   with:
@@ -898,7 +898,7 @@ The browser action provides a `res` object with action-specific properties:
     timeout: "10s"
   test: res.code == 0
 
-# Wait for specific text
+# 特定のテキストを待機
 - name: "Wait for Success Message"
   uses: browser
   with:
@@ -908,7 +908,7 @@ The browser action provides a `res` object with action-specific properties:
   test: res.code == 0
 ```
 
-#### Capture Screenshots
+#### スクリーンショットの撮影
 
 ```yaml
 - name: "Take Screenshot"
@@ -921,9 +921,9 @@ The browser action provides a `res` object with action-specific properties:
     screenshot_size: res.size_bytes
 ```
 
-### Advanced Usage Examples
+### 高度な使用例
 
-#### Login Flow
+#### ログインフロー
 
 ```yaml
 vars:
@@ -971,7 +971,7 @@ steps:
     test: res.code == 0
 ```
 
-#### Data Extraction
+#### データ抽出
 
 ```yaml
 steps:
@@ -1008,7 +1008,7 @@ steps:
       first_cell: res.results.text
 ```
 
-#### E2E Testing
+#### E2Eテスト
 
 ```yaml
 steps:
@@ -1066,7 +1066,7 @@ steps:
     test: res.code == 0
 ```
 
-### Error Handling
+### エラーハンドリング
 
 ```yaml
 - name: "Browser Action with Error Handling"
@@ -1086,27 +1086,27 @@ steps:
         "unknown"}}
 ```
 
-### Performance Considerations
+### パフォーマンスの考慮事項
 
-- **Headless Mode**: Use `headless: true` (default) for faster execution
-- **Timeouts**: Set appropriate timeouts to prevent hanging
-- **Resource Usage**: Browser actions consume more resources than other actions
-- **Screenshots**: Large screenshots consume significant memory
+- **ヘッドレスモード**: より高速な実行のため`headless: true`（デフォルト）を使用
+- **タイムアウト**: ハングを防ぐために適切なタイムアウトを設定
+- **リソース使用量**: ブラウザアクションは他のアクションよりも多くのリソースを消費
+- **スクリーンショット**: 大きなスクリーンショットは大量のメモリを消費
 
-### Security Features
+### セキュリティ機能
 
-The browser action implements several security measures:
+ブラウザアクションはいくつかのセキュリティ対策を実装しています：
 
-- **Sandboxed Execution**: ChromeDP runs in a sandboxed environment
-- **Timeout Protection**: Prevents indefinite hanging
-- **URL Validation**: Validates URLs before navigation
-- **Resource Limits**: Built-in resource usage limits
+- **サンドボックス実行**: ChromeDPはサンドボックス環境で実行
+- **タイムアウト保護**: 無限ハングを防止
+- **URL検証**: ナビゲーション前にURLを検証
+- **リソース制限**: 組み込みのリソース使用制限
 
-## Shell Action
+## シェルアクション
 
-The `shell` action executes shell commands and scripts securely, providing comprehensive output capture and error handling.
+`shell`アクションはシェルコマンドとスクリプトを安全に実行し、包括的な出力キャプチャとエラーハンドリングを提供します。
 
-### Basic Syntax
+### 基本的な構文
 
 ```yaml
 steps:
@@ -1117,13 +1117,13 @@ steps:
     test: res.code == 0
 ```
 
-### Parameters
+### パラメータ
 
-#### `cmd` (required)
+#### `cmd` (必須)
 
-**Type:** String  
-**Description:** The shell command to execute  
-**Supports:** Template expressions
+**型:** String  
+**説明:** 実行するシェルコマンド  
+**サポート:** テンプレート式
 
 ```yaml
 vars:
@@ -1135,11 +1135,11 @@ with:
   cmd: "curl -f {{vars.api_url}}/health"
 ```
 
-#### `shell` (optional)
+#### `shell` (オプション)
 
-**Type:** String  
-**Default:** `/bin/sh`  
-**Allowed Values:** `/bin/sh`, `/bin/bash`, `/bin/zsh`, `/bin/dash`, `/usr/bin/sh`, `/usr/bin/bash`, `/usr/bin/zsh`, `/usr/bin/dash`
+**型:** String  
+**デフォルト:** `/bin/sh`  
+**許可値:** `/bin/sh`, `/bin/bash`, `/bin/zsh`, `/bin/dash`, `/usr/bin/sh`, `/usr/bin/bash`, `/usr/bin/zsh`, `/usr/bin/dash`
 
 ```yaml
 with:
@@ -1147,11 +1147,11 @@ with:
   shell: "/bin/bash"
 ```
 
-#### `workdir` (optional)
+#### `workdir` (オプション)
 
-**Type:** String  
-**Description:** Working directory for command execution (must be absolute path)  
-**Supports:** Template expressions
+**型:** String  
+**説明:** コマンド実行用の作業ディレクトリ（絶対パス必須）  
+**サポート:** テンプレート式
 
 ```yaml
 with:
@@ -1160,24 +1160,24 @@ with:
   workdir: "{{vars.project_path}}"
 ```
 
-#### `timeout` (optional)
+#### `timeout` (オプション)
 
-**Type:** String or Duration  
-**Default:** `30s`  
-**Format:** Go duration format (`30s`, `5m`, `1h`) or plain number (seconds)
+**型:** String または Duration  
+**デフォルト:** `30s`  
+**形式:** Go duration形式 (`30s`, `5m`, `1h`) または数値 (秒)
 
 ```yaml
 with:
   cmd: "npm test"
   timeout: "10m"
-  timeout: "300"  # 300 seconds
+  timeout: "300"  # 300秒
 ```
 
-#### `env` (optional)
+#### `env` (オプション)
 
-**Type:** Object  
-**Description:** Environment variables to set for the command  
-**Supports:** Template expressions in values
+**型:** Object  
+**説明:** コマンドに設定する環境変数  
+**サポート:** 値でのテンプレート式
 
 ```yaml
 vars:
@@ -1191,26 +1191,26 @@ with:
     BUILD_VERSION: "{{vars.version}}"
 ```
 
-### Response Format
+### レスポンス形式
 
 ```yaml
 res:
-  code: 0                    # Exit code (0 = success)
-  stdout: "Build successful" # Standard output
-  stderr: ""                 # Standard error output
+  code: 0                    # 終了コード (0 = 成功)
+  stdout: "Build successful" # 標準出力
+  stderr: ""                 # 標準エラー出力
 
 req:
-  cmd: "npm run build"       # Original command
-  shell: "/bin/sh"          # Shell used
-  workdir: "/app"           # Working directory
-  timeout: "30s"            # Timeout setting
-  env:                      # Environment variables
+  cmd: "npm run build"       # 元のコマンド
+  shell: "/bin/sh"          # 使用されたシェル
+  workdir: "/app"           # 作業ディレクトリ
+  timeout: "30s"            # タイムアウト設定
+  env:                      # 環境変数
     NODE_ENV: "production"
 ```
 
-### Usage Examples
+### 使用例
 
-#### Basic Command Execution
+#### 基本的なコマンド実行
 
 ```yaml
 - name: "System Information"
@@ -1220,7 +1220,7 @@ req:
   test: res.code == 0
 ```
 
-#### Build and Test Pipeline
+#### ビルドとテストパイプライン
 
 ```yaml
 - name: "Install Dependencies"
@@ -1242,7 +1242,7 @@ req:
   test: res.code == 0 && (res.stdout | contains("All tests passed"))
 ```
 
-#### Environment-specific Deployment
+#### 環境固有のデプロイ
 
 ```yaml
 vars:
@@ -1262,7 +1262,7 @@ vars:
   test: res.code == 0
 ```
 
-#### Error Handling and Debugging
+#### エラーハンドリングとデバッグ
 
 ```yaml
 - name: "Service Health Check"
@@ -1275,32 +1275,32 @@ vars:
   uses: shell
   with:
     cmd: "npm run build:debug"
-  # Allow failure to capture debug output
+  # デバッグ出力をキャプチャするために失敗を許可
   outputs:
     debug_info: res.stderr
 ```
 
-### Security Features
+### セキュリティ機能
 
-The shell action implements several security measures:
+シェルアクションはいくつかのセキュリティ対策を実装しています：
 
-- **Shell Path Restriction**: Only allows approved shell executables
-- **Working Directory Validation**: Ensures absolute paths and directory existence
-- **Timeout Protection**: Prevents infinite execution
-- **Environment Variable Filtering**: Safely handles environment variable passing
-- **Output Sanitization**: Safely captures and returns command output
+- **シェルパス制限**: 承認されたシェル実行ファイルのみを許可
+- **作業ディレクトリ検証**: 絶対パスとディレクトリの存在を確保
+- **タイムアウト保護**: 無限実行を防止
+- **環境変数フィルタリング**: 環境変数の受け渡しを安全に処理
+- **出力サニタイゼーション**: コマンド出力を安全にキャプチャして返す
 
-### Error Handling
+### エラーハンドリング
 
-Common exit codes and their meanings:
+一般的な終了コードとその意味：
 
-- **0**: Success
-- **1**: General error
-- **2**: Misuse of shell builtins
-- **126**: Command cannot execute (permission denied)
-- **127**: Command not found
-- **130**: Script terminated by Ctrl+C
-- **255**: Exit status out of range
+- **0**: 成功
+- **1**: 一般的なエラー
+- **2**: シェル組み込みコマンドの誤用
+- **126**: コマンドを実行できない（権限拒否）
+- **127**: コマンドが見つからない
+- **130**: Ctrl+Cでスクリプトが終了
+- **255**: 終了ステータスが範囲外
 
 ```yaml
 - name: "Handle Different Exit Codes"
@@ -1313,11 +1313,11 @@ Common exit codes and their meanings:
     res.code < 128
 ```
 
-## SMTP Action
+## SMTPアクション
 
-The `smtp` action sends email notifications and alerts through SMTP servers.
+`smtp`アクションはSMTPサーバーを通じてメール通知とアラートを送信します。
 
-### Basic Syntax
+### 基本的な構文
 
 ```yaml
 vars:
@@ -1326,7 +1326,7 @@ vars:
 
 steps:
   - name: "Send Alert"
-    action: smtp
+    uses: smtp
     with:
       host: "smtp.gmail.com"
       username: "{{vars.smtp_user}}"
@@ -1337,12 +1337,12 @@ steps:
       body: "Service is down"
 ```
 
-### Parameters
+### パラメータ
 
-#### `host` (required)
+#### `host` (必須)
 
-**Type:** String  
-**Description:** SMTP server hostname or IP address
+**型:** String  
+**説明:** SMTPサーバーのホスト名またはIPアドレス
 
 ```yaml
 with:
@@ -1351,11 +1351,11 @@ with:
   host: "127.0.0.1"
 ```
 
-#### `port` (optional)
+#### `port` (オプション)
 
-**Type:** Integer  
-**Default:** `587`  
-**Description:** SMTP server port
+**型:** Integer  
+**デフォルト:** `587`  
+**説明:** SMTPサーバーポート
 
 ```yaml
 with:
@@ -1365,11 +1365,11 @@ with:
   port: 25     # Plain
 ```
 
-#### `username` (required)
+#### `username` (必須)
 
-**Type:** String  
-**Description:** SMTP authentication username  
-**Supports:** Template expressions
+**型:** String  
+**説明:** SMTP認証ユーザー名  
+**サポート:** テンプレート式
 
 ```yaml
 vars:
@@ -1380,11 +1380,11 @@ with:
   username: "alerts@example.com"
 ```
 
-#### `password` (required)
+#### `password` (必須)
 
-**Type:** String  
-**Description:** SMTP authentication password  
-**Supports:** Template expressions
+**型:** String  
+**説明:** SMTP認証パスワード  
+**サポート:** テンプレート式
 
 ```yaml
 vars:
@@ -1396,11 +1396,11 @@ with:
   password: "{{vars.email_app_password}}"
 ```
 
-#### `from` (required)
+#### `from` (必須)
 
-**Type:** String  
-**Description:** Sender email address  
-**Supports:** Template expressions
+**型:** String  
+**説明:** 送信者メールアドレス  
+**サポート:** テンプレート式
 
 ```yaml
 vars:
@@ -1412,11 +1412,11 @@ with:
   from: "Probe Monitor <probe@example.com>"
 ```
 
-#### `to` (required)
+#### `to` (必須)
 
-**Type:** Array of strings  
-**Description:** Recipient email addresses  
-**Supports:** Template expressions
+**型:** 文字列の配列  
+**説明:** 受信者メールアドレス  
+**サポート:** テンプレート式
 
 ```yaml
 vars:
@@ -1425,13 +1425,13 @@ vars:
 with:
   to: ["admin@example.com"]
   to: ["user1@example.com", "user2@example.com"]
-  to: ["{{vars.alert_email}}"]"
+  to: ["{{vars.alert_email}}"]
 ```
 
-#### `cc` (optional)
+#### `cc` (オプション)
 
-**Type:** Array of strings  
-**Description:** Carbon copy recipients
+**型:** 文字列の配列  
+**説明:** カーボンコピー受信者
 
 ```yaml
 with:
@@ -1439,10 +1439,10 @@ with:
   cc: ["team@example.com", "manager@example.com"]
 ```
 
-#### `bcc` (optional)
+#### `bcc` (オプション)
 
-**Type:** Array of strings  
-**Description:** Blind carbon copy recipients
+**型:** 文字列の配列  
+**説明:** ブラインドカーボンコピー受信者
 
 ```yaml
 with:
@@ -1450,11 +1450,11 @@ with:
   bcc: ["audit@example.com"]
 ```
 
-#### `subject` (required)
+#### `subject` (必須)
 
-**Type:** String  
-**Description:** Email subject line  
-**Supports:** Template expressions
+**型:** String  
+**説明:** メール件名行  
+**サポート:** テンプレート式
 
 ```yaml
 vars:
@@ -1463,45 +1463,45 @@ vars:
 with:
   subject: "Alert: Service Down"
   subject: "{{vars.service_name}} Status: {{outputs.health-check.status}}"
-  subject: "Daily Report - {{date('2006-01-02')}}"
+  subject: "Daily Report - {{unixtime() | date('2006-01-02')}}"
 ```
 
-#### `body` (required)
+#### `body` (必須)
 
-**Type:** String  
-**Description:** Email body content  
-**Supports:** Template expressions and multi-line strings
+**型:** String  
+**説明:** メール本文コンテンツ  
+**サポート:** テンプレート式と複数行文字列
 
 ```yaml
 with:
   body: "Simple text message"
   
-  # Multi-line text
+  # 複数行テキスト
   body: |
     Service Alert Report
     
     Status: {{outputs.check.status}}
-    Timestamp: {{iso8601()}}
+    Timestamp: {{unixtime()}}
     Response Time: {{outputs.check.time}}ms
     
     Please investigate immediately.
 
-  # HTML email (set html: true)
+  # HTMLメール (html: trueを設定)
   body: |
     <html>
     <body>
       <h1>Service Alert</h1>
       <p>Status: <strong>{{outputs.check.status}}</strong></p>
-      <p>Time: {{iso8601()}}</p>
+      <p>Time: {{unixtime()}}</p>
     </body>
     </html>
 ```
 
-#### `html` (optional)
+#### `html` (オプション)
 
-**Type:** Boolean  
-**Default:** `false`  
-**Description:** Whether the body contains HTML content
+**型:** Boolean  
+**デフォルト:** `false`  
+**説明:** 本文にHTMLコンテンツが含まれているかどうか
 
 ```yaml
 with:
@@ -1510,37 +1510,37 @@ with:
   html: true
 ```
 
-#### `tls` (optional)
+#### `tls` (オプション)
 
-**Type:** Boolean  
-**Default:** `true`  
-**Description:** Whether to use TLS/STARTTLS encryption
+**型:** Boolean  
+**デフォルト:** `true`  
+**説明:** TLS/STARTTLS暗号化を使用するかどうか
 
 ```yaml
 with:
   host: "smtp.example.com"
   port: 587
-  tls: true     # Use STARTTLS
+  tls: true     # STARTTLSを使用
   
 with:
   host: "smtp.example.com"
   port: 465
-  tls: false    # Use SSL (port 465 typically uses implicit SSL)
+  tls: false    # SSL使用 (ポート465は通常暗黙的SSLを使用)
 ```
 
-### Response Object
+### レスポンスオブジェクト
 
-The SMTP action provides a `res` object with the following properties:
+SMTPアクションは次のプロパティを持つ`res`オブジェクトを提供します：
 
-| Property | Type | Description |
+| プロパティ | 型 | 説明 |
 |----------|------|-------------|
-| `success` | Boolean | Whether the email was sent successfully |
-| `message_id` | String | Unique message identifier (if provided by server) |
-| `time` | Integer | Time taken to send email in milliseconds |
+| `success` | Boolean | メールが正常に送信されたかどうか |
+| `message_id` | String | 一意のメッセージ識別子（サーバーから提供された場合） |
+| `time` | Integer | メール送信にかかった時間（ミリ秒） |
 
-### SMTP Examples
+### SMTP例
 
-#### Gmail Configuration
+#### Gmail設定
 
 ```yaml
 vars:
@@ -1549,25 +1549,25 @@ vars:
 
 steps:
   - name: "Send Gmail Alert"
-    action: smtp
+    uses: smtp
     with:
       host: "smtp.gmail.com"
       port: 587
       username: "{{vars.gmail_username}}"
-      password: "{{vars.gmail_app_password}}"  # Use app password, not account password
+      password: "{{vars.gmail_app_password}}"  # アカウントパスワードではなくアプリパスワードを使用
       from: "{{vars.gmail_username}}"
       to: ["admin@example.com"]
-      subject: "Probe Alert - {{date('15:04')}}"
+      subject: "Probe Alert - {{unixtime() | date('15:04')}}"
       body: |
         Alert from Probe workflow.
         
         Details:
         - Workflow: {{workflow.name}}
-        - Time: {{iso8601()}}
+        - Time: {{unixtime()}}
         - Status: Failed
 ```
 
-#### Office 365 Configuration
+#### Office 365設定
 
 ```yaml
 vars:
@@ -1576,7 +1576,7 @@ vars:
 
 steps:
   - name: "Send Office 365 Alert"
-    action: smtp
+    uses: smtp
     with:
       host: "smtp.office365.com"
       port: 587
@@ -1589,7 +1589,7 @@ steps:
       tls: true
 ```
 
-#### HTML Email with Multiple Recipients
+#### 複数受信者でのHTMLメール
 
 ```yaml
 vars:
@@ -1599,7 +1599,7 @@ vars:
 
 steps:
   - name: "HTML Status Report"
-    action: smtp
+    uses: smtp
     with:
       host: "{{vars.smtp_host}}"
       port: 587
@@ -1608,7 +1608,7 @@ steps:
       from: "reports@example.com"
       to: ["admin@example.com", "ops@example.com"]
       cc: ["manager@example.com"]
-      subject: "Daily Health Report - {{date('2006-01-02')}}"
+      subject: "Daily Health Report - {{unixtime() | date('2006-01-02')}}"
       html: true
       body: |
         <html>
@@ -1620,49 +1620,49 @@ steps:
             <tr><td>API</td><td style="color: {{outputs.api.success ? 'green' : 'red'}}">{{outputs.api.status}}</td><td>{{outputs.api.time}}ms</td></tr>
             <tr><td>Database</td><td style="color: {{outputs.db.success ? 'green' : 'red'}}">{{outputs.db.status}}</td><td>{{outputs.db.time}}ms</td></tr>
           </table>
-          <p>Generated at {{iso8601()}}</p>
+          <p>Generated at {{unixtime()}}</p>
         </body>
         </html>
 ```
 
-## Hello Action
+## Helloアクション
 
-The `hello` action is a simple test action used for development, debugging, and workflow validation.
+`hello`アクションは開発、デバッグ、ワークフロー検証に使用される簡単なテストアクションです。
 
-### Basic Syntax
+### 基本的な構文
 
 ```yaml
 steps:
   - name: "Test Hello"
-    action: hello
+    uses: hello
     with:
       message: "Hello, World!"
 ```
 
-### Parameters
+### パラメータ
 
-#### `message` (optional)
+#### `message` (オプション)
 
-**Type:** String  
-**Default:** `"Hello from Probe!"`  
-**Description:** Message to display  
-**Supports:** Template expressions
+**型:** String  
+**デフォルト:** `"Hello from Probe!"`  
+**説明:** 表示するメッセージ  
+**サポート:** テンプレート式
 
 ```yaml
 with:
   message: "Hello, World!"
-  message: "Current time: {{iso8601()}}"
+  message: "Current time: {{unixtime()}}"
 vars:
   user_name: "{{USER_NAME}}"
 
   message: "Hello {{vars.user_name}}"
 ```
 
-#### `delay` (optional)
+#### `delay` (オプション)
 
-**Type:** Duration  
-**Default:** `0s`  
-**Description:** Artificial delay before completing
+**型:** Duration  
+**デフォルト:** `0s`  
+**説明:** 完了前の人為的な遅延
 
 ```yaml
 with:
@@ -1670,47 +1670,47 @@ with:
   delay: "2s"
 ```
 
-### Response Object
+### レスポンスオブジェクト
 
-The hello action provides a `res` object with the following properties:
+helloアクションは次のプロパティを持つ`res`オブジェクトを提供します：
 
-| Property | Type | Description |
+| プロパティ | 型 | 説明 |
 |----------|------|-------------|
-| `message` | String | The message that was displayed |
-| `time` | Integer | Time taken in milliseconds (including delay) |
-| `timestamp` | String | ISO 8601 timestamp when action completed |
+| `message` | String | 表示されたメッセージ |
+| `time` | Integer | かかった時間（ミリ秒）（遅延を含む） |
+| `timestamp` | String | アクション完了時のISO 8601タイムスタンプ |
 
-### Hello Examples
+### Hello例
 
-#### Basic Test
+#### 基本テスト
 
 ```yaml
 steps:
   - name: "Simple Test"
-    action: hello
+    uses: hello
     test: res.message != ""
     outputs:
       test_time: res.time
 ```
 
-#### Timing Test
+#### タイミングテスト
 
 ```yaml
 steps:
   - name: "Timing Test"
-    action: hello
+    uses: hello
     with:
       message: "Testing timing"
       delay: "1s"
     test: res.time >= 1000 && res.time < 1100
 ```
 
-#### Template Testing
+#### テンプレートテスト
 
 ```yaml
 steps:
   - name: "Template Test"
-    action: hello
+    uses: hello
     with:
 vars:
   user: "{{USER}}"
@@ -1721,40 +1721,40 @@ vars:
       rendered_message: res.message
 ```
 
-## Action Error Handling
+## アクションエラーハンドリング
 
-### Common Error Scenarios
+### 一般的なエラーシナリオ
 
-All actions can fail for various reasons. Understanding common failure modes helps with writing robust workflows.
+すべてのアクションはさまざまな理由で失敗する可能性があります。一般的な失敗モードを理解することで、堅牢なワークフローの作成に役立ちます。
 
-#### HTTP Action Errors
+#### HTTPアクションエラー
 
 ```yaml
 steps:
   - name: "HTTP with Error Handling"
-    action: http
+    uses: http
     with:
       url: "https://api.example.com/endpoint"
     test: |
-      res.status >= 200 && res.status < 300
+      res.code >= 200 && res.code < 300
     continue_on_error: false
     outputs:
-      success: res.status >= 200 && res.status < 300
+      success: res.code >= 200 && res.code < 300
       error_message: |
-        {{res.status >= 400 ? "Client error: " + res.status : 
-          res.status >= 500 ? "Server error: " + res.status : ""}}
+        {{res.code >= 400 ? "Client error: " + res.code : 
+          res.code >= 500 ? "Server error: " + res.code : ""}}
 ```
 
-#### SMTP Action Errors
+#### SMTPアクションエラー
 
+```yaml
 vars:
   smtp_user: "{{SMTP_USER}}"
   smtp_pass: "{{SMTP_PASS}}"
 
-```yaml
 steps:
   - name: "SMTP with Error Handling"
-    action: smtp
+    uses: smtp
     with:
       host: "smtp.example.com"
       username: "{{vars.smtp_user}}"
@@ -1770,52 +1770,51 @@ steps:
       send_time: res.time
 ```
 
-## Performance Considerations
+## パフォーマンスの考慮事項
 
-### HTTP Action Performance
+### HTTPアクションパフォーマンス
 
-- **Connection pooling:** HTTP actions reuse connections when possible
-- **Timeouts:** Set appropriate timeouts to prevent hanging
-- **Response size:** Large responses consume more memory
-- **Concurrent requests:** Multiple HTTP actions can run in parallel
+- **コネクションプーリング:** HTTPアクションは可能な場合接続を再利用
+- **タイムアウト:** ハングを防ぐために適切なタイムアウトを設定
+- **レスポンスサイズ:** 大きなレスポンスはより多くのメモリを消費
+- **同時リクエスト:** 複数のHTTPアクションは並列実行可能
 
 ```yaml
-# Performance-optimized HTTP configuration
+# パフォーマンス最適化されたHTTP設定
 vars:
   api_url: "{{API_URL}}"
 
-defaults:
-  http:
-    timeout: "10s"
-    follow_redirects: true
-    max_redirects: 3
-
 jobs:
-  performance-test:
-    steps:
-      - name: "Quick Health Check"
-        action: http
-        with:
-          url: "{{vars.api_url}}/ping"
-          timeout: "2s"
-        test: res.status == 200 && res.time < 500
+- name: performance-test
+  defaults:
+    http:
+      timeout: "10s"
+      follow_redirects: true
+      max_redirects: 3
+  steps:
+    - name: "Quick Health Check"
+      uses: http
+      with:
+        url: "{{vars.api_url}}/ping"
+        timeout: "2s"
+      test: res.code == 200 && res.time < 500
 ```
 
-### SMTP Action Performance
+### SMTPアクションパフォーマンス
 
-- **Connection reuse:** SMTP connections are established per action
-- **Batch emails:** Consider grouping recipients to reduce connections
-- **TLS overhead:** TLS negotiation adds latency
+- **接続再利用:** SMTP接続はアクションごとに確立
+- **バッチメール:** 接続を減らすために受信者をグループ化することを検討
+- **TLSオーバーヘッド:** TLSネゴシエーションは遅延を追加
 
 ```yaml
-# Efficient email notification
+# 効率的なメール通知
 vars:
   smtp_user: "{{SMTP_USER}}"
   smtp_pass: "{{SMTP_PASS}}"
 
 steps:
   - name: "Batch Notification"
-    action: smtp
+    uses: smtp
     with:
       host: "smtp.example.com"
       username: "{{vars.smtp_user}}"
@@ -1826,10 +1825,10 @@ steps:
       body: "Single email to multiple recipients"
 ```
 
-## See Also
+## 関連項目
 
-- **[YAML Configuration](../yaml-configuration/)** - Complete YAML syntax reference
-- **[Built-in Functions](../built-in-functions/)** - Expression functions for use with actions
-- **[Concepts: Actions](../../concepts/actions/)** - Action system architecture
-- **[How-tos: API Testing](../../how-tos/api-testing/)** - Practical HTTP action examples
-- **[How-tos: Error Handling](../../how-tos/error-handling-strategies/)** - Error handling patterns
+- **[YAML設定](../yaml-configuration/)** - 完全なYAML構文リファレンス
+- **[組み込み関数](../built-in-functions/)** - アクションで使用する式関数
+- **[概念: アクション](../../concepts/actions/)** - アクションシステムアーキテクチャ
+- **[ハウツー: APIテスト](../../how-tos/api-testing/)** - 実用的なHTTPアクション例
+- **[ハウツー: エラーハンドリング](../../how-tos/error-handling-strategies/)** - エラーハンドリングパターン

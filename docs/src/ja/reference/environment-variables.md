@@ -1,45 +1,45 @@
-# Environment Variables Reference
+# 環境変数リファレンス
 
-This page provides comprehensive documentation for all environment variables that control Probe's behavior, configuration, and execution.
+このページでは、Probeの動作、設定、実行を制御するすべての環境変数の包括的なドキュメントを提供します。
 
-## Overview
+## 概要
 
-Probe uses environment variables for:
+Probeは以下のために環境変数を使用します：
 
-- **Runtime Configuration** - Control logging, timeouts, and behavior
-- **Authentication** - API keys, tokens, and credentials
-- **Integration** - CI/CD systems, monitoring tools
-- **Customization** - Plugin directories, default configurations
+- **ランタイム設定** - ログ、タイムアウト、動作の制御
+- **認証** - APIキー、トークン、認証情報
+- **統合** - CI/CDシステム、監視ツール
+- **カスタマイズ** - プラグインディレクトリ、デフォルト設定
 
-Environment variables can be set at the system level, in CI/CD pipelines, or defined within workflow files using the `env` section.
+環境変数はシステムレベル、CI/CDパイプライン、またはワークフローファイル内の`vars`セクションで定義できます。
 
-## Runtime Configuration Variables
+## ランタイム設定変数
 
 ### `PROBE_LOG_LEVEL`
 
-**Type:** String  
-**Values:** `debug`, `info`, `warn`, `error`  
-**Default:** `info`  
-**Description:** Controls the verbosity of Probe's logging output
+**型:** String  
+**値:** `debug`, `info`, `warn`, `error`  
+**デフォルト:** `info`  
+**説明:** Probeのログ出力の詳細レベルを制御
 
 ```bash
-# Enable debug logging
+# デバッグログを有効化
 export PROBE_LOG_LEVEL=debug
 probe workflow.yml
 
-# Reduce to warnings and errors only
+# 警告とエラーのみに減らす
 export PROBE_LOG_LEVEL=warn
 probe workflow.yml
 ```
 
-**Output Examples:**
+**出力例:**
 
 ```bash
-# info level (default)
+# infoレベル（デフォルト）
 2023-09-01 12:30:00 [INFO] Starting workflow: API Health Check
 2023-09-01 12:30:01 [INFO] Job 'health-check' completed successfully
 
-# debug level
+# debugレベル
 2023-09-01 12:30:00 [DEBUG] Loading workflow file: workflow.yml
 2023-09-01 12:30:00 [DEBUG] Parsing YAML configuration
 2023-09-01 12:30:00 [INFO] Starting workflow: API Health Check
@@ -52,87 +52,89 @@ probe workflow.yml
 
 ### `PROBE_NO_COLOR`
 
-**Type:** Boolean  
-**Values:** `true`, `false`, `1`, `0`  
-**Default:** `false`  
-**Description:** Disables colored output in terminal
+**型:** Boolean  
+**値:** `true`, `false`, `1`, `0`  
+**デフォルト:** `false`  
+**説明:** ターミナルでのカラー出力を無効化
 
 ```bash
-# Disable colors (useful for CI/CD logs)
+# カラーを無効化（CI/CDログに有用）
 export PROBE_NO_COLOR=true
 probe workflow.yml
 
-# Force color output (override terminal detection)
+# カラー出力を強制（ターミナル検出を上書き）
 export PROBE_NO_COLOR=false
 probe workflow.yml
 ```
 
 ### `PROBE_TIMEOUT`
 
-**Type:** Duration  
-**Default:** `300s` (5 minutes)  
-**Description:** Global timeout for entire workflow execution
+**型:** Duration  
+**デフォルト:** `300s`（5分）  
+**説明:** ワークフロー全体実行のグローバルタイムアウト
 
 ```bash
-# Set 10-minute timeout
+# 10分タイムアウトを設定
 export PROBE_TIMEOUT=600s
 probe long-running-workflow.yml
 
-# Set 30-second timeout for quick tests
+# クイックテスト用30秒タイムアウト
 export PROBE_TIMEOUT=30s
 probe quick-health-check.yml
 ```
 
 ### `PROBE_CONFIG`
 
-**Type:** String (file path)  
-**Default:** None  
-**Description:** Path to default configuration file that gets merged with all workflows
+**型:** String（ファイルパス）  
+**デフォルト:** なし  
+**説明:** すべてのワークフローとマージされるデフォルト設定ファイルのパス
 
 ```bash
-# Use global defaults
+# グローバルデフォルトを使用
 export PROBE_CONFIG=/etc/probe/defaults.yml
-probe workflow.yml  # Merges with defaults.yml
+probe workflow.yml  # defaults.ymlとマージされる
 
-# User-specific defaults
+# ユーザー固有のデフォルト
 export PROBE_CONFIG=~/.probe/defaults.yml
 probe workflow.yml
 ```
 
-**Example default configuration file:**
+**デフォルト設定ファイルの例:**
 
 ```yaml
 # /etc/probe/defaults.yml
 vars:
-  # Environment variables accessed via vars
+  # varsを通じてアクセスされる環境変数
   user_agent: "{{USER_AGENT ?? 'Probe Monitor v1.0'}}"
   default_timeout: "{{DEFAULT_TIMEOUT ?? '30s'}}"
 
-defaults:
-  http:
-    timeout: "{{vars.default_timeout}}"
-    headers:
-      User-Agent: "{{vars.user_agent}}"
-      Accept: "application/json"
+jobs:
+- name: default
+  defaults:
+    http:
+      timeout: "{{vars.default_timeout}}"
+      headers:
+        User-Agent: "{{vars.user_agent}}"
+        Accept: "application/json"
 ```
 
 ### `PROBE_PLUGIN_DIR`
 
-**Type:** String (directory path)  
-**Default:** `~/.probe/plugins`  
-**Description:** Directory containing custom action plugins
+**型:** String（ディレクトリパス）  
+**デフォルト:** `~/.probe/plugins`  
+**説明:** カスタムアクションプラグインを含むディレクトリ
 
 ```bash
-# Use system-wide plugins
+# システム全体のプラグインを使用
 export PROBE_PLUGIN_DIR=/usr/local/lib/probe/plugins
 probe workflow.yml
 
-# Use project-specific plugins
+# プロジェクト固有のプラグインを使用
 export PROBE_PLUGIN_DIR=./plugins
 probe workflow.yml
 ```
 
-**Plugin directory structure:**
+**プラグインディレクトリ構造:**
 
 ```
 /usr/local/lib/probe/plugins/
@@ -144,16 +146,16 @@ probe workflow.yml
     └── notification-plugin
 ```
 
-## Authentication Variables
+## 認証変数
 
-### API Authentication
+### API認証
 
-Common patterns for API authentication in workflows:
+ワークフローでのAPI認証の一般的なパターン：
 
 #### `API_TOKEN` / `API_KEY`
 
 ```bash
-# Bearer token authentication
+# Bearerトークン認証
 export API_TOKEN="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
 ```
 
@@ -162,16 +164,18 @@ export API_TOKEN="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
 vars:
   api_token: "{{API_TOKEN}}"
 
-defaults:
-  http:
-    headers:
-      Authorization: "Bearer {{vars.api_token}}"
+jobs:
+- name: default
+  defaults:
+    http:
+      headers:
+        Authorization: "Bearer {{vars.api_token}}"
 ```
 
 #### `USERNAME` / `PASSWORD`
 
 ```bash
-# Basic authentication credentials
+# Basic認証資格情報
 export API_USERNAME="admin"
 export API_PASSWORD="secret123"
 ```
@@ -188,15 +192,15 @@ steps:
     with:
       url: "https://api.example.com/protected"
       headers:
-        Authorization: "Basic {{encode_base64(vars.username + ':' + vars.password)}}"
+        Authorization: "Basic {{base64(vars.username + ':' + vars.password)}}"
 ```
 
-### Email Authentication
+### メール認証
 
-#### SMTP Configuration
+#### SMTP設定
 
 ```bash
-# Gmail with app password
+# Gmailでアプリパスワード使用
 export SMTP_HOST="smtp.gmail.com"
 export SMTP_PORT=587
 export SMTP_USERNAME="alerts@example.com"
@@ -217,38 +221,40 @@ vars:
   smtp_username: "{{SMTP_USERNAME}}"
   smtp_password: "{{SMTP_PASSWORD}}"
 
-defaults:
-  smtp:
-    host: "{{vars.smtp_host}}"
-    port: "{{vars.smtp_port}}"
-    username: "{{vars.smtp_username}}"
-    password: "{{vars.smtp_password}}"
-    from: "{{vars.smtp_username}}"
+jobs:
+- name: default
+  defaults:
+    smtp:
+      host: "{{vars.smtp_host}}"
+      port: "{{vars.smtp_port}}"
+      username: "{{vars.smtp_username}}"
+      password: "{{vars.smtp_password}}"
+      from: "{{vars.smtp_username}}"
 ```
 
-## Application Configuration Variables
+## アプリケーション設定変数
 
-### Service URLs
+### サービスURL
 
 ```bash
-# API endpoints
+# APIエンドポイント
 export API_BASE_URL="https://api.production.com"
 export API_VERSION="v2"
 export HEALTH_CHECK_URL="${API_BASE_URL}/${API_VERSION}/health"
 
-# Database connections
+# データベース接続
 export DATABASE_URL="postgresql://user:pass@localhost:5432/db"
 export REDIS_URL="redis://localhost:6379/0"
 
-# External services
+# 外部サービス
 export SLACK_WEBHOOK_URL="https://hooks.slack.com/services/T00000000/B00000000/XXXXXXXXXXXXXXXXXXXXXXXX"
 export MONITORING_URL="https://monitoring.example.com/api/alerts"
 ```
 
-### Feature Flags
+### 機能フラグ
 
 ```bash
-# Enable/disable features
+# 機能の有効/無効
 export ENABLE_MONITORING=true
 export ENABLE_SLACK_NOTIFICATIONS=false
 export ENABLE_DETAILED_LOGGING=true
@@ -265,31 +271,31 @@ vars:
   slack_webhook_url: "{{SLACK_WEBHOOK_URL}}"
 
 jobs:
-  monitoring:
-    if: vars.enable_monitoring == "true"
-    steps:
-      - name: "Performance Check"
-        if: vars.enable_performance_tracking == "true"
-        uses: http
-        with:
-          url: "{{vars.api_base_url}}/metrics"
+- name: monitoring
+  if: vars.enable_monitoring == "true"
+  steps:
+    - name: "Performance Check"
+      if: vars.enable_performance_tracking == "true"
+      uses: http
+      with:
+        url: "{{vars.api_base_url}}/metrics"
 
-  notifications:
-    if: vars.enable_slack_notifications == "true"
-    needs: [monitoring]
-    steps:
-      - name: "Slack Alert"
-        uses: http
-        with:
-          url: "{{vars.slack_webhook_url}}"
-          method: "POST"
-          body: |
-            {
-              "text": "Monitoring completed: {{jobs.monitoring.status}}"
-            }
+- name: notifications
+  if: vars.enable_slack_notifications == "true"
+  needs: [monitoring]
+  steps:
+    - name: "Slack Alert"
+      uses: http
+      with:
+        url: "{{vars.slack_webhook_url}}"
+        method: "POST"
+        body: |
+          {
+            "text": "Monitoring completed: {{jobs.monitoring.status}}"
+          }
 ```
 
-## CI/CD Integration Variables
+## CI/CD統合変数
 
 ### GitHub Actions
 
@@ -314,7 +320,7 @@ jobs:
         run: probe workflow.yml
 ```
 
-**Available in workflow:**
+**ワークフローで利用可能:**
 
 ```bash
 export GITHUB_REPOSITORY="owner/repo"
@@ -340,7 +346,7 @@ probe-test:
     PIPELINE_ID: $CI_PIPELINE_ID
 ```
 
-**Available in workflow:**
+**ワークフローで利用可能:**
 
 ```bash
 export CI_PROJECT_NAME="project-name"
@@ -372,7 +378,7 @@ pipeline {
 }
 ```
 
-**Available in workflow:**
+**ワークフローで利用可能:**
 
 ```bash
 export BUILD_NUMBER="123"
@@ -381,16 +387,16 @@ export WORKSPACE="/var/jenkins_home/workspace/api-tests"
 export JENKINS_URL="https://jenkins.example.com"
 ```
 
-## Environment-Specific Configuration
+## 環境固有設定
 
-### Multi-Environment Setup
+### マルチ環境セットアップ
 
 ```bash
-# Base configuration (always set)
+# ベース設定（常に設定）
 export API_VERSION="v1"
 export DEFAULT_TIMEOUT="30s"
 
-# Environment-specific (set per environment)
+# 環境固有（環境ごとに設定）
 case $ENVIRONMENT in
   "production")
     export API_BASE_URL="https://api.prod.com"
@@ -413,17 +419,17 @@ case $ENVIRONMENT in
 esac
 ```
 
-### Docker Configuration
+### Docker設定
 
 ```dockerfile
 # Dockerfile
 FROM alpine:latest
 
-# Install Probe
+# Probeをインストール
 RUN curl -L https://github.com/linyows/probe/releases/latest/download/probe-linux-amd64 -o /usr/local/bin/probe && \
     chmod +x /usr/local/bin/probe
 
-# Set default environment variables
+# デフォルト環境変数を設定
 ENV PROBE_LOG_LEVEL=info
 ENV PROBE_NO_COLOR=true
 ENV PROBE_TIMEOUT=300s
@@ -453,75 +459,75 @@ services:
     command: monitoring.yml
 ```
 
-## Security Considerations
+## セキュリティの考慮事項
 
-### Sensitive Variables
+### 機密変数
 
-**Never commit sensitive values to version control:**
+**機密値をバージョン管理にコミットしないでください:**
 
 ```bash
-# ❌ Bad: Hardcoded in workflow file
-env:
+# ❌ 悪い例: ワークフローファイルにハードコード
+vars:
   API_TOKEN: "secret-token-here"
 
-# ✅ Good: Reference environment variable
+# ✅ 良い例: 環境変数を参照
 vars:
   api_token: "{{API_TOKEN}}"
 ```
 
-### Variable Management
+### 変数管理
 
 ```bash
-# Use secure secret management
+# セキュアな秘密管理を使用
 export API_TOKEN=$(aws ssm get-parameter --name "/app/api-token" --with-decryption --query 'Parameter.Value' --output text)
 export DB_PASSWORD=$(vault kv get -field=password secret/database)
 
-# Use temporary files for complex secrets
+# 複雑な秘密には一時ファイルを使用
 echo "$GOOGLE_CREDENTIALS_JSON" > /tmp/gcp-key.json
 export GOOGLE_APPLICATION_CREDENTIALS=/tmp/gcp-key.json
 ```
 
-### Environment Isolation
+### 環境隔離
 
 ```bash
-# Prefix variables by environment to avoid conflicts
+# 競合を避けるために環境でプレフィックス変数
 export PROD_API_TOKEN="prod-token"
 export STAGING_API_TOKEN="staging-token"  
 export DEV_API_TOKEN="dev-token"
 
-# Use environment-specific selection
+# 環境固有の選択を使用
 export API_TOKEN="${ENVIRONMENT}_API_TOKEN"
-export API_TOKEN="${!API_TOKEN}"  # Indirect variable expansion
+export API_TOKEN="${!API_TOKEN}"  # 間接変数展開
 ```
 
-## Debugging Environment Variables
+## 環境変数のデバッグ
 
-### Viewing Available Variables
+### 利用可能な変数の表示
 
 ```bash
-# List all environment variables
+# すべての環境変数をリスト
 env | grep -E '^(PROBE_|API_|SMTP_)' | sort
 
-# Check specific variables
+# 特定の変数をチェック
 echo "API_TOKEN: $API_TOKEN"
 echo "PROBE_LOG_LEVEL: $PROBE_LOG_LEVEL"
 
-# Debug in workflow (be careful with sensitive data)
+# ワークフローでデバッグ（機密データに注意）
 probe -v workflow.yml 2>&1 | grep -i "environment"
 ```
 
-### Template Debugging
+### テンプレートデバッグ
 
 ```yaml
-# workflow.yml - Debug environment variable expansion
+# workflow.yml - 環境変数展開のデバッグ
 vars:
   api_base_url: "{{API_BASE_URL}}"
   environment: "{{ENVIRONMENT}}"
-  default_timeout: "{{DEFAULT_TIMEOUT || 'not set'}}"
+  default_timeout: "{{DEFAULT_TIMEOUT ?? 'not set'}}"
 
 steps:
   - name: "Debug Environment"
-    action: hello
+    uses: hello
     with:
       message: |
         Environment Debug:
@@ -530,35 +536,37 @@ steps:
         Timeout: "{{vars.default_timeout}}"
         
   - name: "Test Variable Access"
-    echo: |
-      Available variables:
-      {{range $key, $value := vars}}
-        {{$key}}: {{$value}}
-      {{end}}
+    uses: echo
+    with:
+      message: |
+        Available variables:
+        {{range $key, $value := vars}}
+          {{$key}}: {{$value}}
+        {{end}}
 ```
 
-## Common Patterns
+## 一般的なパターン
 
-### Configuration Cascading
+### 設定カスケード
 
 ```bash
-# System defaults
+# システムデフォルト
 export PROBE_CONFIG=/etc/probe/system.yml
 
-# Team defaults  
+# チームデフォルト  
 export TEAM_CONFIG=/opt/team/defaults.yml
 
-# Project-specific
+# プロジェクト固有
 export PROJECT_CONFIG=./probe-defaults.yml
 
-# Runtime execution with cascading
+# カスケードでランタイム実行
 probe ${PROBE_CONFIG},${TEAM_CONFIG},${PROJECT_CONFIG},workflow.yml
 ```
 
-### Dynamic Configuration
+### 動的設定
 
 ```bash
-# Generate configuration based on environment
+# 環境に基づいて設定を生成
 WORKFLOW_FILE="workflow-${ENVIRONMENT}.yml"
 if [[ ! -f "$WORKFLOW_FILE" ]]; then
   WORKFLOW_FILE="workflow.yml"
@@ -567,10 +575,10 @@ fi
 probe "$WORKFLOW_FILE"
 ```
 
-### Conditional Execution
+### 条件付き実行
 
 ```bash
-# Skip certain jobs based on environment
+# 環境に基づいて特定のジョブをスキップ
 export SKIP_PERFORMANCE_TESTS=$([[ "$ENVIRONMENT" == "development" ]] && echo "true" || echo "false")
 export ENABLE_SLACK_ALERTS=$([[ "$ENVIRONMENT" == "production" ]] && echo "true" || echo "false")
 ```
@@ -582,19 +590,19 @@ vars:
   enable_slack_alerts: "{{ENABLE_SLACK_ALERTS}}"
 
 jobs:
-  performance-tests:
-    if: "{{vars.skip_performance_tests}}" != "true"
-    # Performance test steps
+- name: performance-tests
+  if: "{{vars.skip_performance_tests}}" != "true"
+  # パフォーマンステストステップ
     
-  alerts:
-    if: "{{vars.enable_slack_alerts}}" == "true"
-    needs: [performance-tests]
-    # Alert steps
+- name: alerts
+  if: "{{vars.enable_slack_alerts}}" == "true"
+  needs: [performance-tests]
+  # アラートステップ
 ```
 
-## See Also
+## 関連項目
 
-- **[CLI Reference](../cli-reference/)** - Command-line environment variable usage
-- **[YAML Configuration](../yaml-configuration/)** - Using environment variables in workflows
-- **[How-tos: Environment Management](../../how-tos/environment-management/)** - Practical environment management strategies
-- **[Concepts: File Merging](../../concepts/file-merging/)** - Configuration composition patterns
+- **[CLIリファレンス](../cli-reference/)** - コマンドライン環境変数の使用
+- **[YAML設定](../yaml-configuration/)** - ワークフローでの環境変数の使用
+- **[ハウツー: 環境管理](../../how-tos/environment-management/)** - 実用的な環境管理戦略
+- **[概念: ファイルマージ](../../concepts/file-merging/)** - 設定合成パターン

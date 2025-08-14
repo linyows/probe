@@ -1,9 +1,3 @@
----
-title: CLI Reference
-description: Complete command-line interface reference for Probe
-weight: 10
----
-
 # CLI Reference
 
 This page provides complete documentation for the Probe command-line interface, including all commands, options, and usage patterns.

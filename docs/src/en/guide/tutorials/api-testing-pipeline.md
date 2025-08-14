@@ -1,9 +1,3 @@
----
-title: API Testing Pipeline
-description: Build a comprehensive API testing suite with Probe
-weight: 20
----
-
 # API Testing Pipeline
 
 In this tutorial, you'll build a comprehensive API testing pipeline that validates functionality, performance, security, and data integrity across your entire API surface. This goes beyond simple health checks to create a complete testing suite suitable for CI/CD integration.

@@ -29,15 +29,15 @@ const guide = [
     ]
   },
   {
-    text: 'やりかた',
+    text: 'やり方',
     base: '/ja/guide/how-tos/',
     collapsed: false,
     items: [
-      { text: 'API Testing', link: 'api-testing' },
-      { text: 'Environment Management', link: 'environment-management' },
-      { text: 'Error Handling Strategies', link: 'error-handling-strategies' },
-      { text: 'Monitoring Workflows', link: 'monitoring-workflows' },
-      { text: 'Performance Testing', link: 'performance-testing' }
+      { text: 'APIテスト', link: 'api-testing' },
+      { text: '環境管理', link: 'environment-management' },
+      { text: 'エラーハンドリング戦略', link: 'error-handling-strategies' },
+      { text: 'モニタリングワークフロー', link: 'monitoring-workflows' },
+      { text: 'パフォーマンステスト', link: 'performance-testing' }
     ]
   },
   {
@@ -45,23 +45,50 @@ const guide = [
     base: '/ja/guide/tutorials/',
     collapsed: false,
     items: [
-      { text: 'API Testing Pipeline', link: 'api-testing-pipeline' },
-      { text: 'First Monitoring System', link: 'first-monitoring-system' },
-      { text: 'Multi-Environment Testing', link: 'multi-environment-testing' }
+      { text: 'APIテストパイプライン', link: 'api-testing-pipeline' },
+      { text: '初めての監視システム構築', link: 'first-monitoring-system' },
+      { text: 'マルチ環境デプロイテスト', link: 'multi-environment-testing' }
     ]
   },
 ]
 
 const reference = [
   {
-    text: 'リファレンス',
+    text: 'アクション',
+    base: '/ja/reference/actions/',
+    collapsed: false,
+    items: [
+      { text: '変数', link: 'variables' },
+      { text: 'HTTP', link: 'http' },
+      { text: 'SMTP', link: 'smtp' },
+      { text: 'DB', link: 'db' },
+      { text: 'SHELL', link: 'shell' },
+      { text: 'BROWSER', link: 'browser' },
+      { text: 'EMBEDDED', link: 'embedded' },
+    ]
+  },
+  {
+    text: '組み込み関数',
+    base: '/ja/reference/functions/',
+    collapsed: false,
+    items: [
+      { text: '利用可能なフィールドと構文', link: 'available-fields-and-syntax' },
+      { text: '文字列関数', link: 'string' },
+      { text: '日時関数', link: 'datetime' },
+      { text: 'エンコーディング関数', link: 'encoding' },
+      { text: '数学関数', link: 'mathematics' },
+      { text: 'ユーティリティ関数', link: 'utility' },
+      { text: 'JSON関数', link: 'json' },
+      { text: '高度な関数使用法', link: 'advanced-usage' },
+    ]
+  },
+  {
+    text: 'その他',
     base: '/ja/reference/',
     collapsed: false,
     items: [
-      { text: 'CLI', link: 'cli-reference' },
-      { text: 'アクション', link: 'actions-reference' },
-      { text: '組込み関数', link: 'built-in-functions' },
       { text: '環境変数', link: 'environment-variables' },
+      { text: 'CLI', link: 'cli-reference' },
       { text: 'YAMLフィールド', link: 'yaml-configuration' }
     ]
   },
@@ -70,7 +97,7 @@ const reference = [
 export const jaNavSidebar = {
   nav: [
     { text: 'ガイド', link: '/ja/guide/introduction/what-is-probe' },
-    { text: 'リファレンス', link: '/ja/reference/yaml-configuration' },
+    { text: 'リファレンス', link: '/ja/reference/actions/variables' },
     { text: '外部ドキュメント',
       items: [
         { text: 'Github Release', link: 'https://github.com/linyows/probe/releases' },

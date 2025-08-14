@@ -1,9 +1,3 @@
----
-title: YAML Configuration Reference
-description: Complete YAML configuration syntax and options reference
-weight: 20
----
-
 # YAML Configuration Reference
 
 This page provides complete documentation for Probe's YAML configuration syntax, including all available options, data types, and validation rules.
