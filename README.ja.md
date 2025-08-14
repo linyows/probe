@@ -291,7 +291,8 @@ test: |
   uses: http
   with:
     url: https://api.example.com
-    method: POST  # GET, POST, PUT, DELETE など
+    # GET, POST, PUT, DELETE など
+    post: /
     headers:
       content-type: application/json
       authorization: Bearer token
