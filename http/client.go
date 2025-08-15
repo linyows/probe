@@ -5,6 +5,8 @@ import (
 	"errors"
 	"io"
 	hp "net/http"
+	"net/url"
+	"path"
 	"strings"
 	"time"
 
@@ -122,8 +124,111 @@ type Callback struct {
 	after  func(res *hp.Response)
 }
 
+var httpMethods = []string{
+	hp.MethodGet,
+	hp.MethodHead,
+	hp.MethodPost,
+	hp.MethodPut,
+	hp.MethodPatch,
+	hp.MethodDelete,
+	hp.MethodConnect,
+	hp.MethodOptions,
+	hp.MethodTrace,
+}
+
+// ResolveMethodAndURL resolves HTTP method fields and updates the data map
+// Converts method fields like "get", "post" to "method" and "url" fields
+func ResolveMethodAndURL(data map[string]string) error {
+	for _, method := range httpMethods {
+		lowerMethod := strings.ToLower(method)
+		route, ok := data[lowerMethod]
+		if !ok {
+			continue
+		}
+
+		data["method"] = method
+		delete(data, lowerMethod)
+
+		// If route is a complete URL (starts with http:// or https://), use it directly
+		if strings.HasPrefix(route, "http://") || strings.HasPrefix(route, "https://") {
+			data["url"] = route
+		} else {
+			// If route is a relative path, combine with base URL
+			baseURL, ok := data["url"]
+			if !ok {
+				return errors.New("url is missing for relative path")
+			}
+
+			// renew url as full-url
+			u, err := url.Parse(baseURL)
+			if err != nil {
+				return err
+			}
+			u.Path = path.Join(u.Path, route)
+			data["url"] = u.String()
+		}
+
+		break
+	}
+
+	return nil
+}
+
+// ConvertBodyToFormEncoded converts body__ prefixed fields to form-encoded body
+func ConvertBodyToFormEncoded(data map[string]string) error {
+	values := url.Values{}
+
+	for key, value := range data {
+		if strings.HasPrefix(key, "body__") {
+			newKey := strings.TrimPrefix(key, "body__")
+			values.Add(newKey, value)
+			delete(data, key)
+		}
+	}
+
+	if len(values) > 0 {
+		data["body"] = values.Encode()
+		data["headers__content-type"] = "application/x-www-form-urlencoded"
+	}
+
+	return nil
+}
+
+// PrepareRequestData prepares all request data including method fields and body conversion
+func PrepareRequestData(data map[string]string) error {
+	// Resolve HTTP method fields first
+	if err := ResolveMethodAndURL(data); err != nil {
+		return err
+	}
+
+	// Handle body conversion based on content-type
+	contentType, exists := data["headers__content-type"]
+	if exists && contentType == "application/json" {
+		if err := probe.ConvertBodyToJson(data); err != nil {
+			return err
+		}
+	} else {
+		if err := ConvertBodyToFormEncoded(data); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 func Request(data map[string]string, opts ...Option) (map[string]string, error) {
-	m := probe.HeaderToStringValue(probe.UnflattenInterface(data))
+	// Create a copy to avoid modifying the original data
+	dataCopy := make(map[string]string)
+	for k, v := range data {
+		dataCopy[k] = v
+	}
+	
+	// Prepare request data (resolve method fields and convert body)
+	if err := PrepareRequestData(dataCopy); err != nil {
+		return map[string]string{}, err
+	}
+	
+	m := probe.HeaderToStringValue(probe.UnflattenInterface(dataCopy))
 	r := NewReq()
 
 	cb := &Callback{}
