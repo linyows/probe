@@ -1,17 +1,13 @@
 package embedded
 
 import (
-	"bytes"
-	"fmt"
+	"errors"
 	"os"
-	"path/filepath"
-	"time"
 
-	"github.com/goccy/go-yaml"
 	"github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/go-plugin"
 	"github.com/linyows/probe"
-	"gopkg.in/go-playground/validator.v9"
+	"github.com/linyows/probe/embedded"
 )
 
 type Action struct {
@@ -19,110 +15,35 @@ type Action struct {
 }
 
 func (a *Action) Run(args []string, with map[string]string) (map[string]string, error) {
-	m := probe.UnflattenInterface(with)
-	r := &Req{}
-	if err := probe.MapToStructByTags(m, r); err != nil {
-		return map[string]string{}, err
-	}
-	if r.Path == "" {
-		return nil, fmt.Errorf("path must be of type string")
+	// Validate that required parameters are provided
+	if len(with) == 0 {
+		return map[string]string{}, errors.New("embedded action requires parameters in 'with' section. Please specify embedded job details like path")
 	}
 
-	// Execute embedded steps
-	result, err := executeEmbeddedSteps(r, a.log)
+	// Use default truncate length, can be overridden by caller
+	truncateLength := probe.MaxLogStringLength
+
+	// Truncate long parameters for logging to prevent log bloat
+	truncatedParams := probe.TruncateMapStringString(with, truncateLength)
+	a.log.Debug("received embedded request parameters", "params", truncatedParams)
+
+	before := embedded.WithBefore(func(path string, vars map[string]any) {
+		a.log.Debug("embedded job prepared", "path", path, "vars", vars)
+	})
+	after := embedded.WithAfter(func(result *embedded.Result) {
+		a.log.Debug("embedded job completed", "result", result)
+	})
+	ret, err := embedded.Execute(with, before, after)
+
 	if err != nil {
-		a.log.Error("embedded steps execution failed", "error", err)
-		return result, err
-	}
-
-	return result, nil
-}
-
-type Req struct {
-	Path string         `map:"path"`
-	Vars map[string]any `map:"vars"`
-}
-
-type Res struct {
-	Code    int            `map:"code"`
-	Outputs map[string]any `map:"outputs"`
-	Report  string         `map:"report"`
-	Err     string         `map:"error"`
-}
-
-type Result struct {
-	Req    Req           `map:"req"`
-	Res    Res           `map:"res"`
-	RT     time.Duration `map:"rt"`
-	Status int           `map:"status"`
-}
-
-func executeEmbeddedSteps(req *Req, log hclog.Logger) (map[string]string, error) {
-	absPath, err := filepath.Abs(req.Path)
-	if err != nil {
-		return map[string]string{}, fmt.Errorf("failed to resolve path: %w", err)
-	}
-
-	if _, err := os.Stat(absPath); os.IsNotExist(err) {
-		return map[string]string{}, fmt.Errorf("embedded steps file does not exist: %s", absPath)
-	}
-
-	log.Debug("loading embedded steps file", "path", absPath)
-
-	data, err := os.ReadFile(absPath)
-	if err != nil {
-		return map[string]string{}, fmt.Errorf("failed to read embedded steps file: %w", err)
-	}
-
-	job := &probe.Job{}
-	v := validator.New()
-	dec := yaml.NewDecoder(bytes.NewReader([]byte(data)), yaml.Validator(v))
-	if err = dec.Decode(job); err != nil {
-		return map[string]string{}, fmt.Errorf("failed to decode YAML job: %w", err)
-	}
-
-	if len(job.Steps) == 0 {
-		return map[string]string{}, fmt.Errorf("no steps found in embedded file: %s", absPath)
-	}
-
-	// Apply defaults to steps if they exist
-	applyDefaultsToSteps(job, log)
-
-	log.Debug("parsed embedded steps", "count", len(job.Steps))
-
-	// Execute job independently using the refactored function
-	jobID := "embedded"
-	printer := probe.NewPrinter(true, []string{jobID})
-	success, outputs, report, errorMsg, duration := job.RunIndependently(req.Vars, printer, jobID)
-
-	code := 0
-	if !success {
-		code = 1
-		log.Debug("embedded job failed", "error", errorMsg)
+		a.log.Error("embedded job execution failed", "error", err)
 	} else {
-		log.Debug("embedded job succeeded")
+		// Truncate result for logging to prevent log bloat
+		truncatedResult := probe.TruncateMapStringString(ret, truncateLength)
+		a.log.Debug("embedded job completed successfully", "result", truncatedResult)
 	}
 
-	log.Debug("embedded execution completed", "outputs", outputs)
-
-	ret := &Result{
-		Req: *req,
-		Res: Res{
-			Code:    code,
-			Outputs: outputs,
-			Report:  report,
-			Err:     errorMsg,
-		},
-		RT:     duration,
-		Status: code, // use same logic as res.code (0=success, 1=failure)
-	}
-
-	mapRet, err := probe.StructToMapByTags(ret)
-	if err != nil {
-		return map[string]string{}, err
-	}
-
-	return probe.FlattenInterface(mapRet), nil
+	return ret, err
 }
 
 func Serve() {
@@ -141,59 +62,4 @@ func Serve() {
 		Plugins:         map[string]plugin.Plugin{"actions": pl},
 		GRPCServer:      plugin.DefaultGRPCServer,
 	})
-}
-
-// applyDefaultsToSteps applies defaults from job to steps, similar to probe.go setDefaultsToSteps
-func applyDefaultsToSteps(job *probe.Job, log hclog.Logger) {
-	if job.Defaults == nil {
-		return
-	}
-
-	dataMap, ok := job.Defaults.(map[string]any)
-	if !ok {
-		log.Debug("job defaults is not a map, skipping", "type", fmt.Sprintf("%T", job.Defaults))
-		return
-	}
-
-	log.Debug("applying defaults to embedded steps", "defaults", dataMap)
-
-	for key, values := range dataMap {
-		defaults, defok := values.(map[string]any)
-		if !defok {
-			log.Debug("defaults value is not a map, skipping", "key", key, "type", fmt.Sprintf("%T", values))
-			continue
-		}
-
-		for _, s := range job.Steps {
-			if s.Uses != key {
-				continue
-			}
-
-			if s.With == nil {
-				s.With = make(map[string]any)
-			}
-
-			applyDefaults(s.With, defaults)
-			log.Debug("applied defaults to step", "step", s.Name, "uses", s.Uses, "with", s.With)
-		}
-	}
-}
-
-// applyDefaults recursively applies default values, similar to probe.go setDefaults
-func applyDefaults(data, defaults map[string]any) {
-	for key, defaultValue := range defaults {
-		// If key does not exist in data
-		if _, exists := data[key]; !exists {
-			data[key] = defaultValue
-			continue
-		}
-
-		// If you have a nested map with a key of data
-		if nestedDefault, ok := defaultValue.(map[string]any); ok {
-			if nestedData, ok := data[key].(map[string]any); ok {
-				// Recursively set default values
-				applyDefaults(nestedData, nestedDefault)
-			}
-		}
-	}
 }
