@@ -11,7 +11,6 @@ import (
 	"github.com/linyows/probe/http"
 )
 
-
 type Action struct {
 	log hclog.Logger
 }

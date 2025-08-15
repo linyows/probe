@@ -433,7 +433,7 @@ func TestStep_createStepResult_WithRepeatCounter(t *testing.T) {
 		Wait: "1s",
 		Expr: &Expr{},
 		ctx: StepContext{
-			Res:   map[string]any{"status": 200},
+			Res: map[string]any{"status": 200},
 			RT: ResponseTime{
 				Duration: "250ms",
 				Sec:      0.25,
@@ -483,7 +483,7 @@ func TestStep_createFailedStepResult(t *testing.T) {
 				Duration: "500ms",
 				Sec:      0.5,
 			},
-			Res:   map[string]any{"report": "HTTP error occurred"},
+			Res: map[string]any{"report": "HTTP error occurred"},
 		},
 	}
 	jCtx := &JobContext{

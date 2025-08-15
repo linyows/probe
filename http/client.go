@@ -60,12 +60,12 @@ func mergeHeaders(defaultHeaders, customHeaders map[string]string) map[string]st
 	}
 
 	result := make(map[string]string)
-	
+
 	// First, copy all default headers
 	for key, value := range defaultHeaders {
 		result[key] = value
 	}
-	
+
 	// Then, add/override with custom headers, removing case-insensitive duplicates
 	for customKey, customValue := range customHeaders {
 		// Check if this custom header should override a default header
@@ -76,16 +76,16 @@ func mergeHeaders(defaultHeaders, customHeaders map[string]string) map[string]st
 				break
 			}
 		}
-		
+
 		// Remove the existing header if found
 		if keyToRemove != "" {
 			delete(result, keyToRemove)
 		}
-		
+
 		// Add the custom header
 		result[customKey] = customValue
 	}
-	
+
 	return result
 }
 
@@ -259,14 +259,14 @@ func Request(data map[string]string, opts ...Option) (map[string]string, error) 
 	for k, v := range data {
 		dataCopy[k] = v
 	}
-	
+
 	// Prepare request data (resolve method fields and convert body)
 	if err := PrepareRequestData(dataCopy); err != nil {
 		return map[string]string{}, err
 	}
-	
+
 	m := probe.HeaderToStringValue(probe.UnflattenInterface(dataCopy))
-	
+
 	// Extract custom headers and merge with defaults before MapToStructByTags
 	var customHeaders map[string]string
 	if headersInterface, exists := m["headers"]; exists {
@@ -286,7 +286,7 @@ func Request(data map[string]string, opts ...Option) (map[string]string, error) 
 	// Create new request with merged headers
 	r := NewReq()
 	r.Header = mergeHeaders(r.Header, customHeaders)
-	
+
 	// Update the map with merged headers to avoid duplication in MapToStructByTags
 	m["headers"] = r.Header
 

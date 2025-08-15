@@ -337,19 +337,19 @@ func TestResolveMethodAndURL(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			err := ResolveMethodAndURL(tt.input)
-			
+
 			if tt.wantErr {
 				if err == nil {
 					t.Errorf("Expected error but got none")
 				}
 				return
 			}
-			
+
 			if err != nil {
 				t.Errorf("Unexpected error: %v", err)
 				return
 			}
-			
+
 			for key, expectedValue := range tt.expected {
 				actualValue, exists := tt.input[key]
 				if !exists {
@@ -402,7 +402,7 @@ func TestMergeHeaders(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := mergeHeaders(tt.defaultHeaders, tt.customHeaders)
-			
+
 			if len(result) != len(tt.expected) {
 				t.Errorf("Expected %d headers, got %d", len(tt.expected), len(result))
 			}
