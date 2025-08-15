@@ -27,11 +27,11 @@ type SMTPReq struct {
 }
 
 type SMTPRes struct {
-	Code      int    `map:"code"`
-	Sent      int    `map:"sent"`
-	Failed    int    `map:"failed"`
-	Total     int    `map:"total"`
-	Error     string `map:"error"`
+	Code   int    `map:"code"`
+	Sent   int    `map:"sent"`
+	Failed int    `map:"failed"`
+	Total  int    `map:"total"`
+	Error  string `map:"error"`
 }
 
 type SMTPResult struct {
@@ -43,7 +43,7 @@ type SMTPResult struct {
 
 func (a *Action) Run(args []string, with map[string]string) (map[string]string, error) {
 	start := time.Now()
-	
+
 	// Create structured request
 	req := &SMTPReq{}
 	unflattenedWith := probe.UnflattenInterface(with)

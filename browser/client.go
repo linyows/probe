@@ -419,7 +419,7 @@ func (req *Req) do() (*Result, error) {
 func Request(data map[string]string, opts ...Option) (map[string]string, error) {
 	start := time.Now()
 	req := NewReq()
-	
+
 	if err := req.parseData(data, opts); err != nil {
 		return createErrorResult(start, req, err)
 	}

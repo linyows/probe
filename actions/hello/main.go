@@ -14,14 +14,14 @@ type Action struct {
 
 func (a *Action) Run(args []string, with map[string]string) (map[string]string, error) {
 	a.log.Info("Hello!")
-	
+
 	// Add status field (hello action always succeeds)
 	result := make(map[string]string)
 	for k, v := range with {
 		result[k] = v
 	}
-	result["status"] = "0"  // Always success for hello action (ExitStatusSuccess)
-	
+	result["status"] = "0" // Always success for hello action (ExitStatusSuccess)
+
 	return result, nil
 }
 

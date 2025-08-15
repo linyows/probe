@@ -419,7 +419,7 @@ func parseExitStatus(status any) int {
 	if status == nil {
 		return int(ExitStatusFailure) // default to failure if status is nil
 	}
-	
+
 	switch v := status.(type) {
 	case int:
 		return v
@@ -440,7 +440,7 @@ func (st *Step) updateCtx(logs []map[string]any, req, res map[string]any, rt str
 	st.ctx.Req = req
 	st.ctx.Res = res
 	st.ctx.Status = status
-	
+
 	// Parse RT string to populate RT structure
 	if rt != "" {
 		if duration, err := time.ParseDuration(rt); err == nil {

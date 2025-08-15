@@ -52,7 +52,6 @@ func (a *Action) Run(args []string, with map[string]string) (map[string]string, 
 	return result, nil
 }
 
-
 type shellParams struct {
 	cmd     string
 	workdir string
@@ -110,7 +109,6 @@ func parseParams(with map[string]string) (*shellParams, error) {
 		}
 	}
 
-
 	return params, nil
 }
 
@@ -166,7 +164,6 @@ func parseTimeout(timeoutStr string) (time.Duration, error) {
 	// Parse as duration string (e.g., "30s", "5m", "1h")
 	return time.ParseDuration(timeoutStr)
 }
-
 
 type ShellReq struct {
 	Cmd     string            `map:"cmd"`
