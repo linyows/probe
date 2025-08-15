@@ -19,6 +19,7 @@ type Step struct {
 	Wait         string            `yaml:"wait,omitempty"`
 	SkipIf       string            `yaml:"skipif,omitempty"`
 	Outputs      map[string]string `yaml:"outputs,omitempty"`
+	Retry        *StepRetry        `yaml:"retry,omitempty"`
 	err          error
 	ctx          StepContext
 	Idx          int          `yaml:"-"`
@@ -78,6 +79,7 @@ func (st *Step) prepare(jCtx *JobContext) (string, bool) {
 }
 
 // executeAction executes the step action and returns the result
+// If retry is configured, it will retry until status == 0 or max attempts reached
 func (st *Step) executeAction(name string, jCtx *JobContext) (map[string]any, error) {
 	expW := st.Expr.EvalTemplateMap(st.With, st.ctx)
 
@@ -86,11 +88,75 @@ func (st *Step) executeAction(name string, jCtx *JobContext) (map[string]any, er
 		runner = &PluginActionRunner{} // Default to plugin execution
 	}
 
+	// If no retry configuration, execute once
+	if st.Retry == nil {
+		return st.executeSingleAction(runner, expW, jCtx)
+	}
+
+	// Execute with retry logic
+	return st.executeActionWithRetry(runner, expW, jCtx, name)
+}
+
+// executeSingleAction executes action once without retry
+func (st *Step) executeSingleAction(runner ActionRunner, expW map[string]any, jCtx *JobContext) (map[string]any, error) {
 	ret, err := runner.RunActions(st.Uses, []string{}, expW, jCtx.Verbose)
 	if err != nil {
 		return nil, err
 	}
 	return ret, nil
+}
+
+// executeActionWithRetry executes action with retry logic until status == 0
+func (st *Step) executeActionWithRetry(runner ActionRunner, expW map[string]any, jCtx *JobContext, name string) (map[string]any, error) {
+	retry := st.Retry
+
+	// Initial delay if specified
+	if retry.InitialDelay.Duration > 0 {
+		if jCtx.Verbose {
+			jCtx.Printer.LogDebug("Initial delay before first attempt: %v", retry.InitialDelay.Duration)
+		}
+		time.Sleep(retry.InitialDelay.Duration)
+	}
+
+	var lastResult map[string]any
+	var lastErr error
+
+	// Retry loop
+	for attempt := 1; attempt <= retry.MaxAttempts; attempt++ {
+		if jCtx.Verbose {
+			jCtx.Printer.LogDebug("Executing action with retry: attempt %d/%d", attempt, retry.MaxAttempts)
+		}
+
+		result, err := st.executeSingleAction(runner, expW, jCtx)
+		lastResult = result
+		lastErr = err
+
+		// Check for success (status == 0)
+		if err == nil {
+			if status, ok := result["status"]; ok {
+				if statusInt, isInt := status.(int); isInt && statusInt == int(ExitStatusSuccess) {
+					if jCtx.Verbose {
+						jCtx.Printer.LogDebug("Action succeeded on attempt %d", attempt)
+					}
+					return result, nil
+				}
+			}
+		}
+
+		// If not the last attempt, wait for interval
+		if attempt < retry.MaxAttempts {
+			if jCtx.Verbose {
+				jCtx.Printer.LogDebug("Action failed (attempt %d), retrying after %v", attempt, retry.Interval.Duration)
+			}
+			time.Sleep(retry.Interval.Duration)
+		}
+	}
+
+	// All attempts failed
+	if jCtx.Verbose {
+		jCtx.Printer.LogDebug("All retry attempts failed (%d attempts)", retry.MaxAttempts)
+	}
+	return lastResult, lastErr
 }
 
 // handleActionError handles action execution errors
@@ -132,6 +198,7 @@ func (st *Step) processActionResult(actionResult map[string]any, jCtx *JobContex
 	req, _ := actionResult["req"].(map[string]any)
 	res, okres := actionResult["res"].(map[string]any)
 	rt, _ := actionResult["rt"].(string)
+	status := parseExitStatus(actionResult["status"])
 
 	if okres {
 		body, okbody := res["body"].(string)
@@ -141,8 +208,8 @@ func (st *Step) processActionResult(actionResult map[string]any, jCtx *JobContex
 		}
 	}
 
-	// Update context
-	st.updateCtx(nil, req, res, rt)
+	// Update context with status
+	st.updateCtx(nil, req, res, rt, status)
 }
 
 // finalize handles the final phase: test, echo, output save, and result creation
@@ -347,9 +414,32 @@ func (st *Step) SetCtx(j JobContext, override map[string]any) {
 	}
 }
 
-func (st *Step) updateCtx(logs []map[string]any, req, res map[string]any, rt string) {
+// parseExitStatus converts various status representations to int
+func parseExitStatus(status any) int {
+	if status == nil {
+		return int(ExitStatusFailure) // default to failure if status is nil
+	}
+	
+	switch v := status.(type) {
+	case int:
+		return v
+	case string:
+		if v == "0" {
+			return int(ExitStatusSuccess)
+		} else {
+			return int(ExitStatusFailure)
+		}
+	case ExitStatus:
+		return int(v)
+	default:
+		return int(ExitStatusFailure) // default to failure for unknown types
+	}
+}
+
+func (st *Step) updateCtx(logs []map[string]any, req, res map[string]any, rt string, status int) {
 	st.ctx.Req = req
 	st.ctx.Res = res
+	st.ctx.Status = status
 	
 	// Parse RT string to populate RT structure
 	if rt != "" {
