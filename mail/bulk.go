@@ -31,7 +31,21 @@ type Bulk struct {
 	count int
 }
 
+type DeliveryResult struct {
+	Sent   int
+	Failed int
+	Total  int
+	Error  string
+}
+
 func (b *Bulk) Deliver() {
+	result := b.DeliverWithResult()
+	if result.Failed > 0 {
+		fmt.Printf("[INFO] Delivery complete. Success: %d, Failed: %d\n", result.Sent, result.Failed)
+	}
+}
+
+func (b *Bulk) DeliverWithResult() DeliveryResult {
 	var wg sync.WaitGroup
 	errCh := make(chan error, b.Session)
 
@@ -52,16 +66,22 @@ func (b *Bulk) Deliver() {
 
 	success := 0
 	fail := 0
+	var lastError string
 	for err := range errCh {
 		if err != nil {
 			fmt.Printf("[ERROR] Send failed: %v\n", err)
 			fail++
+			lastError = err.Error()
 		} else {
 			success++
 		}
 	}
-	if fail > 0 {
-		fmt.Printf("[INFO] Delivery complete. Success: %d, Failed: %d\n", success, fail)
+
+	return DeliveryResult{
+		Sent:   success,
+		Failed: fail,
+		Total:  success + fail,
+		Error:  lastError,
 	}
 }
 

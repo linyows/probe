@@ -51,9 +51,10 @@ type Res struct {
 }
 
 type Result struct {
-	Req Req           `map:"req"`
-	Res Res           `map:"res"`
-	RT  time.Duration `map:"rt"`
+	Req    Req           `map:"req"`
+	Res    Res           `map:"res"`
+	RT     time.Duration `map:"rt"`
+	Status int           `map:"status"`
 }
 
 func executeEmbeddedSteps(req *Req, log hclog.Logger) (map[string]string, error) {
@@ -112,7 +113,8 @@ func executeEmbeddedSteps(req *Req, log hclog.Logger) (map[string]string, error)
 			Report:  report,
 			Err:     errorMsg,
 		},
-		RT: duration,
+		RT:     duration,
+		Status: code, // use same logic as res.code (0=success, 1=failure)
 	}
 
 	mapRet, err := probe.StructToMapByTags(ret)

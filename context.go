@@ -6,6 +6,31 @@ type ResponseTime struct {
 	Sec      float64 `expr:"sec"`
 }
 
+// ExitStatus represents the unified status across all actions
+type ExitStatus int
+
+const (
+	ExitStatusSuccess ExitStatus = 0 // Action succeeded
+	ExitStatusFailure ExitStatus = 1 // Action failed
+)
+
+// Int returns the ExitStatus as an int for comparison
+func (e ExitStatus) Int() int {
+	return int(e)
+}
+
+// String returns the ExitStatus as a string
+func (e ExitStatus) String() string {
+	switch e {
+	case ExitStatusSuccess:
+		return "success"
+	case ExitStatusFailure:
+		return "failure"
+	default:
+		return "unknown"
+	}
+}
+
 // StepContext provides context data for step expression evaluation
 type StepContext struct {
 	Vars    map[string]any `expr:"vars"`
@@ -14,6 +39,7 @@ type StepContext struct {
 	RT      ResponseTime   `expr:"rt"`
 	Report  string         `expr:"report"`
 	Outputs map[string]any `expr:"outputs"`
+	Status  int            `expr:"status"`
 }
 
 // JobContext provides context data for job execution

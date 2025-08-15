@@ -69,3 +69,10 @@ type Repeat struct {
 	Count    int      `yaml:"count" validate:"required,gte=0,lt=100"`
 	Interval Interval `yaml:"interval"`
 }
+
+// StepRetry defines the retry configuration for steps until success (status 0)
+type StepRetry struct {
+	MaxAttempts  int      `yaml:"max_attempts" validate:"required,gte=1,lte=100"`
+	Interval     Interval `yaml:"interval"`
+	InitialDelay Interval `yaml:"initial_delay,omitempty"`
+}

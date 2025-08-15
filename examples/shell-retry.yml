@@ -1,0 +1,104 @@
+name: Shell Action Retry Examples
+description: Demonstrates shell action retry functionality
+
+jobs:
+- name: Basic Retry Examples
+  steps:
+  - name: Simple success (no retry needed)
+    uses: shell
+    with:
+      cmd: "echo 'This command succeeds immediately'"
+    retry:
+      max_attempts: 3
+      interval: "100ms"
+    test: res.code == 0
+
+  - name: Retry with eventual success
+    uses: shell
+    with:
+      cmd: |
+        # This simulates a service that becomes available after some attempts
+        if [ ! -f /tmp/ready.flag ]; then
+          echo 'Service not ready'
+          touch /tmp/ready.flag
+          exit 1
+        else
+          echo 'Service ready!'
+          exit 0
+        fi
+    retry:
+      max_attempts: 3
+      interval: "200ms"
+      initial_delay: "100ms"
+    test: res.code == 0
+
+  - name: All retry attempts fail
+    uses: shell
+    with:
+      cmd: "echo 'This always fails' && exit 1"
+    retry:
+      max_attempts: 3
+      interval: "100ms"
+    test: res.code == 1  # Expect failure after all retries
+
+- name: Practical Retry Use Cases
+  steps:
+  - name: Wait for service startup (simulated)
+    uses: shell
+    with:
+      cmd: |
+        # Simulate service that starts after 2 attempts
+        if [ ! -f /tmp/service_started ]; then
+          echo 'Service starting...'
+          touch /tmp/service_started
+          exit 1
+        else
+          echo 'Service started!'
+          exit 0
+        fi
+    retry:
+      max_attempts: 5
+      interval: "500ms"
+      initial_delay: "1s"
+    test: res.code == 0
+
+  - name: Health check with retry
+    uses: shell
+    with:
+      # Create a mock health endpoint
+      cmd: "echo 'HTTP/1.1 200 OK' && echo 'Status: healthy'"
+    retry:
+      max_attempts: 10
+      interval: "1s"
+    test: res.code == 0
+
+  - name: File availability check
+    id: file_check
+    uses: shell
+    with:
+      cmd: |
+        # Create and check for test file
+        touch /tmp/probe-test-file
+        test -f /tmp/probe-test-file
+    retry:
+      max_attempts: 5
+      interval: "200ms"
+    outputs:
+      file_exists: "true"
+    test: res.code == 0
+
+  - name: Use previous step output
+    uses: shell
+    with:
+      cmd: "echo 'File exists check result: {{outputs.file_check.file_exists}}'"
+    test: res.code == 0
+
+- name: Cleanup
+  steps:
+  - name: Clean up test files
+    uses: shell
+    with:
+      cmd: |
+        # Clean up all test files
+        rm -f /tmp/ready.flag /tmp/probe-test-file /tmp/service_started
+    test: res.code == 0

@@ -87,6 +87,24 @@ with:
     BUILD_VERSION: "{{vars.version}}"
 ```
 
+## リトライ機能
+
+shellアクションは統一されたステップレベルのリトライ機能をサポートしています。これにより、一時的な障害やサービス起動時間に対してコマンドを自動的に再実行できます。
+
+```yaml
+- name: "Wait for Service Startup"
+  uses: shell
+  with:
+    cmd: "curl -f http://localhost:8080/health"
+  retry:
+    max_attempts: 30      # 最大試行回数 (1-100)
+    interval: "2s"        # リトライ間隔
+    initial_delay: "5s"   # 初回実行前の待機時間（オプション）
+  test: res.code == 0
+```
+
+shellアクションでは、**終了コード 0** が成功条件となります。リトライ機能の詳細については[アクションガイド](../../guide/concepts/actions/#リトライ機能)を参照してください。
+
 ## レスポンス形式
 
 ```yaml
@@ -175,6 +193,45 @@ vars:
   outputs:
     debug_info: res.stderr
 ```
+
+### サービス起動とリトライ
+
+```yaml
+- name: "Wait for Database Startup"
+  uses: shell
+  with:
+    cmd: "pg_isready -h postgres -p 5432"
+  retry:
+    max_attempts: 30
+    interval: "2s"
+    initial_delay: "10s"
+  test: res.code == 0
+
+- name: "Verify API Health"
+  uses: shell
+  with:
+    cmd: |
+      # APIエンドポイントの確認
+      curl -f -H "Accept: application/json" \
+           http://api:8080/health
+  retry:
+    max_attempts: 60
+    interval: "1s"
+  test: res.code == 0
+
+- name: "Wait for Build Artifact"
+  uses: shell
+  with:
+    cmd: |
+      # ビルド成果物の確認
+      test -f ./dist/app.js && \
+      test -s ./dist/app.js
+  retry:
+    max_attempts: 20
+    interval: "500ms"
+  test: res.code == 0
+```
+
 
 ## セキュリティ機能
 

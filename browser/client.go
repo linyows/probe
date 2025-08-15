@@ -145,9 +145,10 @@ type Res struct {
 }
 
 type Result struct {
-	Req Req           `map:"req"`
-	Res Res           `map:"res"`
-	RT  time.Duration `map:"rt"`
+	Req    Req           `map:"req"`
+	Res    Res           `map:"res"`
+	RT     time.Duration `map:"rt"`
+	Status int           `map:"status"`
 }
 
 func (req *Req) parseData(data map[string]string, opts []Option) error {
@@ -401,9 +402,10 @@ func (req *Req) do() (*Result, error) {
 		Results: results,
 	}
 	ret := &Result{
-		Req: *req,
-		Res: *res,
-		RT:  time.Since(start),
+		Req:    *req,
+		Res:    *res,
+		RT:     time.Since(start),
+		Status: 0, // success
 	}
 
 	// Callback
@@ -415,22 +417,45 @@ func (req *Req) do() (*Result, error) {
 }
 
 func Request(data map[string]string, opts ...Option) (map[string]string, error) {
+	start := time.Now()
 	req := NewReq()
+	
 	if err := req.parseData(data, opts); err != nil {
-		return nil, err
+		return createErrorResult(start, req, err)
 	}
 
 	result, err := req.do()
 	if err != nil {
-		return nil, err
+		return createErrorResult(start, req, err)
 	}
 
 	mapRet, err := probe.StructToMapByTags(result)
 	if err != nil {
-		return nil, err
+		return createErrorResult(start, req, err)
 	}
 
 	return probe.FlattenInterface(mapRet), nil
+}
+
+func createErrorResult(start time.Time, req *Req, err error) (map[string]string, error) {
+	duration := time.Since(start)
+
+	result := &Result{
+		Req: *req,
+		Res: Res{
+			Code:    1,
+			Results: map[string]string{},
+		},
+		RT:     duration,
+		Status: 1, // failure
+	}
+
+	mapResult, mapErr := probe.StructToMapByTags(result)
+	if mapErr != nil {
+		return map[string]string{}, mapErr
+	}
+
+	return probe.FlattenInterface(mapResult), err
 }
 
 func WithInBrowser(f func(s string, i ...interface{})) Option {

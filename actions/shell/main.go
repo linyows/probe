@@ -52,6 +52,7 @@ func (a *Action) Run(args []string, with map[string]string) (map[string]string, 
 	return result, nil
 }
 
+
 type shellParams struct {
 	cmd     string
 	workdir string
@@ -109,6 +110,7 @@ func parseParams(with map[string]string) (*shellParams, error) {
 		}
 	}
 
+
 	return params, nil
 }
 
@@ -165,6 +167,7 @@ func parseTimeout(timeoutStr string) (time.Duration, error) {
 	return time.ParseDuration(timeoutStr)
 }
 
+
 type ShellReq struct {
 	Cmd     string            `map:"cmd"`
 	Shell   string            `map:"shell"`
@@ -180,12 +183,17 @@ type ShellRes struct {
 }
 
 type ShellResult struct {
-	Req ShellReq      `map:"req"`
-	Res ShellRes      `map:"res"`
-	RT  time.Duration `map:"rt"`
+	Req    ShellReq      `map:"req"`
+	Res    ShellRes      `map:"res"`
+	RT     time.Duration `map:"rt"`
+	Status int           `map:"status"`
 }
 
 func executeShellCommand(params *shellParams, log hclog.Logger) (map[string]string, error) {
+	return executeSingleCommand(params, log)
+}
+
+func executeSingleCommand(params *shellParams, log hclog.Logger) (map[string]string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), params.timeout)
 	defer cancel()
 
@@ -276,6 +284,12 @@ func executeShellCommand(params *shellParams, log hclog.Logger) (map[string]stri
 		}
 	}
 
+	// Determine status based on exit code (0 = success, 1 = failure)
+	status := 1 // default to failure
+	if exitCode == 0 {
+		status = 0 // success
+	}
+
 	// Create result structure similar to HTTP action
 	result := &ShellResult{
 		Req: ShellReq{
@@ -290,7 +304,8 @@ func executeShellCommand(params *shellParams, log hclog.Logger) (map[string]stri
 			Stdout: string(stdoutBytes),
 			Stderr: string(stderrBytes),
 		},
-		RT: duration,
+		RT:     duration,
+		Status: status,
 	}
 
 	// Convert to map[string]string using probe's mapping function

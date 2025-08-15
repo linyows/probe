@@ -157,6 +157,7 @@ func TestParseParams(t *testing.T) {
 					t.Errorf("env[%s]: expected %v, got %v", k, v, result.env[k])
 				}
 			}
+
 		})
 	}
 }
@@ -597,3 +598,4 @@ func TestActionRunIntegration(t *testing.T) {
 		t.Errorf("Expected env VAR2 to be 'value2', got: %v", result["req__env__VAR2"])
 	}
 }
+
