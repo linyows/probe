@@ -83,8 +83,11 @@ func TestRequest_Validation(t *testing.T) {
 				t.Errorf("Expected error message '%s', got '%s'", tc.expectedErr, err.Error())
 			}
 
-			if len(result) != 0 {
-				t.Error("Expected empty result map when error occurs")
+			// Check that status field is present and indicates failure
+			if status, exists := result["status"]; !exists {
+				t.Error("Expected status field in error result")
+			} else if status != "1" {
+				t.Errorf("Expected status=1 for error, got %v", status)
 			}
 		})
 	}
