@@ -356,6 +356,195 @@ with:
   tls: true
 ```
 
+## リトライ機能
+
+Probeは全てのアクションで利用可能な統一されたリトライ機能を提供します。この機能により、一時的な障害や起動待機時間が必要なサービスに対してアクションを自動的に再実行できます。
+
+### 基本的なリトライ構文
+
+リトライはステップレベルで設定し、任意のアクション（`http`、`shell`、`db`など）と組み合わせて使用できます：
+
+```yaml
+- name: "Service Health Check"
+  uses: http
+  with:
+    url: "http://localhost:8080/health"
+  retry:
+    max_attempts: 10      # 最大試行回数 (1-100)
+    interval: "2s"        # リトライ間隔
+    initial_delay: "5s"   # 初回実行前の待機時間（オプション）
+  test: res.code == 200
+```
+
+### リトライパラメータ
+
+#### `max_attempts` (必須)
+- **型:** Integer
+- **範囲:** 1-100
+- **説明:** リトライする最大試行回数
+
+#### `interval` (オプション)
+- **型:** String または Duration
+- **デフォルト:** `1s`
+- **形式:** Go duration形式 (`500ms`, `2s`, `1m`) または数値 (秒)
+- **説明:** 各リトライ試行の間隔
+
+#### `initial_delay` (オプション)
+- **型:** String または Duration
+- **デフォルト:** `0s` (遅延なし)
+- **形式:** Go duration形式 (`500ms`, `2s`, `1m`) または数値 (秒)
+- **説明:** 最初の試行前の待機時間
+
+### 成功条件
+
+各アクションの成功条件は統一されたステータスシステムに基づいています：
+
+- **成功**: `status` フィールドが `0` の場合
+- **失敗**: `status` フィールドが `0` 以外の場合
+
+アクション別の成功条件：
+- **HTTP**: ステータスコード 200-299 → `status: 0`
+- **Shell**: 終了コード 0 → `status: 0`
+- **DB**: クエリ成功 → `status: 0`
+
+### 実行フロー
+
+1. `initial_delay` が指定されている場合、その時間だけ待機
+2. アクションを実行
+3. `status` が `0` の場合、成功として結果を返す
+4. `status` が `0` 以外で、まだ試行回数に余裕がある場合：
+   - `interval` の時間だけ待機
+   - ステップ2に戻る
+5. 最大試行回数に達した場合、最後の実行結果を返す
+
+### アクション別の使用例
+
+#### HTTP リトライ - API 起動待機
+
+```yaml
+- name: "Wait for API Server"
+  uses: http
+  with:
+    url: "{{vars.api_base_url}}/health"
+    method: GET
+    timeout: "5s"
+  retry:
+    max_attempts: 30
+    interval: "2s"
+    initial_delay: "10s"
+  test: res.code == 200 && res.body.json.status == "healthy"
+```
+
+#### Shell リトライ - サービス起動監視
+
+```yaml
+- name: "Wait for Database"
+  uses: shell
+  with:
+    cmd: "pg_isready -h postgres -p 5432 -U app"
+  retry:
+    max_attempts: 60
+    interval: "1s"
+    initial_delay: "5s"
+  test: res.code == 0
+```
+
+#### DB リトライ - 接続確立
+
+```yaml
+- name: "Database Connection Test"
+  uses: db
+  with:
+    dsn: "postgres://user:pass@localhost:5432/testdb"
+    query: "SELECT 1"
+  retry:
+    max_attempts: 20
+    interval: "3s"
+  test: res.code == 0
+```
+
+### 高度なリトライパターン
+
+#### 段階的な遅延
+
+```yaml
+jobs:
+  staged-startup:
+    steps:
+      - name: "Quick Health Check"
+        uses: http
+        with:
+          url: "{{vars.service_url}}/ping"
+        retry:
+          max_attempts: 5
+          interval: "100ms"
+        test: res.code == 200
+
+      - name: "Detailed Health Check"
+        uses: http
+        with:
+          url: "{{vars.service_url}}/health"
+        retry:
+          max_attempts: 30
+          interval: "2s"
+          initial_delay: "1s"
+        test: res.code == 200 && res.body.json.database_connected == true
+```
+
+#### 条件付きリトライ
+
+```yaml
+- name: "Environment-Aware Health Check"
+  uses: http
+  with:
+    url: "{{vars.service_url}}/health"
+  retry:
+    max_attempts: "{{vars.environment == 'production' ? 60 : 10}}"
+    interval: "{{vars.environment == 'production' ? '5s' : '1s'}}"
+  test: res.code == 200
+```
+
+### ベストプラクティス
+
+#### 1. 適切なタイムアウト設定
+```yaml
+# 良い例: リトライ間隔より短いタイムアウト
+- name: "Quick API Check"
+  uses: http
+  with:
+    url: "{{vars.api_url}}/ping"
+    timeout: "2s"        # 短いタイムアウト
+  retry:
+    max_attempts: 10
+    interval: "3s"       # タイムアウトより長い間隔
+```
+
+#### 2. 実用的な最大試行回数
+```yaml
+# 良い例: 合理的な試行回数
+- name: "Service Startup"
+  uses: shell
+  with:
+    cmd: "service myapp status"
+  retry:
+    max_attempts: 30     # 30回 × 2秒 = 最大1分待機
+    interval: "2s"
+```
+
+#### 3. 初期遅延の活用
+```yaml
+# 良い例: サービス起動時間を考慮した初期遅延
+- name: "Database Health Check"
+  uses: db
+  with:
+    dsn: "{{vars.db_dsn}}"
+    query: "SELECT 1"
+  retry:
+    max_attempts: 20
+    interval: "3s"
+    initial_delay: "15s"  # データベース起動に時間がかかる場合
+```
+
 ## 高度なアクション使用方法
 
 ### アクションでのエラーハンドリング
