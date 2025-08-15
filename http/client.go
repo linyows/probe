@@ -52,6 +52,43 @@ func NewReq() *Req {
 	}
 }
 
+// mergeHeaders merges custom headers with default headers, handling case-insensitive duplicates
+// Custom headers override defaults when header names match (case-insensitive)
+func mergeHeaders(defaultHeaders, customHeaders map[string]string) map[string]string {
+	if customHeaders == nil {
+		return defaultHeaders
+	}
+
+	result := make(map[string]string)
+	
+	// First, copy all default headers
+	for key, value := range defaultHeaders {
+		result[key] = value
+	}
+	
+	// Then, add/override with custom headers, removing case-insensitive duplicates
+	for customKey, customValue := range customHeaders {
+		// Check if this custom header should override a default header
+		var keyToRemove string
+		for existingKey := range result {
+			if strings.EqualFold(existingKey, customKey) {
+				keyToRemove = existingKey
+				break
+			}
+		}
+		
+		// Remove the existing header if found
+		if keyToRemove != "" {
+			delete(result, keyToRemove)
+		}
+		
+		// Add the custom header
+		result[customKey] = customValue
+	}
+	
+	return result
+}
+
 func (r *Req) Do() (*Result, error) {
 	if r.URL == "" {
 		return nil, errors.New("Req.URL is required")
@@ -229,7 +266,29 @@ func Request(data map[string]string, opts ...Option) (map[string]string, error) 
 	}
 	
 	m := probe.HeaderToStringValue(probe.UnflattenInterface(dataCopy))
+	
+	// Extract custom headers and merge with defaults before MapToStructByTags
+	var customHeaders map[string]string
+	if headersInterface, exists := m["headers"]; exists {
+		if headers, ok := headersInterface.(map[string]string); ok {
+			customHeaders = headers
+		} else if headersInterfaceMap, ok := headersInterface.(map[string]interface{}); ok {
+			// Convert map[string]interface{} to map[string]string
+			customHeaders = make(map[string]string)
+			for k, v := range headersInterfaceMap {
+				if strVal, ok := v.(string); ok {
+					customHeaders[k] = strVal
+				}
+			}
+		}
+	}
+
+	// Create new request with merged headers
 	r := NewReq()
+	r.Header = mergeHeaders(r.Header, customHeaders)
+	
+	// Update the map with merged headers to avoid duplication in MapToStructByTags
+	m["headers"] = r.Header
 
 	cb := &Callback{}
 	for _, opt := range opts {
