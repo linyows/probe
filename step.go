@@ -72,6 +72,7 @@ func (st *Step) prepare(jCtx *JobContext) (string, bool) {
 		return name, false
 	}
 
+
 	// Handle wait only if step is not skipped
 	st.handleWait(jCtx)
 
@@ -685,3 +686,4 @@ func (st *Step) saveOutputs(jCtx *JobContext) {
 		jCtx.Printer.LogDebug("Step '%s' outputs saved: %v", st.ID, outputs)
 	}
 }
+

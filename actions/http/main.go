@@ -1,6 +1,7 @@
 package http
 
 import (
+	"errors"
 	hp "net/http"
 	"os"
 
@@ -16,6 +17,11 @@ type Action struct {
 }
 
 func (a *Action) Run(args []string, with map[string]string) (map[string]string, error) {
+	// Validate that required parameters are provided
+	if len(with) == 0 {
+		return map[string]string{}, errors.New("http action requires parameters in 'with' section. Please specify request details like url, method, or use method fields (get, post, etc.)")
+	}
+
 	// Use default truncate length, can be overridden by caller
 	truncateLength := probe.MaxLogStringLength
 
