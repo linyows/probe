@@ -34,9 +34,10 @@ type Res struct {
 }
 
 type Result struct {
-	Req Req           `map:"req"`
-	Res Res           `map:"res"`
-	RT  time.Duration `map:"rt"`
+	Req    Req           `map:"req"`
+	Res    Res           `map:"res"`
+	RT     time.Duration `map:"rt"`
+	Status int           `map:"status"`
 }
 
 func ParseRequest(with map[string]string) (*Req, string, time.Duration, error) {
@@ -274,7 +275,8 @@ func (r *Req) executeSelectQuery(db *sql.DB, start time.Time) (res *Result, err 
 			RowsAffected: int64(len(results)),
 			Rows:         results,
 		},
-		RT: duration,
+		RT:     duration,
+		Status: 0, // success
 	}, nil
 }
 
@@ -298,7 +300,8 @@ func (r *Req) executeNonSelectQuery(db *sql.DB, start time.Time) (*Result, error
 			RowsAffected: rowsAffected,
 			Rows:         []interface{}{},
 		},
-		RT: duration,
+		RT:     duration,
+		Status: 0, // success
 	}, nil
 }
 
@@ -313,7 +316,8 @@ func (r *Req) createErrorResult(start time.Time, err error) (map[string]string, 
 			Rows:         []interface{}{},
 			Error:        err.Error(),
 		},
-		RT: duration,
+		RT:     duration,
+		Status: 1, // failure
 	}
 
 	// Convert to map[string]string

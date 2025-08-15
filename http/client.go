@@ -33,9 +33,10 @@ type Res struct {
 }
 
 type Result struct {
-	Req Req           `map:"req"`
-	Res Res           `map:"res"`
-	RT  time.Duration `map:"rt"`
+	Req    Req           `map:"req"`
+	Res    Res           `map:"res"`
+	RT     time.Duration `map:"rt"`
+	Status int           `map:"status"`
 }
 
 func NewReq() *Req {
@@ -88,6 +89,13 @@ func (r *Req) Do() (*Result, error) {
 		Status: res.Status,
 		Code:   res.StatusCode,
 	}
+
+	// Determine status based on HTTP status code (200-299 = success, others = failure)
+	status := 1 // default to failure
+	if res.StatusCode >= 200 && res.StatusCode < 300 {
+		status = 0 // success
+	}
+	result.Status = status
 
 	body, err := io.ReadAll(res.Body)
 	if err != nil {
