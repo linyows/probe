@@ -104,6 +104,7 @@ func updateMap(data map[string]string) error {
 }
 
 // replace `get: /foo/bar` and `url: http://localhost:8000` to `method: GET` and `url: http://localhost:8000/foo/bar`
+// or `get: https://api.example.com/users` to `method: GET` and `url: https://api.example.com/users`
 func replaceMethodAndURL(data map[string]string) error {
 	for _, method := range httpMethods {
 		lowerMethod := strings.ToLower(method)
@@ -115,19 +116,24 @@ func replaceMethodAndURL(data map[string]string) error {
 		data["method"] = method
 		delete(data, lowerMethod)
 
-		// get the base-url from url
-		baseURL, ok := data["url"]
-		if !ok {
-			return errors.New("Error: url is missing in the map")
-		}
+		// If route is a complete URL (starts with http:// or https://), use it directly
+		if strings.HasPrefix(route, "http://") || strings.HasPrefix(route, "https://") {
+			data["url"] = route
+		} else {
+			// If route is a relative path, combine with base URL
+			baseURL, ok := data["url"]
+			if !ok {
+				return errors.New("url is missing for relative path")
+			}
 
-		// renew url as full-url
-		u, err := url.Parse(baseURL)
-		if err != nil {
-			return err
+			// renew url as full-url
+			u, err := url.Parse(baseURL)
+			if err != nil {
+				return err
+			}
+			u.Path = path.Join(u.Path, route)
+			data["url"] = u.String()
 		}
-		u.Path = path.Join(u.Path, route)
-		data["url"] = u.String()
 
 		break
 	}
