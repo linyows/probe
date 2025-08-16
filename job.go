@@ -59,6 +59,14 @@ func (j *Job) expandJobName(expr *Expr, ctx JobContext) error {
 	}
 
 	j.Name = name
+	
+	// Update the job name in the result as well
+	if ctx.Result != nil {
+		if jobResult, exists := ctx.Result.Jobs[j.ID]; exists {
+			jobResult.JobName = name
+		}
+	}
+	
 	return nil
 }
 
