@@ -1,3 +1,5 @@
+CERT_DIR := testdata/certs
+
 default: build
 
 build:
@@ -22,3 +24,20 @@ key:
 code:
 	#@which buf || brew install bufbuild/buf/buf
 	buf generate
+
+grpc_server:
+	go run grpc/testserver/*.go
+
+grpc_server_tls:
+	go run grpc/testserver/*.go \
+		-tls \
+		-cert="./testdata/certs/server.crt" \
+		-key="./testdata/certs/server.key" \
+		-port=50052
+
+gen_server_keys:
+	testdata/gen.sh
+
+gen_grpc_server:
+	@cd grpc/testserver && \
+		protoc --go_out=. --go-grpc_out=. ./pb/user_service.proto
