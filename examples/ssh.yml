@@ -1,0 +1,47 @@
+name: SSH Action Examples
+description: Examples for using the ssh action
+
+vars:
+  host: "{{SSH_HOST ?? ''}}"
+  port: "{{SSH_PORT ?? 22}}"
+  user: "{{SSH_USER ?? ''}}"
+  pass: "{{SSH_PASS ?? ''}}"
+
+jobs:
+- name: SSH Connection Test
+  defaults:
+    ssh:
+      host: "{{vars.host}}"
+      port: "{{vars.port}}"
+      user: "{{vars.user}}"
+      password: "{{vars.pass}}"
+      timeout: 30s
+      strict_host_check: false
+      known_hosts: ~/.ssh/known_hosts
+      key_file: ~/.ssh/id_rsa
+
+  steps:
+  - name: Get hostname
+    uses: ssh
+    with:
+      cmd: hostname
+    echo: "Hostname: {{res.stdout}}"
+    test: res.code == 0
+
+  - name: Pipe command
+    uses: ssh
+    with:
+      cmd: ls -l | wc -l
+      workdir: /tmp
+      timeout: 60s
+    test: res.code == 0
+    echo: "{{res.stdout}}"
+
+  - name: Multi-line command
+    uses: ssh
+    with:
+      cmd: |
+        whoami
+        date
+    test: res.code == 0
+    echo: "{{res.stdout}}"

@@ -51,7 +51,7 @@ Features
 --------
 
 - **Simple YAML Syntax**: Easy-to-read workflow definitions
-- **Plugin Architecture**: Built-in HTTP, Database, Browser, Shell, SMTP, and Hello actions with extensibility
+- **Plugin Architecture**: Built-in HTTP, Database, Browser, Shell, SSH, SMTP, and Hello actions with extensibility
 - **Job Dependencies**: Control execution order with `needs`
 - **Step Outputs**: Share data between steps and jobs using `outputs`
 - **Repetition**: Repeat jobs with configurable intervals
@@ -369,6 +369,34 @@ Supported actions:
     env:
       NODE_ENV: production
   test: res.code == 0 && (res.stdout | contains("Build successful"))
+```
+
+### SSH Action
+```yaml
+- name: Deploy Application
+  uses: ssh
+  with:
+    host: "prod.example.com"
+    port: 22
+    user: "deploy"
+    # Authentication methods (use either password or key_file)
+    password: "secure_password"
+    # key_file: "~/.ssh/deploy_key"
+    # key_passphrase: "key_passphrase"  # if key is encrypted
+    cmd: |
+      cd /opt/myapp
+      git pull origin main
+      systemctl restart myapp
+    timeout: "300s"
+    workdir: "/opt/myapp"
+    # Environment variables
+    env:
+      DEPLOY_ENV: production
+      APP_VERSION: v1.2.3
+    # Security settings
+    strict_host_check: true
+    known_hosts: "~/.ssh/known_hosts"
+  test: res.code == 0 && !contains(res.stderr, "error")
 ```
 
 ### Hello Action (Testing)
