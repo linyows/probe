@@ -10,6 +10,11 @@ import (
 
 const (
 	flatkey = "__"
+	
+	// Type prefixes for preserving type information in string encoding
+	typePrefixInt   = "#i#"
+	typePrefixFloat = "#f#"
+	typePrefixBool  = "#b#"
 )
 
 // FlattenInterface recursively flattens a nested data structure into a flat map[string]string.
@@ -79,8 +84,8 @@ func flattenIf(input any, prefix string) map[string]string {
 		}
 
 	default:
-		// If it is a basic type, it is stored as is.
-		res[prefix] = fmt.Sprintf("%v", input)
+		// If it is a basic type, encode with type prefix for type preservation
+		res[prefix] = encodeValueWithTypePrefix(input)
 	}
 
 	return res
@@ -278,21 +283,17 @@ func isNumericSequence(keys []string) bool {
 }
 
 // nestMap is a helper function to set values for nested keys in UnflattenInterface.
-// Creates nested map structure based on key path and converts numeric strings to integers.
+// Creates nested map structure based on key path and decodes values with type prefixes.
 //
 // Example:
 //
 //	m := make(map[string]any)
-//	nestMap(m, []string{"user", "profile", "age"}, "30")
+//	nestMap(m, []string{"user", "profile", "age"}, "#i#30")
 //	// m becomes: {"user": {"profile": {"age": 30}}}
 func nestMap(m map[string]any, keys []string, value string) {
 	if len(keys) == 1 {
-		// when it is the last key, set the value
-		if intValue, err := strconv.Atoi(value); err == nil {
-			m[keys[0]] = intValue
-		} else {
-			m[keys[0]] = value
-		}
+		// when it is the last key, set the value with type decoding
+		m[keys[0]] = decodeValueWithTypePrefix(value)
 	} else {
 		// when there are still keys remaining, create the next level map
 		if _, exists := m[keys[0]]; !exists {
@@ -386,8 +387,25 @@ func ConvertBodyToJson(data map[string]string) error {
 
 	if len(bodyData) > 0 {
 		// Note: Expression expansion should already be done by this point
-		// UnflattenInterface now handles both array conversion and numeric conversion
+		// For HTTP, use legacy numeric conversion for backward compatibility
 		unflattenedData := UnflattenInterface(bodyData)
+		// Apply numeric conversion for backward compatibility with HTTP actions
+		if arrayRoot, ok := unflattenedData["__array_root"]; ok {
+			// Handle root array case
+			if arrayData, isArray := arrayRoot.([]any); isArray {
+				convertedArray := make([]any, len(arrayData))
+				for i, item := range arrayData {
+					if mapItem, isMap := item.(map[string]any); isMap {
+						convertedArray[i] = convertMapsToArraysAndNumericStrings(mapItem)
+					} else {
+						convertedArray[i] = item
+					}
+				}
+				unflattenedData = map[string]any{"__array_root": convertedArray}
+			}
+		} else {
+			unflattenedData = convertMapsToArraysAndNumericStrings(unflattenedData)
+		}
 
 		// Check if the result is a root array (indicated by __array_root key)
 		var dataToMarshal any = unflattenedData
@@ -404,3 +422,109 @@ func ConvertBodyToJson(data map[string]string) error {
 
 	return nil
 }
+
+// encodeValueWithTypePrefix encodes a value with appropriate type prefix for type preservation.
+// This allows accurate type restoration in UnflattenInterface.
+//
+// Encoding format:
+//   - int: "#i#123"
+//   - float64: "#f#19.99"
+//   - bool: "#b#true" or "#b#false"
+//   - string: "value" (no prefix for backward compatibility)
+//
+// Example:
+//
+//	encodeValueWithTypePrefix(42)       // "#i#42"
+//	encodeValueWithTypePrefix(19.99)    // "#f#19.99"
+//	encodeValueWithTypePrefix(true)     // "#b#true"
+//	encodeValueWithTypePrefix("hello")  // "hello"
+func encodeValueWithTypePrefix(input any) string {
+	switch v := input.(type) {
+	case int:
+		return typePrefixInt + strconv.Itoa(v)
+	case int8:
+		return typePrefixInt + strconv.Itoa(int(v))
+	case int16:
+		return typePrefixInt + strconv.Itoa(int(v))
+	case int32:
+		return typePrefixInt + strconv.Itoa(int(v))
+	case int64:
+		return typePrefixInt + strconv.FormatInt(v, 10)
+	case uint:
+		return typePrefixInt + strconv.FormatUint(uint64(v), 10)
+	case uint8:
+		return typePrefixInt + strconv.FormatUint(uint64(v), 10)
+	case uint16:
+		return typePrefixInt + strconv.FormatUint(uint64(v), 10)
+	case uint32:
+		return typePrefixInt + strconv.FormatUint(uint64(v), 10)
+	case uint64:
+		return typePrefixInt + strconv.FormatUint(v, 10)
+	case float32:
+		return typePrefixFloat + strconv.FormatFloat(float64(v), 'f', -1, 32)
+	case float64:
+		return typePrefixFloat + strconv.FormatFloat(v, 'f', -1, 64)
+	case bool:
+		return typePrefixBool + strconv.FormatBool(v)
+	case string:
+		// No prefix for strings to maintain backward compatibility
+		return v
+	default:
+		// For unknown types, convert to string without prefix
+		return fmt.Sprintf("%v", input)
+	}
+}
+
+// decodeValueWithTypePrefix decodes a string value that may contain type prefix information.
+// This is the inverse operation of encodeValueWithTypePrefix.
+//
+// Decoding format:
+//   - "#i#123" → int(123)
+//   - "#f#19.99" → float64(19.99)
+//   - "#b#true" → bool(true)
+//   - "#b#false" → bool(false)
+//   - "hello" → string("hello") (no prefix, default string)
+//
+// Example:
+//
+//	decodeValueWithTypePrefix("#i#42")      // 42 (int)
+//	decodeValueWithTypePrefix("#f#19.99")   // 19.99 (float64)
+//	decodeValueWithTypePrefix("#b#true")    // true (bool)
+//	decodeValueWithTypePrefix("hello")      // "hello" (string)
+func decodeValueWithTypePrefix(value string) any {
+	// Check for type prefixes
+	if strings.HasPrefix(value, typePrefixInt) {
+		valueStr := strings.TrimPrefix(value, typePrefixInt)
+		if intValue, err := strconv.Atoi(valueStr); err == nil {
+			return intValue
+		}
+		// If parsing fails, treat as string
+		return valueStr
+	}
+	
+	if strings.HasPrefix(value, typePrefixFloat) {
+		valueStr := strings.TrimPrefix(value, typePrefixFloat)
+		if floatValue, err := strconv.ParseFloat(valueStr, 64); err == nil {
+			return floatValue
+		}
+		// If parsing fails, treat as string
+		return valueStr
+	}
+	
+	if strings.HasPrefix(value, typePrefixBool) {
+		valueStr := strings.TrimPrefix(value, typePrefixBool)
+		if boolValue, err := strconv.ParseBool(valueStr); err == nil {
+			return boolValue
+		}
+		// If parsing fails, treat as string
+		return valueStr
+	}
+	
+	// No prefix - default to string (type prefix approach: explicit typing only)
+	return value
+}
+
+
+
+
+

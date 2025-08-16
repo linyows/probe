@@ -273,10 +273,10 @@ func TestUnflattenInterface_ArrayConversion(t *testing.T) {
 			},
 		},
 		{
-			name: "numeric conversion",
+			name: "type prefix conversion",
 			input: map[string]string{
-				"count": "42",
-				"price": "19.99",
+				"count": "#i#42",
+				"price": "#f#19.99",
 				"name":  "product",
 			},
 			expected: map[string]any{
