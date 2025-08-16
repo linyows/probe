@@ -6,6 +6,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/fatih/color"
 )
 
 func TestStep_parseWaitDuration(t *testing.T) {
@@ -1124,6 +1126,11 @@ func TestSleepWithMessage(t *testing.T) {
 }
 
 func TestStep_getEchoOutput(t *testing.T) {
+	// Enable color output for testing
+	originalNoColor := color.NoColor
+	color.NoColor = false
+	defer func() { color.NoColor = originalNoColor }()
+
 	tests := []struct {
 		name        string
 		echo        string
@@ -1135,42 +1142,42 @@ func TestStep_getEchoOutput(t *testing.T) {
 			name:        "single line echo",
 			echo:        "Hello World",
 			context:     StepContext{},
-			expected:    "       Hello World\n",
+			expected:    "       \x1b[34mHello World\x1b[0m\n",
 			expectError: false,
 		},
 		{
 			name:        "multi-line echo with explicit newlines",
 			echo:        "Line 1\nLine 2\nLine 3",
 			context:     StepContext{},
-			expected:    "       Line 1\n       Line 2\n       Line 3\n",
+			expected:    "       \x1b[34mLine 1\x1b[0m\n       \x1b[34mLine 2\x1b[0m\n       \x1b[34mLine 3\x1b[0m\n",
 			expectError: false,
 		},
 		{
 			name:        "complex multiline with indentation",
 			echo:        "Header\n  Indented\n    More indented\nBack to left",
 			context:     StepContext{},
-			expected:    "       Header\n         Indented\n           More indented\n       Back to left\n",
+			expected:    "       \x1b[34mHeader\x1b[0m\n       \x1b[34m  Indented\x1b[0m\n       \x1b[34m    More indented\x1b[0m\n       \x1b[34mBack to left\x1b[0m\n",
 			expectError: false,
 		},
 		{
 			name:        "empty line handling",
 			echo:        "Line 1\n\nLine 3",
 			context:     StepContext{},
-			expected:    "       Line 1\n       \n       Line 3\n",
+			expected:    "       \x1b[34mLine 1\x1b[0m\n       \x1b[34m\x1b[0m\n       \x1b[34mLine 3\x1b[0m\n",
 			expectError: false,
 		},
 		{
 			name:        "template expression",
 			echo:        "Status: {{vars.status}}",
 			context:     StepContext{Vars: map[string]any{"status": "OK"}},
-			expected:    "       Status: OK\n",
+			expected:    "       \x1b[34mStatus: OK\x1b[0m\n",
 			expectError: false,
 		},
 		{
 			name:        "multiline template expression",
 			echo:        "Status: {{vars.status}}\nCode: {{vars.code}}",
 			context:     StepContext{Vars: map[string]any{"status": "OK", "code": "200"}},
-			expected:    "       Status: OK\n       Code: 200\n",
+			expected:    "       \x1b[34mStatus: OK\x1b[0m\n       \x1b[34mCode: 200\x1b[0m\n",
 			expectError: false,
 		},
 	}
