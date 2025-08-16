@@ -206,7 +206,7 @@ func TestRequest_StructureValidation(t *testing.T) {
 		"addr":    "localhost:50051",
 		"service": "TestService",
 		"method":  "TestMethod",
-		"body": `{"test": "value"}`,
+		"body":    `{"test": "value"}`,
 	}
 
 	// This will fail with connection error, but should not panic

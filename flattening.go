@@ -10,7 +10,7 @@ import (
 
 const (
 	flatkey = "__"
-	
+
 	// Type prefixes for preserving type information in string encoding
 	typePrefixInt   = "#i#"
 	typePrefixFloat = "#f#"
@@ -501,7 +501,7 @@ func decodeValueWithTypePrefix(value string) any {
 		// If parsing fails, treat as string
 		return valueStr
 	}
-	
+
 	if strings.HasPrefix(value, typePrefixFloat) {
 		valueStr := strings.TrimPrefix(value, typePrefixFloat)
 		if floatValue, err := strconv.ParseFloat(valueStr, 64); err == nil {
@@ -510,7 +510,7 @@ func decodeValueWithTypePrefix(value string) any {
 		// If parsing fails, treat as string
 		return valueStr
 	}
-	
+
 	if strings.HasPrefix(value, typePrefixBool) {
 		valueStr := strings.TrimPrefix(value, typePrefixBool)
 		if boolValue, err := strconv.ParseBool(valueStr); err == nil {
@@ -519,12 +519,7 @@ func decodeValueWithTypePrefix(value string) any {
 		// If parsing fails, treat as string
 		return valueStr
 	}
-	
+
 	// No prefix - default to string (type prefix approach: explicit typing only)
 	return value
 }
-
-
-
-
-

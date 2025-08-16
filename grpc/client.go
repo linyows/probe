@@ -26,25 +26,25 @@ import (
 )
 
 type Req struct {
-	Addr       string            `map:"addr" validate:"required"`
-	Service    string            `map:"service" validate:"required"`
-	Method     string            `map:"method" validate:"required"`
-	Body       string            `map:"body"`
-	Timeout    string            `map:"timeout"`
-	TLS        bool              `map:"tls"`
-	Insecure   bool              `map:"insecure"`
-	CertFile   string            `map:"cert_file"`
-	KeyFile    string            `map:"key_file"`
-	CAFile     string            `map:"ca_file"`
-	Metadata   map[string]string `map:"metadata"`
-	cb         *Callback
+	Addr     string            `map:"addr" validate:"required"`
+	Service  string            `map:"service" validate:"required"`
+	Method   string            `map:"method" validate:"required"`
+	Body     string            `map:"body"`
+	Timeout  string            `map:"timeout"`
+	TLS      bool              `map:"tls"`
+	Insecure bool              `map:"insecure"`
+	CertFile string            `map:"cert_file"`
+	KeyFile  string            `map:"key_file"`
+	CAFile   string            `map:"ca_file"`
+	Metadata map[string]string `map:"metadata"`
+	cb       *Callback
 }
 
 type Res struct {
-	Body           string            `map:"body"`
-	StatusCode     string            `map:"status_code"`
-	StatusMessage  string            `map:"status_message"`
-	Metadata       map[string]string `map:"metadata"`
+	Body          string            `map:"body"`
+	StatusCode    string            `map:"status_code"`
+	StatusMessage string            `map:"status_message"`
+	Metadata      map[string]string `map:"metadata"`
 }
 
 type Result struct {
@@ -62,7 +62,6 @@ func NewReq() *Req {
 		Metadata: make(map[string]string),
 	}
 }
-
 
 // ConvertMetadataToMap converts flat metadata data to nested map structure
 func ConvertMetadataToMap(data map[string]string) error {
@@ -248,10 +247,10 @@ func (r *Req) invokeMethod(ctx context.Context, conn *grpc.ClientConn, reflectio
 	}
 
 	res := &Res{
-		Body:           responseJSON,
-		StatusCode:     "OK",
-		StatusMessage:  "",
-		Metadata:       metadataMap,
+		Body:          responseJSON,
+		StatusCode:    "OK",
+		StatusMessage: "",
+		Metadata:      metadataMap,
 	}
 
 	if err != nil {
