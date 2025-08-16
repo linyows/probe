@@ -99,7 +99,7 @@ func PrepareGrpcRequestData(data map[string]string) error {
 	return nil
 }
 
-func (r *Req) Do() (*Result, error) {
+func (r *Req) Do() (re *Result, er error) {
 	if r.Addr == "" {
 		return nil, errors.New("Req.Addr is required")
 	}
@@ -162,7 +162,13 @@ func (r *Req) Do() (*Result, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to gRPC server: %w", err)
 	}
-	defer conn.Close()
+
+	defer func() {
+		err := conn.Close()
+		if er == nil {
+			er = err
+		}
+	}()
 
 	// Prepare metadata
 	md := metadata.New(r.Metadata)
@@ -262,14 +268,20 @@ func (r *Req) invokeMethod(ctx context.Context, conn *grpc.ClientConn, reflectio
 	return res, nil
 }
 
-func (r *Req) getServiceDescriptor(ctx context.Context, client grpc_reflection_v1alpha.ServerReflectionClient) (protoreflect.ServiceDescriptor, error) {
+func (r *Req) getServiceDescriptor(ctx context.Context, client grpc_reflection_v1alpha.ServerReflectionClient) (re protoreflect.ServiceDescriptor, er error) {
 	stream, err := client.ServerReflectionInfo(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create reflection stream: %w", err)
 	}
-	defer stream.CloseSend()
+	defer func() {
+		err := stream.CloseSend()
+		if er == nil {
+			er = err
+		}
+	}()
 
 	// Request service descriptor
+	//nolint:staticcheck // v1alpha reflection API is still widely used
 	err = stream.Send(&grpc_reflection_v1alpha.ServerReflectionRequest{
 		MessageRequest: &grpc_reflection_v1alpha.ServerReflectionRequest_FileContainingSymbol{
 			FileContainingSymbol: r.Service,
@@ -289,11 +301,14 @@ func (r *Req) getServiceDescriptor(ctx context.Context, client grpc_reflection_v
 	}
 
 	// Handle error response
+	//nolint:staticcheck // v1alpha reflection API is still widely used
 	if errResp := resp.GetErrorResponse(); errResp != nil {
+		//nolint:staticcheck // v1alpha reflection API is still widely used
 		return nil, fmt.Errorf("reflection error: %s", errResp.GetErrorMessage())
 	}
 
 	// Get file descriptor response
+	//nolint:staticcheck // v1alpha reflection API is still widely used
 	fileDescResp := resp.GetFileDescriptorResponse()
 	if fileDescResp == nil {
 		return nil, errors.New("unexpected response type from reflection")
@@ -301,6 +316,7 @@ func (r *Req) getServiceDescriptor(ctx context.Context, client grpc_reflection_v
 
 	// Parse file descriptors
 	var fileDesc protoreflect.FileDescriptor
+	//nolint:staticcheck // v1alpha reflection API is still widely used
 	for _, fdBytes := range fileDescResp.GetFileDescriptorProto() {
 		fd := &descriptorpb.FileDescriptorProto{}
 		if err := proto.Unmarshal(fdBytes, fd); err != nil {
