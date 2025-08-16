@@ -6,6 +6,7 @@ toolchain go1.24.0
 
 require (
 	github.com/briandowns/spinner v1.23.2
+	github.com/chromedp/chromedp v0.14.1
 	github.com/expr-lang/expr v1.16.9
 	github.com/fatih/color v1.18.0
 	github.com/go-playground/validator/v10 v10.4.1
@@ -25,7 +26,6 @@ require (
 require (
 	filippo.io/edwards25519 v1.1.0 // indirect
 	github.com/chromedp/cdproto v0.0.0-20250724212937-08a3db8b4327 // indirect
-	github.com/chromedp/chromedp v0.14.1 // indirect
 	github.com/chromedp/sysutil v1.1.0 // indirect
 	github.com/go-json-experiment/json v0.0.0-20250725192818-e39067aee2d2 // indirect
 	github.com/go-playground/locales v0.13.0 // indirect

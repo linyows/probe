@@ -12,6 +12,7 @@ import (
 	"github.com/linyows/probe/actions/browser"
 	"github.com/linyows/probe/actions/db"
 	"github.com/linyows/probe/actions/embedded"
+	grpcaction "github.com/linyows/probe/actions/grpc"
 	"github.com/linyows/probe/actions/hello"
 	http "github.com/linyows/probe/actions/http"
 	"github.com/linyows/probe/actions/shell"
@@ -263,6 +264,10 @@ func (c *Cmd) runBuiltinActions(name string) {
 	case "embedded":
 		if !c.mocking {
 			embedded.Serve()
+		}
+	case "grpc":
+		if !c.mocking {
+			grpcaction.Serve()
 		}
 
 	default:

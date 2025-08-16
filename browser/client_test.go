@@ -86,8 +86,8 @@ func TestRequest_Validation(t *testing.T) {
 			// Check that status field is present and indicates failure
 			if status, exists := result["status"]; !exists {
 				t.Error("Expected status field in error result")
-			} else if status != "1" {
-				t.Errorf("Expected status=1 for error, got %v", status)
+			} else if status != "#i#1" {
+				t.Errorf("Expected status=#i#1 for error, got %v", status)
 			}
 		})
 	}

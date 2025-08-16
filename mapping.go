@@ -163,7 +163,23 @@ func MapToStructByTags(params map[string]any, dest any) error {
 			if v, ok := params[mapTag]; ok {
 				// set a value for a field
 				if field.CanSet() {
-					field.Set(reflect.ValueOf(v))
+					// Special handling for bool fields to handle string "false"/"true" from YAML
+					if field.Kind() == reflect.Bool {
+						switch val := v.(type) {
+						case bool:
+							field.SetBool(val)
+						case string:
+							if boolVal, err := strconv.ParseBool(val); err == nil {
+								field.SetBool(boolVal)
+							} else {
+								return fmt.Errorf("cannot convert '%s' to bool for field '%s'", val, mapTag)
+							}
+						default:
+							return fmt.Errorf("cannot convert %T to bool for field '%s'", v, mapTag)
+						}
+					} else {
+						field.Set(reflect.ValueOf(v))
+					}
 				}
 
 				// error when required field is missing
