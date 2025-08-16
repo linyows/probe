@@ -19,7 +19,7 @@ jobs:
     test: |
       res.code == 200 &&
       res.body.json.name == vars.name
-    echo: vars
+    echo: "{{vars}}"
     vars:
       id: 1234
       name: default

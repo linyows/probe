@@ -43,6 +43,10 @@ func colorSkipped() *color.Color {
 	return color.New(color.FgHiBlack)
 }
 
+func colorNoTest() *color.Color {
+	return color.RGB(0, 102, 204)
+}
+
 // String truncation utilities
 
 const (
@@ -76,12 +80,12 @@ func TruncateMapStringString(params map[string]string, maxLen int) map[string]st
 
 // Icon constants
 const (
-	IconSuccess = "✔︎ "
-	IconError   = "✘ "
-	IconWarning = "△ "
-	IconCircle  = "⏺"
-	IconWait    = "🕐︎"
-	IconSkip    = "⏭ "
+	IconSuccess  = "✔︎ "
+	IconError    = "✘ "
+	IconTriangle = "△ "
+	IconCircle   = "⏺"
+	IconWait     = "🕐︎"
+	IconSkip     = "⏭ "
 )
 
 // LogLevel defines different logging levels
@@ -190,7 +194,7 @@ func (p *Printer) printStepRepeatResult(counter *StepRepeatCounter, hasTest bool
 			if counter.SuccessCount == 0 {
 				statusIcon = colorError().Sprintf(IconError)
 			} else {
-				statusIcon = colorInfo().Sprintf(IconWarning)
+				statusIcon = colorNoTest().Sprintf(IconTriangle)
 			}
 		}
 
@@ -202,7 +206,7 @@ func (p *Printer) printStepRepeatResult(counter *StepRepeatCounter, hasTest bool
 	} else {
 		totalCount := counter.SuccessCount + counter.FailureCount
 		p.Fprintf(output, "    %s %d/%d completed (no test)\n",
-			colorInfo().Sprintf(IconWarning),
+			colorNoTest().Sprintf(IconTriangle),
 			totalCount,
 			totalCount)
 	}
@@ -393,7 +397,7 @@ func (p *Printer) generateJobResultsFromStepResults(stepResults []StepResult) st
 					p.Fprintf(&output, "%s %s %s%s%s\n", num, colorError().Sprintf(IconError), waitPrefix, stepResult.Name, ps)
 				}
 			case StatusWarning:
-				p.Fprintf(&output, "%s %s %s%s%s\n", num, colorInfo().Sprintf(IconWarning), waitPrefix, stepResult.Name, ps)
+				p.Fprintf(&output, "%s %s %s%s%s\n", num, colorNoTest().Sprintf(IconTriangle), waitPrefix, stepResult.Name, ps)
 			case StatusSkipped:
 				p.Fprintf(&output, "%s %s %s%s%s\n", num, colorInfo().Sprintf(IconSkip), waitPrefix, colorDim().Sprintf("%s", stepResult.Name), ps)
 			}
@@ -499,7 +503,7 @@ func (p *Printer) generateEchoOutput(content string, err error) string {
 	indentedLines := make([]string, len(lines))
 
 	for i, line := range lines {
-		indentedLines[i] = indent + colorDim().Sprintf("%s", line)
+		indentedLines[i] = indent + colorInfo().Sprintf("%s", line)
 	}
 
 	return strings.Join(indentedLines, "\n") + "\n"
