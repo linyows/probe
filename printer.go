@@ -499,7 +499,7 @@ func (p *Printer) generateEchoOutput(content string, err error) string {
 	indentedLines := make([]string, len(lines))
 
 	for i, line := range lines {
-		indentedLines[i] = indent + line
+		indentedLines[i] = indent + colorDim().Sprintf("%s", line)
 	}
 
 	return strings.Join(indentedLines, "\n") + "\n"
