@@ -275,7 +275,7 @@ func createSSHConfig(params *sshParams) (*ssh.ClientConfig, error) {
 	return config, nil
 }
 
-func (r *Req) Do() (*Result, error) {
+func (r *Req) Do() (re *Result, er error) {
 	params, err := parseParams(r)
 	if err != nil {
 		return nil, err
@@ -302,7 +302,12 @@ func (r *Req) Do() (*Result, error) {
 	if err != nil {
 		return result, fmt.Errorf("failed to connect to SSH server: %w", err)
 	}
-	defer client.Close()
+	defer func() {
+		err := client.Close()
+		if er == nil {
+			er = err
+		}
+	}()
 
 	// Create SSH session
 	session, err := client.NewSession()
@@ -380,7 +385,7 @@ func (r *Req) Do() (*Result, error) {
 		// Try to signal the session to stop
 		if signalErr := session.Signal(ssh.SIGTERM); signalErr != nil {
 			// If SIGTERM fails, try SIGKILL
-			session.Signal(ssh.SIGKILL)
+			_ = session.Signal(ssh.SIGKILL)
 		}
 		// Wait a bit for graceful termination, then proceed
 		select {
@@ -435,11 +440,7 @@ func (r *Req) Do() (*Result, error) {
 	}
 	result.Status = status
 
-	// Explicitly close session to ensure proper cleanup
-	if closeErr := session.Close(); closeErr != nil {
-		// Log the close error but don't override the main result
-		// This is important for proper session cleanup
-	}
+	_ = session.Close()
 
 	// callback after
 	if r.cb != nil && r.cb.after != nil {
