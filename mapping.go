@@ -326,6 +326,26 @@ func StructToMapByTags(src any) (map[string]any, error) {
 			// when the field is a map[string]string
 			result[mapTag] = field.Interface()
 
+			// when the field is []???(slice)
+		} else if field.Kind() == reflect.Slice {
+			if fieldType.Type.Elem().Kind() == reflect.Struct {
+				// []struct ===> []any{map[string]any{}}
+				sliceValue := field
+				var anySlice []any
+				for i := 0; i < sliceValue.Len(); i++ {
+					structElem := sliceValue.Index(i)
+					structMap, err := StructToMapByTags(structElem.Interface())
+					if err != nil {
+						return nil, err
+					}
+					anySlice = append(anySlice, structMap)
+				}
+				result[mapTag] = anySlice
+			} else {
+				// other slice types (string, etc.)
+				result[mapTag] = field.Interface()
+			}
+
 		} else {
 			// when the normal field
 			result[mapTag] = field.Interface()
