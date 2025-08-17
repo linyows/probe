@@ -202,22 +202,32 @@ func MapToStructByTags(params map[string]any, dest any) error {
 					}
 				}
 
-			} else if fieldType.Type.Elem().Kind() == reflect.Struct {
+			} else if fieldType.Type.Elem().Kind() == reflect.Struct || fieldType.Type.Elem().Kind() == reflect.Ptr {
 				sliceParams, ok := params[mapTag].([]any)
 				if !ok && validateTag == labelRequired {
 					return fmt.Errorf("required field '%s' is missing or not a map[string]any", mapTag)
 				} else if ok {
-					kind := field.Type().Elem().Kind()
+					elemType := field.Type().Elem()
 					for _, prms := range sliceParams {
 						nestedParams, okk := prms.(map[string]any)
 						if okk {
-							p := reflect.New(field.Type().Elem())
+							var p reflect.Value
+							if elemType.Kind() == reflect.Ptr {
+								// []*Struct: create new struct and get pointer
+								structType := elemType.Elem()
+								p = reflect.New(structType)
+							} else {
+								// []Struct: create new struct
+								p = reflect.New(elemType)
+							}
+							
 							err := MapToStructByTags(nestedParams, p.Interface())
 							if err != nil {
 								return err
 							}
-							if kind == reflect.Ptr {
-								// []any{map[string]any{}} ===> *[]Struct
+							
+							if elemType.Kind() == reflect.Ptr {
+								// []any{map[string]any{}} ===> []*Struct
 								field.Set(reflect.Append(field, p))
 							} else {
 								// []any{map[string]any{}} ===> []Struct
