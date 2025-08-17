@@ -6,20 +6,23 @@ import (
 )
 
 type TestStruct struct {
-	String      string            `map:"string"`
-	Number      int               `map:"number"`
-	Bool        bool              `map:"bool"`
-	Bytes       []byte            `map:"bytes"`
-	Required    string            `map:"required" validate:"required"`
-	MapStrStr   map[string]string `map:"map_str_str"`
-	EmbedStruct TestEmbedStruct   `map:"embed_struct"`
+	String         string            `map:"string"`
+	Number         int               `map:"number"`
+	SliceString    []string          `map:"slice_string"`
+	SliceAnyString []string          `map:"slice_any_string"`
+	SliceStruct    []TestEmbedStruct `map:"slice_struct"`
+	Bool           bool              `map:"bool"`
+	Bytes          []byte            `map:"bytes"`
+	Required       string            `map:"required" validate:"required"`
+	MapStrStr      map[string]string `map:"map_str_str"`
+	EmbedStruct    TestEmbedStruct   `map:"embed_struct"`
 }
 
 type TestEmbedStruct struct {
 	Name string `map:"name"`
 }
 
-func TestMapToStructByTags(t *testing.T) {
+func TestMapToStructByTags_Types(t *testing.T) {
 	got := TestStruct{
 		String: "hello, world!",
 		MapStrStr: map[string]string{
@@ -29,8 +32,22 @@ func TestMapToStructByTags(t *testing.T) {
 	}
 
 	params := map[string]any{
-		"string":   "s-t-r-i-n-g",
-		"number":   123,
+		"string": "s-t-r-i-n-g",
+		"number": 123,
+		"slice_string": []string{
+			"a-a-a",
+			"b-b-b",
+			"c-c-c",
+		},
+		"slice_any_string": []any{
+			"a-a-a",
+			"b-b-b",
+			"c-c-c",
+		},
+		"slice_struct": []any{
+			map[string]any{"name": "foo"},
+			map[string]any{"name": "bar"},
+		},
 		"bool":     false,
 		"bytes":    "b-y-t-e-s",
 		"required": "required!",
@@ -45,8 +62,22 @@ func TestMapToStructByTags(t *testing.T) {
 	}
 
 	expects := TestStruct{
-		String:   "s-t-r-i-n-g",
-		Number:   123,
+		String: "s-t-r-i-n-g",
+		Number: 123,
+		SliceString: []string{
+			"a-a-a",
+			"b-b-b",
+			"c-c-c",
+		},
+		SliceAnyString: []string{
+			"a-a-a",
+			"b-b-b",
+			"c-c-c",
+		},
+		SliceStruct: []TestEmbedStruct{
+			{Name: "foo"},
+			{Name: "bar"},
+		},
 		Bool:     false,
 		Bytes:    []byte("b-y-t-e-s"),
 		Required: "required!",

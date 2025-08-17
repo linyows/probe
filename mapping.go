@@ -178,6 +178,56 @@ func MapToStructByTags(params map[string]any, dest any) error {
 				field.Set(reflect.ValueOf([]byte(v)))
 			}
 
+			// when the field is []???(slice)
+		} else if field.Kind() == reflect.Slice {
+			v, ok := params[mapTag].([]string)
+			if !ok && validateTag == labelRequired {
+				return fmt.Errorf("required field '%s' is missing or not a []string", mapTag)
+			} else if fieldType.Type.Elem().Kind() == reflect.String {
+				if ok {
+					// []string ===> []string
+					field.Set(reflect.ValueOf(v))
+
+					// []any ===> []string
+				} else if params[mapTag] != nil && reflect.TypeOf(params[mapTag]).String() == "[]interface {}" {
+					vv, okk := params[mapTag].([]any)
+					if !okk && validateTag == labelRequired {
+						return fmt.Errorf("required field '%s' is missing or not a []string", mapTag)
+					} else {
+						stSlice, err := FromAnySlice[string](vv)
+						if err != nil {
+							return err
+						}
+						field.Set(reflect.ValueOf(stSlice))
+					}
+				}
+
+			} else if fieldType.Type.Elem().Kind() == reflect.Struct {
+				sliceParams, ok := params[mapTag].([]any)
+				if !ok && validateTag == labelRequired {
+					return fmt.Errorf("required field '%s' is missing or not a map[string]any", mapTag)
+				} else if ok {
+					kind := field.Type().Elem().Kind()
+					for _, prms := range sliceParams {
+						nestedParams, okk := prms.(map[string]any)
+						if okk {
+							p := reflect.New(field.Type().Elem())
+							err := MapToStructByTags(nestedParams, p.Interface())
+							if err != nil {
+								return err
+							}
+							if kind == reflect.Ptr {
+								// []any{map[string]any{}} ===> *[]Struct
+								field.Set(reflect.Append(field, p))
+							} else {
+								// []any{map[string]any{}} ===> []Struct
+								field.Set(reflect.Append(field, p.Elem()))
+							}
+						}
+					}
+				}
+			}
+
 		} else {
 			// get the value corresponding to the key from the map
 			if v, ok := params[mapTag]; ok {
