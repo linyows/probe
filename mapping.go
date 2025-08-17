@@ -86,6 +86,26 @@ func MergeMaps(base, over map[string]any) map[string]any {
 	return merged
 }
 
+func ToAnySlice[T any](s []T) []any {
+	res := make([]any, len(s))
+	for i, v := range s {
+		res[i] = v
+	}
+	return res
+}
+
+func FromAnySlice[T any](s []any) ([]T, error) {
+	res := make([]T, len(s))
+	for i, v := range s {
+		val, ok := v.(T)
+		if !ok {
+			return nil, fmt.Errorf("element %d has type %T, expected %T", i, v, *new(T))
+		}
+		res[i] = val
+	}
+	return res, nil
+}
+
 // MapToStructByTags converts a map[string]any to a struct using struct tags.
 // Fields are mapped using the "map" tag, and validation is performed using the "validate" tag.
 // Supports nested structs, []byte fields, and map[string]string fields.
