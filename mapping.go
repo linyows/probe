@@ -86,6 +86,26 @@ func MergeMaps(base, over map[string]any) map[string]any {
 	return merged
 }
 
+func ToAnySlice[T any](s []T) []any {
+	res := make([]any, len(s))
+	for i, v := range s {
+		res[i] = v
+	}
+	return res
+}
+
+func FromAnySlice[T any](s []any) ([]T, error) {
+	res := make([]T, len(s))
+	for i, v := range s {
+		val, ok := v.(T)
+		if !ok {
+			return nil, fmt.Errorf("element %d has type %T, expected %T", i, v, *new(T))
+		}
+		res[i] = val
+	}
+	return res, nil
+}
+
 // MapToStructByTags converts a map[string]any to a struct using struct tags.
 // Fields are mapped using the "map" tag, and validation is performed using the "validate" tag.
 // Supports nested structs, []byte fields, and map[string]string fields.
@@ -156,6 +176,66 @@ func MapToStructByTags(params map[string]any, dest any) error {
 				return fmt.Errorf("expected string for field '%s' to convert to []byte", mapTag)
 			} else {
 				field.Set(reflect.ValueOf([]byte(v)))
+			}
+
+			// when the field is []???(slice)
+		} else if field.Kind() == reflect.Slice {
+			v, ok := params[mapTag].([]string)
+			if !ok && validateTag == labelRequired {
+				return fmt.Errorf("required field '%s' is missing or not a []string", mapTag)
+			} else if fieldType.Type.Elem().Kind() == reflect.String {
+				if ok {
+					// []string ===> []string
+					field.Set(reflect.ValueOf(v))
+
+					// []any ===> []string
+				} else if params[mapTag] != nil && reflect.TypeOf(params[mapTag]).String() == "[]interface {}" {
+					vv, okk := params[mapTag].([]any)
+					if !okk && validateTag == labelRequired {
+						return fmt.Errorf("required field '%s' is missing or not a []string", mapTag)
+					} else {
+						stSlice, err := FromAnySlice[string](vv)
+						if err != nil {
+							return err
+						}
+						field.Set(reflect.ValueOf(stSlice))
+					}
+				}
+
+			} else if fieldType.Type.Elem().Kind() == reflect.Struct || fieldType.Type.Elem().Kind() == reflect.Ptr {
+				sliceParams, ok := params[mapTag].([]any)
+				if !ok && validateTag == labelRequired {
+					return fmt.Errorf("required field '%s' is missing or not a map[string]any", mapTag)
+				} else if ok {
+					elemType := field.Type().Elem()
+					for _, prms := range sliceParams {
+						nestedParams, okk := prms.(map[string]any)
+						if okk {
+							var p reflect.Value
+							if elemType.Kind() == reflect.Ptr {
+								// []*Struct: create new struct and get pointer
+								structType := elemType.Elem()
+								p = reflect.New(structType)
+							} else {
+								// []Struct: create new struct
+								p = reflect.New(elemType)
+							}
+
+							err := MapToStructByTags(nestedParams, p.Interface())
+							if err != nil {
+								return err
+							}
+
+							if elemType.Kind() == reflect.Ptr {
+								// []any{map[string]any{}} ===> []*Struct
+								field.Set(reflect.Append(field, p))
+							} else {
+								// []any{map[string]any{}} ===> []Struct
+								field.Set(reflect.Append(field, p.Elem()))
+							}
+						}
+					}
+				}
 			}
 
 		} else {
@@ -255,6 +335,26 @@ func StructToMapByTags(src any) (map[string]any, error) {
 		} else if field.Type() == reflect.TypeOf(map[string]string{}) {
 			// when the field is a map[string]string
 			result[mapTag] = field.Interface()
+
+			// when the field is []???(slice)
+		} else if field.Kind() == reflect.Slice {
+			if fieldType.Type.Elem().Kind() == reflect.Struct {
+				// []struct ===> []any{map[string]any{}}
+				sliceValue := field
+				var anySlice []any
+				for i := 0; i < sliceValue.Len(); i++ {
+					structElem := sliceValue.Index(i)
+					structMap, err := StructToMapByTags(structElem.Interface())
+					if err != nil {
+						return nil, err
+					}
+					anySlice = append(anySlice, structMap)
+				}
+				result[mapTag] = anySlice
+			} else {
+				// other slice types (string, etc.)
+				result[mapTag] = field.Interface()
+			}
 
 		} else {
 			// when the normal field

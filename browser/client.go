@@ -120,10 +120,10 @@ func NewChromeDPAction() *ChromeDPAction {
 }
 
 type Req struct {
-	Actions       []*ChromeDPAction
-	Headless      bool `map:"headless"`
-	WindowW       int  `map:"window_w"`
-	WindowH       int  `map:"window_h"`
+	Actions       []*ChromeDPAction `map:"actions"`
+	Headless      bool              `map:"headless"`
+	WindowW       int               `map:"window_w"`
+	WindowH       int               `map:"window_h"`
 	Timeout       time.Duration
 	cb            *Callback
 	browserRunner BrowserRunner
@@ -160,45 +160,23 @@ func (req *Req) parseData(data map[string]string, opts []Option) error {
 	}
 	req.cb = cb
 
-	actions, exists := unflattened["actions"]
-	if !exists || actions == "" {
+	// Validate actions existence
+	if _, exists := unflattened["actions"]; !exists {
 		return fmt.Errorf("actions parameter is required")
 	}
-	if sl, ok := actions.([]interface{}); ok {
-		for _, cdpa := range sl {
-			if ma, ok := cdpa.(map[string]any); ok {
-				a := NewChromeDPAction()
-				err := probe.MapToStructByTags(ma, a)
-				if err != nil {
-					return fmt.Errorf("MapToStructByTags failed: %w", err)
-				}
-				req.Actions = append(req.Actions, a)
-			}
-		}
+
+	// Use MapToStructByTags to parse all fields including actions
+	err := probe.MapToStructByTags(unflattened, req)
+	if err != nil {
+		return fmt.Errorf("MapToStructByTags failed: %w", err)
 	}
 
-	if headless, exists := unflattened["headless"]; exists {
-		if bo, ok := headless.(bool); ok {
-			req.Headless = bo
-		}
-	}
-
+	// Handle timeout separately as it requires special parsing
 	if timeout, exists := unflattened["timeout"]; exists {
 		if st, ok := timeout.(string); ok {
 			if parsed, err := time.ParseDuration(st); err == nil {
 				req.Timeout = parsed
 			}
-		}
-	}
-
-	if ww, exists := unflattened["window_w"]; exists {
-		if in, ok := ww.(int); ok {
-			req.WindowW = in
-		}
-	}
-	if wh, exists := unflattened["window_h"]; exists {
-		if in, ok := wh.(int); ok {
-			req.WindowH = in
 		}
 	}
 
