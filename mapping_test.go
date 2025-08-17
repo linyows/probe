@@ -197,29 +197,29 @@ func TestMergeMaps(t *testing.T) {
 
 func TestStructToMapByTags(t *testing.T) {
 	input := TestStruct{
-		String:            "test",
-		Number:            42,
-		SliceString:       []string{"a", "b", "c"},
-		SliceAnyString:    []string{},
-		SliceStruct:       []TestEmbedStruct{{Name: "foo"}, {Name: "bar"}},
-		Bool:              true,
-		Bytes:             []byte("bytes"),
-		Required:          "required",
-		MapStrStr:         map[string]string{"key": "value"},
-		EmbedStruct:       TestEmbedStruct{Name: "embedded"},
+		String:         "test",
+		Number:         42,
+		SliceString:    []string{"a", "b", "c"},
+		SliceAnyString: []string{},
+		SliceStruct:    []TestEmbedStruct{{Name: "foo"}, {Name: "bar"}},
+		Bool:           true,
+		Bytes:          []byte("bytes"),
+		Required:       "required",
+		MapStrStr:      map[string]string{"key": "value"},
+		EmbedStruct:    TestEmbedStruct{Name: "embedded"},
 	}
 
 	expected := map[string]any{
-		"string":            "test",
-		"number":            42,
-		"slice_string":      []string{"a", "b", "c"},
-		"slice_any_string":  []string{},
-		"slice_struct":      []any{map[string]any{"name": "foo"}, map[string]any{"name": "bar"}},
-		"bool":              true,
-		"bytes":             "bytes",
-		"required":          "required",
-		"map_str_str":       map[string]string{"key": "value"},
-		"embed_struct":      map[string]any{"name": "embedded"},
+		"string":           "test",
+		"number":           42,
+		"slice_string":     []string{"a", "b", "c"},
+		"slice_any_string": []string{},
+		"slice_struct":     []any{map[string]any{"name": "foo"}, map[string]any{"name": "bar"}},
+		"bool":             true,
+		"bytes":            "bytes",
+		"required":         "required",
+		"map_str_str":      map[string]string{"key": "value"},
+		"embed_struct":     map[string]any{"name": "embedded"},
 	}
 
 	result, err := StructToMapByTags(input)

@@ -78,11 +78,11 @@ func TestRequest_Validation(t *testing.T) {
 			mockRunner.SetRunFunc(func(ctx context.Context, actions ...chromedp.Action) error {
 				return fmt.Errorf("mock error")
 			})
-			
+
 			// Create req and set mock runner
 			req := NewReq()
 			req.browserRunner = mockRunner
-			
+
 			// Parse data
 			err := req.parseData(tc.data, nil)
 			if err != nil {
@@ -92,7 +92,7 @@ func TestRequest_Validation(t *testing.T) {
 				}
 				return
 			}
-			
+
 			// If parsing succeeded, try to build action tasks (this should fail for invalid actions)
 			_, err = req.buildActionTasks()
 			if err != nil {
@@ -101,7 +101,7 @@ func TestRequest_Validation(t *testing.T) {
 				}
 				return
 			}
-			
+
 			// If we get here, the test should have failed but didn't
 			t.Errorf("Expected error for %s, but got none", tc.name)
 		})

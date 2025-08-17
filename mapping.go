@@ -220,12 +220,12 @@ func MapToStructByTags(params map[string]any, dest any) error {
 								// []Struct: create new struct
 								p = reflect.New(elemType)
 							}
-							
+
 							err := MapToStructByTags(nestedParams, p.Interface())
 							if err != nil {
 								return err
 							}
-							
+
 							if elemType.Kind() == reflect.Ptr {
 								// []any{map[string]any{}} ===> []*Struct
 								field.Set(reflect.Append(field, p))
