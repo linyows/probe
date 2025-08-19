@@ -1223,3 +1223,64 @@ func TestStep_getEchoOutput_Error(t *testing.T) {
 		}
 	}
 }
+
+func TestStepContext_RepeatIndex(t *testing.T) {
+	tests := []struct {
+		name        string
+		repeatIndex int
+		expression  string
+		expected    string
+	}{
+		{
+			name:        "repeat_index in echo",
+			repeatIndex: 3,
+			expression:  "Repeat: {{repeat_index}}",
+			expected:    "Repeat: 3",
+		},
+		{
+			name:        "repeat_index in test",
+			repeatIndex: 5,
+			expression:  "repeat_index == 5",
+			expected:    "true",
+		},
+		{
+			name:        "repeat_index arithmetic",
+			repeatIndex: 2,
+			expression:  "{{repeat_index + 1}}",
+			expected:    "3",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := StepContext{
+				RepeatIndex: tt.repeatIndex,
+			}
+
+			expr := &Expr{}
+			var result string
+			var err error
+
+			if strings.Contains(tt.expression, "{{") {
+				// Template expression
+				result, err = expr.EvalTemplate(tt.expression, ctx)
+			} else {
+				// Boolean/arithmetic expression
+				output, evalErr := expr.Eval(tt.expression, ctx)
+				err = evalErr
+				if err == nil {
+					result = fmt.Sprintf("%v", output)
+				}
+			}
+
+			if err != nil {
+				t.Errorf("Expression evaluation failed: %v", err)
+				return
+			}
+
+			if result != tt.expected {
+				t.Errorf("Expected %q, got %q", tt.expected, result)
+			}
+		})
+	}
+}
