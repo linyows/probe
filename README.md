@@ -51,7 +51,7 @@ Features
 --------
 
 - **Simple YAML Syntax**: Easy-to-read workflow definitions
-- **Plugin Architecture**: Built-in HTTP, Database, Browser, Shell, SSH, SMTP, and Hello actions with extensibility
+- **Plugin Architecture**: Built-in HTTP, Database, Browser, Shell, SSH, SMTP, IMAP, and Hello actions with extensibility
 - **Job Dependencies**: Control execution order with `needs`
 - **Step Outputs**: Share data between steps and jobs using `outputs`
 - **Repetition**: Repeat jobs with configurable intervals
@@ -398,6 +398,64 @@ Supported actions:
     known_hosts: "~/.ssh/known_hosts"
   test: res.code == 0 && !contains(res.stderr, "error")
 ```
+
+### IMAP Action
+```yaml
+- name: Email Operations
+  uses: imap
+  with:
+    host: "imap.example.com"
+    port: 993
+    username: "user@example.com"
+    password: "password"
+    tls: true
+    timeout: 30s
+    strict_host_check: true
+    insecure_skip_tls: false
+    commands:
+    - name: "select"
+      mailbox: "INBOX"
+    - name: "search"
+      criteria:
+        since: "today"
+        flags: ["unseen"]
+    - name: "fetch"
+      sequence: "*"
+      dataitem: "ALL"
+  test: res.code == 0 && res.data.search.count > 0
+```
+
+Supported IMAP commands:
+- **select**: Select a mailbox for read-write operations
+- **examine**: Select a mailbox for read-only operations  
+- **search**: Search messages using criteria
+- **uid search**: Search using UID instead of sequence numbers
+- **list**: List available mailboxes
+- **fetch**: Fetch message data
+- **uid fetch**: Fetch using UID instead of sequence numbers
+- **store**: Store message flags (basic implementation)
+- **uid store**: Store using UID (basic implementation)
+- **copy**: Copy messages to another mailbox (basic implementation)
+- **uid copy**: Copy using UID (basic implementation)
+- **create**: Create a new mailbox
+- **delete**: Delete a mailbox
+- **rename**: Rename a mailbox
+- **subscribe**: Subscribe to a mailbox
+- **unsubscribe**: Unsubscribe from a mailbox
+- **noop**: No operation (keepalive)
+
+Search criteria support:
+- **seq_nums**: Sequence number ranges (e.g., "1:10", "*")
+- **uids**: UID ranges for UID search commands
+- **since**: Messages received since date ("today", "yesterday", "2024-01-01", "1 hour ago")
+- **before**: Messages received before date
+- **sent_since**: Messages sent since date
+- **sent_before**: Messages sent before date
+- **headers**: Header field matches (e.g., {"from": "sender@example.com"})
+- **bodies**: Body text contains
+- **texts**: Text (headers + body) contains
+- **flags**: Message flags (e.g., ["seen", "answered"])
+- **not_flags**: Messages without these flags
 
 ### Hello Action (Testing)
 ```yaml
