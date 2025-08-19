@@ -571,7 +571,7 @@ func TestPrinter_PrintMapData(t *testing.T) {
 			name: "nested map",
 			data: map[string]any{
 				"outer": map[string]any{
-					"inner": "nested_value",
+					"inner":  "nested_value",
 					"number": 123,
 				},
 			},
@@ -1413,5 +1413,3 @@ func TestPrinter_PrintRequestResponse(t *testing.T) {
 		})
 	}
 }
-
-

@@ -743,7 +743,7 @@ func TestParseHeaderData(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := r.parseHeaderData(tt.headerData)
-			
+
 			// Check if all expected headers are present
 			for key, expectedValue := range tt.expected {
 				if actualValue, exists := result[key]; !exists {
@@ -752,7 +752,7 @@ func TestParseHeaderData(t *testing.T) {
 					t.Errorf("Header %s: expected %s, got %s", key, expectedValue, actualValue)
 				}
 			}
-			
+
 			// Check if there are any unexpected headers
 			for key := range result {
 				if _, expected := tt.expected[key]; !expected {
