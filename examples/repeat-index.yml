@@ -1,0 +1,20 @@
+name: "Test repeat_index functionality"
+jobs:
+  - name: "Test Job with Repeat Index"
+    id: test-job
+    repeat:
+      count: 3
+      interval: 100ms
+    steps:
+      - name: "Test repeat_index in echo"
+        id: echo-step
+        uses: hello
+        echo: "Current iteration: {{repeat_index}}"
+      - name: "Test repeat_index in test condition"
+        id: test-step
+        uses: hello
+        test: "repeat_index >= 1"
+      - name: "Test repeat_index calculation"
+        id: calc-step
+        uses: hello
+        echo: "Calculated value: {{repeat_index * 10}}"
