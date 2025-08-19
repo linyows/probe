@@ -10,7 +10,7 @@ jobs:
       uses: http
       with:
         url: http://localhost:8000
-        header:
+        headers:
           content-type: application/json
         post: /post
         body:
