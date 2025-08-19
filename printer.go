@@ -507,7 +507,7 @@ func (p *Printer) generateEchoOutput(content string, err error) string {
 	indentedLines := make([]string, len(lines))
 
 	for i, line := range lines {
-		indentedLines[i] = indent + fmt.Sprintf("%s", line)
+		indentedLines[i] = indent + line
 	}
 
 	return strings.Join(indentedLines, "\n") + "\n"

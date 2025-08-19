@@ -599,11 +599,11 @@ func TestExecutor_ConcurrencyEdgeCases(t *testing.T) {
 }
 
 func TestEnv(t *testing.T) {
-	os.Setenv("HOST", "http://localhost")
-	os.Setenv("TOKEN", "secrets")
+	_ = os.Setenv("HOST", "http://localhost")
+	_ = os.Setenv("TOKEN", "secrets")
 	defer func() {
-		os.Unsetenv("HOST")
-		os.Unsetenv("TOKEN")
+		_ = os.Unsetenv("HOST")
+		_ = os.Unsetenv("TOKEN")
 	}()
 
 	expected := map[string]string{

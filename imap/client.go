@@ -252,9 +252,7 @@ func (r *Req) runImap() (*Res, error) {
 		}
 	}
 	defer func() {
-		if err := r.cl.Close(); err != nil {
-			// Log error but don't interrupt execution
-		}
+		_ = r.cl.Close()
 	}()
 
 	if err := r.cl.Login(r.Username, r.Password).Wait(); err != nil {
