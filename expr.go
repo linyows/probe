@@ -39,7 +39,6 @@ func (e *Expr) Options(env any) []ex.Option {
 		ex.AllowUndefinedVariables(),
 
 		// Security: Disable dangerous built-in functions
-		ex.DisableBuiltin("len"),
 		ex.DisableBuiltin("all"),
 		ex.DisableBuiltin("any"),
 		ex.DisableBuiltin("one"),

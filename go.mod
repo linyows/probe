@@ -20,6 +20,7 @@ require (
 	github.com/lib/pq v1.10.9
 	github.com/mattn/go-isatty v0.0.20
 	github.com/mattn/go-sqlite3 v1.14.30
+	github.com/stretchr/testify v1.7.0
 	golang.org/x/crypto v0.26.0
 	google.golang.org/grpc v1.67.0
 	google.golang.org/protobuf v1.34.2
@@ -30,6 +31,7 @@ require (
 	filippo.io/edwards25519 v1.1.0 // indirect
 	github.com/chromedp/cdproto v0.0.0-20250724212937-08a3db8b4327 // indirect
 	github.com/chromedp/sysutil v1.1.0 // indirect
+	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/emersion/go-sasl v0.0.0-20231106173351-e73c9f7bad43 // indirect
 	github.com/go-json-experiment/json v0.0.0-20250725192818-e39067aee2d2 // indirect
 	github.com/go-playground/locales v0.13.0 // indirect
@@ -43,7 +45,7 @@ require (
 	github.com/mattn/go-colorable v0.1.13 // indirect
 	github.com/mitchellh/go-testing-interface v0.0.0-20171004221916-a61a99592b77 // indirect
 	github.com/oklog/run v1.0.0 // indirect
-	github.com/stretchr/testify v1.7.0 // indirect
+	github.com/pmezard/go-difflib v1.0.0 // indirect
 	golang.org/x/net v0.28.0 // indirect
 	golang.org/x/sys v0.34.0 // indirect
 	golang.org/x/term v0.23.0 // indirect

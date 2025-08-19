@@ -16,10 +16,27 @@ type TestStruct struct {
 	Required       string            `map:"required" validate:"required"`
 	MapStrStr      map[string]string `map:"map_str_str"`
 	EmbedStruct    TestEmbedStruct   `map:"embed_struct"`
+	Nested1        TestNested1       `map:"nested1"`
 }
 
 type TestEmbedStruct struct {
 	Name string `map:"name"`
+}
+
+type TestNested1 struct {
+	Nested2 TestNested2 `map:"nested2"`
+}
+
+type TestNested2 struct {
+	Nested3 TestNested3 `map:"nested3"`
+}
+
+type TestNested3 struct {
+	Nested4 TestNested4 `map:"nested4"`
+}
+
+type TestNested4 struct {
+	Nested5 []TestEmbedStruct `map:"nested5"`
 }
 
 func TestMapToStructByTags_Types(t *testing.T) {
@@ -207,6 +224,15 @@ func TestStructToMapByTags(t *testing.T) {
 		Required:       "required",
 		MapStrStr:      map[string]string{"key": "value"},
 		EmbedStruct:    TestEmbedStruct{Name: "embedded"},
+		Nested1: TestNested1{
+			Nested2: TestNested2{
+				Nested3: TestNested3{
+					Nested4: TestNested4{
+						Nested5: []TestEmbedStruct{{Name: "aaa"}, {Name: "bbb"}},
+					},
+				},
+			},
+		},
 	}
 
 	expected := map[string]any{
@@ -220,6 +246,18 @@ func TestStructToMapByTags(t *testing.T) {
 		"required":         "required",
 		"map_str_str":      map[string]string{"key": "value"},
 		"embed_struct":     map[string]any{"name": "embedded"},
+		"nested1": map[string]any{
+			"nested2": map[string]any{
+				"nested3": map[string]any{
+					"nested4": map[string]any{
+						"nested5": []any{
+							map[string]any{"name": "aaa"},
+							map[string]any{"name": "bbb"},
+						},
+					},
+				},
+			},
+		},
 	}
 
 	result, err := StructToMapByTags(input)
