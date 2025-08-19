@@ -578,6 +578,30 @@ func TestParseFetchItemsBodySection(t *testing.T) {
 						t.Errorf("Expected HeaderFields[%d] to be %s, got %s", i, field, opts.BodySection[0].HeaderFields[i])
 					}
 				}
+				// Verify that Specifier is set to Header for HEADER.FIELDS
+				if opts.BodySection[0].Specifier != imap.PartSpecifierHeader {
+					t.Error("Expected Specifier to be PartSpecifierHeader for HEADER.FIELDS")
+				}
+			},
+		},
+		{
+			name:     "BODY[HEADER.FIELDS (FROM)] - single header field",
+			dataitem: "BODY[HEADER.FIELDS (FROM)]",
+			wantErr:  false,
+			validate: func(t *testing.T, opts *imap.FetchOptions) {
+				if len(opts.BodySection) == 0 {
+					t.Error("Expected BodySection to be set")
+				}
+				if len(opts.BodySection[0].HeaderFields) != 1 {
+					t.Errorf("Expected HeaderFields length to be 1, got %d", len(opts.BodySection[0].HeaderFields))
+				}
+				if opts.BodySection[0].HeaderFields[0] != "FROM" {
+					t.Errorf("Expected HeaderFields[0] to be FROM, got %s", opts.BodySection[0].HeaderFields[0])
+				}
+				// Verify that Specifier is set to Header for HEADER.FIELDS
+				if opts.BodySection[0].Specifier != imap.PartSpecifierHeader {
+					t.Error("Expected Specifier to be PartSpecifierHeader for HEADER.FIELDS")
+				}
 			},
 		},
 		{
@@ -667,6 +691,73 @@ func TestParseBodySection(t *testing.T) {
 			}
 			if !tt.wantErr && tt.validate != nil {
 				tt.validate(t, section)
+			}
+		})
+	}
+}
+
+func TestParseHeaderData(t *testing.T) {
+	tests := []struct {
+		name       string
+		headerData string
+		expected   map[string]string
+	}{
+		{
+			name:       "Single header",
+			headerData: "From: test@example.com",
+			expected: map[string]string{
+				"from": "test@example.com",
+			},
+		},
+		{
+			name:       "Multiple headers",
+			headerData: "From: test@example.com\nTo: recipient@example.com\nSubject: Test Subject",
+			expected: map[string]string{
+				"from":    "test@example.com",
+				"to":      "recipient@example.com",
+				"subject": "Test Subject",
+			},
+		},
+		{
+			name:       "Header with continuation line",
+			headerData: "Subject: This is a very long subject line\r\n that continues on the next line",
+			expected: map[string]string{
+				"subject": "This is a very long subject line that continues on the next line",
+			},
+		},
+		{
+			name:       "HEADER.FIELDS response format (FROM only)",
+			headerData: "From: test@example.com\r\n\r\n",
+			expected: map[string]string{
+				"from": "test@example.com",
+			},
+		},
+		{
+			name:       "Empty header data",
+			headerData: "",
+			expected:   map[string]string{},
+		},
+	}
+
+	r := NewReq()
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := r.parseHeaderData(tt.headerData)
+			
+			// Check if all expected headers are present
+			for key, expectedValue := range tt.expected {
+				if actualValue, exists := result[key]; !exists {
+					t.Errorf("Expected header %s not found", key)
+				} else if actualValue != expectedValue {
+					t.Errorf("Header %s: expected %s, got %s", key, expectedValue, actualValue)
+				}
+			}
+			
+			// Check if there are any unexpected headers
+			for key := range result {
+				if _, expected := tt.expected[key]; !expected {
+					t.Errorf("Unexpected header %s found: %s", key, result[key])
+				}
 			}
 		})
 	}
