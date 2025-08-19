@@ -33,13 +33,14 @@ func (e ExitStatus) String() string {
 
 // StepContext provides context data for step expression evaluation
 type StepContext struct {
-	Vars    map[string]any `expr:"vars"`
-	Res     map[string]any `expr:"res"`
-	Req     map[string]any `expr:"req"`
-	RT      ResponseTime   `expr:"rt"`
-	Report  string         `expr:"report"`
-	Outputs map[string]any `expr:"outputs"`
-	Status  int            `expr:"status"`
+	Vars        map[string]any `expr:"vars"`
+	Res         map[string]any `expr:"res"`
+	Req         map[string]any `expr:"req"`
+	RT          ResponseTime   `expr:"rt"`
+	Report      string         `expr:"report"`
+	Outputs     map[string]any `expr:"outputs"`
+	Status      int            `expr:"status"`
+	RepeatIndex int            `expr:"repeat_index"`
 }
 
 // JobContext provides context data for job execution

@@ -66,13 +66,13 @@ func (i Interval) MarshalYAML() (interface{}, error) {
 
 // Repeat defines the repeat configuration for jobs
 type Repeat struct {
-	Count    int      `yaml:"count" validate:"required,gte=0,lt=100"`
+	Count    int      `yaml:"count" validate:"required,gte=0,lt=10000"`
 	Interval Interval `yaml:"interval"`
 }
 
 // StepRetry defines the retry configuration for steps until success (status 0)
 type StepRetry struct {
-	MaxAttempts  int      `yaml:"max_attempts" validate:"required,gte=1,lte=100"`
+	MaxAttempts  int      `yaml:"max_attempts" validate:"required,gte=1,lte=10000"`
 	Interval     Interval `yaml:"interval"`
 	InitialDelay Interval `yaml:"initial_delay,omitempty"`
 }
