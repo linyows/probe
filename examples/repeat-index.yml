@@ -1,20 +1,36 @@
-name: "Test repeat_index functionality"
+name: Repeat job example
 jobs:
-  - name: "Test Job with Repeat Index"
-    id: test-job
-    repeat:
-      count: 3
-      interval: 100ms
-    steps:
-      - name: "Test repeat_index in echo"
-        id: echo-step
-        uses: hello
-        echo: "Current iteration: {{repeat_index}}"
-      - name: "Test repeat_index in test condition"
-        id: test-step
-        uses: hello
-        test: "repeat_index >= 1"
-      - name: "Test repeat_index calculation"
-        id: calc-step
-        uses: hello
-        echo: "Calculated value: {{repeat_index * 10}}"
+- name: Job with repeat index
+  repeat:
+    count: 3
+    interval: 2s
+
+  steps:
+    - name: Test repeat_index in echo - {{vars.name}}
+      uses: http
+      with:
+        url: http://localhost:8000
+        headers:
+          content-type: application/json
+        post: /post
+        body:
+          name: "{{vars.name}}"
+          index: "{{repeat_index}}"
+      echo: |
+        Current iteration: {{repeat_index}}
+      wait: 500ms
+      vars:
+        name: repeat-{{repeat_index}}
+
+    - name: Test repeat_index in test condition - {{vars.name}}
+      uses: hello
+      test: "repeat_index >= 1"
+      wait: 500ms
+      vars:
+        name: Hello
+
+    - name: Test repeat_index calculation - {{repeat_index}}
+      uses: hello
+      echo: |
+        Calculated value: {{repeat_index * 10}}
+      wait: 500ms

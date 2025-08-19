@@ -57,14 +57,14 @@ func (st *Step) prepare(jCtx *JobContext) (string, bool) {
 		st.Name = "Unknown Step"
 	}
 
-	jCtx.Printer.AddSpinnerSuffix(st.Name)
-
 	// Evaluate step name
 	name, err := st.Expr.EvalTemplate(st.Name, st.ctx)
 	if err != nil {
 		jCtx.Printer.PrintError("step name evaluation error: %v", err)
 		return "", false
 	}
+
+	jCtx.Printer.AddSpinnerSuffix(name)
 
 	// Check if step should be skipped BEFORE waiting
 	if st.shouldSkip(jCtx) {
@@ -377,8 +377,9 @@ func (st *Step) SetCtx(j JobContext, override map[string]any) {
 
 	// Create context for step vars evaluation
 	evalCtx := StepContext{
-		Vars:    j.Vars,
-		Outputs: outputs,
+		Vars:        j.Vars,
+		Outputs:     outputs,
+		RepeatIndex: j.RepeatCurrent,
 	}
 
 	// Evaluate step-level vars with access to outputs
