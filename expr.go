@@ -238,7 +238,7 @@ func (e *Expr) isSafeEnvKey(key string) bool {
 	}
 
 	// Allow basic result variables
-	safeKeys := []string{"res", "result", "data", "response", "body", "status", "headers", "host", "name", "service", "authorization", "url"}
+	safeKeys := []string{"res", "result", "data", "response", "body", "status", "headers", "host", "name", "service", "authorization", "url", "repeat_index"}
 	for _, safe := range safeKeys {
 		if strings.ToLower(key) == safe {
 			return true

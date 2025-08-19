@@ -409,8 +409,9 @@ func (st *Step) SetCtx(j JobContext, override map[string]any) {
 	}
 
 	st.ctx = StepContext{
-		Vars:    vers,
-		Outputs: outputs,
+		Vars:        vers,
+		Outputs:     outputs,
+		RepeatIndex: j.RepeatCurrent,
 	}
 }
 
