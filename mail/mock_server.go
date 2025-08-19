@@ -54,7 +54,7 @@ func (s *MockServer) Serve() error {
 	if err != nil {
 		return err
 	}
-	defer listener.Close()
+	defer func() { _ = listener.Close() }()
 
 	s.Log.Printf("The mocking SMTP server is listening on %s\n", s.Addr)
 
@@ -71,7 +71,7 @@ func (s *MockServer) Serve() error {
 }
 
 func (s *MockServerSession) handle(conn net.Conn) {
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	err := s.setOptimisticID()
 	if err != nil {
@@ -83,7 +83,7 @@ func (s *MockServerSession) handle(conn net.Conn) {
 	s.writer = bufio.NewWriter(conn)
 
 	s.writeStringWithLog(fmt.Sprintf("220 %s ESMTP Server", s.server.Name))
-	s.writer.Flush()
+	_ = s.writer.Flush()
 	s.nowDataInProgress = false
 
 	for {
@@ -107,7 +107,7 @@ func (s *MockServerSession) handle(conn net.Conn) {
 			s.handleCommand(cmd)
 		}
 
-		s.writer.Flush()
+		_ = s.writer.Flush()
 	}
 }
 
@@ -145,7 +145,7 @@ func (s *MockServerSession) handleCommand(cmd string) {
 		s.writeStringWithLog("354 End data with <CR><LF>.<CR><LF>")
 	case "QUIT":
 		s.writeStringWithLog("221 2.0.0 Bye")
-		s.writer.Flush()
+		_ = s.writer.Flush()
 		return
 	case ".":
 		s.nowDataInProgress = false
@@ -158,7 +158,7 @@ func (s *MockServerSession) handleCommand(cmd string) {
 		s.writeStringWithLog("502 5.5.1 VRFY command is disabled")
 	case "STARTTLS":
 		s.writeStringWithLog("220 2.0.0 Ready to start TLS")
-		s.writer.Flush()
+		_ = s.writer.Flush()
 	default:
 		if !s.nowDataInProgress {
 			s.writeStringWithLog("500 Command not recognized")
@@ -177,7 +177,7 @@ func (s *MockServerSession) setOptimisticID() error {
 
 //nolint:unused // Reserved for future TLS support
 func (s *MockServerSession) startTLS(conn net.Conn) {
-	cert, err := tls.LoadX509KeyPair(s.server.TLS.CertPath, s.server.TLS.KeyPath)
+	cert, err := tls.LoadX509KeyPair(s.server.CertPath, s.server.KeyPath)
 	if err != nil {
 		s.server.Log.Printf("%s %s Error loading server certificate: %#v", s.id, inserver, err)
 		return

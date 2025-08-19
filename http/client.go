@@ -117,7 +117,7 @@ func (r *Req) Do() (*Result, error) {
 	if err != nil {
 		return result, err
 	}
-	defer res.Body.Close()
+	defer func() { _ = res.Body.Close() }()
 
 	// callback
 	if r.cb != nil && r.cb.after != nil {

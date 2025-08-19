@@ -82,7 +82,7 @@ func (l *Latencies) getDateHeader(p string) (time.Time, error) {
 	if err != nil {
 		return time.Time{}, err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	var date time.Time
 	scanner := bufio.NewScanner(f)
@@ -126,7 +126,7 @@ func (l *Latencies) ParseMail(p string) error {
 	if err != nil {
 		return err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	row := Latency{FilePath: p}
 	var receivedTimes []time.Time
@@ -260,7 +260,7 @@ func ReadFirstBytes(p string, bytes int) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	buf := make([]byte, bytes)
 	n, err := io.ReadFull(f, buf)

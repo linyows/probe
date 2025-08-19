@@ -138,9 +138,9 @@ func isValidStepID(id string) bool {
 
 	// Check each character
 	for _, char := range id {
-		if !((char >= 'a' && char <= 'z') ||
-			(char >= '0' && char <= '9') ||
-			char == '_' || char == '-') {
+		if (char < 'a' || char > 'z') &&
+			(char < '0' || char > '9') &&
+			char != '_' && char != '-' {
 			return false
 		}
 	}

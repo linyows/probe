@@ -547,6 +547,110 @@ func TestPrinter_generateJobStatus_SuccessNotBlue(t *testing.T) {
 	}
 }
 
+// Test PrintMapData with nested structures
+func TestPrinter_PrintMapData(t *testing.T) {
+	color.NoColor = true
+	defer func() { color.NoColor = false }()
+
+	printer := NewPrinter(true, []string{}) // verbose mode to see LogDebug output
+
+	tests := []struct {
+		name     string
+		data     map[string]any
+		expected []string // strings that should appear in the output
+	}{
+		{
+			name: "simple flat map",
+			data: map[string]any{
+				"key1": "value1",
+				"key2": 42,
+			},
+			expected: []string{"key1: value1", "key2: 42"},
+		},
+		{
+			name: "nested map",
+			data: map[string]any{
+				"outer": map[string]any{
+					"inner":  "nested_value",
+					"number": 123,
+				},
+			},
+			expected: []string{"outer:", "inner: nested_value", "number: 123"},
+		},
+		{
+			name: "deeply nested map",
+			data: map[string]any{
+				"level1": map[string]any{
+					"level2": map[string]any{
+						"level3": "deep_value",
+					},
+				},
+			},
+			expected: []string{"level1:", "level2:", "level3: deep_value"},
+		},
+		{
+			name: "map with slice",
+			data: map[string]any{
+				"items": []any{"item1", "item2", "item3"},
+			},
+			expected: []string{"items:", "- item1", "- item2", "- item3"},
+		},
+		{
+			name: "map with nested slice and map",
+			data: map[string]any{
+				"complex": []any{
+					map[string]any{
+						"nested_key": "nested_value",
+					},
+					"simple_item",
+				},
+			},
+			expected: []string{"complex:", "-", "nested_key: nested_value", "- simple_item"},
+		},
+		{
+			name: "empty containers",
+			data: map[string]any{
+				"empty_map":   map[string]any{},
+				"empty_slice": []any{},
+			},
+			expected: []string{"empty_map: {}", "empty_slice: []"},
+		},
+		{
+			name: "string map and slice",
+			data: map[string]any{
+				"string_map": map[string]string{
+					"str_key": "str_value",
+				},
+				"string_slice": []string{"str1", "str2"},
+			},
+			expected: []string{"string_map:", "str_key: str_value", "string_slice:", "- str1", "- str2"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Capture output by redirecting to a buffer
+			var captured strings.Builder
+			originalOut := printer.errWriter
+			printer.errWriter = &captured
+
+			printer.PrintMapData(tt.data)
+
+			// Restore original writer
+			printer.errWriter = originalOut
+
+			output := captured.String()
+
+			// Check that all expected strings are present in the output
+			for _, expected := range tt.expected {
+				if !strings.Contains(output, expected) {
+					t.Errorf("PrintMapData() output should contain %q, got:\n%s", expected, output)
+				}
+			}
+		})
+	}
+}
+
 // Test that skipped jobs have gray formatting for entire line
 func TestPrinter_generateJobStatus_SkippedFormatting(t *testing.T) {
 	// Disable color output for consistent testing
@@ -1304,59 +1408,6 @@ func TestPrinter_PrintRequestResponse(t *testing.T) {
 
 			// This method prints debug output to buffer, we mainly test it doesn't panic
 			printer.PrintRequestResponse(tt.stepIdx, tt.stepName, tt.req, tt.res, tt.rt)
-
-			// Test passes if no panic occurs
-		})
-	}
-}
-
-func TestPrinter_PrintMapData(t *testing.T) {
-	tests := []struct {
-		name    string
-		data    map[string]any
-		verbose bool
-	}{
-		{
-			name: "simple map data",
-			data: map[string]any{
-				"key1": "value1",
-				"key2": 123,
-				"key3": true,
-			},
-			verbose: true,
-		},
-		{
-			name: "nested map data",
-			data: map[string]any{
-				"simple": "value",
-				"nested": map[string]any{
-					"inner1": "value1",
-					"inner2": 456,
-				},
-			},
-			verbose: true,
-		},
-		{
-			name:    "empty map",
-			data:    map[string]any{},
-			verbose: true,
-		},
-		{
-			name: "non-verbose mode",
-			data: map[string]any{
-				"key": "value",
-			},
-			verbose: false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			printer := newBufferPrinter()
-			printer.verbose = tt.verbose
-
-			// This method prints debug output to buffer, we mainly test it doesn't panic
-			printer.PrintMapData(tt.data)
 
 			// Test passes if no panic occurs
 		})

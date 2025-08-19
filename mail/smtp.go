@@ -37,7 +37,7 @@ func NewClient(conn net.Conn, host string) (*Client, error) {
 	text := textproto.NewConn(conn)
 	_, _, err := text.ReadResponse(220)
 	if err != nil {
-		text.Close()
+		_ = text.Close()
 		return nil, err
 	}
 	c := &Client{Text: text, conn: conn, serverName: host, localName: "localhost"}
@@ -221,7 +221,7 @@ type dataCloser struct {
 }
 
 func (d *dataCloser) Close() error {
-	d.WriteCloser.Close()
+	_ = d.WriteCloser.Close()
 	_, _, err := d.c.Text.ReadResponse(250)
 	return err
 }

@@ -61,7 +61,7 @@ func (i Interval) MarshalYAML() (interface{}, error) {
 		return int(i.Duration / time.Second), nil
 	}
 	// Otherwise, return as duration string
-	return i.Duration.String(), nil
+	return i.String(), nil
 }
 
 // Repeat defines the repeat configuration for jobs

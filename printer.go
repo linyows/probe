@@ -405,12 +405,16 @@ func (p *Printer) generateJobResultsFromStepResults(stepResults []StepResult) st
 			if stepResult.Report != "" {
 				a5space := "     "
 				re := strings.ReplaceAll(stepResult.Report, "\n", "\n"+a5space)
-				re = strings.TrimRight(re, " \t")
+				re = strings.TrimRight(re, " \n\t\r")
 				output.WriteString(a5space + re)
 			}
 
 			if stepResult.EchoOutput != "" {
-				output.WriteString(stepResult.EchoOutput)
+				// NOTE:
+				// If you apply an ANSI reset code to a string that contains line breaks, the Trim methods will no longer work as expected.
+				// Therefore, remove the trailing line breaks first, then apply the color settings and finally add the line break.
+				echo := strings.TrimRight(stepResult.EchoOutput, " \n\t\r")
+				output.WriteString(colorInfo().Sprint(echo) + "\n")
 			}
 		}
 	}
@@ -499,11 +503,11 @@ func (p *Printer) generateEchoOutput(content string, err error) string {
 
 	// Add indent to all lines, including after user-specified newlines
 	indent := "       "
-	lines := strings.Split(content, "\n")
+	lines := strings.Split(strings.TrimSpace(content), "\n")
 	indentedLines := make([]string, len(lines))
 
 	for i, line := range lines {
-		indentedLines[i] = indent + colorInfo().Sprintf("%s", line)
+		indentedLines[i] = indent + line
 	}
 
 	return strings.Join(indentedLines, "\n") + "\n"
@@ -570,19 +574,93 @@ func (p *Printer) PrintRequestResponse(stepIdx int, stepName string, req, res ma
 
 // PrintMapData prints map data with proper formatting for nested structures
 func (p *Printer) PrintMapData(data map[string]any) {
+	p.printMapDataRecursive(data, 1)
+}
+
+// printMapDataRecursive recursively prints map data with YAML-like indentation
+func (p *Printer) printMapDataRecursive(data map[string]any, indentLevel int) {
+	indent := strings.Repeat("  ", indentLevel)
+
 	for k, v := range data {
-		if nested, ok := v.(map[string]any); ok {
-			p.printNestedMap(k, nested)
-		} else {
-			p.LogDebug("  %s: %v", k, v)
+		switch val := v.(type) {
+		case map[string]any:
+			if len(val) == 0 {
+				p.LogDebug("%s%s: {}", indent, k)
+			} else {
+				p.LogDebug("%s%s:", indent, k)
+				p.printMapDataRecursive(val, indentLevel+1)
+			}
+		case []any:
+			if len(val) == 0 {
+				p.LogDebug("%s%s: []", indent, k)
+			} else {
+				p.LogDebug("%s%s:", indent, k)
+				p.printSliceRecursive(val, indentLevel+1)
+			}
+		case map[string]string:
+			if len(val) == 0 {
+				p.LogDebug("%s%s: {}", indent, k)
+			} else {
+				p.LogDebug("%s%s:", indent, k)
+				for kk, vv := range val {
+					p.LogDebug("%s  %s: %v", indent, kk, vv)
+				}
+			}
+		case []string:
+			if len(val) == 0 {
+				p.LogDebug("%s%s: []", indent, k)
+			} else {
+				p.LogDebug("%s%s:", indent, k)
+				for _, item := range val {
+					p.LogDebug("%s- %v", indent+"  ", item)
+				}
+			}
+		default:
+			p.LogDebug("%s%s: %v", indent, k, v)
 		}
 	}
 }
 
-// printNestedMap prints nested map data with indentation
-func (p *Printer) printNestedMap(key string, nested map[string]any) {
-	p.LogDebug("  %s:", key)
-	for kk, vv := range nested {
-		p.LogDebug("    %s: %v", kk, vv)
+// printSliceRecursive recursively prints slice data with YAML-like indentation
+func (p *Printer) printSliceRecursive(data []any, indentLevel int) {
+	indent := strings.Repeat("  ", indentLevel)
+
+	for _, v := range data {
+		switch val := v.(type) {
+		case map[string]any:
+			if len(val) == 0 {
+				p.LogDebug("%s- {}", indent)
+			} else {
+				p.LogDebug("%s-", indent)
+				p.printMapDataRecursive(val, indentLevel+1)
+			}
+		case []any:
+			if len(val) == 0 {
+				p.LogDebug("%s- []", indent)
+			} else {
+				p.LogDebug("%s-", indent)
+				p.printSliceRecursive(val, indentLevel+1)
+			}
+		case map[string]string:
+			if len(val) == 0 {
+				p.LogDebug("%s- {}", indent)
+			} else {
+				p.LogDebug("%s-", indent)
+				for kk, vv := range val {
+					p.LogDebug("%s  %s: %v", indent, kk, vv)
+				}
+			}
+		case []string:
+			if len(val) == 0 {
+				p.LogDebug("%s- []", indent)
+			} else {
+				p.LogDebug("%s-", indent)
+				for _, item := range val {
+					p.LogDebug("%s  - %v", indent, item)
+				}
+			}
+		default:
+			p.LogDebug("%s- %v", indent, v)
+		}
 	}
 }

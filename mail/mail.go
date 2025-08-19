@@ -32,7 +32,7 @@ func (m *Mail) Send() error {
 	if err != nil {
 		return fmt.Errorf("tcp dial error: %w", err)
 	}
-	defer c.Close()
+	defer func() { _ = c.Close() }()
 	if err = c.hello(); err != nil {
 		return fmt.Errorf("smtp hello error: %w", err)
 	}

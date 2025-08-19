@@ -58,10 +58,10 @@ func TestGetFQDN(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			if tt.setEnv {
-				os.Setenv("FQDN_DOMAIN", tt.envValue)
-				defer os.Unsetenv("FQDN_DOMAIN")
+				_ = os.Setenv("FQDN_DOMAIN", tt.envValue)
+				defer func() { _ = os.Unsetenv("FQDN_DOMAIN") }()
 			} else {
-				os.Unsetenv("FQDN_DOMAIN")
+				_ = os.Unsetenv("FQDN_DOMAIN")
 			}
 
 			fqdn := getFQDN()
@@ -325,7 +325,7 @@ func TestMail_Send_Success(t *testing.T) {
 				t.Fatalf("failed to create listener: %v", err)
 			}
 			addr := listener.Addr().String()
-			listener.Close()
+			_ = listener.Close()
 
 			mockServer.Addr = addr
 			tt.mail.Addr = addr
@@ -392,7 +392,7 @@ func TestMail_Send_WithAuth(t *testing.T) {
 				t.Fatalf("failed to create listener: %v", err)
 			}
 			addr := listener.Addr().String()
-			listener.Close()
+			_ = listener.Close()
 
 			mockServer.Addr = addr
 
@@ -509,7 +509,7 @@ func TestMail_Send_StartTLS(t *testing.T) {
 				t.Fatalf("failed to create listener: %v", err)
 			}
 			addr := listener.Addr().String()
-			listener.Close()
+			_ = listener.Close()
 
 			mockServer.Addr = addr
 
@@ -577,7 +577,7 @@ func TestMail_Send_StartTLSHook(t *testing.T) {
 		t.Fatalf("failed to create listener: %v", err)
 	}
 	addr := listener.Addr().String()
-	listener.Close()
+	_ = listener.Close()
 
 	mockServer.Addr = addr
 

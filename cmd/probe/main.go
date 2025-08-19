@@ -15,6 +15,7 @@ import (
 	grpcaction "github.com/linyows/probe/actions/grpc"
 	"github.com/linyows/probe/actions/hello"
 	http "github.com/linyows/probe/actions/http"
+	imapaction "github.com/linyows/probe/actions/imap"
 	"github.com/linyows/probe/actions/shell"
 	"github.com/linyows/probe/actions/smtp"
 	sshaction "github.com/linyows/probe/actions/ssh"
@@ -273,6 +274,10 @@ func (c *Cmd) runBuiltinActions(name string) {
 	case "ssh":
 		if !c.mocking {
 			sshaction.Serve()
+		}
+	case "imap":
+		if !c.mocking {
+			imapaction.Serve()
 		}
 
 	default:

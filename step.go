@@ -214,7 +214,7 @@ func (st *Step) processActionResult(actionResult map[string]any, jCtx *JobContex
 
 // finalize handles the final phase: test, echo, output save, and result creation
 func (st *Step) finalize(name string, actionResult map[string]any, jCtx *JobContext) {
-	if jCtx.Config.Verbose {
+	if jCtx.Verbose {
 		jCtx.Printer.PrintRequestResponse(st.Idx, name, st.ctx.Req, st.ctx.Res, st.ctx.RT.Duration)
 	}
 
@@ -562,7 +562,7 @@ func (st *Step) shouldSkip(jCtx *JobContext) bool {
 
 // handleSkip handles the skipped step logic
 func (st *Step) handleSkip(name string, jCtx *JobContext) {
-	if jCtx.Config.Verbose {
+	if jCtx.Verbose {
 		jCtx.Printer.LogDebug("%s", colorWarning().Sprintf("--- Step %d: %s (SKIPPED)", st.Idx, name))
 		jCtx.Printer.LogDebug("Skip condition: %s", st.SkipIf)
 		jCtx.Printer.PrintSeparator()
@@ -681,7 +681,7 @@ func (st *Step) saveOutputs(jCtx *JobContext) {
 		}
 	}
 
-	if jCtx.Config.Verbose {
+	if jCtx.Verbose {
 		jCtx.Printer.LogDebug("Step '%s' outputs saved: %v", st.ID, outputs)
 	}
 }

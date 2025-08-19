@@ -1,0 +1,106 @@
+name: Email Authentication Flow
+description: Retrieve authentication codes and verification links from email
+
+vars:
+  host: "{{MAIL_HOST ?? 'imap.gmail.com'}}"
+  user: "{{MAIL_USER}}"
+  pass: "{{MAIL_PASS}}"
+  port: "{{MAIL_PORT ?? 993}}"
+
+jobs:
+- name: Email Authentication
+  defaults:
+    imap:
+      host: "{{vars.host}}"
+      port: "{{vars.port}}"
+      username: "{{vars.user}}"
+      password: "{{vars.pass}}"
+      tls: true
+  steps:
+  - name: List
+    uses: imap
+    with:
+      tls: true
+      commands:
+      - name: list
+        reference: "INBOX"
+        pattern: "*"
+    test: status == 0
+    echo: |
+      List: {{res.data.list.mailboxes}}
+
+  - name: Select to INBOX
+    uses: imap
+    with:
+      tls: true
+      commands:
+      - name: select
+        mailbox: INBOX
+    test: status == 0
+    echo: |
+      INBOX Count: {{res.data.select.exists}}
+
+  - name: UID Search on INBOX
+    uses: imap
+    with:
+      tls: true
+      commands:
+      - name: select
+        mailbox: INBOX
+      - name: uid search
+        criteria:
+          #before: 2025-01-01
+          flags: [seen]
+          #not_flags: [seen]
+    test: status == 0
+    echo: |
+      Search: {{res.data.search}}
+
+  - name: UID Fetch after UID Search
+    uses: imap
+    with:
+      tls: true
+      commands:
+      - name: select
+        mailbox: INBOX
+      - name: uid search
+        criteria:
+          flags: [seen]
+      - name: uid fetch
+    test: status == 0 && len(res.data.fetch.messages) > 0
+    echo: |
+      Subject: {{res.data.fetch.messages[0].subject}}
+      From: {{res.data.fetch.messages[0].from}}
+      To: {{res.data.fetch.messages[0].to}}
+      Flags: {{res.data.fetch.messages[0].flags}}
+      Size: {{res.data.fetch.messages[0].size}}
+
+  - name: UID Fetch Return-Path Header after UID Search
+    uses: imap
+    with:
+      tls: true
+      commands:
+      - name: select
+        mailbox: INBOX
+      - name: uid search
+        criteria:
+          flags: [seen]
+      - name: uid fetch
+        dataitem: "BODY[HEADER.FIELDS (Return-Path)]"
+    test: status == 0 && len(res.data.fetch.messages) > 0
+    echo: |
+      Headers: {{res.data.fetch.messages[0].headers}}
+
+  - name: Get error
+    uses: imap
+    with:
+      tls: true
+      commands:
+      - name: search
+        criteria:
+          bodies: [@@@nothing@@@]
+      - name: uid fetch
+        dataitem: all
+    test: status == 1
+    echo: |
+      Error: {{res.error}}
