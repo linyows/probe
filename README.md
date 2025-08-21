@@ -655,6 +655,26 @@ Best Practices
 6. **Handle errors** gracefully with appropriate tests
 7. **Use variables** for configuration management
 
+FAQ
+---
+
+Common questions about Probe.
+
+### How is Probe different from Common Workflow Language (CWL) or Workflow Description Language (WDL)?
+
+While CWL and WDL are powerful workflow languages designed for scientific computing and bioinformatics with complex data processing pipelines, Probe takes a different approach by specializing in web-based use cases.
+
+**Key Differences:**
+
+- **Target Use Cases**: CWL focuses on scientific data processing with Docker-based distributed execution, while WDL targets genomics pipelines with strong type systems and cloud-based distributed computing. Probe is designed specifically for API monitoring, test automation, and operational tasks.
+- **Internet Protocol Focus**: Probe specializes in web use cases, providing built-in support for HTTP, SMTP, SSH, IMAP, and browser automation. This specialization allows you to define and execute workflows with minimal configuration for internet protocol-based tasks.
+- **Simplicity vs. Flexibility**: While Probe offers less general-purpose flexibility compared to CWL or WDL, this is an intentional design choice. By focusing on web and internet protocols, Probe dramatically improves productivity in its target domain. The plugin-based architecture using Protocol Buffers still allows for extensibility when needed.
+- **Execution Model**: Unlike CWL and WDL which are designed for distributed computing environments, Probe is optimized for lightweight, local execution with real-time monitoring capabilities.
+- **Syntax**: Probe uses intuitive YAML-based configuration instead of the more complex type systems found in CWL and WDL, making it accessible to operations teams and developers working with web services.
+
+Probe's value lies in providing the most efficient path for web-based automation tasks while maintaining the ability to extend functionality through custom actions when necessary.
+For more examples and advanced usage, check the [examples directory](./examples/).
+
 Contributing
 ------------
 
@@ -670,6 +690,3 @@ Author
 
 [linyows](https://github.com/linyows)
 
----
-
-For more examples and advanced usage, check the [examples directory](./examples/).
