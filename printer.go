@@ -406,7 +406,7 @@ func (p *Printer) generateJobResultsFromStepResults(stepResults []StepResult) st
 				a5space := "     "
 				re := strings.ReplaceAll(stepResult.Report, "\n", "\n"+a5space)
 				re = strings.TrimRight(re, " \n\t\r")
-				output.WriteString(a5space + re)
+				output.WriteString(a5space + re + "\n")
 			}
 
 			if stepResult.EchoOutput != "" {

@@ -1413,3 +1413,117 @@ func TestPrinter_PrintRequestResponse(t *testing.T) {
 		})
 	}
 }
+
+// Test embedded job report formatting with newlines
+func TestPrinter_generateJobResultsFromStepResults_ReportNewlineFormatting(t *testing.T) {
+	// Disable color output for consistent testing
+	color.NoColor = true
+	defer func() { color.NoColor = false }()
+
+	printer := NewPrinter(false, []string{})
+
+	tests := []struct {
+		name        string
+		stepResults []StepResult
+		wantContains string
+		wantEndsWith string
+	}{
+		{
+			name: "single step with report",
+			stepResults: []StepResult{
+				{
+					Index:  1,
+					Name:   "Test Step",
+					Status: StatusSuccess,
+					Report: "This is a test report",
+				},
+			},
+			wantContains: "     This is a test report\n",
+			wantEndsWith: "\n",
+		},
+		{
+			name: "step with multiline report",
+			stepResults: []StepResult{
+				{
+					Index:  1,
+					Name:   "Multiline Step",
+					Status: StatusSuccess,
+					Report: "Line 1\nLine 2\nLine 3",
+				},
+			},
+			wantContains: "     Line 1\n     Line 2\n     Line 3\n",
+			wantEndsWith: "\n",
+		},
+		{
+			name: "step with report containing trailing whitespace",
+			stepResults: []StepResult{
+				{
+					Index:  1,
+					Name:   "Whitespace Step",
+					Status: StatusSuccess,
+					Report: "Report with trailing spaces   \n\t\n",
+				},
+			},
+			wantContains: "     Report with trailing spaces\n",
+			wantEndsWith: "\n",
+		},
+		{
+			name: "step with empty report",
+			stepResults: []StepResult{
+				{
+					Index:  1,
+					Name:   "Empty Report Step",
+					Status: StatusSuccess,
+					Report: "",
+				},
+			},
+			wantContains: "Empty Report Step",
+			wantEndsWith: "\n",
+		},
+		{
+			name: "multiple steps with reports",
+			stepResults: []StepResult{
+				{
+					Index:  1,
+					Name:   "First Step",
+					Status: StatusSuccess,
+					Report: "First report",
+				},
+				{
+					Index:  2,
+					Name:   "Second Step",
+					Status: StatusSuccess,
+					Report: "Second report\nWith multiple lines",
+				},
+			},
+			wantContains: "     First report\n",
+			wantEndsWith: "\n",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := printer.generateJobResultsFromStepResults(tt.stepResults)
+
+			// Check that the result contains the expected formatted report
+			if !strings.Contains(result, tt.wantContains) {
+				t.Errorf("generateJobResultsFromStepResults() should contain %q, got:\n%s", tt.wantContains, result)
+			}
+
+			// Check that the result ends with a newline to prevent display corruption
+			if !strings.HasSuffix(result, tt.wantEndsWith) {
+				t.Errorf("generateJobResultsFromStepResults() should end with %q, got result ending with: %q", tt.wantEndsWith, result[len(result)-5:])
+			}
+
+			// Verify that embedded job reports are properly indented with 5 spaces
+			lines := strings.Split(result, "\n")
+			for _, line := range lines {
+				if strings.Contains(line, "report") && len(line) > 0 {
+					if !strings.HasPrefix(line, "     ") {
+						t.Errorf("Report lines should be indented with 5 spaces, got line: %q", line)
+					}
+				}
+			}
+		})
+	}
+}
