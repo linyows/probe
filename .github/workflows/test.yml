@@ -40,3 +40,11 @@ jobs:
       run: |
         make
         ./probe examples/realtime-print.yml
+
+    - name: Run shell.yml by custom action
+      uses: linyows/probe-action@v1
+      with:
+        workdir: ./examples
+        paths: |
+          realtime-print.yml
+          embedded-job.yml
