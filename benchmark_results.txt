@@ -1,0 +1,20 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/linyows/probe
+cpu: Apple M2
+BenchmarkFlattenInterface-8            	   58462	     20390 ns/op	   28926 B/op	     350 allocs/op
+BenchmarkUnflattenInterface-8          	   97246	     12540 ns/op	   14569 B/op	     253 allocs/op
+BenchmarkFlattenUnflattenRoundTrip-8   	   34479	     34656 ns/op	   43504 B/op	     603 allocs/op
+BenchmarkStructpbNewStruct-8           	  300340	      4032 ns/op	    7060 B/op	     131 allocs/op
+BenchmarkStructpbAsMap-8               	  472070	      2558 ns/op	    4256 B/op	      55 allocs/op
+BenchmarkStructpbRoundTrip-8           	  176992	      6796 ns/op	   11317 B/op	     186 allocs/op
+BenchmarkProtobufMarshalFlat-8         	  194224	      5944 ns/op	    3776 B/op	     141 allocs/op
+BenchmarkProtobufMarshalStruct-8       	  111268	     10882 ns/op	    2304 B/op	      81 allocs/op
+BenchmarkProtobufUnmarshalFlat-8       	  148854	      8086 ns/op	    8232 B/op	     220 allocs/op
+BenchmarkProtobufUnmarshalStruct-8     	   82052	     12566 ns/op	    9176 B/op	     277 allocs/op
+BenchmarkJSONMarshal-8                 	  230197	      5161 ns/op	    3825 B/op	      92 allocs/op
+BenchmarkJSONUnmarshal-8               	  164427	      7383 ns/op	    5392 B/op	     136 allocs/op
+BenchmarkCompleteWorkflowFlat-8        	   24020	     50384 ns/op	   55571 B/op	     965 allocs/op
+BenchmarkCompleteWorkflowStruct-8      	   38385	     31284 ns/op	   22822 B/op	     545 allocs/op
+PASS
+ok  	github.com/linyows/probe	19.254s
