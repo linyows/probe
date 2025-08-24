@@ -80,8 +80,8 @@ func TruncateMapStringString(params map[string]string, maxLen int) map[string]st
 
 // Icon constants
 const (
-	IconSuccess  = "✔︎ "
-	IconError    = "✘ "
+	IconSuccess  = "✓ "
+	IconError    = "✗ "
 	IconTriangle = "△ "
 	IconCircle   = "⏺"
 	IconWait     = "🕐︎"
