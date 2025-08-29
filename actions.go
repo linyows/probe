@@ -107,12 +107,15 @@ func (p *PluginActionRunner) RunActions(name string, args []string, with map[str
 	}
 
 	actions := raw.(Actions)
-	flatW := FlattenInterface(with)
+	flatW, err := MapToStructFlat(with)
+	if err != nil {
+		return nil, err
+	}
 	result, err := actions.Run(args, flatW)
 	if err != nil {
 		return nil, err
 	}
-	unflatR := UnflattenInterface(result)
+	unflatR := StructFlatToMap(result)
 	return unflatR, nil
 }
 

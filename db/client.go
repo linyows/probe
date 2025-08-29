@@ -42,7 +42,7 @@ type Result struct {
 
 func ParseRequest(with map[string]string) (*Req, string, time.Duration, error) {
 	// First unflatten the input to handle nested structures like arrays
-	unflattenedWith := probe.UnflattenInterface(with)
+	unflattenedWith := probe.StructFlatToMap(with)
 
 	// Use MapToStructByTags to directly populate Req struct
 	req := &Req{}
@@ -211,7 +211,7 @@ func (r *Req) Execute(driverDSN string, timeout time.Duration) (res map[string]s
 	}
 
 	// Flatten the result like other actions do
-	return probe.FlattenInterface(mapResult), nil
+	return probe.MapToStructFlat(mapResult)
 }
 
 func (r *Req) executeSelectQuery(db *sql.DB, start time.Time) (res *Result, err error) {
@@ -326,7 +326,11 @@ func (r *Req) createErrorResult(start time.Time, err error) (map[string]string, 
 		return map[string]string{}, fmt.Errorf("failed to convert error result to map: %w", mapErr)
 	}
 
-	return probe.FlattenInterface(mapResult), err
+	flat, flatErr := probe.MapToStructFlat(mapResult)
+	if flatErr != nil {
+		return map[string]string{}, flatErr
+	}
+	return flat, err
 }
 
 type Option func(*Callback)

@@ -188,7 +188,7 @@ func WithAfter(f func(res *Res)) Option {
 }
 
 func Request(data map[string]string, opts ...Option) (map[string]string, error) {
-	m := probe.UnflattenInterface(data)
+	m := probe.StructFlatToMap(data)
 	r := NewReq()
 	if err := probe.MapToStructByTags(m, r); err != nil {
 		return map[string]string{}, fmt.Errorf("failed in map-to-struct-by-tags for data: %w", err)
@@ -204,7 +204,7 @@ func Request(data map[string]string, opts ...Option) (map[string]string, error) 
 		return map[string]string{}, fmt.Errorf("failed in struct-to-map-by-tags for result: %w", err)
 	}
 
-	return probe.FlattenInterface(mapRet), nil
+	return probe.MapToStructFlat(mapRet)
 }
 
 func NewReq() *Req {

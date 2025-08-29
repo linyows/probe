@@ -380,7 +380,7 @@ func Request(data map[string]string, opts ...Option) (map[string]string, error) 
 		return map[string]string{}, err
 	}
 
-	m := probe.HeaderToStringValue(probe.UnflattenInterface(dataCopy))
+	m := probe.HeaderToStringValue(probe.StructFlatToMap(dataCopy))
 
 	// Create new request
 	r := NewReq()
@@ -405,7 +405,7 @@ func Request(data map[string]string, opts ...Option) (map[string]string, error) 
 		return map[string]string{}, err
 	}
 
-	return probe.FlattenInterface(mapRet), nil
+	return probe.MapToStructFlat(mapRet)
 }
 
 func WithBefore(f func(ctx context.Context, service, method string)) Option {

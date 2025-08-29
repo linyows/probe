@@ -484,7 +484,7 @@ func Execute(data map[string]string, opts ...Option) (map[string]string, error) 
 		return map[string]string{}, err
 	}
 
-	m := probe.HeaderToStringValue(probe.UnflattenInterface(dataCopy))
+	m := probe.HeaderToStringValue(probe.StructFlatToMap(dataCopy))
 
 	r := NewReq()
 
@@ -508,7 +508,7 @@ func Execute(data map[string]string, opts ...Option) (map[string]string, error) 
 		return map[string]string{}, err
 	}
 
-	return probe.FlattenInterface(mapResult), nil
+	return probe.MapToStructFlat(mapResult)
 }
 
 func WithBefore(f func(host string, port int, user string, cmd string)) Option {

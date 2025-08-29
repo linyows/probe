@@ -181,7 +181,7 @@ func Execute(data map[string]string, opts ...Option) (map[string]string, error) 
 		dataCopy[k] = v
 	}
 
-	m := probe.HeaderToStringValue(probe.UnflattenInterface(dataCopy))
+	m := probe.HeaderToStringValue(probe.StructFlatToMap(dataCopy))
 
 	r := NewReq()
 
@@ -201,7 +201,11 @@ func Execute(data map[string]string, opts ...Option) (map[string]string, error) 
 		if result != nil {
 			mapResult, mapErr := probe.StructToMapByTags(result)
 			if mapErr == nil {
-				return probe.FlattenInterface(mapResult), err
+				flat, flatErr := probe.MapToStructFlat(mapResult)
+				if flatErr != nil {
+					return map[string]string{}, err
+				}
+				return flat, err
 			}
 		}
 		return map[string]string{}, err
@@ -212,7 +216,7 @@ func Execute(data map[string]string, opts ...Option) (map[string]string, error) 
 		return map[string]string{}, err
 	}
 
-	return probe.FlattenInterface(mapResult), nil
+	return probe.MapToStructFlat(mapResult)
 }
 
 func WithBefore(f func(path string, vars map[string]any)) Option {
