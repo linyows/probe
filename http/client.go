@@ -1,7 +1,6 @@
 package http
 
 import (
-	"bytes"
 	"errors"
 	"io"
 	hp "net/http"
@@ -23,15 +22,16 @@ type Req struct {
 	Method string            `map:"method" validate:"required"`
 	Proto  string            `map:"ver"`
 	Header map[string]string `map:"headers"`
-	Body   []byte            `map:"body"`
+	Body   string            `map:"body"`     // Changed from []byte to string for text data
 	cb     *Callback
 }
 
 type Res struct {
-	Status string            `map:"status"`
-	Code   int               `map:"code"`
-	Header map[string]string `map:"headers"`
-	Body   []byte            `map:"body"`
+	Status   string            `map:"status"`
+	Code     int               `map:"code"`
+	Header   map[string]string `map:"headers"`
+	Body     string            `map:"body"`     // Changed from []byte to string for text data
+	FilePath string            `map:"filepath"` // New field for binary file paths
 }
 
 type Result struct {
@@ -94,7 +94,7 @@ func (r *Req) Do() (*Result, error) {
 		return nil, errors.New("Req.URL is required")
 	}
 
-	req, err := hp.NewRequest(r.Method, r.URL, bytes.NewBuffer(r.Body))
+	req, err := hp.NewRequest(r.Method, r.URL, strings.NewReader(r.Body))
 	if err != nil {
 		return nil, err
 	}
@@ -140,7 +140,15 @@ func (r *Req) Do() (*Result, error) {
 	if err != nil {
 		return result, err
 	}
-	result.Res.Body = body
+
+	// Process body based on Content-Type
+	contentType := res.Header.Get("Content-Type")
+	bodyString, filePath, err := probe.ProcessHttpBody(body, contentType)
+	if err != nil {
+		return result, err
+	}
+	result.Res.Body = bodyString
+	result.Res.FilePath = filePath
 
 	header := make(map[string]string)
 	for k, v := range res.Header {
@@ -265,7 +273,7 @@ func Request(data map[string]string, opts ...Option) (map[string]string, error) 
 		return map[string]string{}, err
 	}
 
-	m := probe.HeaderToStringValue(probe.UnflattenInterface(dataCopy))
+	m := probe.HeaderToStringValue(probe.StructFlatToMap(dataCopy))
 
 	// Extract custom headers and merge with defaults before MapToStructByTags
 	var customHeaders map[string]string
@@ -310,7 +318,7 @@ func Request(data map[string]string, opts ...Option) (map[string]string, error) 
 		return map[string]string{}, err
 	}
 
-	return probe.FlattenInterface(mapRet), nil
+	return probe.MapToStructFlat(mapRet)
 }
 
 func WithBefore(f func(req *hp.Request)) Option {
