@@ -126,6 +126,11 @@ func (b *Bulk) calcMessageNumEachSession() int {
 	return n
 }
 
+// MakeData returns the mail data for external access
+func (b *Bulk) MakeData() []byte {
+	return b.makeData()
+}
+
 func (b *Bulk) makeData() []byte {
 	now := time.Now().Format("Mon, 02 Jan 2006 15:04:05 -0700")
 	appendingText := insertLF(strings.Repeat("*", b.Length), 80)

@@ -20,11 +20,13 @@ type Req struct {
 }
 
 type Res struct {
-	Code   int    `map:"code"`
-	Sent   int    `map:"sent"`
-	Failed int    `map:"failed"`
-	Total  int    `map:"total"`
-	Error  string `map:"error"`
+	Code     int    `map:"code"`
+	Sent     int    `map:"sent"`
+	Failed   int    `map:"failed"`
+	Total    int    `map:"total"`
+	Error    string `map:"error"`
+	MailData string `map:"maildata"` // For text mail data
+	FilePath string `map:"filepath"` // For binary mail data files
 }
 
 type Result struct {
@@ -104,12 +106,23 @@ func (r *Req) Do() (*Result, error) {
 		status = 0 // success if no failures and at least one sent
 	}
 
+	// Get mail data for processing
+	mailData := bulk.MakeData()
+	
+	// Process mail data (check if it's text or binary)
+	bodyString, filePath, err := probe.ProcessHttpBody(mailData, "text/plain")
+	if err != nil {
+		return result, fmt.Errorf("failed to process mail data: %w", err)
+	}
+
 	result.Res = Res{
-		Code:   status,
-		Sent:   deliveryResult.Sent,
-		Failed: deliveryResult.Failed,
-		Total:  deliveryResult.Total,
-		Error:  deliveryResult.Error,
+		Code:     status,
+		Sent:     deliveryResult.Sent,
+		Failed:   deliveryResult.Failed,
+		Total:    deliveryResult.Total,
+		Error:    deliveryResult.Error,
+		MailData: bodyString,
+		FilePath: filePath,
 	}
 	result.Status = status
 
@@ -133,7 +146,7 @@ func Send(data map[string]string, opts ...Option) (map[string]string, error) {
 		dataCopy[k] = v
 	}
 
-	m := probe.HeaderToStringValue(probe.UnflattenInterface(dataCopy))
+	m := probe.HeaderToStringValue(probe.StructFlatToMap(dataCopy))
 
 	r := NewReq()
 
@@ -153,7 +166,11 @@ func Send(data map[string]string, opts ...Option) (map[string]string, error) {
 		if result != nil {
 			mapResult, mapErr := probe.StructToMapByTags(result)
 			if mapErr == nil {
-				return probe.FlattenInterface(mapResult), err
+				flat, flatErr := probe.MapToStructFlat(mapResult)
+				if flatErr != nil {
+					return map[string]string{}, err
+				}
+				return flat, err
 			}
 		}
 		return map[string]string{}, err
@@ -164,7 +181,7 @@ func Send(data map[string]string, opts ...Option) (map[string]string, error) {
 		return map[string]string{}, err
 	}
 
-	return probe.FlattenInterface(mapResult), nil
+	return probe.MapToStructFlat(mapResult)
 }
 
 func WithBefore(f func(from string, to string, subject string)) Option {
