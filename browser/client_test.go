@@ -118,7 +118,7 @@ func TestRequest_ParameterMapping(t *testing.T) {
 		"window_h":         "600",
 	}
 
-	unflattened := probe.UnflattenInterface(data)
+	unflattened := probe.StructFlatToMap(data)
 	req := NewReq()
 
 	// Test headless parameter - probe package converts "false" string to bool
