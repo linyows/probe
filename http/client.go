@@ -100,7 +100,9 @@ func (r *Req) Do() (*Result, error) {
 	}
 
 	for k, v := range r.Header {
-		req.Header.Set(probe.TitleCase(k, "-"), v)
+		// Clean header value by removing newlines and other invalid characters
+		cleanValue := strings.ReplaceAll(strings.ReplaceAll(v, "\n", ""), "\r", "")
+		req.Header.Set(probe.TitleCase(k, "-"), cleanValue)
 	}
 
 	// callback

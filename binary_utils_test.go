@@ -101,7 +101,7 @@ func TestSaveBinaryToTempFile(t *testing.T) {
 			}
 			
 			// Clean up
-			defer os.Remove(filePath)
+			defer func() { _ = os.Remove(filePath) }()
 			
 			// Verify file contents
 			savedData, err := os.ReadFile(filePath)
@@ -193,7 +193,7 @@ func TestProcessHttpBody(t *testing.T) {
 					t.Error("expected non-empty filepath for binary data")
 				} else {
 					// Clean up
-					defer os.Remove(filePath)
+					defer func() { _ = os.Remove(filePath) }()
 					
 					// Verify file exists
 					if _, err := os.Stat(filePath); os.IsNotExist(err) {

@@ -70,10 +70,10 @@ func SaveBinaryToTempFile(data []byte, contentType string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("failed to create temp file: %w", err)
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 	
 	if _, err := file.Write(data); err != nil {
-		os.Remove(filePath) // Clean up on error
+		_ = os.Remove(filePath) // Clean up on error
 		return "", fmt.Errorf("failed to write data to temp file: %w", err)
 	}
 	
