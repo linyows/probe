@@ -8,7 +8,7 @@ jobs:
   - name: Basic task
     uses: http
     with:
-      url: https://httpbin.org
+      url: http://localhost:8080
       get: /status
 
 - id: should-skip
@@ -19,7 +19,7 @@ jobs:
   - name: This should not run
     uses: http
     with:
-      url: https://httpbin.org
+      url: http://localhost:8080
       get: /status
 
 - id: cleanup
@@ -29,5 +29,5 @@ jobs:
   - name: Clean up task
     uses: http
     with:
-      url: https://httpbin.org
+      url: http://localhost:8080
       get: /status

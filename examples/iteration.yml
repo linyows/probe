@@ -3,7 +3,7 @@ jobs:
 - name: Run iteration example
   defaults:
     http:
-      url: https://httpbin.org
+      url: http://localhost:8080
       headers:
         content-type: application/json
         accept: application/json

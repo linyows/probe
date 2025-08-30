@@ -2,7 +2,7 @@ name: Embedded Job
 
 vars:
   testenv: "{{TESTENV ?? 'dev'}}"
-  url: "https://httpbin.org"
+  url: "{{TESTURL ?? 'http://localhost:8080'}}"
 
 jobs:
 - name: First job

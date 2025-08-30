@@ -12,7 +12,7 @@ jobs:
         uses: http
         with:
           get: /status
-          url: https://httpbin.org
+          url: http://localhost:8080
 
   - id: should-skip
     name: Should Be Skipped
@@ -23,7 +23,7 @@ jobs:
         uses: http
         with:
           get: /status
-          url: https://httpbin.org
+          url: http://localhost:8080
 
   - id: cleanup
     name: Final Cleanup
@@ -33,4 +33,4 @@ jobs:
         uses: http
         with:
           get: /status
-          url: https://httpbin.org
+          url: http://localhost:8080

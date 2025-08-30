@@ -1,7 +1,7 @@
 name: Needs Dependency Test
 defaults: &def
   http:
-    url: https://httpbin.org
+    url: http://localhost:8080
     headers:
       content-type: application/json
       accept: application/json

@@ -41,6 +41,12 @@ jobs:
         make
         ./probe examples/realtime-print.yml
 
+    - name: Start server with background
+      uses: JarvusInnovations/background-action@v1.0.7
+      with:
+        run: |
+          make http_server
+
     - name: Run shell.yml by custom action
       uses: linyows/probe-action@v1
       with:
