@@ -52,17 +52,18 @@ func NewReq() *Req {
 }
 
 func (r *Req) Do() (*Result, error) {
+	// Always create result with current request data, even if validation fails
+	result := &Result{Req: *r}
+	
 	if r.Addr == "" {
-		return nil, fmt.Errorf("Req.Addr is required")
+		return result, fmt.Errorf("Req.Addr is required")
 	}
 	if r.From == "" {
-		return nil, fmt.Errorf("Req.From is required")
+		return result, fmt.Errorf("Req.From is required")
 	}
 	if r.To == "" {
-		return nil, fmt.Errorf("Req.To is required")
+		return result, fmt.Errorf("Req.To is required")
 	}
-
-	result := &Result{Req: *r}
 
 	// callback before
 	if r.cb != nil && r.cb.before != nil {
@@ -156,7 +157,12 @@ func Send(data map[string]any, opts ...Option) (map[string]any, error) {
 		}
 	}
 
-	m := probe.HeaderToStringValue(dataCopy)
+	// Convert map[string]string to map[string]any for HeaderToStringValue
+	dataCopyAny := make(map[string]any)
+	for k, v := range dataCopy {
+		dataCopyAny[k] = v
+	}
+	m := probe.HeaderToStringValue(dataCopyAny)
 
 	r := NewReq()
 
@@ -166,18 +172,24 @@ func Send(data map[string]any, opts ...Option) (map[string]any, error) {
 	}
 	r.cb = cb
 
-	if err := probe.MapToStructByTags(m, r); err != nil {
-		return map[string]any{}, err
-	}
-
+	mapErr := probe.MapToStructByTags(m, r)
+	
 	result, err := r.Do()
-	if err != nil {
+	if err != nil || mapErr != nil {
 		// Even on error, try to return a structured result if we have one
 		if result != nil {
-			mapResult, mapErr := probe.StructToMapByTags(result)
-			if mapErr == nil {
+			mapResult, structErr := probe.StructToMapByTags(result)
+			if structErr == nil {
+				// Return the original error (either mapErr or err)
+				if mapErr != nil {
+					return mapResult, mapErr
+				}
 				return mapResult, err
 			}
+		}
+		// If we can't create a structured result, return the original error
+		if mapErr != nil {
+			return map[string]any{}, mapErr
 		}
 		return map[string]any{}, err
 	}

@@ -168,12 +168,12 @@ func TestReqDo_WithCallbacks(t *testing.T) {
 func TestSend(t *testing.T) {
 	tests := []struct {
 		name        string
-		data        map[string]string
+		data        map[string]any
 		expectError bool
 	}{
 		{
 			name: "complete request data",
-			data: map[string]string{
+			data: map[string]any{
 				"addr":    "localhost:25",
 				"from":    "test@example.com",
 				"to":      "recipient@example.com",
@@ -186,7 +186,7 @@ func TestSend(t *testing.T) {
 		},
 		{
 			name: "missing required addr",
-			data: map[string]string{
+			data: map[string]any{
 				"from": "test@example.com",
 				"to":   "recipient@example.com",
 			},
@@ -194,7 +194,7 @@ func TestSend(t *testing.T) {
 		},
 		{
 			name: "missing required from",
-			data: map[string]string{
+			data: map[string]any{
 				"addr": "localhost:25",
 				"to":   "recipient@example.com",
 			},
@@ -202,7 +202,7 @@ func TestSend(t *testing.T) {
 		},
 		{
 			name: "missing required to",
-			data: map[string]string{
+			data: map[string]any{
 				"addr": "localhost:25",
 				"from": "test@example.com",
 			},
@@ -232,7 +232,10 @@ func TestSend(t *testing.T) {
 			}
 
 			// For valid requests, callbacks should be called even if SMTP fails
-			if tt.data["addr"] != "" && tt.data["from"] != "" && tt.data["to"] != "" {
+			addr, addrOk := tt.data["addr"]
+			from, fromOk := tt.data["from"]
+			to, toOk := tt.data["to"]
+			if addrOk && addr != "" && fromOk && from != "" && toOk && to != "" {
 				if !beforeCalled {
 					t.Error("before callback was not called for valid request")
 				}
@@ -240,17 +243,25 @@ func TestSend(t *testing.T) {
 					t.Error("after callback was not called for valid request")
 				}
 
-				// Check that result is flattened map when error occurs
+				// Check that result contains nested structure when error occurs
 				if result != nil {
-					// Check that basic fields exist in flattened result
-					if _, exists := result["req__addr"]; !exists {
-						t.Error("Expected 'req__addr' field in result")
-					}
-					if _, exists := result["req__from"]; !exists {
-						t.Error("Expected 'req__from' field in result")
-					}
-					if _, exists := result["req__to"]; !exists {
-						t.Error("Expected 'req__to' field in result")
+					// Check that req nested fields exist
+					if req, exists := result["req"]; exists {
+						if reqMap, ok := req.(map[string]any); ok {
+							if _, exists := reqMap["addr"]; !exists {
+								t.Error("Expected 'addr' field in req")
+							}
+							if _, exists := reqMap["from"]; !exists {
+								t.Error("Expected 'from' field in req")
+							}
+							if _, exists := reqMap["to"]; !exists {
+								t.Error("Expected 'to' field in req")
+							}
+						} else {
+							t.Error("Expected req to be map[string]any")
+						}
+					} else {
+						t.Error("Expected 'req' field in result")
 					}
 				}
 			}

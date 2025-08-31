@@ -183,19 +183,19 @@ func TestValidateKeyFile(t *testing.T) {
 func TestPrepareRequestData(t *testing.T) {
 	tests := []struct {
 		name     string
-		input    map[string]string
-		expected map[string]string
+		input    map[string]any
+		expected map[string]any
 	}{
 		{
 			name: "with environment variables",
-			input: map[string]string{
+			input: map[string]any{
 				"host":      "example.com",
 				"user":      "testuser",
 				"env__PATH": "/usr/bin",
 				"env__HOME": "/home/user",
 				"cmd":       "echo $PATH",
 			},
-			expected: map[string]string{
+			expected: map[string]any{
 				"host":      "example.com",
 				"user":      "testuser",
 				"env__PATH": "/usr/bin",
@@ -205,12 +205,12 @@ func TestPrepareRequestData(t *testing.T) {
 		},
 		{
 			name: "without environment variables",
-			input: map[string]string{
+			input: map[string]any{
 				"host": "example.com",
 				"user": "testuser",
 				"cmd":  "ls -la",
 			},
-			expected: map[string]string{
+			expected: map[string]any{
 				"host": "example.com",
 				"user": "testuser",
 				"cmd":  "ls -la",
@@ -221,7 +221,7 @@ func TestPrepareRequestData(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Make a copy of input since PrepareRequestData modifies the map
-			data := make(map[string]string)
+			data := make(map[string]any)
 			for k, v := range tt.input {
 				data[k] = v
 			}

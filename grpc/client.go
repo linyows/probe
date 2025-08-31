@@ -396,7 +396,12 @@ func Request(data map[string]any, opts ...Option) (map[string]any, error) {
 		return map[string]any{}, err
 	}
 
-	m := probe.HeaderToStringValue(dataCopy)
+	// Convert map[string]string to map[string]any for HeaderToStringValue
+	dataCopyAny := make(map[string]any)
+	for k, v := range dataCopy {
+		dataCopyAny[k] = v
+	}
+	m := probe.HeaderToStringValue(dataCopyAny)
 
 	// Create new request
 	r := NewReq()

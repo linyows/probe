@@ -9,17 +9,17 @@ import (
 func TestConvertMetadataToMap(t *testing.T) {
 	tests := []struct {
 		name     string
-		input    map[string]string
-		expected map[string]string
+		input    map[string]any
+		expected map[string]any
 	}{
 		{
 			name: "simple metadata",
-			input: map[string]string{
+			input: map[string]any{
 				"metadata__authorization": "Bearer token",
 				"metadata__user-agent":    "probe-grpc/1.0",
 				"service":                 "UserService",
 			},
-			expected: map[string]string{
+			expected: map[string]any{
 				"metadata__authorization": "Bearer token",
 				"metadata__user-agent":    "probe-grpc/1.0",
 				"service":                 "UserService",
@@ -27,11 +27,11 @@ func TestConvertMetadataToMap(t *testing.T) {
 		},
 		{
 			name: "no metadata",
-			input: map[string]string{
+			input: map[string]any{
 				"service": "UserService",
 				"method":  "GetUser",
 			},
-			expected: map[string]string{
+			expected: map[string]any{
 				"service": "UserService",
 				"method":  "GetUser",
 			},
@@ -43,7 +43,7 @@ func TestConvertMetadataToMap(t *testing.T) {
 			// Make a copy of input to avoid modifying the test case
 			data := make(map[string]string)
 			for k, v := range tt.input {
-				data[k] = v
+				data[k] = v.(string) // Convert to string for ConvertMetadataToMap
 			}
 
 			err := ConvertMetadataToMap(data)
@@ -69,12 +69,12 @@ func TestConvertMetadataToMap(t *testing.T) {
 func TestPrepareGrpcRequestData(t *testing.T) {
 	tests := []struct {
 		name     string
-		input    map[string]string
-		expected map[string]string
+		input    map[string]any
+		expected map[string]any
 	}{
 		{
 			name: "complete gRPC request",
-			input: map[string]string{
+			input: map[string]any{
 				"addr":                    "localhost:50051",
 				"service":                 "UserService",
 				"method":                  "CreateUser",
@@ -83,7 +83,7 @@ func TestPrepareGrpcRequestData(t *testing.T) {
 				"metadata__authorization": "Bearer token",
 				"metadata__user-agent":    "probe/1.0",
 			},
-			expected: map[string]string{
+			expected: map[string]any{
 				"addr":                    "localhost:50051",
 				"service":                 "UserService",
 				"method":                  "CreateUser",
@@ -99,7 +99,7 @@ func TestPrepareGrpcRequestData(t *testing.T) {
 			// Make a copy of input to avoid modifying the test case
 			data := make(map[string]string)
 			for k, v := range tt.input {
-				data[k] = v
+				data[k] = v.(string) // Convert to string for PrepareGrpcRequestData
 			}
 
 			err := PrepareGrpcRequestData(data)
@@ -202,7 +202,7 @@ func TestReq_Validation(t *testing.T) {
 func TestRequest_StructureValidation(t *testing.T) {
 	// Test that Request function can be called without panicking
 	// Note: This doesn't test actual gRPC calls as that would require a running server
-	data := map[string]string{
+	data := map[string]any{
 		"addr":    "localhost:50051",
 		"service": "TestService",
 		"method":  "TestMethod",

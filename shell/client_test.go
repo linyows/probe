@@ -199,18 +199,18 @@ func TestDo(t *testing.T) {
 func TestPrepareRequestData(t *testing.T) {
 	tests := []struct {
 		name     string
-		input    map[string]string
-		expected map[string]string
+		input    map[string]any
+		expected map[string]any
 	}{
 		{
 			name: "extract environment variables",
-			input: map[string]string{
+			input: map[string]any{
 				"cmd":           "echo $TEST_VAR",
 				"env__TEST_VAR": "hello",
 				"env__PATH":     "/usr/bin",
 				"shell":         "/bin/bash",
 			},
-			expected: map[string]string{
+			expected: map[string]any{
 				"cmd":           "echo $TEST_VAR",
 				"shell":         "/bin/bash",
 				"env__TEST_VAR": "hello",
@@ -219,11 +219,11 @@ func TestPrepareRequestData(t *testing.T) {
 		},
 		{
 			name: "no environment variables",
-			input: map[string]string{
+			input: map[string]any{
 				"cmd":   "echo hello",
 				"shell": "/bin/sh",
 			},
-			expected: map[string]string{
+			expected: map[string]any{
 				"cmd":   "echo hello",
 				"shell": "/bin/sh",
 			},
@@ -235,7 +235,7 @@ func TestPrepareRequestData(t *testing.T) {
 			// Make a copy of input to avoid modifying the test case
 			data := make(map[string]string)
 			for k, v := range tt.input {
-				data[k] = v
+				data[k] = v.(string) // Convert to string for PrepareRequestData
 			}
 
 			err := PrepareRequestData(data)
@@ -244,8 +244,14 @@ func TestPrepareRequestData(t *testing.T) {
 				return
 			}
 
-			if !reflect.DeepEqual(data, tt.expected) {
-				t.Errorf("PrepareRequestData() = %v, want %v", data, tt.expected)
+			// Convert data back to map[string]any for comparison
+			dataAny := make(map[string]any)
+			for k, v := range data {
+				dataAny[k] = v
+			}
+			
+			if !reflect.DeepEqual(dataAny, tt.expected) {
+				t.Errorf("PrepareRequestData() = %v, want %v", dataAny, tt.expected)
 			}
 		})
 	}
@@ -254,13 +260,13 @@ func TestPrepareRequestData(t *testing.T) {
 func TestExecute(t *testing.T) {
 	tests := []struct {
 		name        string
-		data        map[string]string
+		data        map[string]any
 		expectError bool
 		checkStatus bool
 	}{
 		{
 			name: "simple command execution",
-			data: map[string]string{
+			data: map[string]any{
 				"cmd":   "echo 'test output'",
 				"shell": "/bin/sh",
 			},
@@ -269,7 +275,7 @@ func TestExecute(t *testing.T) {
 		},
 		{
 			name: "command with environment variable",
-			data: map[string]string{
+			data: map[string]any{
 				"cmd":           "echo $TEST_VAR",
 				"shell":         "/bin/sh",
 				"env__TEST_VAR": "hello_world",
@@ -279,7 +285,7 @@ func TestExecute(t *testing.T) {
 		},
 		{
 			name: "missing required cmd parameter",
-			data: map[string]string{
+			data: map[string]any{
 				"shell": "/bin/sh",
 			},
 			expectError: true,
@@ -329,12 +335,28 @@ func TestExecute(t *testing.T) {
 			}
 
 			if tt.checkStatus {
-				// Check that basic fields exist in flattened result
-				if _, exists := result["req__cmd"]; !exists {
-					t.Error("Expected 'req__cmd' field in result")
+				// Check that basic fields exist in nested result structure
+				if req, exists := result["req"]; exists {
+					if reqMap, ok := req.(map[string]any); ok {
+						if _, exists := reqMap["cmd"]; !exists {
+							t.Error("Expected 'cmd' field in req")
+						}
+					} else {
+						t.Error("Expected req to be map[string]any")
+					}
+				} else {
+					t.Error("Expected 'req' field in result")
 				}
-				if _, exists := result["res__code"]; !exists {
-					t.Error("Expected 'res__code' field in result")
+				if res, exists := result["res"]; exists {
+					if resMap, ok := res.(map[string]any); ok {
+						if _, exists := resMap["code"]; !exists {
+							t.Error("Expected 'code' field in res")
+						}
+					} else {
+						t.Error("Expected res to be map[string]any")
+					}
+				} else {
+					t.Error("Expected 'res' field in result")
 				}
 				if _, exists := result["status"]; !exists {
 					t.Error("Expected 'status' field in result")

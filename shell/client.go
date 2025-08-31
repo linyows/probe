@@ -157,16 +157,17 @@ func parseTimeout(timeoutStr string) (time.Duration, error) {
 }
 
 func (r *Req) Do() (*Result, error) {
+	// Always create result with current request data, even if validation fails
+	result := &Result{Req: *r}
+	
 	if r.Cmd == "" {
-		return nil, fmt.Errorf("Req.Cmd is required")
+		return result, fmt.Errorf("Req.Cmd is required")
 	}
 
 	params, err := parseParams(r)
 	if err != nil {
-		return nil, err
+		return result, err
 	}
-
-	result := &Result{Req: *r}
 
 	// callback before
 	if r.cb != nil && r.cb.before != nil {
@@ -335,12 +336,25 @@ func Execute(data map[string]any, opts ...Option) (map[string]any, error) {
 	}
 	r.cb = cb
 
-	if err := probe.MapToStructByTags(m, r); err != nil {
-		return map[string]any{}, err
-	}
-
+	mapErr := probe.MapToStructByTags(m, r)
+	
 	result, err := r.Do()
-	if err != nil {
+	if err != nil || mapErr != nil {
+		// Even on error, try to return a structured result if we have one
+		if result != nil {
+			mapResult, structErr := probe.StructToMapByTags(result)
+			if structErr == nil {
+				// Return the original error (either mapErr or err)
+				if mapErr != nil {
+					return mapResult, mapErr
+				}
+				return mapResult, err
+			}
+		}
+		// If we can't create a structured result, return the original error
+		if mapErr != nil {
+			return map[string]any{}, mapErr
+		}
 		return map[string]any{}, err
 	}
 

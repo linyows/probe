@@ -9,7 +9,7 @@ jobs:
     - name: Test repeat_index in echo - {{vars.name}}
       uses: http
       with:
-        url: http://localhost:8000
+        url: http://localhost:8080
         headers:
           content-type: application/json
         post: /post
