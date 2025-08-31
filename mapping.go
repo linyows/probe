@@ -6,6 +6,8 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+
+	"google.golang.org/protobuf/types/known/structpb"
 )
 
 const (
@@ -590,4 +592,111 @@ func TitleCase(st string, char string) string {
 		}
 	}
 	return strings.Join(parts, char)
+}
+
+// StructToMap converts a protobuf Struct to a map[string]any
+func StructToMap(s *structpb.Struct) map[string]any {
+	if s == nil {
+		return nil
+	}
+	return s.AsMap()
+}
+
+// MapToStruct converts a map[string]any to a protobuf Struct
+func MapToStruct(m map[string]any) (*structpb.Struct, error) {
+	if m == nil {
+		return nil, nil
+	}
+	return structpb.NewStruct(m)
+}
+
+func nestMapValue(m map[string]any, keys []string, value string) {
+	if len(keys) == 1 {
+		// Convert numeric strings
+		if num, err := strconv.Atoi(value); err == nil {
+			m[keys[0]] = num
+		} else if floatNum, err := strconv.ParseFloat(value, 64); err == nil {
+			m[keys[0]] = floatNum
+		} else {
+			m[keys[0]] = value
+		}
+	} else {
+		if _, exists := m[keys[0]]; !exists {
+			m[keys[0]] = make(map[string]any)
+		}
+		nestMapValue(m[keys[0]].(map[string]any), keys[1:], value)
+	}
+}
+
+func convertMapsToArraysAndNumericStrings(input map[string]any) map[string]any {
+	result := make(map[string]any)
+
+	for key, value := range input {
+		switch v := value.(type) {
+		case map[string]any:
+			if shouldConvertToArray(v) {
+				result[key] = convertMapToArray(v)
+			} else {
+				result[key] = convertMapsToArraysAndNumericStrings(v)
+			}
+		default:
+			result[key] = v
+		}
+	}
+	return result
+}
+
+func shouldConvertToArray(m map[string]any) bool {
+	if len(m) == 0 {
+		return false
+	}
+	for i := 0; i < len(m); i++ {
+		if _, exists := m[strconv.Itoa(i)]; !exists {
+			return false
+		}
+	}
+	return true
+}
+
+func convertMapToArray(m map[string]any) []any {
+	result := make([]any, len(m))
+	for key, value := range m {
+		index, _ := strconv.Atoi(key)
+		if mapVal, ok := value.(map[string]any); ok {
+			if shouldConvertToArray(mapVal) {
+				result[index] = convertMapToArray(mapVal)
+			} else {
+				result[index] = convertMapsToArraysAndNumericStrings(mapVal)
+			}
+		} else {
+			result[index] = value
+		}
+	}
+	return result
+}
+
+// ConvertNumericStrings provides backward compatibility for numeric conversion
+func ConvertNumericStrings(data map[string]any) map[string]any {
+	result := make(map[string]any)
+
+	for key, value := range data {
+		switch v := value.(type) {
+		case string:
+			// Try to convert numeric strings to numbers
+			if num, err := strconv.Atoi(v); err == nil {
+				result[key] = num
+			} else if floatNum, err := strconv.ParseFloat(v, 64); err == nil {
+				result[key] = floatNum
+			} else {
+				result[key] = v
+			}
+		case map[string]any:
+			// Recursively process nested maps
+			result[key] = ConvertNumericStrings(v)
+		default:
+			result[key] = v
+		}
+	}
+
+	return result
 }
