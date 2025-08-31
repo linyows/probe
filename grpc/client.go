@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/linyows/probe"
@@ -64,41 +63,7 @@ func NewReq() *Req {
 	}
 }
 
-// ConvertMetadataToMap converts flat metadata data to nested map structure
-func ConvertMetadataToMap(data map[string]string) error {
-	metadataData := map[string]string{}
 
-	// Extract all metadata__ prefixed keys
-	for key, value := range data {
-		if strings.HasPrefix(key, "metadata__") {
-			newKey := strings.TrimPrefix(key, "metadata__")
-			metadataData[newKey] = value
-			delete(data, key)
-		}
-	}
-
-	// Add individual metadata fields back to data with metadata prefix
-	for key, value := range metadataData {
-		data["metadata__"+key] = value
-	}
-
-	return nil
-}
-
-// PrepareGrpcRequestData prepares all request data including body and metadata conversion
-func PrepareGrpcRequestData(data map[string]string) error {
-	// Convert body__ fields to JSON (reuse existing HTTP functionality)
-	if err := probe.ConvertBodyToJson(data); err != nil {
-		return err
-	}
-
-	// Handle metadata__ fields
-	if err := ConvertMetadataToMap(data); err != nil {
-		return err
-	}
-
-	return nil
-}
 
 func (r *Req) Do() (re *Result, er error) {
 	if r.Addr == "" {
@@ -370,38 +335,23 @@ type Callback struct {
 }
 
 func Request(data map[string]any, opts ...Option) (map[string]any, error) {
-	// Convert map[string]any to map[string]string for internal processing
-	dataCopy := make(map[string]string)
+	// Create a copy to avoid modifying the original data
+	m := make(map[string]any)
 	for k, v := range data {
-		if str, ok := v.(string); ok {
-			dataCopy[k] = str
-		} else if k == "body" {
-			// Special handling for body field - convert to JSON
-			if bodyMap, ok := v.(map[string]any); ok {
-				if jsonBytes, err := json.Marshal(bodyMap); err == nil {
-					dataCopy[k] = string(jsonBytes)
-				} else {
-					dataCopy[k] = fmt.Sprintf("%v", v)
-				}
-			} else {
-				dataCopy[k] = fmt.Sprintf("%v", v)
+		m[k] = v
+	}
+
+	// Handle body conversion for structured data
+	if bodyData, bodyExists := m["body"]; bodyExists {
+		if bodyMap, isMap := bodyData.(map[string]any); isMap {
+			// Convert body map to JSON string
+			if jsonBytes, err := json.Marshal(bodyMap); err == nil {
+				m["body"] = string(jsonBytes)
 			}
-		} else {
-			dataCopy[k] = fmt.Sprintf("%v", v)
 		}
 	}
 
-	// Prepare request data (convert request and metadata fields)
-	if err := PrepareGrpcRequestData(dataCopy); err != nil {
-		return map[string]any{}, err
-	}
-
-	// Convert map[string]string to map[string]any for HeaderToStringValue
-	dataCopyAny := make(map[string]any)
-	for k, v := range dataCopy {
-		dataCopyAny[k] = v
-	}
-	m := probe.HeaderToStringValue(dataCopyAny)
+	m = probe.HeaderToStringValue(m)
 
 	// Create new request
 	r := NewReq()
