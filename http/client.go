@@ -192,12 +192,17 @@ var httpMethods = []string{
 
 // ResolveMethodAndURL resolves HTTP method fields and updates the data map
 // Converts method fields like "get", "post" to "method" and "url" fields
-func ResolveMethodAndURL(data map[string]string) error {
+func ResolveMethodAndURL(data map[string]any) error {
 	for _, method := range httpMethods {
 		lowerMethod := strings.ToLower(method)
-		route, ok := data[lowerMethod]
+		routeValue, ok := data[lowerMethod]
 		if !ok {
 			continue
+		}
+
+		route, ok := routeValue.(string)
+		if !ok {
+			return fmt.Errorf("method field %s must be a string", lowerMethod)
 		}
 
 		data["method"] = method
@@ -208,9 +213,14 @@ func ResolveMethodAndURL(data map[string]string) error {
 			data["url"] = route
 		} else {
 			// If route is a relative path, combine with base URL
-			baseURL, ok := data["url"]
+			baseURLValue, ok := data["url"]
 			if !ok {
 				return errors.New("url is missing for relative path")
+			}
+
+			baseURL, ok := baseURLValue.(string)
+			if !ok {
+				return fmt.Errorf("base URL must be a string")
 			}
 
 			// renew url as full-url
@@ -228,57 +238,18 @@ func ResolveMethodAndURL(data map[string]string) error {
 	return nil
 }
 
-// ConvertBodyToFormEncoded converts body__ prefixed fields to form-encoded body
-func ConvertBodyToFormEncoded(data map[string]string) error {
-	values := url.Values{}
 
-	for key, value := range data {
-		if strings.HasPrefix(key, "body__") {
-			newKey := strings.TrimPrefix(key, "body__")
-			values.Add(newKey, value)
-			delete(data, key)
-		}
-	}
-
-	if len(values) > 0 {
-		data["body"] = values.Encode()
-		data["headers__content-type"] = "application/x-www-form-urlencoded"
-	}
-
-	return nil
-}
-
-// PrepareRequestData prepares all request data including method fields and body conversion
-func PrepareRequestData(data map[string]string) error {
-	// Resolve HTTP method fields first
-	if err := ResolveMethodAndURL(data); err != nil {
-		return err
-	}
-
-	// Handle body conversion based on content-type
-	contentType, exists := data["headers__content-type"]
-	if exists && contentType == "application/json" {
-		if err := probe.ConvertBodyToJson(data); err != nil {
-			return err
-		}
-	} else {
-		if err := ConvertBodyToFormEncoded(data); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
 
 func Request(data map[string]any, opts ...Option) (map[string]any, error) {
-	// Create a copy to avoid modifying the original data and convert to map[string]string for compatibility
-	dataCopy := make(map[string]string)
+	// Create a copy to avoid modifying the original data
+	m := make(map[string]any)
 	for k, v := range data {
-		if str, ok := v.(string); ok {
-			dataCopy[k] = str
-		} else {
-			dataCopy[k] = fmt.Sprintf("%v", v)
-		}
+		m[k] = v
+	}
+
+	// Resolve HTTP method fields (get, post, etc.) to method and url
+	if err := ResolveMethodAndURL(m); err != nil {
+		return map[string]any{}, err
 	}
 
 	// Handle body conversion for JSON content-type by checking headers
@@ -288,29 +259,13 @@ func Request(data map[string]any, opts ...Option) (map[string]any, error) {
 				if bodyMap, isMap := bodyData.(map[string]any); isMap {
 					// Convert body map to JSON string
 					if jsonBytes, err := json.Marshal(bodyMap); err == nil {
-						dataCopy["body"] = string(jsonBytes)
-						hclog.Default().Info("DEBUG: Converted body to JSON", "body", string(jsonBytes))
+						m["body"] = string(jsonBytes)
 					}
 				}
 			}
 		}
 	}
 
-	// Prepare request data (resolve method fields and convert body)
-	if err := PrepareRequestData(dataCopy); err != nil {
-		return map[string]any{}, err
-	}
-
-	// Convert dataCopy (map[string]string) directly to map[string]any, but preserve original headers
-	m := make(map[string]any)
-	for k, v := range dataCopy {
-		m[k] = v
-	}
-	// Restore original headers map if it exists in data
-	if originalHeaders, exists := data["headers"]; exists {
-		m["headers"] = originalHeaders
-		hclog.Default().Info("DEBUG: Restored original headers", "headers", originalHeaders, "type", fmt.Sprintf("%T", originalHeaders))
-	}
 	m = probe.HeaderToStringValue(m)
 
 	// Extract custom headers and merge with defaults before MapToStructByTags
