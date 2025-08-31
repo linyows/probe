@@ -14,20 +14,28 @@ type Action struct {
 	log hclog.Logger
 }
 
-func (a *Action) Run(args []string, with map[string]string) (map[string]string, error) {
+func (a *Action) Run(args []string, with map[string]any) (map[string]any, error) {
 	truncateLength := probe.MaxLogStringLength
-	truncatedParams := probe.TruncateMapStringString(with, truncateLength)
+	truncatedParams := probe.TruncateMapStringAny(with, truncateLength)
 	a.log.Debug("received db request parameters", "params", truncatedParams)
 
 	// Validate required parameters
-	dsn, exists := with["dsn"]
-	if !exists || dsn == "" {
-		return map[string]string{}, fmt.Errorf("dsn parameter is required")
+	dsnVal, exists := with["dsn"]
+	if !exists || dsnVal == nil {
+		return map[string]any{}, fmt.Errorf("dsn parameter is required")
+	}
+	dsn, ok := dsnVal.(string)
+	if !ok || dsn == "" {
+		return map[string]any{}, fmt.Errorf("dsn parameter must be a non-empty string")
 	}
 
-	query, exists := with["query"]
-	if !exists || query == "" {
-		return map[string]string{}, fmt.Errorf("query parameter is required")
+	queryVal, exists := with["query"]
+	if !exists || queryVal == nil {
+		return map[string]any{}, fmt.Errorf("query parameter is required")
+	}
+	query, ok := queryVal.(string)
+	if !ok || query == "" {
+		return map[string]any{}, fmt.Errorf("query parameter must be a non-empty string")
 	}
 
 	// Execute database query with logger callbacks
@@ -41,11 +49,10 @@ func (a *Action) Run(args []string, with map[string]string) (map[string]string, 
 	)
 	if err != nil {
 		a.log.Error("database query execution failed", "error", err)
-		// Return result even on error for debugging
 		return result, err
 	}
 
-	truncatedResult := probe.TruncateMapStringString(result, truncateLength)
+	truncatedResult := probe.TruncateMapStringAny(result, truncateLength)
 	a.log.Debug("database query completed", "result", truncatedResult)
 
 	return result, nil

@@ -2,6 +2,7 @@ package ssh
 
 import (
 	"errors"
+	"fmt"
 	"os"
 
 	"github.com/hashicorp/go-hclog"
@@ -14,10 +15,10 @@ type Action struct {
 	log hclog.Logger
 }
 
-func (a *Action) Run(args []string, with map[string]string) (map[string]string, error) {
+func (a *Action) Run(args []string, with map[string]any) (map[string]any, error) {
 	// Validate that required parameters are provided
 	if len(with) == 0 {
-		return map[string]string{}, errors.New("ssh action requires parameters in 'with' section. Please specify connection details like host, user, cmd")
+		return map[string]any{}, errors.New("ssh action requires parameters in 'with' section. Please specify connection details like host, user, cmd")
 	}
 
 	// Use default truncate length, can be overridden by caller
@@ -25,7 +26,7 @@ func (a *Action) Run(args []string, with map[string]string) (map[string]string, 
 
 	// Truncate long parameters for logging to prevent log bloat
 	// Note: Sensitive data like passwords and keys are excluded from logs for security
-	truncatedParams := probe.TruncateMapStringString(with, truncateLength)
+	truncatedParams := probe.TruncateMapStringAny(with, truncateLength)
 
 	// Remove sensitive information from logs
 	logParams := make(map[string]string)
@@ -35,11 +36,15 @@ func (a *Action) Run(args []string, with map[string]string) (map[string]string, 
 			logParams[k] = "[REDACTED]"
 		case "key_file":
 			// Log only the filename, not the full path for security
-			if v != "" {
+			if str, ok := v.(string); ok && str != "" {
 				logParams[k] = "[KEY_FILE_PROVIDED]"
 			}
 		default:
-			logParams[k] = v
+			if str, ok := v.(string); ok {
+				logParams[k] = str
+			} else {
+				logParams[k] = fmt.Sprintf("%v", v)
+			}
 		}
 	}
 
@@ -74,7 +79,7 @@ func (a *Action) Run(args []string, with map[string]string) (map[string]string, 
 		a.log.Error("ssh command failed", "error", err)
 	} else {
 		// Truncate result for logging to prevent log bloat
-		truncatedResult := probe.TruncateMapStringString(ret, truncateLength)
+		truncatedResult := probe.TruncateMapStringAny(ret, truncateLength)
 		a.log.Debug("ssh command completed successfully", "result_keys", getMapKeys(truncatedResult))
 	}
 
@@ -82,7 +87,7 @@ func (a *Action) Run(args []string, with map[string]string) (map[string]string, 
 }
 
 // getMapKeys returns the keys of a map for logging purposes
-func getMapKeys(m map[string]string) []string {
+func getMapKeys(m map[string]any) []string {
 	keys := make([]string, 0, len(m))
 	for k := range m {
 		keys = append(keys, k)

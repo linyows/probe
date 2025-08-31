@@ -14,9 +14,9 @@ type Action struct {
 	log hclog.Logger
 }
 
-func (a *Action) Run(args []string, with map[string]string) (map[string]string, error) {
+func (a *Action) Run(args []string, with map[string]any) (map[string]any, error) {
 	truncateLength := probe.MaxLogStringLength
-	truncatedParams := probe.TruncateMapStringString(with, truncateLength)
+	truncatedParams := probe.TruncateMapStringAny(with, truncateLength)
 	a.log.Debug("received browser action request", "params", truncatedParams)
 
 	within := br.WithInBrowser(func(s string, i ...interface{}) {
@@ -34,7 +34,7 @@ func (a *Action) Run(args []string, with map[string]string) (map[string]string, 
 	if err != nil {
 		a.log.Error("browser request failed", "error", err)
 	} else {
-		truncatedResult := probe.TruncateMapStringString(ret, truncateLength)
+		truncatedResult := probe.TruncateMapStringAny(ret, truncateLength)
 		a.log.Debug("browser request completed successfully", "result", truncatedResult)
 	}
 

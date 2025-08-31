@@ -15,17 +15,17 @@ type Action struct {
 	log hclog.Logger
 }
 
-func (a *Action) Run(args []string, with map[string]string) (map[string]string, error) {
+func (a *Action) Run(args []string, with map[string]any) (map[string]any, error) {
 	// Validate that required parameters are provided
 	if len(with) == 0 {
-		return map[string]string{}, errors.New("grpc action requires parameters in 'with' section. Please specify request details like addr, service, method")
+		return map[string]any{}, errors.New("grpc action requires parameters in 'with' section. Please specify request details like addr, service, method")
 	}
 
 	// Use default truncate length, can be overridden by caller
 	truncateLength := probe.MaxLogStringLength
 
 	// Truncate long parameters for logging to prevent log bloat
-	truncatedParams := probe.TruncateMapStringString(with, truncateLength)
+	truncatedParams := probe.TruncateMapStringAny(with, truncateLength)
 	a.log.Debug("received grpc request parameters", "params", truncatedParams)
 
 	before := grpcpkg.WithBefore(func(ctx context.Context, service, method string) {
@@ -40,7 +40,7 @@ func (a *Action) Run(args []string, with map[string]string) (map[string]string, 
 		a.log.Error("grpc request failed", "error", err)
 	} else {
 		// Truncate result for logging to prevent log bloat
-		truncatedResult := probe.TruncateMapStringString(ret, truncateLength)
+		truncatedResult := probe.TruncateMapStringAny(ret, truncateLength)
 		a.log.Debug("grpc request completed successfully", "result", truncatedResult)
 	}
 

@@ -12,15 +12,15 @@ type Action struct {
 	log hclog.Logger
 }
 
-func (a *Action) Run(args []string, with map[string]string) (map[string]string, error) {
+func (a *Action) Run(args []string, with map[string]any) (map[string]any, error) {
 	a.log.Info("Hello!")
 
 	// Add status field (hello action always succeeds)
-	result := make(map[string]string)
+	result := make(map[string]any)
 	for k, v := range with {
 		result[k] = v
 	}
-	result["status"] = "0" // Always success for hello action (ExitStatusSuccess)
+	result["status"] = 0 // Always success for hello action (ExitStatusSuccess)
 
 	return result, nil
 }

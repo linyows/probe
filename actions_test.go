@@ -11,27 +11,27 @@ import (
 
 // MockActions implements the Actions interface for testing
 type MockActions struct {
-	RunFunc func(args []string, with map[string]string) (map[string]string, error)
+	RunFunc func(args []string, with map[string]any) (map[string]any, error)
 }
 
-func (m *MockActions) Run(args []string, with map[string]string) (map[string]string, error) {
+func (m *MockActions) Run(args []string, with map[string]any) (map[string]any, error) {
 	if m.RunFunc != nil {
 		return m.RunFunc(args, with)
 	}
-	return map[string]string{"result": "success"}, nil
+	return map[string]any{"result": "success"}, nil
 }
 
 // MockActionsClient for testing ActionsClient without GRPC
 type MockActionsClient struct {
 }
 
-func (m *MockActionsClient) Run(args []string, with map[string]string) (map[string]string, error) {
+func (m *MockActionsClient) Run(args []string, with map[string]any) (map[string]any, error) {
 	// For unit testing, we can simulate the behavior without actual GRPC calls
 	if len(args) == 0 {
 		return nil, errors.New("no arguments provided")
 	}
 
-	result := map[string]string{
+	result := map[string]any{
 		"action": args[0],
 		"status": "completed",
 	}
@@ -293,15 +293,15 @@ func TestMockActions_Run(t *testing.T) {
 
 	t.Run("custom function", func(t *testing.T) {
 		mock := &MockActions{
-			RunFunc: func(args []string, with map[string]string) (map[string]string, error) {
-				return map[string]string{
+			RunFunc: func(args []string, with map[string]any) (map[string]any, error) {
+				return map[string]any{
 					"custom":     "response",
-					"args_count": string(rune(len(args))),
+					"args_count": len(args),
 				}, nil
 			},
 		}
 
-		result, err := mock.Run([]string{"arg1", "arg2"}, map[string]string{})
+		result, err := mock.Run([]string{"arg1", "arg2"}, map[string]any{})
 
 		if err != nil {
 			t.Errorf("unexpected error: %v", err)
@@ -314,12 +314,12 @@ func TestMockActions_Run(t *testing.T) {
 
 	t.Run("error case", func(t *testing.T) {
 		mock := &MockActions{
-			RunFunc: func(args []string, with map[string]string) (map[string]string, error) {
+			RunFunc: func(args []string, with map[string]any) (map[string]any, error) {
 				return nil, errors.New("test error")
 			},
 		}
 
-		result, err := mock.Run([]string{}, map[string]string{})
+		result, err := mock.Run([]string{}, map[string]any{})
 
 		if err == nil {
 			t.Error("expected error but got none")
