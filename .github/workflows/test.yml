@@ -46,6 +46,8 @@ jobs:
       with:
         run: |
           make http_server
+        wait-on:
+          http-get://localhost:8080/status/200
 
     - name: Run shell.yml by custom action
       uses: linyows/probe-action@v1
