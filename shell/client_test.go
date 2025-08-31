@@ -328,7 +328,6 @@ func TestExecute(t *testing.T) {
 				t.Error("after callback was not called")
 			}
 
-			// Check that result is flattened map
 			if result == nil {
 				t.Error("Execute() returned nil result")
 				return
