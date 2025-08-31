@@ -198,6 +198,7 @@ func (st *Step) processActionResult(actionResult map[string]any, jCtx *JobContex
 	req, _ := actionResult["req"].(map[string]any)
 	res, okres := actionResult["res"].(map[string]any)
 	rt, _ := actionResult["rt"].(string)
+
 	status := parseExitStatus(actionResult["status"])
 
 	if okres {
@@ -425,6 +426,9 @@ func parseExitStatus(status any) int {
 	switch v := status.(type) {
 	case int:
 		return v
+	case float64:
+		// Handle JSON numbers which are parsed as float64
+		return int(v)
 	case string:
 		if v == "0" {
 			return int(ExitStatusSuccess)

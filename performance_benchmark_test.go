@@ -15,14 +15,14 @@ import (
 // Sample test data for benchmarking (compatible with structpb)
 var testData = map[string]any{
 	"user": map[string]any{
-		"id":   123,
-		"name": "John Doe",
-		"age":  30,
+		"id":    123,
+		"name":  "John Doe",
+		"age":   30,
 		"email": "john@example.com",
 		"profile": map[string]any{
 			"bio":      "Software engineer with 10+ years of experience",
 			"location": "San Francisco, CA",
-			"skills": []any{"Go", "Python", "JavaScript", "Docker"},
+			"skills":   []any{"Go", "Python", "JavaScript", "Docker"},
 			"languages": map[string]any{
 				"english":  "native",
 				"spanish":  "conversational",
@@ -30,20 +30,20 @@ var testData = map[string]any{
 			},
 		},
 		"settings": map[string]any{
-			"theme":        "dark",
+			"theme":         "dark",
 			"notifications": true,
-			"privacy":      map[string]any{
+			"privacy": map[string]any{
 				"profile_visible": true,
 				"email_visible":   false,
 			},
 		},
 	},
 	"metadata": map[string]any{
-		"created_at":    "2023-01-15T10:30:00Z",
-		"last_login":    "2023-12-01T14:22:33Z",
-		"login_count":   456,
-		"is_verified":   true,
-		"subscription":  map[string]any{
+		"created_at":  "2023-01-15T10:30:00Z",
+		"last_login":  "2023-12-01T14:22:33Z",
+		"login_count": 456,
+		"is_verified": true,
+		"subscription": map[string]any{
 			"plan":       "premium",
 			"expires_at": "2024-12-31T23:59:59Z",
 			"features":   []any{"api_access", "priority_support", "advanced_analytics"},
@@ -57,11 +57,11 @@ var testData = map[string]any{
 			"enable_cache": true,
 		},
 		"database": map[string]any{
-			"host":         "localhost",
-			"port":         5432,
-			"name":         "myapp_db",
-			"ssl_enabled":  false,
-			"pool_size":    20,
+			"host":        "localhost",
+			"port":        5432,
+			"name":        "myapp_db",
+			"ssl_enabled": false,
+			"pool_size":   20,
 		},
 	},
 }
@@ -178,7 +178,7 @@ func BenchmarkProtobufUnmarshalFlat(b *testing.B) {
 	if err != nil {
 		b.Fatal(err)
 	}
-	
+
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		var unmarshaled performance.FlatDataRequest
@@ -203,7 +203,7 @@ func BenchmarkProtobufUnmarshalStruct(b *testing.B) {
 	if err != nil {
 		b.Fatal(err)
 	}
-	
+
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		var unmarshaled performance.StructDataRequest
@@ -250,23 +250,23 @@ func BenchmarkCompleteWorkflowFlat(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		// 1. Flatten the data
 		flattened := FlattenInterface(testData)
-		
+
 		// 2. Create protobuf message
 		req := &performance.FlatDataRequest{Data: flattened}
-		
+
 		// 3. Marshal to protobuf
 		marshaled, err := proto.Marshal(req)
 		if err != nil {
 			b.Fatal(err)
 		}
-		
+
 		// 4. Unmarshal from protobuf
 		var unmarshaled performance.FlatDataRequest
 		err = proto.Unmarshal(marshaled, &unmarshaled)
 		if err != nil {
 			b.Fatal(err)
 		}
-		
+
 		// 5. Unflatten back to original structure
 		result := UnflattenInterface(unmarshaled.Data)
 		_ = result
@@ -282,23 +282,23 @@ func BenchmarkCompleteWorkflowStruct(b *testing.B) {
 		if err != nil {
 			b.Fatal(err)
 		}
-		
+
 		// 2. Create protobuf message
 		req := &performance.StructDataRequest{Data: structData}
-		
+
 		// 3. Marshal to protobuf
 		marshaled, err := proto.Marshal(req)
 		if err != nil {
 			b.Fatal(err)
 		}
-		
+
 		// 4. Unmarshal from protobuf
 		var unmarshaled performance.StructDataRequest
 		err = proto.Unmarshal(marshaled, &unmarshaled)
 		if err != nil {
 			b.Fatal(err)
 		}
-		
+
 		// 5. Convert back to map
 		result := unmarshaled.Data.AsMap()
 		_ = result

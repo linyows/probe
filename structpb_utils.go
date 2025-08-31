@@ -6,7 +6,7 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
-	
+
 	"google.golang.org/protobuf/types/known/structpb"
 )
 
@@ -26,45 +26,43 @@ func MapToStruct(m map[string]any) (*structpb.Struct, error) {
 	return structpb.NewStruct(m)
 }
 
-// MapToStructFlat creates a protobuf Struct from map[string]any and returns flattened map[string]string
-// This function provides high-performance data processing using protobuf.Struct internally
+// MapToStructFlat is deprecated - use MapToStruct and StructToMap directly
+// This function now returns the input map converted to string values without flattening
 func MapToStructFlat(m map[string]any) (map[string]string, error) {
-	// Use protobuf.Struct for validation and processing
-	structData, err := structpb.NewStruct(m)
-	if err != nil {
-		// Fall back to original flattening for unsupported types
-		return FlattenInterface(m), nil
+	// Convert map[string]any to map[string]string without flattening
+	result := make(map[string]string)
+	for k, v := range m {
+		if str, ok := v.(string); ok {
+			result[k] = str
+		} else {
+			result[k] = fmt.Sprintf("%v", v)
+		}
 	}
-	
-	// Convert back to map for processing 
-	processedMap := structData.AsMap()
-	
-	// Return flattened result for API compatibility using direct implementation
-	return flattenMap(processedMap, ""), nil
+	return result, nil
 }
 
-// StructFlatToMap converts a flattened map[string]string to map[string]any using protobuf Struct
-// This function provides high-performance data processing using protobuf.Struct internally
+// StructFlatToMap is deprecated - use MapToStruct and StructToMap directly
+// This function now simply converts map[string]string to map[string]any without unflattening
 func StructFlatToMap(flat map[string]string) map[string]any {
-	// First unflatten using direct implementation
-	unflattened := unflattenMap(flat)
-	
-	// Use protobuf.Struct for validation and normalization
-	structData, err := structpb.NewStruct(unflattened)
-	if err != nil {
-		// Fall back to original approach for unsupported data
-		return unflattened
+	// Convert map[string]string to map[string]any without unflattening
+	result := make(map[string]any)
+	for k, v := range flat {
+		// Try to parse as number first
+		if intValue, err := strconv.Atoi(v); err == nil {
+			result[k] = intValue
+		} else if floatValue, err := strconv.ParseFloat(v, 64); err == nil {
+			result[k] = floatValue
+		} else {
+			result[k] = v
+		}
 	}
-	
-	// Convert back to map and fix numeric type issues
-	result := structData.AsMap()
-	return normalizeNumericTypes(result)
+	return result
 }
 
 // normalizeNumericTypes converts float64 values to int where appropriate
 func normalizeNumericTypes(data map[string]any) map[string]any {
 	result := make(map[string]any)
-	
+
 	for key, value := range data {
 		switch v := value.(type) {
 		case float64:
@@ -94,7 +92,7 @@ func normalizeNumericTypes(data map[string]any) map[string]any {
 			result[key] = v
 		}
 	}
-	
+
 	return result
 }
 
@@ -106,7 +104,7 @@ func FlattenInterface(input any) map[string]string {
 	return flattenMap(input, "")
 }
 
-// UnflattenInterface provides backward compatibility with the old API  
+// UnflattenInterface provides backward compatibility with the old API
 func UnflattenInterface(flatMap map[string]string) map[string]any {
 	return unflattenMap(flatMap)
 }
@@ -157,7 +155,7 @@ func unflattenMap(flatMap map[string]string) map[string]any {
 	}
 
 	converted := convertMapsToArraysAndNumericStrings(result)
-	
+
 	// Check if the root level forms an array
 	if shouldConvertToArray(converted) {
 		// Return a wrapper map containing the array
@@ -249,7 +247,7 @@ func ConvertBodyToJson(data map[string]string) error {
 	if len(bodyData) > 0 {
 		// Use new unflatten implementation
 		unflattenedData := unflattenMap(bodyData)
-		
+
 		// Check if the result is a root array (indicated by __array_root key)
 		var dataToMarshal any = unflattenedData
 		if arrayRoot, ok := unflattenedData["__array_root"]; ok {

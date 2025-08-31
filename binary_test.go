@@ -69,50 +69,50 @@ func TestSaveBinaryToTempFile(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			filePath, err := SaveBinaryToTempFile(tt.data, tt.contentType)
-			
+
 			if tt.wantErr {
 				if err == nil {
 					t.Error("expected error, got nil")
 				}
 				return
 			}
-			
+
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
-			
+
 			if tt.wantEmpty {
 				if filePath != "" {
 					t.Errorf("expected empty filepath, got %q", filePath)
 				}
 				return
 			}
-			
+
 			// Verify file was created
 			if filePath == "" {
 				t.Error("expected non-empty filepath")
 				return
 			}
-			
+
 			// Check file exists
 			if _, err := os.Stat(filePath); os.IsNotExist(err) {
 				t.Errorf("file was not created at %q", filePath)
 				return
 			}
-			
+
 			// Clean up
 			defer func() { _ = os.Remove(filePath) }()
-			
+
 			// Verify file contents
 			savedData, err := os.ReadFile(filePath)
 			if err != nil {
 				t.Fatalf("failed to read saved file: %v", err)
 			}
-			
+
 			if len(savedData) != len(tt.data) {
 				t.Errorf("saved data length = %d, expected %d", len(savedData), len(tt.data))
 			}
-			
+
 			for i, b := range tt.data {
 				if i >= len(savedData) || savedData[i] != b {
 					t.Errorf("saved data differs at byte %d", i)
@@ -125,12 +125,12 @@ func TestSaveBinaryToTempFile(t *testing.T) {
 
 func TestProcessHttpBody(t *testing.T) {
 	tests := []struct {
-		name           string
-		data           []byte
-		contentType    string
-		expectedBody   string
-		expectedFile   bool
-		wantErr        bool
+		name         string
+		data         []byte
+		contentType  string
+		expectedBody string
+		expectedFile bool
+		wantErr      bool
 	}{
 		{
 			name:         "empty data",
@@ -172,29 +172,29 @@ func TestProcessHttpBody(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			bodyString, filePath, err := ProcessHttpBody(tt.data, tt.contentType)
-			
+
 			if tt.wantErr {
 				if err == nil {
 					t.Error("expected error, got nil")
 				}
 				return
 			}
-			
+
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
-			
+
 			if bodyString != tt.expectedBody {
 				t.Errorf("body = %q, expected %q", bodyString, tt.expectedBody)
 			}
-			
+
 			if tt.expectedFile {
 				if filePath == "" {
 					t.Error("expected non-empty filepath for binary data")
 				} else {
 					// Clean up
 					defer func() { _ = os.Remove(filePath) }()
-					
+
 					// Verify file exists
 					if _, err := os.Stat(filePath); os.IsNotExist(err) {
 						t.Errorf("binary file was not created at %q", filePath)

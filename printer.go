@@ -78,6 +78,22 @@ func TruncateMapStringString(params map[string]string, maxLen int) map[string]st
 	return truncated
 }
 
+// TruncateMapStringAny truncates long values in map[string]any for logging
+func TruncateMapStringAny(params map[string]any, maxLen int) map[string]any {
+	truncated := make(map[string]any)
+	for key, value := range params {
+		switch v := value.(type) {
+		case string:
+			truncated[key] = TruncateString(v, maxLen)
+		default:
+			// For non-string values, convert to string first, then truncate
+			str := fmt.Sprintf("%v", v)
+			truncated[key] = TruncateString(str, maxLen)
+		}
+	}
+	return truncated
+}
+
 // Icon constants
 const (
 	IconSuccess  = "✓ "
