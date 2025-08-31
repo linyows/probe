@@ -25,6 +25,14 @@ code:
 	#@which buf || brew install bufbuild/buf/buf
 	buf generate
 
+http_server:
+	go run github.com/mccutchen/go-httpbin/v2/cmd/go-httpbin@latest -host 127.0.0.1 -port 8080
+
+http_server_tls:
+	go run github.com/mccutchen/go-httpbin/v2/cmd/go-httpbin@latest -host 127.0.0.1 -port 8080 \
+		-https-cert-file ./testdata/server.crt \
+		-https-key-file ./testdata/server.key
+
 grpc_server:
 	go run grpc/testserver/*.go
 

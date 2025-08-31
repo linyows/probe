@@ -1,7 +1,7 @@
 name: REST API Example
 vars:
   token: "{{TOKEN ?? 'secret'}}"
-  url: "{{URL ?? 'https://httpbin.org'}}"
+  url: "{{URL ?? 'http://localhost:8080'}}"
 
 jobs:
 - name: "Request to {{vars.url}}"
@@ -33,7 +33,7 @@ jobs:
       get: /get
     test: |
       res.code == 200 &&
-      res.body.url == "https://httpbin.org/get"
+      res.body.url == "http://localhost:8080/get"
   - name: Update
     uses: http
     with:

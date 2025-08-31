@@ -20,11 +20,13 @@ type Req struct {
 }
 
 type Res struct {
-	Code   int    `map:"code"`
-	Sent   int    `map:"sent"`
-	Failed int    `map:"failed"`
-	Total  int    `map:"total"`
-	Error  string `map:"error"`
+	Code     int    `map:"code"`
+	Sent     int    `map:"sent"`
+	Failed   int    `map:"failed"`
+	Total    int    `map:"total"`
+	Error    string `map:"error"`
+	MailData string `map:"maildata"` // For text mail data
+	FilePath string `map:"filepath"` // For binary mail data files
 }
 
 type Result struct {
@@ -50,17 +52,18 @@ func NewReq() *Req {
 }
 
 func (r *Req) Do() (*Result, error) {
+	// Always create result with current request data, even if validation fails
+	result := &Result{Req: *r}
+
 	if r.Addr == "" {
-		return nil, fmt.Errorf("Req.Addr is required")
+		return result, fmt.Errorf("Req.Addr is required")
 	}
 	if r.From == "" {
-		return nil, fmt.Errorf("Req.From is required")
+		return result, fmt.Errorf("Req.From is required")
 	}
 	if r.To == "" {
-		return nil, fmt.Errorf("Req.To is required")
+		return result, fmt.Errorf("Req.To is required")
 	}
-
-	result := &Result{Req: *r}
 
 	// callback before
 	if r.cb != nil && r.cb.before != nil {
@@ -88,8 +91,14 @@ func (r *Req) Do() (*Result, error) {
 		params["length"] = fmt.Sprintf("%d", r.Length)
 	}
 
+	// Convert params to map[string]any for NewBulk
+	paramsAny := make(map[string]any)
+	for k, v := range params {
+		paramsAny[k] = v
+	}
+
 	// Create bulk mailer
-	bulk, err := NewBulk(params)
+	bulk, err := NewBulk(paramsAny)
 	if err != nil {
 		return result, fmt.Errorf("failed to create bulk mailer: %w", err)
 	}
@@ -104,12 +113,23 @@ func (r *Req) Do() (*Result, error) {
 		status = 0 // success if no failures and at least one sent
 	}
 
+	// Get mail data for processing
+	mailData := bulk.MakeData()
+
+	// Process mail data (check if it's text or binary)
+	bodyString, filePath, err := probe.ProcessHttpBody(mailData, "text/plain")
+	if err != nil {
+		return result, fmt.Errorf("failed to process mail data: %w", err)
+	}
+
 	result.Res = Res{
-		Code:   status,
-		Sent:   deliveryResult.Sent,
-		Failed: deliveryResult.Failed,
-		Total:  deliveryResult.Total,
-		Error:  deliveryResult.Error,
+		Code:     status,
+		Sent:     deliveryResult.Sent,
+		Failed:   deliveryResult.Failed,
+		Total:    deliveryResult.Total,
+		Error:    deliveryResult.Error,
+		MailData: bodyString,
+		FilePath: filePath,
 	}
 	result.Status = status
 
@@ -126,14 +146,23 @@ func (r *Req) Do() (*Result, error) {
 	return result, nil
 }
 
-func Send(data map[string]string, opts ...Option) (map[string]string, error) {
-	// Create a copy to avoid modifying the original data
+func Send(data map[string]any, opts ...Option) (map[string]any, error) {
+	// Convert map[string]any to map[string]string for internal processing
 	dataCopy := make(map[string]string)
 	for k, v := range data {
-		dataCopy[k] = v
+		if str, ok := v.(string); ok {
+			dataCopy[k] = str
+		} else {
+			dataCopy[k] = fmt.Sprintf("%v", v)
+		}
 	}
 
-	m := probe.HeaderToStringValue(probe.UnflattenInterface(dataCopy))
+	// Convert map[string]string to map[string]any for HeaderToStringValue
+	dataCopyAny := make(map[string]any)
+	for k, v := range dataCopy {
+		dataCopyAny[k] = v
+	}
+	m := probe.HeaderToStringValue(dataCopyAny)
 
 	r := NewReq()
 
@@ -143,28 +172,34 @@ func Send(data map[string]string, opts ...Option) (map[string]string, error) {
 	}
 	r.cb = cb
 
-	if err := probe.MapToStructByTags(m, r); err != nil {
-		return map[string]string{}, err
-	}
+	mapErr := probe.MapToStructByTags(m, r)
 
 	result, err := r.Do()
-	if err != nil {
+	if err != nil || mapErr != nil {
 		// Even on error, try to return a structured result if we have one
 		if result != nil {
-			mapResult, mapErr := probe.StructToMapByTags(result)
-			if mapErr == nil {
-				return probe.FlattenInterface(mapResult), err
+			mapResult, structErr := probe.StructToMapByTags(result)
+			if structErr == nil {
+				// Return the original error (either mapErr or err)
+				if mapErr != nil {
+					return mapResult, mapErr
+				}
+				return mapResult, err
 			}
 		}
-		return map[string]string{}, err
+		// If we can't create a structured result, return the original error
+		if mapErr != nil {
+			return map[string]any{}, mapErr
+		}
+		return map[string]any{}, err
 	}
 
 	mapResult, err := probe.StructToMapByTags(result)
 	if err != nil {
-		return map[string]string{}, err
+		return map[string]any{}, err
 	}
 
-	return probe.FlattenInterface(mapResult), nil
+	return mapResult, nil
 }
 
 func WithBefore(f func(from string, to string, subject string)) Option {

@@ -9,12 +9,12 @@ import (
 func TestParseParams(t *testing.T) {
 	tests := []struct {
 		name    string
-		input   map[string]string
+		input   map[string]any
 		wantErr bool
 	}{
 		{
 			name: "valid mysql dsn",
-			input: map[string]string{
+			input: map[string]any{
 				"dsn":   "mysql://user:pass@localhost:3306/testdb",
 				"query": "SELECT * FROM users",
 			},
@@ -22,7 +22,7 @@ func TestParseParams(t *testing.T) {
 		},
 		{
 			name: "valid postgres dsn",
-			input: map[string]string{
+			input: map[string]any{
 				"dsn":   "postgres://user:pass@localhost:5432/testdb",
 				"query": "SELECT * FROM users",
 			},
@@ -30,7 +30,7 @@ func TestParseParams(t *testing.T) {
 		},
 		{
 			name: "valid sqlite dsn",
-			input: map[string]string{
+			input: map[string]any{
 				"dsn":   "test.db",
 				"query": "SELECT * FROM users",
 			},
@@ -38,21 +38,21 @@ func TestParseParams(t *testing.T) {
 		},
 		{
 			name: "missing dsn",
-			input: map[string]string{
+			input: map[string]any{
 				"query": "SELECT * FROM users",
 			},
 			wantErr: true,
 		},
 		{
 			name: "missing query",
-			input: map[string]string{
+			input: map[string]any{
 				"dsn": "mysql://user:pass@localhost:3306/testdb",
 			},
 			wantErr: true,
 		},
 		{
 			name: "invalid dsn format",
-			input: map[string]string{
+			input: map[string]any{
 				"dsn":   "invalid://dsn",
 				"query": "SELECT * FROM users",
 			},
@@ -60,7 +60,7 @@ func TestParseParams(t *testing.T) {
 		},
 		{
 			name: "with timeout",
-			input: map[string]string{
+			input: map[string]any{
 				"dsn":     "mysql://user:pass@localhost:3306/testdb",
 				"query":   "SELECT * FROM users",
 				"timeout": "30s",
@@ -69,7 +69,7 @@ func TestParseParams(t *testing.T) {
 		},
 		{
 			name: "with params",
-			input: map[string]string{
+			input: map[string]any{
 				"dsn":    "mysql://user:pass@localhost:3306/testdb",
 				"query":  "SELECT * FROM users WHERE id = ?",
 				"param1": "123",
@@ -115,26 +115,26 @@ func TestReqStruct(t *testing.T) {
 func TestValidationErrors(t *testing.T) {
 	tests := []struct {
 		name        string
-		data        map[string]string
+		data        map[string]any
 		expectError bool
 	}{
 		{
 			name: "missing dsn",
-			data: map[string]string{
+			data: map[string]any{
 				"query": "SELECT 1",
 			},
 			expectError: true,
 		},
 		{
 			name: "missing query",
-			data: map[string]string{
+			data: map[string]any{
 				"dsn": "mysql://user:pass@localhost:3306/testdb",
 			},
 			expectError: true,
 		},
 		{
 			name: "empty dsn",
-			data: map[string]string{
+			data: map[string]any{
 				"dsn":   "",
 				"query": "SELECT 1",
 			},
@@ -142,7 +142,7 @@ func TestValidationErrors(t *testing.T) {
 		},
 		{
 			name: "empty query",
-			data: map[string]string{
+			data: map[string]any{
 				"dsn":   "mysql://user:pass@localhost:3306/testdb",
 				"query": "",
 			},
@@ -171,26 +171,26 @@ func TestValidationErrors(t *testing.T) {
 func TestExecuteQuery(t *testing.T) {
 	tests := []struct {
 		name        string
-		data        map[string]string
+		data        map[string]any
 		expectError bool
 	}{
 		{
 			name: "missing required dsn",
-			data: map[string]string{
+			data: map[string]any{
 				"query": "SELECT 1",
 			},
 			expectError: true,
 		},
 		{
 			name: "missing required query",
-			data: map[string]string{
+			data: map[string]any{
 				"dsn": "mysql://user:pass@localhost:3306/testdb",
 			},
 			expectError: true,
 		},
 		{
 			name: "empty dsn",
-			data: map[string]string{
+			data: map[string]any{
 				"dsn":   "",
 				"query": "SELECT 1",
 			},
@@ -198,7 +198,7 @@ func TestExecuteQuery(t *testing.T) {
 		},
 		{
 			name: "empty query",
-			data: map[string]string{
+			data: map[string]any{
 				"dsn":   "mysql://user:pass@localhost:3306/testdb",
 				"query": "",
 			},

@@ -187,24 +187,66 @@ func WithAfter(f func(res *Res)) Option {
 	}
 }
 
-func Request(data map[string]string, opts ...Option) (map[string]string, error) {
-	m := probe.UnflattenInterface(data)
+func Request(data map[string]any, opts ...Option) (map[string]any, error) {
+	m := probe.HeaderToStringValue(data)
+
+	// Manually handle type conversions BEFORE MapToStructByTags to prevent reflection panics
+	if portInput, exists := m["port"]; exists {
+		if portStr, ok := portInput.(string); ok {
+			if portInt, err := strconv.Atoi(portStr); err == nil {
+				m["port"] = portInt
+			}
+		}
+	}
+
+	if tlsInput, exists := m["tls"]; exists {
+		if tlsStr, ok := tlsInput.(string); ok {
+			if tlsBool, err := strconv.ParseBool(tlsStr); err == nil {
+				m["tls"] = tlsBool
+			}
+		}
+	}
+
+	if strictInput, exists := m["strict_host_check"]; exists {
+		if strictStr, ok := strictInput.(string); ok {
+			if strictBool, err := strconv.ParseBool(strictStr); err == nil {
+				m["strict_host_check"] = strictBool
+			}
+		}
+	}
+
+	if insecureInput, exists := m["insecure_skip_tls"]; exists {
+		if insecureStr, ok := insecureInput.(string); ok {
+			if insecureBool, err := strconv.ParseBool(insecureStr); err == nil {
+				m["insecure_skip_tls"] = insecureBool
+			}
+		}
+	}
+
+	if timeoutInput, exists := m["timeout"]; exists {
+		if timeoutStr, ok := timeoutInput.(string); ok {
+			if timeoutDuration, err := time.ParseDuration(timeoutStr); err == nil {
+				m["timeout"] = timeoutDuration
+			}
+		}
+	}
+
 	r := NewReq()
 	if err := probe.MapToStructByTags(m, r); err != nil {
-		return map[string]string{}, fmt.Errorf("failed in map-to-struct-by-tags for data: %w", err)
+		return map[string]any{}, fmt.Errorf("failed in map-to-struct-by-tags for data: %w", err)
 	}
 
 	ret, err := r.Do()
 	if err != nil {
-		return map[string]string{}, fmt.Errorf("failed to Do(): %w", err)
+		return map[string]any{}, fmt.Errorf("failed to Do(): %w", err)
 	}
 
 	mapRet, err := probe.StructToMapByTags(ret)
 	if err != nil {
-		return map[string]string{}, fmt.Errorf("failed in struct-to-map-by-tags for result: %w", err)
+		return map[string]any{}, fmt.Errorf("failed in struct-to-map-by-tags for result: %w", err)
 	}
 
-	return probe.FlattenInterface(mapRet), nil
+	return mapRet, nil
 }
 
 func NewReq() *Req {

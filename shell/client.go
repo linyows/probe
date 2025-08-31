@@ -157,16 +157,17 @@ func parseTimeout(timeoutStr string) (time.Duration, error) {
 }
 
 func (r *Req) Do() (*Result, error) {
+	// Always create result with current request data, even if validation fails
+	result := &Result{Req: *r}
+
 	if r.Cmd == "" {
-		return nil, fmt.Errorf("Req.Cmd is required")
+		return result, fmt.Errorf("Req.Cmd is required")
 	}
 
 	params, err := parseParams(r)
 	if err != nil {
-		return nil, err
+		return result, err
 	}
-
-	result := &Result{Req: *r}
 
 	// callback before
 	if r.cb != nil && r.cb.before != nil {
@@ -304,19 +305,28 @@ func PrepareRequestData(data map[string]string) error {
 	return nil
 }
 
-func Execute(data map[string]string, opts ...Option) (map[string]string, error) {
-	// Create a copy to avoid modifying the original data
+func Execute(data map[string]any, opts ...Option) (map[string]any, error) {
+	// Create a copy to avoid modifying the original data and convert to map[string]string for compatibility
 	dataCopy := make(map[string]string)
 	for k, v := range data {
-		dataCopy[k] = v
+		if str, ok := v.(string); ok {
+			dataCopy[k] = str
+		} else {
+			dataCopy[k] = fmt.Sprintf("%v", v)
+		}
 	}
 
 	// Prepare request data
 	if err := PrepareRequestData(dataCopy); err != nil {
-		return map[string]string{}, err
+		return map[string]any{}, err
 	}
 
-	m := probe.HeaderToStringValue(probe.UnflattenInterface(dataCopy))
+	// Convert dataCopy (map[string]string) directly to map[string]any
+	m := make(map[string]any)
+	for k, v := range dataCopy {
+		m[k] = v
+	}
+	m = probe.HeaderToStringValue(m)
 
 	r := NewReq()
 
@@ -326,21 +336,35 @@ func Execute(data map[string]string, opts ...Option) (map[string]string, error) 
 	}
 	r.cb = cb
 
-	if err := probe.MapToStructByTags(m, r); err != nil {
-		return map[string]string{}, err
-	}
+	mapErr := probe.MapToStructByTags(m, r)
 
 	result, err := r.Do()
-	if err != nil {
-		return map[string]string{}, err
+	if err != nil || mapErr != nil {
+		// Even on error, try to return a structured result if we have one
+		if result != nil {
+			mapResult, structErr := probe.StructToMapByTags(result)
+			if structErr == nil {
+				// Return the original error (either mapErr or err)
+				if mapErr != nil {
+					return mapResult, mapErr
+				}
+				return mapResult, err
+			}
+		}
+		// If we can't create a structured result, return the original error
+		if mapErr != nil {
+			return map[string]any{}, mapErr
+		}
+		return map[string]any{}, err
 	}
 
 	mapResult, err := probe.StructToMapByTags(result)
 	if err != nil {
-		return map[string]string{}, err
+		return map[string]any{}, err
 	}
 
-	return probe.FlattenInterface(mapResult), nil
+	// Return the result directly without flattening
+	return mapResult, nil
 }
 
 func WithBefore(f func(cmd string, shell string, workdir string)) Option {

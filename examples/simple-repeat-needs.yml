@@ -7,7 +7,7 @@ jobs:
     interval: 1
   defaults:
     http:
-      url: https://httpbin.org
+      url: http://localhost:8080
   steps:
   - name: First step
     uses: http
@@ -18,7 +18,7 @@ jobs:
   needs: [first]
   defaults:
     http:
-      url: https://httpbin.org  
+      url: http://localhost:8080
   steps:
   - name: Second step
     uses: http

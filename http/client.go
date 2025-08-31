@@ -1,8 +1,9 @@
 package http
 
 import (
-	"bytes"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	hp "net/http"
 	"net/url"
@@ -10,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/hashicorp/go-hclog"
 	"github.com/linyows/probe"
 )
 
@@ -23,15 +25,16 @@ type Req struct {
 	Method string            `map:"method" validate:"required"`
 	Proto  string            `map:"ver"`
 	Header map[string]string `map:"headers"`
-	Body   []byte            `map:"body"`
+	Body   string            `map:"body"` // Changed from []byte to string for text data
 	cb     *Callback
 }
 
 type Res struct {
-	Status string            `map:"status"`
-	Code   int               `map:"code"`
-	Header map[string]string `map:"headers"`
-	Body   []byte            `map:"body"`
+	Status   string            `map:"status"`
+	Code     int               `map:"code"`
+	Header   map[string]string `map:"headers"`
+	Body     string            `map:"body"`     // Changed from []byte to string for text data
+	FilePath string            `map:"filepath"` // New field for binary file paths
 }
 
 type Result struct {
@@ -94,13 +97,19 @@ func (r *Req) Do() (*Result, error) {
 		return nil, errors.New("Req.URL is required")
 	}
 
-	req, err := hp.NewRequest(r.Method, r.URL, bytes.NewBuffer(r.Body))
+	// Debug: log the body content and content-type
+	log := hclog.Default()
+	log.Info("DEBUG: HTTP Request Body", "body", r.Body, "headers", r.Header)
+
+	req, err := hp.NewRequest(r.Method, r.URL, strings.NewReader(r.Body))
 	if err != nil {
 		return nil, err
 	}
 
 	for k, v := range r.Header {
-		req.Header.Set(probe.TitleCase(k, "-"), v)
+		// Clean header value by removing newlines and other invalid characters
+		cleanValue := strings.ReplaceAll(strings.ReplaceAll(v, "\n", ""), "\r", "")
+		req.Header.Set(probe.TitleCase(k, "-"), cleanValue)
 	}
 
 	// callback
@@ -140,7 +149,15 @@ func (r *Req) Do() (*Result, error) {
 	if err != nil {
 		return result, err
 	}
-	result.Res.Body = body
+
+	// Process body based on Content-Type
+	contentType := res.Header.Get("Content-Type")
+	bodyString, filePath, err := probe.ProcessHttpBody(body, contentType)
+	if err != nil {
+		return result, err
+	}
+	result.Res.Body = bodyString
+	result.Res.FilePath = filePath
 
 	header := make(map[string]string)
 	for k, v := range res.Header {
@@ -175,12 +192,17 @@ var httpMethods = []string{
 
 // ResolveMethodAndURL resolves HTTP method fields and updates the data map
 // Converts method fields like "get", "post" to "method" and "url" fields
-func ResolveMethodAndURL(data map[string]string) error {
+func ResolveMethodAndURL(data map[string]any) error {
 	for _, method := range httpMethods {
 		lowerMethod := strings.ToLower(method)
-		route, ok := data[lowerMethod]
+		routeValue, ok := data[lowerMethod]
 		if !ok {
 			continue
+		}
+
+		route, ok := routeValue.(string)
+		if !ok {
+			return fmt.Errorf("method field %s must be a string", lowerMethod)
 		}
 
 		data["method"] = method
@@ -191,9 +213,14 @@ func ResolveMethodAndURL(data map[string]string) error {
 			data["url"] = route
 		} else {
 			// If route is a relative path, combine with base URL
-			baseURL, ok := data["url"]
+			baseURLValue, ok := data["url"]
 			if !ok {
 				return errors.New("url is missing for relative path")
+			}
+
+			baseURL, ok := baseURLValue.(string)
+			if !ok {
+				return fmt.Errorf("base URL must be a string")
 			}
 
 			// renew url as full-url
@@ -211,67 +238,41 @@ func ResolveMethodAndURL(data map[string]string) error {
 	return nil
 }
 
-// ConvertBodyToFormEncoded converts body__ prefixed fields to form-encoded body
-func ConvertBodyToFormEncoded(data map[string]string) error {
-	values := url.Values{}
-
-	for key, value := range data {
-		if strings.HasPrefix(key, "body__") {
-			newKey := strings.TrimPrefix(key, "body__")
-			values.Add(newKey, value)
-			delete(data, key)
-		}
-	}
-
-	if len(values) > 0 {
-		data["body"] = values.Encode()
-		data["headers__content-type"] = "application/x-www-form-urlencoded"
-	}
-
-	return nil
-}
-
-// PrepareRequestData prepares all request data including method fields and body conversion
-func PrepareRequestData(data map[string]string) error {
-	// Resolve HTTP method fields first
-	if err := ResolveMethodAndURL(data); err != nil {
-		return err
-	}
-
-	// Handle body conversion based on content-type
-	contentType, exists := data["headers__content-type"]
-	if exists && contentType == "application/json" {
-		if err := probe.ConvertBodyToJson(data); err != nil {
-			return err
-		}
-	} else {
-		if err := ConvertBodyToFormEncoded(data); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-func Request(data map[string]string, opts ...Option) (map[string]string, error) {
+func Request(data map[string]any, opts ...Option) (map[string]any, error) {
 	// Create a copy to avoid modifying the original data
-	dataCopy := make(map[string]string)
+	m := make(map[string]any)
 	for k, v := range data {
-		dataCopy[k] = v
+		m[k] = v
 	}
 
-	// Prepare request data (resolve method fields and convert body)
-	if err := PrepareRequestData(dataCopy); err != nil {
-		return map[string]string{}, err
+	// Resolve HTTP method fields (get, post, etc.) to method and url
+	if err := ResolveMethodAndURL(m); err != nil {
+		return map[string]any{}, err
 	}
 
-	m := probe.HeaderToStringValue(probe.UnflattenInterface(dataCopy))
+	// Handle body conversion for JSON content-type by checking headers
+	if headers, ok := data["headers"].(map[string]any); ok {
+		if contentType, exists := headers["content-type"]; exists && contentType == "application/json" {
+			if bodyData, bodyExists := data["body"]; bodyExists {
+				if bodyMap, isMap := bodyData.(map[string]any); isMap {
+					// Convert body map to JSON string
+					if jsonBytes, err := json.Marshal(bodyMap); err == nil {
+						m["body"] = string(jsonBytes)
+					}
+				}
+			}
+		}
+	}
+
+	m = probe.HeaderToStringValue(m)
 
 	// Extract custom headers and merge with defaults before MapToStructByTags
 	var customHeaders map[string]string
 	if headersInterface, exists := m["headers"]; exists {
+		hclog.Default().Info("DEBUG: Processing headers", "headers", headersInterface, "type", fmt.Sprintf("%T", headersInterface))
 		if headers, ok := headersInterface.(map[string]string); ok {
 			customHeaders = headers
+			hclog.Default().Info("DEBUG: Headers matched map[string]string")
 		} else if headersInterfaceMap, ok := headersInterface.(map[string]interface{}); ok {
 			// Convert map[string]interface{} to map[string]string
 			customHeaders = make(map[string]string)
@@ -280,7 +281,20 @@ func Request(data map[string]string, opts ...Option) (map[string]string, error) 
 					customHeaders[k] = strVal
 				}
 			}
+			hclog.Default().Info("DEBUG: Headers matched map[string]interface{}")
+		} else if headersAnyMap, ok := headersInterface.(map[string]any); ok {
+			// Convert map[string]any to map[string]string
+			customHeaders = make(map[string]string)
+			for k, v := range headersAnyMap {
+				if strVal, ok := v.(string); ok {
+					customHeaders[k] = strVal
+				}
+			}
+			hclog.Default().Info("DEBUG: Headers matched map[string]any")
+		} else {
+			hclog.Default().Info("DEBUG: Headers type not matched")
 		}
+		hclog.Default().Info("DEBUG: Extracted custom headers", "customHeaders", customHeaders)
 	}
 
 	// Create new request with merged headers
@@ -297,20 +311,21 @@ func Request(data map[string]string, opts ...Option) (map[string]string, error) 
 	r.cb = cb
 
 	if err := probe.MapToStructByTags(m, r); err != nil {
-		return map[string]string{}, err
+		return map[string]any{}, err
 	}
 
 	ret, err := r.Do()
 	if err != nil {
-		return map[string]string{}, err
+		return map[string]any{}, err
 	}
 
 	mapRet, err := probe.StructToMapByTags(ret)
 	if err != nil {
-		return map[string]string{}, err
+		return map[string]any{}, err
 	}
 
-	return probe.FlattenInterface(mapRet), nil
+	// Return the result directly without flattening
+	return mapRet, nil
 }
 
 func WithBefore(f func(req *hp.Request)) Option {

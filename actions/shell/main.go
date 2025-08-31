@@ -14,17 +14,17 @@ type Action struct {
 	log hclog.Logger
 }
 
-func (a *Action) Run(args []string, with map[string]string) (map[string]string, error) {
+func (a *Action) Run(args []string, with map[string]any) (map[string]any, error) {
 	// Validate that required parameters are provided
 	if len(with) == 0 {
-		return map[string]string{}, errors.New("shell action requires parameters in 'with' section. Please specify command details like cmd")
+		return map[string]any{}, errors.New("shell action requires parameters in 'with' section. Please specify command details like cmd")
 	}
 
 	// Use default truncate length, can be overridden by caller
 	truncateLength := probe.MaxLogStringLength
 
 	// Truncate long parameters for logging to prevent log bloat
-	truncatedParams := probe.TruncateMapStringString(with, truncateLength)
+	truncatedParams := probe.TruncateMapStringAny(with, truncateLength)
 	a.log.Debug("received shell request parameters", "params", truncatedParams)
 
 	before := shell.WithBefore(func(cmd string, shell string, workdir string) {
@@ -39,7 +39,7 @@ func (a *Action) Run(args []string, with map[string]string) (map[string]string, 
 		a.log.Error("shell command failed", "error", err)
 	} else {
 		// Truncate result for logging to prevent log bloat
-		truncatedResult := probe.TruncateMapStringString(ret, truncateLength)
+		truncatedResult := probe.TruncateMapStringAny(ret, truncateLength)
 		a.log.Debug("shell command completed successfully", "result", truncatedResult)
 	}
 

@@ -13,7 +13,7 @@ jobs:
   - name: Check environment
     uses: http
     with:
-      url: https://httpbin.org
+      url: http://localhost:8080
       get: /status
 
 - id: test
@@ -24,7 +24,7 @@ jobs:
   - name: Execute tests
     uses: http
     with:
-      url: https://httpbin.org
+      url: http://localhost:8080
       get: /status
 
 - id: build
@@ -34,7 +34,7 @@ jobs:
   - name: Build app
     uses: http
     with:
-      url: https://httpbin.org
+      url: http://localhost:8080
       get: /status
 
 - id: deploy-production
@@ -45,7 +45,7 @@ jobs:
   - name: Deploy app
     uses: http
     with:
-      url: https://httpbin.org
+      url: http://localhost:8080
       get: /status
 
 - id: cleanup
@@ -55,5 +55,5 @@ jobs:
   - name: Clean up
     uses: http
     with:
-      url: https://httpbin.org
+      url: http://localhost:8080
       get: /status

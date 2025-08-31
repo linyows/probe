@@ -107,10 +107,11 @@ type ChromeDPAction struct {
 	Selector  string   `map:"selector"`
 	Attribute []string `map:"attribute"`
 	Value     string   `map:"value"`
-	Path      string   `map:"path"`
+	Path      string   `map:"path"` // Deprecated: use FilePath from results
 	Quality   int      `map:"quality"`
 	reText    *string
 	reBuf     *[]byte
+	filePath  *string // New: for binary file path
 }
 
 func NewChromeDPAction() *ChromeDPAction {
@@ -140,8 +141,9 @@ func NewReq() *Req {
 }
 
 type Res struct {
-	Code    int               `map:"code"`
-	Results map[string]string `map:"results"`
+	Code      int               `map:"code"`
+	Results   map[string]string `map:"results"`
+	FilePaths map[string]string `map:"filepaths"` // New: for binary file paths (action_id -> filepath)
 }
 
 type Result struct {
@@ -151,9 +153,7 @@ type Result struct {
 	Status int           `map:"status"`
 }
 
-func (req *Req) parseData(data map[string]string, opts []Option) error {
-	unflattened := probe.UnflattenInterface(data)
-
+func (req *Req) parseData(data map[string]any, opts []Option) error {
 	cb := &Callback{}
 	for _, opt := range opts {
 		opt(cb)
@@ -161,18 +161,18 @@ func (req *Req) parseData(data map[string]string, opts []Option) error {
 	req.cb = cb
 
 	// Validate actions existence
-	if _, exists := unflattened["actions"]; !exists {
+	if _, exists := data["actions"]; !exists {
 		return fmt.Errorf("actions parameter is required")
 	}
 
 	// Use MapToStructByTags to parse all fields including actions
-	err := probe.MapToStructByTags(unflattened, req)
+	err := probe.MapToStructByTags(data, req)
 	if err != nil {
 		return fmt.Errorf("MapToStructByTags failed: %w", err)
 	}
 
 	// Handle timeout separately as it requires special parsing
-	if timeout, exists := unflattened["timeout"]; exists {
+	if timeout, exists := data["timeout"]; exists {
 		if st, ok := timeout.(string); ok {
 			if parsed, err := time.ParseDuration(st); err == nil {
 				req.Timeout = parsed
@@ -322,8 +322,9 @@ func (req *Req) buildActionTasks() (chromedp.Tasks, error) {
 	return tasks, nil
 }
 
-func (req *Req) collectResults() (map[string]string, error) {
+func (req *Req) collectResults() (map[string]string, map[string]string, error) {
 	results := make(map[string]string)
+	filePaths := make(map[string]string)
 
 	for _, action := range req.Actions {
 		switch action.Name {
@@ -337,14 +338,31 @@ func (req *Req) collectResults() (map[string]string, error) {
 			}
 		case "full_screenshot", "capture_screenshot", "screenshot":
 			if action.reBuf != nil && len(*action.reBuf) > 0 {
-				if err := os.WriteFile(action.Path, *action.reBuf, 0644); err != nil {
-					return nil, err
+				// Save screenshot to temporary file using our binary utility
+				filePath, err := probe.SaveBinaryToTempFile(*action.reBuf, "image/png")
+				if err != nil {
+					return nil, nil, fmt.Errorf("failed to save screenshot: %w", err)
+				}
+				action.filePath = &filePath
+
+				// Store file path in results
+				key := action.Name
+				if action.ID != "" {
+					key = action.ID
+				}
+				filePaths[key] = filePath
+
+				// Backward compatibility: also save to specified path if provided
+				if action.Path != "" {
+					if err := os.WriteFile(action.Path, *action.reBuf, 0644); err != nil {
+						return nil, nil, err
+					}
 				}
 			}
 		}
 	}
 
-	return results, nil
+	return results, filePaths, nil
 }
 
 func (req *Req) do() (*Result, error) {
@@ -370,14 +388,15 @@ func (req *Req) do() (*Result, error) {
 		return nil, err
 	}
 
-	results, err := req.collectResults()
+	results, filePaths, err := req.collectResults()
 	if err != nil {
 		return nil, err
 	}
 
 	res := &Res{
-		Code:    0,
-		Results: results,
+		Code:      0,
+		Results:   results,
+		FilePaths: filePaths,
 	}
 	ret := &Result{
 		Req:    *req,
@@ -394,7 +413,7 @@ func (req *Req) do() (*Result, error) {
 	return ret, nil
 }
 
-func Request(data map[string]string, opts ...Option) (map[string]string, error) {
+func Request(data map[string]any, opts ...Option) (map[string]any, error) {
 	start := time.Now()
 	req := NewReq()
 
@@ -412,10 +431,10 @@ func Request(data map[string]string, opts ...Option) (map[string]string, error) 
 		return createErrorResult(start, req, err)
 	}
 
-	return probe.FlattenInterface(mapRet), nil
+	return mapRet, nil
 }
 
-func createErrorResult(start time.Time, req *Req, err error) (map[string]string, error) {
+func createErrorResult(start time.Time, req *Req, err error) (map[string]any, error) {
 	duration := time.Since(start)
 
 	result := &Result{
@@ -430,10 +449,10 @@ func createErrorResult(start time.Time, req *Req, err error) (map[string]string,
 
 	mapResult, mapErr := probe.StructToMapByTags(result)
 	if mapErr != nil {
-		return map[string]string{}, mapErr
+		return map[string]any{}, mapErr
 	}
 
-	return probe.FlattenInterface(mapResult), err
+	return mapResult, err
 }
 
 func WithInBrowser(f func(s string, i ...interface{})) Option {

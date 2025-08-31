@@ -40,15 +40,19 @@ type Result struct {
 	Status int           `map:"status"`
 }
 
-func ParseRequest(with map[string]string) (*Req, string, time.Duration, error) {
-	// First unflatten the input to handle nested structures like arrays
-	unflattenedWith := probe.UnflattenInterface(with)
-
+func ParseRequest(with map[string]any) (*Req, string, time.Duration, error) {
 	// Use MapToStructByTags to directly populate Req struct
 	req := &Req{}
-	err := probe.MapToStructByTags(unflattenedWith, req)
+	err := probe.MapToStructByTags(with, req)
 	if err != nil {
 		return nil, "", 0, fmt.Errorf("failed to parse request: %w", err)
+	}
+
+	// Manually handle params field because MapToStructByTags doesn't handle []interface{} properly
+	if paramsInput, exists := with["params"]; exists {
+		if paramsList, ok := paramsInput.([]interface{}); ok {
+			req.Params = paramsList
+		}
 	}
 
 	// Validate required parameters
@@ -157,7 +161,7 @@ func parseDSN(dsn string) (driver, driverDSN string, err error) {
 	}
 }
 
-func (r *Req) Execute(driverDSN string, timeout time.Duration) (res map[string]string, err error) {
+func (r *Req) Execute(driverDSN string, timeout time.Duration) (res map[string]any, err error) {
 	start := time.Now()
 
 	// Before callback
@@ -204,14 +208,13 @@ func (r *Req) Execute(driverDSN string, timeout time.Duration) (res map[string]s
 		r.cb.after(result)
 	}
 
-	// Convert to map[string]string using probe's mapping function
+	// Convert to map[string]any using probe's mapping function
 	mapResult, err := probe.StructToMapByTags(result)
 	if err != nil {
 		return r.createErrorResult(start, fmt.Errorf("failed to convert result to map: %w", err))
 	}
 
-	// Flatten the result like other actions do
-	return probe.FlattenInterface(mapResult), nil
+	return mapResult, nil
 }
 
 func (r *Req) executeSelectQuery(db *sql.DB, start time.Time) (res *Result, err error) {
@@ -305,7 +308,7 @@ func (r *Req) executeNonSelectQuery(db *sql.DB, start time.Time) (*Result, error
 	}, nil
 }
 
-func (r *Req) createErrorResult(start time.Time, err error) (map[string]string, error) {
+func (r *Req) createErrorResult(start time.Time, err error) (map[string]any, error) {
 	duration := time.Since(start)
 
 	result := &Result{
@@ -320,13 +323,13 @@ func (r *Req) createErrorResult(start time.Time, err error) (map[string]string, 
 		Status: 1, // failure
 	}
 
-	// Convert to map[string]string
+	// Convert to map[string]any
 	mapResult, mapErr := probe.StructToMapByTags(result)
 	if mapErr != nil {
-		return map[string]string{}, fmt.Errorf("failed to convert error result to map: %w", mapErr)
+		return map[string]any{}, fmt.Errorf("failed to convert error result to map: %w", mapErr)
 	}
 
-	return probe.FlattenInterface(mapResult), err
+	return mapResult, err
 }
 
 type Option func(*Callback)
@@ -336,10 +339,10 @@ type Callback struct {
 	after  func(result *Result)
 }
 
-func ExecuteQuery(data map[string]string, opts ...Option) (map[string]string, error) {
+func ExecuteQuery(data map[string]any, opts ...Option) (map[string]any, error) {
 	req, driverDSN, timeout, err := ParseRequest(data)
 	if err != nil {
-		return map[string]string{}, err
+		return map[string]any{}, err
 	}
 
 	cb := &Callback{}

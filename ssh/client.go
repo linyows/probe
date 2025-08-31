@@ -451,13 +451,17 @@ func (r *Req) Do() (re *Result, er error) {
 }
 
 // PrepareRequestData prepares SSH request data by extracting environment variables
-func PrepareRequestData(data map[string]string) error {
+func PrepareRequestData(data map[string]any) error {
 	// Extract environment variables from env__ prefixed keys
 	env := make(map[string]string)
 	for key, value := range data {
 		if strings.HasPrefix(key, "env__") {
 			envKey := strings.TrimPrefix(key, "env__")
-			env[envKey] = value
+			if strValue, ok := value.(string); ok {
+				env[envKey] = strValue
+			} else {
+				env[envKey] = fmt.Sprintf("%v", value)
+			}
 			delete(data, key)
 		}
 	}
@@ -472,19 +476,36 @@ func PrepareRequestData(data map[string]string) error {
 	return nil
 }
 
-func Execute(data map[string]string, opts ...Option) (map[string]string, error) {
+func Execute(data map[string]any, opts ...Option) (map[string]any, error) {
 	// Create a copy to avoid modifying the original data
-	dataCopy := make(map[string]string)
+	dataCopy := make(map[string]any)
 	for k, v := range data {
 		dataCopy[k] = v
 	}
 
 	// Prepare request data
 	if err := PrepareRequestData(dataCopy); err != nil {
-		return map[string]string{}, err
+		return map[string]any{}, err
 	}
 
-	m := probe.HeaderToStringValue(probe.UnflattenInterface(dataCopy))
+	m := probe.HeaderToStringValue(dataCopy)
+
+	// Manually handle type conversions BEFORE MapToStructByTags to prevent reflection panics
+	if portInput, exists := m["port"]; exists {
+		if portStr, ok := portInput.(string); ok {
+			if portInt, err := strconv.Atoi(portStr); err == nil {
+				m["port"] = portInt
+			}
+		}
+	}
+
+	if strictInput, exists := m["strict_host_check"]; exists {
+		if strictStr, ok := strictInput.(string); ok {
+			if strictBool, err := strconv.ParseBool(strictStr); err == nil {
+				m["strict_host_check"] = strictBool
+			}
+		}
+	}
 
 	r := NewReq()
 
@@ -495,20 +516,20 @@ func Execute(data map[string]string, opts ...Option) (map[string]string, error) 
 	r.cb = cb
 
 	if err := probe.MapToStructByTags(m, r); err != nil {
-		return map[string]string{}, err
+		return map[string]any{}, err
 	}
 
 	result, err := r.Do()
 	if err != nil {
-		return map[string]string{}, err
+		return map[string]any{}, err
 	}
 
 	mapResult, err := probe.StructToMapByTags(result)
 	if err != nil {
-		return map[string]string{}, err
+		return map[string]any{}, err
 	}
 
-	return probe.FlattenInterface(mapResult), nil
+	return mapResult, nil
 }
 
 func WithBefore(f func(host string, port int, user string, cmd string)) Option {

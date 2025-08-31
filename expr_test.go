@@ -305,6 +305,283 @@ func TestCustomFunctions(t *testing.T) {
 			t.Errorf("expected error for wrong parameter count")
 		}
 	})
+
+	t.Run("parse_int function", func(t *testing.T) {
+		expr := &Expr{}
+		tests := []struct {
+			name     string
+			input    string
+			env      map[string]any
+			expected int64
+			wantErr  bool
+		}{
+			{
+				name:     "valid integer string",
+				input:    "parse_int(num_str)",
+				env:      map[string]any{"num_str": "123"},
+				expected: 123,
+				wantErr:  false,
+			},
+			{
+				name:     "negative integer",
+				input:    "parse_int(num_str)",
+				env:      map[string]any{"num_str": "-456"},
+				expected: -456,
+				wantErr:  false,
+			},
+			{
+				name:    "invalid string",
+				input:   "parse_int(num_str)",
+				env:     map[string]any{"num_str": "not_a_number"},
+				wantErr: true,
+			},
+			{
+				name:     "integer parameter",
+				input:    "parse_int(num)",
+				env:      map[string]any{"num": 123},
+				expected: 123,
+				wantErr:  false,
+			},
+			{
+				name:     "float64 parameter",
+				input:    "parse_int(num)",
+				env:      map[string]any{"num": 456.0},
+				expected: 456,
+				wantErr:  false,
+			},
+			{
+				name:    "unsupported parameter type",
+				input:   "parse_int(arr)",
+				env:     map[string]any{"arr": []int{1, 2, 3}},
+				wantErr: true,
+			},
+		}
+
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				result, err := expr.Eval(tt.input, tt.env)
+				
+				if tt.wantErr {
+					if err == nil {
+						t.Errorf("expected error but got none")
+					}
+					return
+				}
+				
+				if err != nil {
+					t.Errorf("unexpected error: %v", err)
+					return
+				}
+				
+				if result != tt.expected {
+					t.Errorf("expected %v, got %v", tt.expected, result)
+				}
+			})
+		}
+	})
+}
+
+func TestWholeStringTemplateTypePreservation(t *testing.T) {
+	expr := &Expr{}
+	
+	t.Run("integer type preservation", func(t *testing.T) {
+		result, err := expr.EvalTemplateWithTypePreservation("{{ vars.count }}", map[string]any{
+			"vars": map[string]any{"count": 123},
+		})
+		if err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+		if result != 123 {
+			t.Errorf("expected 123, got %v (type: %T)", result, result)
+		}
+	})
+
+	t.Run("float64 type preservation", func(t *testing.T) {
+		result, err := expr.EvalTemplateWithTypePreservation("{{ vars.price }}", map[string]any{
+			"vars": map[string]any{"price": 19.99},
+		})
+		if err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+		if result != 19.99 {
+			t.Errorf("expected 19.99, got %v (type: %T)", result, result)
+		}
+	})
+
+	t.Run("boolean type preservation", func(t *testing.T) {
+		result, err := expr.EvalTemplateWithTypePreservation("{{ vars.enabled }}", map[string]any{
+			"vars": map[string]any{"enabled": true},
+		})
+		if err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+		if result != true {
+			t.Errorf("expected true, got %v (type: %T)", result, result)
+		}
+	})
+
+	t.Run("string type preservation", func(t *testing.T) {
+		result, err := expr.EvalTemplateWithTypePreservation("{{ vars.message }}", map[string]any{
+			"vars": map[string]any{"message": "hello"},
+		})
+		if err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+		if result != "hello" {
+			t.Errorf("expected \"hello\", got %v (type: %T)", result, result)
+		}
+	})
+
+	t.Run("partial template remains string", func(t *testing.T) {
+		result, err := expr.EvalTemplateWithTypePreservation("Count: {{ vars.count }}", map[string]any{
+			"vars": map[string]any{"count": 123},
+		})
+		if err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+		expected := "Count: 123"
+		if result != expected {
+			t.Errorf("expected %q, got %v (type: %T)", expected, result, result)
+		}
+	})
+
+	t.Run("multiple templates remain string", func(t *testing.T) {
+		result, err := expr.EvalTemplateWithTypePreservation("{{ vars.name }} is {{ vars.age }}", map[string]any{
+			"vars": map[string]any{"name": "John", "age": 30},
+		})
+		if err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+		expected := "John is 30"
+		if result != expected {
+			t.Errorf("expected %q, got %v (type: %T)", expected, result, result)
+		}
+	})
+
+	t.Run("whitespace handling", func(t *testing.T) {
+		result, err := expr.EvalTemplateWithTypePreservation("  {{ vars.number }}  ", map[string]any{
+			"vars": map[string]any{"number": 42},
+		})
+		if err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+		if result != 42 {
+			t.Errorf("expected 42, got %v (type: %T)", result, result)
+		}
+	})
+}
+
+func TestHelperFunctions(t *testing.T) {
+	t.Run("isWholeStringTemplate", func(t *testing.T) {
+		tests := []struct {
+			input    string
+			expected bool
+		}{
+			{"{{ vars.count }}", true},
+			{"  {{ vars.count }}  ", true},
+			{"Count: {{ vars.count }}", false},
+			{"{{ vars.a }} and {{ vars.b }}", false},
+			{"{{ vars.count }} extra", false},
+			{"prefix {{ vars.count }}", false},
+			{"{vars.count}", false},
+			{"vars.count", false},
+			{"", false},
+		}
+
+		for _, tt := range tests {
+			result := isWholeStringTemplate(tt.input)
+			if result != tt.expected {
+				t.Errorf("isWholeStringTemplate(%q) = %v, want %v", tt.input, result, tt.expected)
+			}
+		}
+	})
+
+	t.Run("extractTemplateExpression", func(t *testing.T) {
+		tests := []struct {
+			input    string
+			expected string
+		}{
+			{"{{ vars.count }}", "vars.count"},
+			{"  {{ vars.count }}  ", "vars.count"},
+			{"{{ vars.price * 1.1 }}", "vars.price * 1.1"},
+			{"{vars.count}", ""},
+			{"vars.count", ""},
+			{"", ""},
+		}
+
+		for _, tt := range tests {
+			result := extractTemplateExpression(tt.input)
+			if result != tt.expected {
+				t.Errorf("extractTemplateExpression(%q) = %q, want %q", tt.input, result, tt.expected)
+			}
+		}
+	})
+}
+
+func TestEvalTemplateMapTypePreservation(t *testing.T) {
+	expr := &Expr{}
+	
+	input := map[string]any{
+		"number":       "{{ vars.count }}",
+		"price":        "{{ vars.price }}",
+		"enabled":      "{{ vars.enabled }}",
+		"message":      "{{ vars.message }}",
+		"partial":      "Count: {{ vars.count }}",
+		"multiple":     "{{ vars.name }} is {{ vars.age }}",
+		"unchanged":    "static value",
+		"nested": map[string]any{
+			"inner_number": "{{ vars.inner }}",
+		},
+	}
+	
+	env := map[string]any{
+		"vars": map[string]any{
+			"count":   123,
+			"price":   19.99,
+			"enabled": true,
+			"message": "hello",
+			"name":    "John",
+			"age":     30,
+			"inner":   456,
+		},
+	}
+	
+	result := expr.EvalTemplateMap(input, env)
+	
+	// Check type preservation
+	if result["number"] != 123 {
+		t.Errorf("number: expected 123 (int), got %v (%T)", result["number"], result["number"])
+	}
+	if result["price"] != 19.99 {
+		t.Errorf("price: expected 19.99 (float64), got %v (%T)", result["price"], result["price"])
+	}
+	if result["enabled"] != true {
+		t.Errorf("enabled: expected true (bool), got %v (%T)", result["enabled"], result["enabled"])
+	}
+	if result["message"] != "hello" {
+		t.Errorf("message: expected \"hello\" (string), got %v (%T)", result["message"], result["message"])
+	}
+	
+	// Check string templates remain string
+	if result["partial"] != "Count: 123" {
+		t.Errorf("partial: expected \"Count: 123\", got %v", result["partial"])
+	}
+	if result["multiple"] != "John is 30" {
+		t.Errorf("multiple: expected \"John is 30\", got %v", result["multiple"])
+	}
+	
+	// Check unchanged values
+	if result["unchanged"] != "static value" {
+		t.Errorf("unchanged: expected \"static value\", got %v", result["unchanged"])
+	}
+	
+	// Check nested maps
+	nested, ok := result["nested"].(map[string]any)
+	if !ok {
+		t.Errorf("nested: expected map[string]any, got %T", result["nested"])
+	} else if nested["inner_number"] != 456 {
+		t.Errorf("nested.inner_number: expected 456 (int), got %v (%T)", nested["inner_number"], nested["inner_number"])
+	}
 }
 
 func TestSafeEnvironment(t *testing.T) {

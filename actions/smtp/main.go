@@ -14,17 +14,17 @@ type Action struct {
 	log hclog.Logger
 }
 
-func (a *Action) Run(args []string, with map[string]string) (map[string]string, error) {
+func (a *Action) Run(args []string, with map[string]any) (map[string]any, error) {
 	// Validate that required parameters are provided
 	if len(with) == 0 {
-		return map[string]string{}, errors.New("smtp action requires parameters in 'with' section. Please specify email details like addr, from, to")
+		return map[string]any{}, errors.New("smtp action requires parameters in 'with' section. Please specify email details like addr, from, to")
 	}
 
 	// Use default truncate length, can be overridden by caller
 	truncateLength := probe.MaxLogStringLength
 
 	// Truncate long parameters for logging to prevent log bloat
-	truncatedParams := probe.TruncateMapStringString(with, truncateLength)
+	truncatedParams := probe.TruncateMapStringAny(with, truncateLength)
 	a.log.Debug("received smtp request parameters", "params", truncatedParams)
 
 	before := mail.WithBefore(func(from string, to string, subject string) {
@@ -39,7 +39,7 @@ func (a *Action) Run(args []string, with map[string]string) (map[string]string, 
 		a.log.Error("email delivery failed", "error", err)
 	} else {
 		// Truncate result for logging to prevent log bloat
-		truncatedResult := probe.TruncateMapStringString(ret, truncateLength)
+		truncatedResult := probe.TruncateMapStringAny(ret, truncateLength)
 		a.log.Debug("email delivery completed successfully", "result", truncatedResult)
 	}
 

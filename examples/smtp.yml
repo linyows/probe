@@ -1,0 +1,65 @@
+name: SMTP Email Examples
+description: Examples for sending emails via SMTP using the smtp action
+
+vars:
+  smtp_addr: "{{SMTP_ADDR ?? 'localhost:2525'}}"
+  from_addr: "{{FROM_ADDR ?? 'sender@example.com'}}"
+  to_addr: "{{TO_ADDR ?? 'recipient@example.com'}}"
+
+jobs:
+- name: "Send email via SMTP to {{vars.smtp_addr}}"
+  steps:
+  - name: Send simple text email
+    uses: smtp
+    with:
+      addr: "{{vars.smtp_addr}}"
+      from: "{{vars.from_addr}}"
+      to: "{{vars.to_addr}}"
+      subject: Simple Test Email
+      myhostname: probe-client.local
+      session: 1
+      message: 1
+      length: 500
+    test: |
+      res.code == 0 && res.sent > 0
+    echo: |
+      Email sent successfully!
+      Sent: {{res.sent}}
+      Failed: {{res.failed}}
+      Total: {{res.total}}
+
+  - name: Send email with custom content
+    uses: smtp
+    with:
+      addr: "{{vars.smtp_addr}}"
+      from: "{{vars.from_addr}}"
+      to: "{{vars.to_addr}}"
+      subject: Custom Test Email with Body
+      myhostname: probe-client.local
+      session: 2
+      message: 1
+      length: 1000
+    test: |
+      res.code == 0 && res.sent > 0
+    echo: |
+      Custom email sent!
+      Mail data length: {{len(res.maildata)}} characters
+      File path: {{res.filepath}}
+
+  - name: Send bulk emails
+    uses: smtp
+    with:
+      addr: "{{vars.smtp_addr}}"
+      from: "{{vars.from_addr}}"
+      to: "{{vars.to_addr}}"
+      subject: Bulk Email Test
+      myhostname: probe-client.local
+      session: 3
+      message: 3  # Send 3 messages
+      length: 750
+    test: |
+      res.code == 0 && res.sent == 3
+    echo: |
+      Bulk emails sent!
+      Messages sent: {{res.sent}}
+      Total messages: {{res.total}}

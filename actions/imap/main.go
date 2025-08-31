@@ -14,17 +14,17 @@ type Action struct {
 	log hclog.Logger
 }
 
-func (a *Action) Run(args []string, with map[string]string) (map[string]string, error) {
+func (a *Action) Run(args []string, with map[string]any) (map[string]any, error) {
 	// Validate that required parameters are provided
 	if len(with) == 0 {
-		return map[string]string{}, errors.New("imap action requires parameters in 'with' section. Please specify connection details like host, username, password")
+		return map[string]any{}, errors.New("imap action requires parameters in 'with' section. Please specify connection details like host, username, password")
 	}
 
 	// Use default truncate length, can be overridden by caller
 	truncateLength := probe.MaxLogStringLength
 
 	// Truncate long parameters for logging to prevent log bloat
-	truncatedParams := probe.TruncateMapStringString(with, truncateLength)
+	truncatedParams := probe.TruncateMapStringAny(with, truncateLength)
 	a.log.Debug("received imap request parameters", "params", truncatedParams)
 
 	before := imap.WithBefore(func(req *imap.Req) {
@@ -39,7 +39,7 @@ func (a *Action) Run(args []string, with map[string]string) (map[string]string, 
 		a.log.Error("imap request failed", "error", err)
 	} else {
 		// Truncate result for logging to prevent log bloat
-		truncatedResult := probe.TruncateMapStringString(ret, truncateLength)
+		truncatedResult := probe.TruncateMapStringAny(ret, truncateLength)
 		a.log.Debug("imap request completed successfully", "result", truncatedResult)
 	}
 

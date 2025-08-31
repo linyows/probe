@@ -3,7 +3,7 @@ jobs:
 - name: Use Alias Headers
   defaults:
     http:
-      url: https://httpbin.org
+      url: http://localhost:8080
   steps:
   - name: Post
     uses: http
@@ -15,6 +15,6 @@ jobs:
         message: hello
     test: |
       res.code == 200 &&
-      res.body.form.message == "hello"
+      res.body.form.message[0] == "hello"
     echo: |
       X-Foobar: {{res.body.headers["X-Foobar"]}}

@@ -174,14 +174,14 @@ func applyDefaults(data, defaults map[string]any) {
 	}
 }
 
-func Execute(data map[string]string, opts ...Option) (map[string]string, error) {
+func Execute(data map[string]any, opts ...Option) (map[string]any, error) {
 	// Create a copy to avoid modifying the original data
-	dataCopy := make(map[string]string)
+	dataCopy := make(map[string]any)
 	for k, v := range data {
 		dataCopy[k] = v
 	}
 
-	m := probe.HeaderToStringValue(probe.UnflattenInterface(dataCopy))
+	m := probe.HeaderToStringValue(dataCopy)
 
 	r := NewReq()
 
@@ -192,7 +192,7 @@ func Execute(data map[string]string, opts ...Option) (map[string]string, error) 
 	r.cb = cb
 
 	if err := probe.MapToStructByTags(m, r); err != nil {
-		return map[string]string{}, err
+		return map[string]any{}, err
 	}
 
 	result, err := r.Do()
@@ -201,18 +201,18 @@ func Execute(data map[string]string, opts ...Option) (map[string]string, error) 
 		if result != nil {
 			mapResult, mapErr := probe.StructToMapByTags(result)
 			if mapErr == nil {
-				return probe.FlattenInterface(mapResult), err
+				return mapResult, err
 			}
 		}
-		return map[string]string{}, err
+		return map[string]any{}, err
 	}
 
 	mapResult, err := probe.StructToMapByTags(result)
 	if err != nil {
-		return map[string]string{}, err
+		return map[string]any{}, err
 	}
 
-	return probe.FlattenInterface(mapResult), nil
+	return mapResult, nil
 }
 
 func WithBefore(f func(path string, vars map[string]any)) Option {

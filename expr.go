@@ -154,6 +154,33 @@ func (e *Expr) Options(env any) []ex.Option {
 			},
 		),
 		ex.Function(
+			"parse_int",
+			func(params ...any) (any, error) {
+				if len(params) != 1 {
+					return nil, fmt.Errorf("parse_int requires exactly 1 parameter")
+				}
+				
+				switch v := params[0].(type) {
+				case string:
+					i, err := strconv.ParseInt(v, 10, 64)
+					if err != nil {
+						return nil, fmt.Errorf("parse_int error: %w", err)
+					}
+					return i, nil
+				case int:
+					return int64(v), nil
+				case int64:
+					return v, nil
+				case uint64:
+					return int64(v), nil
+				case float64:
+					return int64(v), nil
+				default:
+					return nil, fmt.Errorf("parse_int parameter must be a string or number, got %T", v)
+				}
+			},
+		),
+		ex.Function(
 			"encode_base64",
 			func(params ...any) (any, error) {
 				if len(params) != 1 {
@@ -396,6 +423,32 @@ func (e *Expr) executeWithTimeout(program *vm.Program, env any) (any, error) {
 	}
 }
 
+// isWholeStringTemplate checks if the input string contains only a single template expression
+func isWholeStringTemplate(input string) bool {
+	trimmed := strings.TrimSpace(input)
+	if !strings.HasPrefix(trimmed, templateStart) || !strings.HasSuffix(trimmed, templateEnd) {
+		return false
+	}
+	
+	// Count template markers to ensure there's exactly one pair
+	startCount := strings.Count(trimmed, templateStart)
+	endCount := strings.Count(trimmed, templateEnd)
+	
+	return startCount == 1 && endCount == 1
+}
+
+// extractTemplateExpression extracts the expression from a whole string template
+func extractTemplateExpression(input string) string {
+	trimmed := strings.TrimSpace(input)
+	if !strings.HasPrefix(trimmed, templateStart) || !strings.HasSuffix(trimmed, templateEnd) {
+		return ""
+	}
+	
+	// Remove template markers and trim whitespace
+	expression := trimmed[len(templateStart) : len(trimmed)-len(templateEnd)]
+	return strings.TrimSpace(expression)
+}
+
 func (e *Expr) EvalTemplate(input string, env any) (string, error) {
 	// Security: Validate template input
 	if err := e.validateExpression(input); err != nil {
@@ -454,6 +507,27 @@ func (e *Expr) EvalTemplate(input string, env any) (string, error) {
 	return string(result), nil
 }
 
+func (e *Expr) EvalTemplateWithTypePreservation(input string, env any) (any, error) {
+	// Security: Validate template input
+	if err := e.validateExpression(input); err != nil {
+		return "", fmt.Errorf("template validation failed: %w", err)
+	}
+
+	// Check if this is a whole string template for type preservation
+	if isWholeStringTemplate(input) {
+		expression := extractTemplateExpression(input)
+		if expression == "" {
+			return "", fmt.Errorf("failed to extract expression from template: %s", input)
+		}
+		
+		// Use Eval directly to preserve type
+		return e.Eval(expression, env)
+	}
+
+	// For partial templates, fall back to string processing
+	return e.EvalTemplate(input, env)
+}
+
 func (e *Expr) EvalTemplateMap(input map[string]any, env any) map[string]any {
 	results := make(map[string]any)
 
@@ -466,7 +540,7 @@ func (e *Expr) EvalTemplateMap(input map[string]any, env any) map[string]any {
 
 		switch v := val.(type) {
 		case string:
-			output, err := e.EvalTemplate(v, env)
+			output, err := e.EvalTemplateWithTypePreservation(v, env)
 			if err != nil {
 				// Security: Don't expose internal errors, use sanitized error
 				results[key] = "[EvaluationError]"
@@ -501,7 +575,7 @@ func (e *Expr) evalTemplateArray(input []any, env any) []any {
 
 		switch v := val.(type) {
 		case string:
-			output, err := e.EvalTemplate(v, env)
+			output, err := e.EvalTemplateWithTypePreservation(v, env)
 			if err != nil {
 				// Security: Don't expose internal errors, use sanitized error
 				results[i] = "[EvaluationError]"

@@ -6,6 +6,8 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+
+	"google.golang.org/protobuf/types/known/structpb"
 )
 
 const (
@@ -257,8 +259,60 @@ func MapToStructByTags(params map[string]any, dest any) error {
 						default:
 							return fmt.Errorf("cannot convert %T to bool for field '%s'", v, mapTag)
 						}
+						// Special handling for int fields to handle float64 from YAML/JSON
+					} else if field.Kind() == reflect.Int {
+						switch val := v.(type) {
+						case int:
+							field.SetInt(int64(val))
+						case int64:
+							field.SetInt(val)
+						case float64:
+							// YAML/JSON numbers are parsed as float64, convert to int
+							field.SetInt(int64(val))
+						case string:
+							if intVal, err := strconv.ParseInt(val, 10, 64); err == nil {
+								field.SetInt(intVal)
+							} else {
+								return fmt.Errorf("cannot convert '%s' to int for field '%s'", val, mapTag)
+							}
+						default:
+							return fmt.Errorf("cannot convert %T to int for field '%s'", v, mapTag)
+						}
 					} else {
-						field.Set(reflect.ValueOf(v))
+						// Type-safe assignment based on field type
+						fieldType := field.Type()
+						valueType := reflect.TypeOf(v)
+						
+						if valueType == fieldType {
+							// Direct assignment if types match
+							field.Set(reflect.ValueOf(v))
+						} else if fieldType.Kind() == reflect.String {
+							// Convert to string if field expects string
+							if v != nil {
+								field.SetString(fmt.Sprintf("%v", v))
+							}
+						} else if fieldType.Kind() == reflect.Map && valueType.Kind() == reflect.Map {
+							// Handle map type conversion
+							if fieldType.Key().Kind() == reflect.String && fieldType.Elem().Kind() == reflect.String {
+								// Convert map[string]interface{} to map[string]string
+								if mapVal, ok := v.(map[string]interface{}); ok {
+									newMap := make(map[string]string)
+									for k, val := range mapVal {
+										newMap[k] = fmt.Sprintf("%v", val)
+									}
+									field.Set(reflect.ValueOf(newMap))
+								} else {
+									field.Set(reflect.ValueOf(v))
+								}
+							} else {
+								field.Set(reflect.ValueOf(v))
+							}
+						} else if valueType.ConvertibleTo(fieldType) {
+							// Use Go's type conversion if possible
+							field.Set(reflect.ValueOf(v).Convert(fieldType))
+						} else {
+							return fmt.Errorf("cannot assign %T to field '%s' of type %s", v, mapTag, fieldType)
+						}
 					}
 				}
 
@@ -399,9 +453,19 @@ func AssignStruct(pa ActionsParams, st any) error {
 		if ok {
 			switch fType.String() {
 			case "string":
-				v.Field(i).SetString(value)
+				if strValue, ok := value.(string); ok {
+					v.Field(i).SetString(strValue)
+				} else {
+					v.Field(i).SetString(fmt.Sprintf("%v", value))
+				}
 			case "int":
-				intValue, err := strconv.Atoi(value)
+				var strValue string
+				if str, ok := value.(string); ok {
+					strValue = str
+				} else {
+					strValue = fmt.Sprintf("%v", value)
+				}
+				intValue, err := strconv.Atoi(strValue)
 				if err != nil {
 					e.AddMessage(fmt.Sprintf("params '%s' can't convert to int: %s", mapKey, err))
 				} else {
@@ -561,4 +625,46 @@ func TitleCase(st string, char string) string {
 		}
 	}
 	return strings.Join(parts, char)
+}
+
+// StructToMap converts a protobuf Struct to a map[string]any
+func StructToMap(s *structpb.Struct) map[string]any {
+	if s == nil {
+		return nil
+	}
+	return s.AsMap()
+}
+
+// MapToStruct converts a map[string]any to a protobuf Struct
+func MapToStruct(m map[string]any) (*structpb.Struct, error) {
+	if m == nil {
+		return nil, nil
+	}
+	return structpb.NewStruct(m)
+}
+
+// ConvertNumericStrings provides backward compatibility for numeric conversion
+func ConvertNumericStrings(data map[string]any) map[string]any {
+	result := make(map[string]any)
+
+	for key, value := range data {
+		switch v := value.(type) {
+		case string:
+			// Try to convert numeric strings to numbers
+			if num, err := strconv.Atoi(v); err == nil {
+				result[key] = num
+			} else if floatNum, err := strconv.ParseFloat(v, 64); err == nil {
+				result[key] = floatNum
+			} else {
+				result[key] = v
+			}
+		case map[string]any:
+			// Recursively process nested maps
+			result[key] = ConvertNumericStrings(v)
+		default:
+			result[key] = v
+		}
+	}
+
+	return result
 }

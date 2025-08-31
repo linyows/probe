@@ -1423,8 +1423,8 @@ func TestPrinter_generateJobResultsFromStepResults_ReportNewlineFormatting(t *te
 	printer := NewPrinter(false, []string{})
 
 	tests := []struct {
-		name        string
-		stepResults []StepResult
+		name         string
+		stepResults  []StepResult
 		wantContains string
 		wantEndsWith string
 	}{

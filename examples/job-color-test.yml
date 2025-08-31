@@ -9,7 +9,7 @@ jobs:
         uses: http
         with:
           get: /status/200
-          url: https://httpbin.org
+          url: http://localhost:8080
 
   - id: skip-job
     name: Skipped Job  
@@ -20,7 +20,7 @@ jobs:
         uses: http
         with:
           get: /status/200
-          url: https://httpbin.org
+          url: http://localhost:8080
 
   - id: fail-job
     name: Failed Job
@@ -30,7 +30,7 @@ jobs:
         uses: http
         with:
           get: /status/500
-          url: https://httpbin.org
+          url: http://localhost:8080
         test: res.code == 200
 
   - id: cleanup-job
@@ -41,4 +41,4 @@ jobs:
         uses: http
         with:
           get: /status/200
-          url: https://httpbin.org
+          url: http://localhost:8080

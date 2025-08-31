@@ -55,156 +55,6 @@ func TestDo(t *testing.T) {
 	}
 }
 
-func TestConvertBodyToJson(t *testing.T) {
-	tests := []struct {
-		name     string
-		input    map[string]string
-		expected string
-		hasBody  bool
-	}{
-		{
-			name: "simple flat structure",
-			input: map[string]string{
-				"body__name": "test",
-				"body__age":  "25",
-				"method":     "POST",
-			},
-			expected: `{"age":25,"name":"test"}`,
-			hasBody:  true,
-		},
-		{
-			name: "nested structure",
-			input: map[string]string{
-				"body__foo__name": "aaa",
-				"body__foo__role": "bbb",
-				"body__bar":       "xyz",
-				"method":          "POST",
-			},
-			expected: `{"bar":"xyz","foo":{"name":"aaa","role":"bbb"}}`,
-			hasBody:  true,
-		},
-		{
-			name: "array structure",
-			input: map[string]string{
-				"body__0__foo": "1",
-				"body__0__bar": "2",
-				"body__0__baz": "3",
-				"method":       "POST",
-			},
-			expected: `[{"bar":2,"baz":3,"foo":1}]`,
-			hasBody:  true,
-		},
-		{
-			name: "multiple array items",
-			input: map[string]string{
-				"body__0__name": "item1",
-				"body__1__name": "item2",
-				"body__2__name": "item3",
-				"method":        "POST",
-			},
-			expected: `[{"name":"item1"},{"name":"item2"},{"name":"item3"}]`,
-			hasBody:  true,
-		},
-		{
-			name: "deeply nested structure",
-			input: map[string]string{
-				"body__user__profile__name":    "John",
-				"body__user__profile__age":     "30",
-				"body__user__settings__theme":  "dark",
-				"body__user__settings__notify": "true",
-				"method":                       "POST",
-			},
-			expected: `{"user":{"profile":{"age":30,"name":"John"},"settings":{"notify":"true","theme":"dark"}}}`,
-			hasBody:  true,
-		},
-		{
-			name: "mixed data types",
-			input: map[string]string{
-				"body__count":   "42",
-				"body__price":   "19.99",
-				"body__active":  "true",
-				"body__message": "hello world",
-				"method":        "POST",
-			},
-			expected: `{"active":"true","count":42,"message":"hello world","price":19.99}`,
-			hasBody:  true,
-		},
-		{
-			name: "no body data",
-			input: map[string]string{
-				"method": "GET",
-				"url":    "http://example.com",
-			},
-			expected: "",
-			hasBody:  false,
-		},
-		{
-			name: "empty body prefix",
-			input: map[string]string{
-				"method":  "POST",
-				"headers": "application/json",
-			},
-			expected: "",
-			hasBody:  false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			// Make a copy of input to avoid modifying the test case
-			data := make(map[string]string)
-			for k, v := range tt.input {
-				data[k] = v
-			}
-
-			err := probe.ConvertBodyToJson(data)
-			if err != nil {
-				t.Errorf("ConvertBodyToJson() error = %v", err)
-				return
-			}
-
-			if tt.hasBody {
-				body, exists := data["body"]
-				if !exists {
-					t.Errorf("expected body key to exist in result")
-					return
-				}
-
-				// Parse both JSON strings to compare structure, not formatting
-				var expectedJSON, actualJSON interface{}
-
-				if err := json.Unmarshal([]byte(tt.expected), &expectedJSON); err != nil {
-					t.Errorf("failed to parse expected JSON: %v", err)
-					return
-				}
-
-				if err := json.Unmarshal([]byte(body), &actualJSON); err != nil {
-					t.Errorf("failed to parse actual JSON: %v", err)
-					return
-				}
-
-				expectedBytes, _ := json.Marshal(expectedJSON)
-				actualBytes, _ := json.Marshal(actualJSON)
-
-				if string(expectedBytes) != string(actualBytes) {
-					t.Errorf("ConvertBodyToJson() body = %v, want %v", body, tt.expected)
-				}
-
-				// Verify body__ keys are removed
-				for key := range data {
-					if key != "body" && key != "method" && key != "url" && key != "headers" {
-						t.Errorf("unexpected key remaining: %s", key)
-					}
-				}
-			} else {
-				if _, exists := data["body"]; exists {
-					t.Errorf("expected no body key when hasBody is false")
-				}
-			}
-		})
-	}
-}
-
 func TestConvertNumericStrings(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -295,17 +145,17 @@ func TestConvertNumericStrings(t *testing.T) {
 func TestResolveMethodAndURL(t *testing.T) {
 	tests := []struct {
 		name     string
-		input    map[string]string
-		expected map[string]string
+		input    map[string]any
+		expected map[string]any
 		wantErr  bool
 	}{
 		{
 			name: "GET method with relative path",
-			input: map[string]string{
+			input: map[string]any{
 				"get": "/users",
 				"url": "https://api.example.com",
 			},
-			expected: map[string]string{
+			expected: map[string]any{
 				"method": "GET",
 				"url":    "https://api.example.com/users",
 			},
@@ -313,10 +163,10 @@ func TestResolveMethodAndURL(t *testing.T) {
 		},
 		{
 			name: "POST method with complete HTTPS URL",
-			input: map[string]string{
+			input: map[string]any{
 				"post": "https://api.example.com/users",
 			},
-			expected: map[string]string{
+			expected: map[string]any{
 				"method": "POST",
 				"url":    "https://api.example.com/users",
 			},
@@ -324,10 +174,10 @@ func TestResolveMethodAndURL(t *testing.T) {
 		},
 		{
 			name: "Missing URL with relative path",
-			input: map[string]string{
+			input: map[string]any{
 				"get": "/users",
 			},
-			expected: map[string]string{
+			expected: map[string]any{
 				"get": "/users",
 			},
 			wantErr: true,

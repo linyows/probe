@@ -3,7 +3,7 @@ jobs:
 - name: Run fail example
   defaults:
     http:
-      url: https://httpbin.org
+      url: http://localhost:8080
   steps:
   - name: Fail
     uses: http

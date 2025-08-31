@@ -1,0 +1,8 @@
+name: Test Shell
+jobs:
+- name: Test shell job
+  steps:
+  - name: Test shell
+    uses: shell
+    with:
+      cmd: echo "hello"
