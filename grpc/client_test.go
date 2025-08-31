@@ -5,8 +5,6 @@ import (
 	"testing"
 )
 
-// Note: ConvertBodyToJson functionality is now handled by probe.ConvertBodyToJson
-
 func TestConvertMetadataToMap(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -47,7 +45,7 @@ func TestConvertMetadataToMap(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// For structured metadata, we simply verify that the input structure is preserved
 			// since ConvertMetadataToMap doesn't need to process structured metadata
-			
+
 			// Check that structured metadata is preserved as-is
 			if !reflect.DeepEqual(tt.input, tt.expected) {
 				t.Errorf("Structured metadata test failed: input = %v, expected = %v", tt.input, tt.expected)
