@@ -2,13 +2,17 @@ package probe
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"os/exec"
+	"reflect"
+	"time"
 
 	"github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/go-plugin"
 	"github.com/linyows/probe/pb"
 	"google.golang.org/grpc"
+	"google.golang.org/protobuf/types/known/structpb"
 )
 
 var (
@@ -18,10 +22,10 @@ var (
 )
 
 type ActionsArgs []string
-type ActionsParams map[string]string
+type ActionsParams map[string]any
 
 type Actions interface {
-	Run(args []string, with map[string]string) (map[string]string, error)
+	Run(args []string, with map[string]any) (map[string]any, error)
 }
 
 type ActionsPlugin struct {
@@ -30,7 +34,12 @@ type ActionsPlugin struct {
 }
 
 func (p *ActionsPlugin) GRPCServer(broker *plugin.GRPCBroker, s *grpc.Server) error {
-	pb.RegisterActionsServer(s, &ActionsServer{Impl: p.Impl})
+	log := hclog.New(&hclog.LoggerOptions{
+		Level:      hclog.Debug,
+		Output:     os.Stderr,
+		JSONFormat: true,
+	})
+	pb.RegisterActionsServer(s, &ActionsServer{Impl: p.Impl, log: log})
 	return nil
 }
 
@@ -42,27 +51,183 @@ type ActionsClient struct {
 	client pb.ActionsClient
 }
 
-func (m *ActionsClient) Run(args []string, with map[string]string) (map[string]string, error) {
-	res := map[string]string{}
+func (m *ActionsClient) Run(args []string, with map[string]any) (map[string]any, error) {
+	// Convert map[string]any directly to protobuf.Struct
+	withStruct, err := structpb.NewStruct(with)
+	if err != nil {
+		return nil, fmt.Errorf("failed to convert parameters to protobuf struct: %v", err)
+	}
+
 	runRes, err := m.client.Run(context.Background(), &pb.RunRequest{
 		Args: args,
-		With: with,
+		With: withStruct,
 	})
 
 	if err != nil {
-		return res, err
+		return nil, err
 	}
 
-	return runRes.Result, err
+	// Convert protobuf.Struct back to map[string]any
+	if runRes.Result != nil {
+		return runRes.Result.AsMap(), nil
+	}
+
+	return map[string]any{}, nil
 }
 
 type ActionsServer struct {
 	Impl Actions
+	log  hclog.Logger
 }
 
 func (m *ActionsServer) Run(ctx context.Context, req *pb.RunRequest) (*pb.RunResponse, error) {
-	v, err := m.Impl.Run(req.Args, req.With)
-	return &pb.RunResponse{Result: v}, err
+	if m.log != nil {
+		m.log.Debug("ActionsServer.Run called", "request", req)
+	}
+
+	// Convert protobuf.Struct to map[string]any
+	var withMap map[string]any
+	if req.With != nil {
+		withMap = req.With.AsMap()
+	} else {
+		withMap = make(map[string]any)
+	}
+
+	v, err := m.Impl.Run(req.Args, withMap)
+	if err != nil {
+		if m.log != nil {
+			m.log.Error("Action execution failed", "error", err)
+		}
+		return &pb.RunResponse{}, err
+	}
+
+	if m.log != nil {
+		m.log.Debug("ActionsServer received from action", "result", v)
+	}
+
+	// Convert map[string]any to protobuf.Struct
+	convertedResult := convertForProtobuf(v)
+	resultMap, ok := convertedResult.(map[string]any)
+	if !ok {
+		if m.log != nil {
+			m.log.Error("ActionsServer convertForProtobuf did not return map[string]any", "type", fmt.Sprintf("%T", convertedResult))
+		}
+		return &pb.RunResponse{}, fmt.Errorf("convertForProtobuf returned invalid type: expected map[string]any, got %T", convertedResult)
+	}
+
+	resultStruct, err := structpb.NewStruct(resultMap)
+	if err != nil {
+		if m.log != nil {
+			m.log.Error("ActionsServer failed to convert result to protobuf struct", "error", err)
+		}
+		return &pb.RunResponse{}, fmt.Errorf("failed to convert result to protobuf struct: %v", err)
+	}
+
+	if m.log != nil {
+		m.log.Debug("ActionsServer final result struct", "result", resultStruct)
+	}
+	return &pb.RunResponse{Result: resultStruct}, nil
+}
+
+// convertForProtobuf converts unsupported types to protobuf-compatible types
+func convertForProtobuf(value any) any {
+	if value == nil {
+		return nil
+	}
+
+	switch v := value.(type) {
+	case time.Duration:
+		// Convert Duration to string
+		return v.String()
+	case time.Time:
+		// Convert Time to RFC3339 string format
+		return v.Format(time.RFC3339)
+	case map[string]string:
+		// Convert map[string]string to map[string]any
+		result := make(map[string]any)
+		for k, val := range v {
+			result[k] = val
+		}
+		return result
+	case map[string]any:
+		// Recursively convert nested maps
+		result := make(map[string]any)
+		for k, val := range v {
+			result[k] = convertForProtobuf(val)
+		}
+		return result
+	case []any:
+		// Recursively convert arrays
+		result := make([]any, len(v))
+		for i, val := range v {
+			result[i] = convertForProtobuf(val)
+		}
+		return result
+	case []string:
+		// Convert []string to []any
+		result := make([]any, len(v))
+		for i, str := range v {
+			result[i] = str
+		}
+		return result
+	default:
+		// Check if it's a slice using reflection
+		rv := reflect.ValueOf(value)
+		if rv.Kind() == reflect.Slice {
+			// Handle other slice types
+			result := make([]any, rv.Len())
+			for i := 0; i < rv.Len(); i++ {
+				result[i] = convertForProtobuf(rv.Index(i).Interface())
+			}
+			return result
+		}
+		// Check if it's a pointer using reflection
+		if rv.Kind() == reflect.Ptr {
+			if rv.IsNil() {
+				return nil
+			}
+			// Dereference pointer and recurse
+			return convertForProtobuf(rv.Elem().Interface())
+		}
+		// Check if it's a struct using reflection
+		if rv.Kind() == reflect.Struct {
+			// Convert struct to map[string]any
+			result := make(map[string]any)
+			rt := rv.Type()
+			for i := 0; i < rv.NumField(); i++ {
+				field := rt.Field(i)
+				fieldValue := rv.Field(i)
+
+				// Skip unexported fields
+				if !field.IsExported() {
+					continue
+				}
+
+				// Use struct tag if available, otherwise use field name
+				fieldName := field.Name
+				if mapTag := field.Tag.Get("map"); mapTag != "" {
+					fieldName = mapTag
+				}
+
+				result[fieldName] = convertForProtobuf(fieldValue.Interface())
+			}
+			return result
+		}
+		// Check if it's a map with string keys using reflection
+		if rv.Kind() == reflect.Map {
+			// Handle map[string]interface{} and similar types
+			result := make(map[string]any)
+			for _, key := range rv.MapKeys() {
+				if keyStr, ok := key.Interface().(string); ok {
+					mapValue := rv.MapIndex(key).Interface()
+					result[keyStr] = convertForProtobuf(mapValue)
+				}
+			}
+			return result
+		}
+		// Return as-is for supported types (string, int, float64, bool, etc.)
+		return value
+	}
 }
 
 // ActionRunner defines the interface for running actions
@@ -107,16 +272,11 @@ func (p *PluginActionRunner) RunActions(name string, args []string, with map[str
 	}
 
 	actions := raw.(Actions)
-	flatW, err := MapToStructFlat(with)
+	result, err := actions.Run(args, with)
 	if err != nil {
 		return nil, err
 	}
-	result, err := actions.Run(args, flatW)
-	if err != nil {
-		return nil, err
-	}
-	unflatR := StructFlatToMap(result)
-	return unflatR, nil
+	return result, nil
 }
 
 // MockActionRunner implements ActionRunner for testing

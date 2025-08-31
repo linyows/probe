@@ -2,13 +2,15 @@ syntax = "proto3";
 package pb;
 option go_package = "./pb";
 
+import "google/protobuf/struct.proto";
+
 message RunRequest {
     repeated string args = 1;
-    map<string, string> with = 2;
+    google.protobuf.Struct with = 2;
 }
 
 message RunResponse {
-    map<string, string> result = 1;
+    google.protobuf.Struct result = 1;
     string error = 2;
 }
 
