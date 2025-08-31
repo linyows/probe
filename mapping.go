@@ -257,6 +257,25 @@ func MapToStructByTags(params map[string]any, dest any) error {
 						default:
 							return fmt.Errorf("cannot convert %T to bool for field '%s'", v, mapTag)
 						}
+						// Special handling for int fields to handle float64 from YAML/JSON
+					} else if field.Kind() == reflect.Int {
+						switch val := v.(type) {
+						case int:
+							field.SetInt(int64(val))
+						case int64:
+							field.SetInt(val)
+						case float64:
+							// YAML/JSON numbers are parsed as float64, convert to int
+							field.SetInt(int64(val))
+						case string:
+							if intVal, err := strconv.ParseInt(val, 10, 64); err == nil {
+								field.SetInt(intVal)
+							} else {
+								return fmt.Errorf("cannot convert '%s' to int for field '%s'", val, mapTag)
+							}
+						default:
+							return fmt.Errorf("cannot convert %T to int for field '%s'", v, mapTag)
+						}
 					} else {
 						field.Set(reflect.ValueOf(v))
 					}
@@ -399,9 +418,19 @@ func AssignStruct(pa ActionsParams, st any) error {
 		if ok {
 			switch fType.String() {
 			case "string":
-				v.Field(i).SetString(value)
+				if strValue, ok := value.(string); ok {
+					v.Field(i).SetString(strValue)
+				} else {
+					v.Field(i).SetString(fmt.Sprintf("%v", value))
+				}
 			case "int":
-				intValue, err := strconv.Atoi(value)
+				var strValue string
+				if str, ok := value.(string); ok {
+					strValue = str
+				} else {
+					strValue = fmt.Sprintf("%v", value)
+				}
+				intValue, err := strconv.Atoi(strValue)
 				if err != nil {
 					e.AddMessage(fmt.Sprintf("params '%s' can't convert to int: %s", mapKey, err))
 				} else {
