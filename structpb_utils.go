@@ -3,7 +3,6 @@ package probe
 import (
 	"encoding/json"
 	"fmt"
-	"reflect"
 	"strconv"
 	"strings"
 
@@ -61,53 +60,6 @@ func StructFlatToMap(flat map[string]string) map[string]any {
 
 // Internal flattening implementation (copied from flattening.go)
 const flatkey = "__"
-
-// FlattenInterface provides backward compatibility with the old API
-func FlattenInterface(input any) map[string]string {
-	return flattenMap(input, "")
-}
-
-// UnflattenInterface provides backward compatibility with the old API
-func UnflattenInterface(flatMap map[string]string) map[string]any {
-	return unflattenMap(flatMap)
-}
-
-func flattenMap(input any, prefix string) map[string]string {
-	res := make(map[string]string)
-
-	if input == nil {
-		res[prefix] = ""
-		return res
-	}
-
-	switch reflect.TypeOf(input).Kind() {
-	case reflect.Map:
-		inputMap := reflect.ValueOf(input)
-		for _, key := range inputMap.MapKeys() {
-			strKey := fmt.Sprintf("%v", key)
-			if prefix != "" {
-				strKey = prefix + flatkey + strKey
-			}
-			for k, v := range flattenMap(inputMap.MapIndex(key).Interface(), strKey) {
-				res[k] = v
-			}
-		}
-	case reflect.Slice, reflect.Array:
-		inputSlice := reflect.ValueOf(input)
-		for i := 0; i < inputSlice.Len(); i++ {
-			strKey := fmt.Sprintf("%d", i)
-			if prefix != "" {
-				strKey = prefix + flatkey + strKey
-			}
-			for k, v := range flattenMap(inputSlice.Index(i).Interface(), strKey) {
-				res[k] = v
-			}
-		}
-	default:
-		res[prefix] = fmt.Sprintf("%v", input)
-	}
-	return res
-}
 
 func unflattenMap(flatMap map[string]string) map[string]any {
 	result := make(map[string]any)
