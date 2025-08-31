@@ -159,7 +159,7 @@ func parseTimeout(timeoutStr string) (time.Duration, error) {
 func (r *Req) Do() (*Result, error) {
 	// Always create result with current request data, even if validation fails
 	result := &Result{Req: *r}
-	
+
 	if r.Cmd == "" {
 		return result, fmt.Errorf("Req.Cmd is required")
 	}
@@ -337,7 +337,7 @@ func Execute(data map[string]any, opts ...Option) (map[string]any, error) {
 	r.cb = cb
 
 	mapErr := probe.MapToStructByTags(m, r)
-	
+
 	result, err := r.Do()
 	if err != nil || mapErr != nil {
 		// Even on error, try to return a structured result if we have one

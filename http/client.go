@@ -238,8 +238,6 @@ func ResolveMethodAndURL(data map[string]any) error {
 	return nil
 }
 
-
-
 func Request(data map[string]any, opts ...Option) (map[string]any, error) {
 	// Create a copy to avoid modifying the original data
 	m := make(map[string]any)

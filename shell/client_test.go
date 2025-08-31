@@ -249,7 +249,7 @@ func TestPrepareRequestData(t *testing.T) {
 			for k, v := range data {
 				dataAny[k] = v
 			}
-			
+
 			if !reflect.DeepEqual(dataAny, tt.expected) {
 				t.Errorf("PrepareRequestData() = %v, want %v", dataAny, tt.expected)
 			}

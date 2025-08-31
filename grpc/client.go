@@ -63,8 +63,6 @@ func NewReq() *Req {
 	}
 }
 
-
-
 func (r *Req) Do() (re *Result, er error) {
 	if r.Addr == "" {
 		return nil, errors.New("Req.Addr is required")
