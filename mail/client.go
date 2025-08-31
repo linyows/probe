@@ -156,7 +156,7 @@ func Send(data map[string]any, opts ...Option) (map[string]any, error) {
 		}
 	}
 
-	m := probe.HeaderToStringValue(probe.StructFlatToMap(dataCopy))
+	m := probe.HeaderToStringValue(dataCopy)
 
 	r := NewReq()
 

@@ -396,7 +396,7 @@ func Request(data map[string]any, opts ...Option) (map[string]any, error) {
 		return map[string]any{}, err
 	}
 
-	m := probe.HeaderToStringValue(probe.StructFlatToMap(dataCopy))
+	m := probe.HeaderToStringValue(dataCopy)
 
 	// Create new request
 	r := NewReq()

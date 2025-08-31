@@ -51,21 +51,25 @@ func TestNewReq(t *testing.T) {
 func TestRequest_Validation(t *testing.T) {
 	testCases := []struct {
 		name        string
-		data        map[string]string
+		data        map[string]any
 		expectedErr string
 	}{
 		{
 			"missing actions",
-			map[string]string{
+			map[string]any{
 				"headless": "true",
 			},
 			"actions parameter is required",
 		},
 		{
 			"invalid action",
-			map[string]string{
-				"actions__0__name": "invalid_action",
-				"actions__0__url":  "http://example.com",
+			map[string]any{
+				"actions": []any{
+					map[string]any{
+						"name": "invalid_action",
+						"url":  "http://example.com",
+					},
+				},
 			},
 			"unsupported action type: invalid_action",
 		},
@@ -109,16 +113,19 @@ func TestRequest_Validation(t *testing.T) {
 }
 
 func TestRequest_ParameterMapping(t *testing.T) {
-	data := map[string]string{
-		"actions__0__name": "navigate",
-		"actions__0__url":  "http://example.com",
-		"headless":         "false",
-		"timeout":          "10s",
-		"window_w":         "800",
-		"window_h":         "600",
+	// Use the new map[string]any format directly
+	unflattened := map[string]any{
+		"actions": []any{
+			map[string]any{
+				"name": "navigate",
+				"url":  "http://example.com",
+			},
+		},
+		"headless": false,
+		"timeout":  "10s",
+		"window_w": 800,
+		"window_h": 600,
 	}
-
-	unflattened := probe.StructFlatToMap(data)
 	req := NewReq()
 
 	// Test headless parameter - probe package converts "false" string to bool
