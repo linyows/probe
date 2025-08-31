@@ -279,7 +279,40 @@ func MapToStructByTags(params map[string]any, dest any) error {
 							return fmt.Errorf("cannot convert %T to int for field '%s'", v, mapTag)
 						}
 					} else {
-						field.Set(reflect.ValueOf(v))
+						// Type-safe assignment based on field type
+						fieldType := field.Type()
+						valueType := reflect.TypeOf(v)
+						
+						if valueType == fieldType {
+							// Direct assignment if types match
+							field.Set(reflect.ValueOf(v))
+						} else if fieldType.Kind() == reflect.String {
+							// Convert to string if field expects string
+							if v != nil {
+								field.SetString(fmt.Sprintf("%v", v))
+							}
+						} else if fieldType.Kind() == reflect.Map && valueType.Kind() == reflect.Map {
+							// Handle map type conversion
+							if fieldType.Key().Kind() == reflect.String && fieldType.Elem().Kind() == reflect.String {
+								// Convert map[string]interface{} to map[string]string
+								if mapVal, ok := v.(map[string]interface{}); ok {
+									newMap := make(map[string]string)
+									for k, val := range mapVal {
+										newMap[k] = fmt.Sprintf("%v", val)
+									}
+									field.Set(reflect.ValueOf(newMap))
+								} else {
+									field.Set(reflect.ValueOf(v))
+								}
+							} else {
+								field.Set(reflect.ValueOf(v))
+							}
+						} else if valueType.ConvertibleTo(fieldType) {
+							// Use Go's type conversion if possible
+							field.Set(reflect.ValueOf(v).Convert(fieldType))
+						} else {
+							return fmt.Errorf("cannot assign %T to field '%s' of type %s", v, mapTag, fieldType)
+						}
 					}
 				}
 

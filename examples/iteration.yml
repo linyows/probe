@@ -26,5 +26,6 @@ jobs:
       role: admin
     iteration:
     - {id: 2000, name: foo, role: user}
-    - {id: 3000, name: bar, role: editor}
-    - {id: 4000, name: baz, role: guest}
+    - {id: -3000, name: bar, role: editor}
+    - {id: 0.123, name: baz, role: guest}
+    - {id: "5000", name: baz, role: guest}
