@@ -107,11 +107,11 @@ type ChromeDPAction struct {
 	Selector  string   `map:"selector"`
 	Attribute []string `map:"attribute"`
 	Value     string   `map:"value"`
-	Path      string   `map:"path"`      // Deprecated: use FilePath from results
+	Path      string   `map:"path"` // Deprecated: use FilePath from results
 	Quality   int      `map:"quality"`
 	reText    *string
 	reBuf     *[]byte
-	filePath  *string  // New: for binary file path
+	filePath  *string // New: for binary file path
 }
 
 func NewChromeDPAction() *ChromeDPAction {
@@ -153,9 +153,7 @@ type Result struct {
 	Status int           `map:"status"`
 }
 
-func (req *Req) parseData(data map[string]string, opts []Option) error {
-	unflattened := probe.StructFlatToMap(data)
-
+func (req *Req) parseData(data map[string]any, opts []Option) error {
 	cb := &Callback{}
 	for _, opt := range opts {
 		opt(cb)
@@ -163,18 +161,18 @@ func (req *Req) parseData(data map[string]string, opts []Option) error {
 	req.cb = cb
 
 	// Validate actions existence
-	if _, exists := unflattened["actions"]; !exists {
+	if _, exists := data["actions"]; !exists {
 		return fmt.Errorf("actions parameter is required")
 	}
 
 	// Use MapToStructByTags to parse all fields including actions
-	err := probe.MapToStructByTags(unflattened, req)
+	err := probe.MapToStructByTags(data, req)
 	if err != nil {
 		return fmt.Errorf("MapToStructByTags failed: %w", err)
 	}
 
 	// Handle timeout separately as it requires special parsing
-	if timeout, exists := unflattened["timeout"]; exists {
+	if timeout, exists := data["timeout"]; exists {
 		if st, ok := timeout.(string); ok {
 			if parsed, err := time.ParseDuration(st); err == nil {
 				req.Timeout = parsed
@@ -346,14 +344,14 @@ func (req *Req) collectResults() (map[string]string, map[string]string, error) {
 					return nil, nil, fmt.Errorf("failed to save screenshot: %w", err)
 				}
 				action.filePath = &filePath
-				
+
 				// Store file path in results
 				key := action.Name
 				if action.ID != "" {
 					key = action.ID
 				}
 				filePaths[key] = filePath
-				
+
 				// Backward compatibility: also save to specified path if provided
 				if action.Path != "" {
 					if err := os.WriteFile(action.Path, *action.reBuf, 0644); err != nil {
@@ -415,7 +413,7 @@ func (req *Req) do() (*Result, error) {
 	return ret, nil
 }
 
-func Request(data map[string]string, opts ...Option) (map[string]string, error) {
+func Request(data map[string]any, opts ...Option) (map[string]any, error) {
 	start := time.Now()
 	req := NewReq()
 
@@ -433,10 +431,10 @@ func Request(data map[string]string, opts ...Option) (map[string]string, error) 
 		return createErrorResult(start, req, err)
 	}
 
-	return probe.MapToStructFlat(mapRet)
+	return mapRet, nil
 }
 
-func createErrorResult(start time.Time, req *Req, err error) (map[string]string, error) {
+func createErrorResult(start time.Time, req *Req, err error) (map[string]any, error) {
 	duration := time.Since(start)
 
 	result := &Result{
@@ -451,14 +449,10 @@ func createErrorResult(start time.Time, req *Req, err error) (map[string]string,
 
 	mapResult, mapErr := probe.StructToMapByTags(result)
 	if mapErr != nil {
-		return map[string]string{}, mapErr
+		return map[string]any{}, mapErr
 	}
 
-	flat, flatErr := probe.MapToStructFlat(mapResult)
-	if flatErr != nil {
-		return map[string]string{}, flatErr
-	}
-	return flat, err
+	return mapResult, err
 }
 
 func WithInBrowser(f func(s string, i ...interface{})) Option {

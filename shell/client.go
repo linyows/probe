@@ -304,19 +304,28 @@ func PrepareRequestData(data map[string]string) error {
 	return nil
 }
 
-func Execute(data map[string]string, opts ...Option) (map[string]string, error) {
-	// Create a copy to avoid modifying the original data
+func Execute(data map[string]any, opts ...Option) (map[string]any, error) {
+	// Create a copy to avoid modifying the original data and convert to map[string]string for compatibility
 	dataCopy := make(map[string]string)
 	for k, v := range data {
-		dataCopy[k] = v
+		if str, ok := v.(string); ok {
+			dataCopy[k] = str
+		} else {
+			dataCopy[k] = fmt.Sprintf("%v", v)
+		}
 	}
 
 	// Prepare request data
 	if err := PrepareRequestData(dataCopy); err != nil {
-		return map[string]string{}, err
+		return map[string]any{}, err
 	}
 
-	m := probe.HeaderToStringValue(probe.StructFlatToMap(dataCopy))
+	// Convert dataCopy (map[string]string) directly to map[string]any
+	m := make(map[string]any)
+	for k, v := range dataCopy {
+		m[k] = v
+	}
+	m = probe.HeaderToStringValue(m)
 
 	r := NewReq()
 
@@ -327,20 +336,21 @@ func Execute(data map[string]string, opts ...Option) (map[string]string, error) 
 	r.cb = cb
 
 	if err := probe.MapToStructByTags(m, r); err != nil {
-		return map[string]string{}, err
+		return map[string]any{}, err
 	}
 
 	result, err := r.Do()
 	if err != nil {
-		return map[string]string{}, err
+		return map[string]any{}, err
 	}
 
 	mapResult, err := probe.StructToMapByTags(result)
 	if err != nil {
-		return map[string]string{}, err
+		return map[string]any{}, err
 	}
 
-	return probe.MapToStructFlat(mapResult)
+	// Return the result directly without flattening
+	return mapResult, nil
 }
 
 func WithBefore(f func(cmd string, shell string, workdir string)) Option {

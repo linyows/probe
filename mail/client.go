@@ -90,8 +90,14 @@ func (r *Req) Do() (*Result, error) {
 		params["length"] = fmt.Sprintf("%d", r.Length)
 	}
 
+	// Convert params to map[string]any for NewBulk
+	paramsAny := make(map[string]any)
+	for k, v := range params {
+		paramsAny[k] = v
+	}
+
 	// Create bulk mailer
-	bulk, err := NewBulk(params)
+	bulk, err := NewBulk(paramsAny)
 	if err != nil {
 		return result, fmt.Errorf("failed to create bulk mailer: %w", err)
 	}
@@ -108,7 +114,7 @@ func (r *Req) Do() (*Result, error) {
 
 	// Get mail data for processing
 	mailData := bulk.MakeData()
-	
+
 	// Process mail data (check if it's text or binary)
 	bodyString, filePath, err := probe.ProcessHttpBody(mailData, "text/plain")
 	if err != nil {
@@ -139,11 +145,15 @@ func (r *Req) Do() (*Result, error) {
 	return result, nil
 }
 
-func Send(data map[string]string, opts ...Option) (map[string]string, error) {
-	// Create a copy to avoid modifying the original data
+func Send(data map[string]any, opts ...Option) (map[string]any, error) {
+	// Convert map[string]any to map[string]string for internal processing
 	dataCopy := make(map[string]string)
 	for k, v := range data {
-		dataCopy[k] = v
+		if str, ok := v.(string); ok {
+			dataCopy[k] = str
+		} else {
+			dataCopy[k] = fmt.Sprintf("%v", v)
+		}
 	}
 
 	m := probe.HeaderToStringValue(probe.StructFlatToMap(dataCopy))
@@ -157,7 +167,7 @@ func Send(data map[string]string, opts ...Option) (map[string]string, error) {
 	r.cb = cb
 
 	if err := probe.MapToStructByTags(m, r); err != nil {
-		return map[string]string{}, err
+		return map[string]any{}, err
 	}
 
 	result, err := r.Do()
@@ -166,22 +176,18 @@ func Send(data map[string]string, opts ...Option) (map[string]string, error) {
 		if result != nil {
 			mapResult, mapErr := probe.StructToMapByTags(result)
 			if mapErr == nil {
-				flat, flatErr := probe.MapToStructFlat(mapResult)
-				if flatErr != nil {
-					return map[string]string{}, err
-				}
-				return flat, err
+				return mapResult, err
 			}
 		}
-		return map[string]string{}, err
+		return map[string]any{}, err
 	}
 
 	mapResult, err := probe.StructToMapByTags(result)
 	if err != nil {
-		return map[string]string{}, err
+		return map[string]any{}, err
 	}
 
-	return probe.MapToStructFlat(mapResult)
+	return mapResult, nil
 }
 
 func WithBefore(f func(from string, to string, subject string)) Option {

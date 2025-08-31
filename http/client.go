@@ -1,7 +1,9 @@
 package http
 
 import (
+	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	hp "net/http"
 	"net/url"
@@ -9,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/hashicorp/go-hclog"
 	"github.com/linyows/probe"
 )
 
@@ -22,7 +25,7 @@ type Req struct {
 	Method string            `map:"method" validate:"required"`
 	Proto  string            `map:"ver"`
 	Header map[string]string `map:"headers"`
-	Body   string            `map:"body"`     // Changed from []byte to string for text data
+	Body   string            `map:"body"` // Changed from []byte to string for text data
 	cb     *Callback
 }
 
@@ -93,6 +96,10 @@ func (r *Req) Do() (*Result, error) {
 	if r.URL == "" {
 		return nil, errors.New("Req.URL is required")
 	}
+
+	// Debug: log the body content and content-type
+	log := hclog.Default()
+	log.Info("DEBUG: HTTP Request Body", "body", r.Body, "headers", r.Header)
 
 	req, err := hp.NewRequest(r.Method, r.URL, strings.NewReader(r.Body))
 	if err != nil {
@@ -263,25 +270,56 @@ func PrepareRequestData(data map[string]string) error {
 	return nil
 }
 
-func Request(data map[string]string, opts ...Option) (map[string]string, error) {
-	// Create a copy to avoid modifying the original data
+func Request(data map[string]any, opts ...Option) (map[string]any, error) {
+	// Create a copy to avoid modifying the original data and convert to map[string]string for compatibility
 	dataCopy := make(map[string]string)
 	for k, v := range data {
-		dataCopy[k] = v
+		if str, ok := v.(string); ok {
+			dataCopy[k] = str
+		} else {
+			dataCopy[k] = fmt.Sprintf("%v", v)
+		}
+	}
+
+	// Handle body conversion for JSON content-type by checking headers
+	if headers, ok := data["headers"].(map[string]any); ok {
+		if contentType, exists := headers["content-type"]; exists && contentType == "application/json" {
+			if bodyData, bodyExists := data["body"]; bodyExists {
+				if bodyMap, isMap := bodyData.(map[string]any); isMap {
+					// Convert body map to JSON string
+					if jsonBytes, err := json.Marshal(bodyMap); err == nil {
+						dataCopy["body"] = string(jsonBytes)
+						hclog.Default().Info("DEBUG: Converted body to JSON", "body", string(jsonBytes))
+					}
+				}
+			}
+		}
 	}
 
 	// Prepare request data (resolve method fields and convert body)
 	if err := PrepareRequestData(dataCopy); err != nil {
-		return map[string]string{}, err
+		return map[string]any{}, err
 	}
 
-	m := probe.HeaderToStringValue(probe.StructFlatToMap(dataCopy))
+	// Convert dataCopy (map[string]string) directly to map[string]any, but preserve original headers
+	m := make(map[string]any)
+	for k, v := range dataCopy {
+		m[k] = v
+	}
+	// Restore original headers map if it exists in data
+	if originalHeaders, exists := data["headers"]; exists {
+		m["headers"] = originalHeaders
+		hclog.Default().Info("DEBUG: Restored original headers", "headers", originalHeaders, "type", fmt.Sprintf("%T", originalHeaders))
+	}
+	m = probe.HeaderToStringValue(m)
 
 	// Extract custom headers and merge with defaults before MapToStructByTags
 	var customHeaders map[string]string
 	if headersInterface, exists := m["headers"]; exists {
+		hclog.Default().Info("DEBUG: Processing headers", "headers", headersInterface, "type", fmt.Sprintf("%T", headersInterface))
 		if headers, ok := headersInterface.(map[string]string); ok {
 			customHeaders = headers
+			hclog.Default().Info("DEBUG: Headers matched map[string]string")
 		} else if headersInterfaceMap, ok := headersInterface.(map[string]interface{}); ok {
 			// Convert map[string]interface{} to map[string]string
 			customHeaders = make(map[string]string)
@@ -290,7 +328,20 @@ func Request(data map[string]string, opts ...Option) (map[string]string, error) 
 					customHeaders[k] = strVal
 				}
 			}
+			hclog.Default().Info("DEBUG: Headers matched map[string]interface{}")
+		} else if headersAnyMap, ok := headersInterface.(map[string]any); ok {
+			// Convert map[string]any to map[string]string
+			customHeaders = make(map[string]string)
+			for k, v := range headersAnyMap {
+				if strVal, ok := v.(string); ok {
+					customHeaders[k] = strVal
+				}
+			}
+			hclog.Default().Info("DEBUG: Headers matched map[string]any")
+		} else {
+			hclog.Default().Info("DEBUG: Headers type not matched")
 		}
+		hclog.Default().Info("DEBUG: Extracted custom headers", "customHeaders", customHeaders)
 	}
 
 	// Create new request with merged headers
@@ -307,20 +358,21 @@ func Request(data map[string]string, opts ...Option) (map[string]string, error) 
 	r.cb = cb
 
 	if err := probe.MapToStructByTags(m, r); err != nil {
-		return map[string]string{}, err
+		return map[string]any{}, err
 	}
 
 	ret, err := r.Do()
 	if err != nil {
-		return map[string]string{}, err
+		return map[string]any{}, err
 	}
 
 	mapRet, err := probe.StructToMapByTags(ret)
 	if err != nil {
-		return map[string]string{}, err
+		return map[string]any{}, err
 	}
 
-	return probe.MapToStructFlat(mapRet)
+	// Return the result directly without flattening
+	return mapRet, nil
 }
 
 func WithBefore(f func(req *hp.Request)) Option {
