@@ -72,7 +72,7 @@ jobs:
       body:
         page_size: 10
         filter:
-          active: true
+          active: "true"
       metadata:
         authorization: Bearer secure-token
     test: |

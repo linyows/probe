@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -368,16 +369,31 @@ type Callback struct {
 	after  func(res *Res)
 }
 
-func Request(data map[string]string, opts ...Option) (map[string]string, error) {
-	// Create a copy to avoid modifying the original data
+func Request(data map[string]any, opts ...Option) (map[string]any, error) {
+	// Convert map[string]any to map[string]string for internal processing
 	dataCopy := make(map[string]string)
 	for k, v := range data {
-		dataCopy[k] = v
+		if str, ok := v.(string); ok {
+			dataCopy[k] = str
+		} else if k == "body" {
+			// Special handling for body field - convert to JSON
+			if bodyMap, ok := v.(map[string]any); ok {
+				if jsonBytes, err := json.Marshal(bodyMap); err == nil {
+					dataCopy[k] = string(jsonBytes)
+				} else {
+					dataCopy[k] = fmt.Sprintf("%v", v)
+				}
+			} else {
+				dataCopy[k] = fmt.Sprintf("%v", v)
+			}
+		} else {
+			dataCopy[k] = fmt.Sprintf("%v", v)
+		}
 	}
 
 	// Prepare request data (convert request and metadata fields)
 	if err := PrepareGrpcRequestData(dataCopy); err != nil {
-		return map[string]string{}, err
+		return map[string]any{}, err
 	}
 
 	m := probe.HeaderToStringValue(probe.StructFlatToMap(dataCopy))
@@ -392,20 +408,20 @@ func Request(data map[string]string, opts ...Option) (map[string]string, error) 
 	r.cb = cb
 
 	if err := probe.MapToStructByTags(m, r); err != nil {
-		return map[string]string{}, err
+		return map[string]any{}, err
 	}
 
 	ret, err := r.Do()
 	if err != nil {
-		return map[string]string{}, err
+		return map[string]any{}, err
 	}
 
 	mapRet, err := probe.StructToMapByTags(ret)
 	if err != nil {
-		return map[string]string{}, err
+		return map[string]any{}, err
 	}
 
-	return probe.MapToStructFlat(mapRet)
+	return mapRet, nil
 }
 
 func WithBefore(f func(ctx context.Context, service, method string)) Option {
