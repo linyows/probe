@@ -59,43 +59,6 @@ func StructFlatToMap(flat map[string]string) map[string]any {
 	return result
 }
 
-// normalizeNumericTypes converts float64 values to int where appropriate
-func normalizeNumericTypes(data map[string]any) map[string]any {
-	result := make(map[string]any)
-
-	for key, value := range data {
-		switch v := value.(type) {
-		case float64:
-			// Check if it's actually an integer
-			if v == float64(int64(v)) {
-				result[key] = int(v)
-			} else {
-				result[key] = v
-			}
-		case map[string]any:
-			// Recursively process nested maps
-			result[key] = normalizeNumericTypes(v)
-		case []any:
-			// Process arrays
-			normalizedArray := make([]any, len(v))
-			for i, item := range v {
-				if itemMap, ok := item.(map[string]any); ok {
-					normalizedArray[i] = normalizeNumericTypes(itemMap)
-				} else if floatVal, ok := item.(float64); ok && floatVal == float64(int64(floatVal)) {
-					normalizedArray[i] = int(floatVal)
-				} else {
-					normalizedArray[i] = item
-				}
-			}
-			result[key] = normalizedArray
-		default:
-			result[key] = v
-		}
-	}
-
-	return result
-}
-
 // Internal flattening implementation (copied from flattening.go)
 const flatkey = "__"
 
