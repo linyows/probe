@@ -2,13 +2,16 @@ package shell
 
 import (
 	"context"
+	"crypto/md5"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/linyows/probe"
@@ -176,11 +179,17 @@ func (r *Req) Do() (*Result, error) {
 		r.cb.before(params.cmd, params.shell, params.workdir)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), params.timeout)
-	defer cancel()
-
-	// Create command
-	cmd := exec.CommandContext(ctx, params.shell, "-c", params.cmd)
+	// Create command with appropriate context
+	var cmd *exec.Cmd
+	if r.Background {
+		// For background execution, use context.Background() without timeout
+		cmd = exec.CommandContext(context.Background(), params.shell, "-c", params.cmd)
+	} else {
+		// For synchronous execution, use timeout context
+		ctx, cancel := context.WithTimeout(context.Background(), params.timeout)
+		defer cancel()
+		cmd = exec.CommandContext(ctx, params.shell, "-c", params.cmd)
+	}
 
 	// Set working directory
 	if params.workdir != "" {
@@ -193,9 +202,70 @@ func (r *Req) Do() (*Result, error) {
 		cmd.Env = append(cmd.Env, fmt.Sprintf("%s=%s", key, value))
 	}
 
+	// For background execution, configure SysProcAttr to create new session
+	if r.Background {
+		if runtime.GOOS != "windows" {
+			cmd.SysProcAttr = &syscall.SysProcAttr{
+				Setsid: true, // Create new session (also creates new process group)
+			}
+		}
+	}
+
 	start := time.Now()
 
-	// Capture stdout and stderr
+	// For background execution, setup log file and start process
+	if r.Background {
+		// Get current working directory for log file
+		cwd, err := os.Getwd()
+		if err != nil {
+			return result, fmt.Errorf("failed to get current working directory: %w", err)
+		}
+
+		// Generate hash from command for unique log filename
+		hash := fmt.Sprintf("%x", md5.Sum([]byte(params.cmd)))[:8]
+		logPath := filepath.Join(cwd, fmt.Sprintf("bg-cmd-%s.log", hash))
+
+		// Create log file
+		logFile, err := os.Create(logPath)
+		if err != nil {
+			return result, fmt.Errorf("failed to create log file: %w", err)
+		}
+
+		// Redirect both stdout and stderr to the same log file
+		cmd.Stdout = logFile
+		cmd.Stderr = logFile
+
+		// Start command
+		if err := cmd.Start(); err != nil {
+			logFile.Close()
+			os.Remove(logPath)
+			return result, fmt.Errorf("failed to start command: %w", err)
+		}
+
+		// Start a goroutine to close the log file when process exits
+		go func() {
+			cmd.Wait()
+			logFile.Close()
+		}()
+
+		result.RT = time.Since(start)
+		result.Res = Res{
+			Code:   -1, // Indicate background process (not finished)
+			Stdout: "",
+			Stderr: "",
+			PID:    cmd.Process.Pid,
+		}
+		result.Status = -1 // Indicate background execution
+		
+		// callback after
+		if r.cb != nil && r.cb.after != nil {
+			r.cb.after(result)
+		}
+		
+		return result, nil
+	}
+
+	// Capture stdout and stderr for synchronous execution
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return result, fmt.Errorf("failed to create stdout pipe: %w", err)
@@ -244,25 +314,6 @@ func (r *Req) Do() (*Result, error) {
 		}
 		stderrChan <- output
 	}()
-
-	// For background execution, return immediately with PID
-	if r.Background {
-		result.RT = time.Since(start)
-		result.Res = Res{
-			Code:   -1, // Indicate background process (not finished)
-			Stdout: "",
-			Stderr: "",
-			PID:    cmd.Process.Pid,
-		}
-		result.Status = -1 // Indicate background execution
-		
-		// callback after
-		if r.cb != nil && r.cb.after != nil {
-			r.cb.after(result)
-		}
-		
-		return result, nil
-	}
 
 	// Wait for command completion (synchronous execution)
 	cmdErr := cmd.Wait()
