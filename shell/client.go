@@ -237,15 +237,15 @@ func (r *Req) Do() (*Result, error) {
 
 		// Start command
 		if err := cmd.Start(); err != nil {
-			logFile.Close()
-			os.Remove(logPath)
+			_ = logFile.Close()
+			_ = os.Remove(logPath)
 			return result, fmt.Errorf("failed to start command: %w", err)
 		}
 
 		// Start a goroutine to close the log file when process exits
 		go func() {
-			cmd.Wait()
-			logFile.Close()
+			_ = cmd.Wait()
+			_ = logFile.Close()
 		}()
 
 		result.RT = time.Since(start)
