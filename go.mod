@@ -23,7 +23,7 @@ require (
 	github.com/stretchr/testify v1.7.0
 	golang.org/x/crypto v0.26.0
 	google.golang.org/grpc v1.67.0
-	google.golang.org/protobuf v1.34.2
+	google.golang.org/protobuf v1.36.8
 	gopkg.in/go-playground/validator.v9 v9.31.0
 )
 
