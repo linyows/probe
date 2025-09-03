@@ -20,7 +20,7 @@ require (
 	github.com/lib/pq v1.10.9
 	github.com/mattn/go-isatty v0.0.20
 	github.com/mattn/go-sqlite3 v1.14.32
-	github.com/stretchr/testify v1.7.0
+	github.com/stretchr/testify v1.11.1
 	golang.org/x/crypto v0.41.0
 	google.golang.org/grpc v1.67.0
 	google.golang.org/protobuf v1.36.8
@@ -53,5 +53,5 @@ require (
 	golang.org/x/xerrors v0.0.0-20200804184101-5ec99f83aff1 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20240814211410-ddb44dafa142 // indirect
 	gopkg.in/go-playground/assert.v1 v1.2.1 // indirect
-	gopkg.in/yaml.v3 v3.0.0-20210107192922-496545a6307b // indirect
+	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
