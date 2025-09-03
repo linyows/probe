@@ -11,11 +11,12 @@ func TestNewReq(t *testing.T) {
 	got := NewReq()
 
 	expected := &Req{
-		Cmd:     "",
-		Shell:   "/bin/sh",
-		Workdir: "",
-		Timeout: "30s",
-		Env:     map[string]string{},
+		Cmd:        "",
+		Shell:      "/bin/sh",
+		Workdir:    "",
+		Timeout:    "30s",
+		Env:        map[string]string{},
+		Background: false,
 	}
 
 	if !reflect.DeepEqual(got, expected) {
@@ -424,6 +425,7 @@ func TestWithAfter(t *testing.T) {
 		Res: Res{
 			Code:   0,
 			Stdout: "test output",
+			PID:    12345,
 		},
 	}
 	cb.after(testResult)
@@ -433,5 +435,221 @@ func TestWithAfter(t *testing.T) {
 	}
 	if capturedResult != testResult {
 		t.Error("after callback did not receive correct result")
+	}
+}
+
+func TestDoBackground(t *testing.T) {
+	tests := []struct {
+		name        string
+		req         *Req
+		expectError bool
+	}{
+		{
+			name: "background sleep command",
+			req: &Req{
+				Cmd:        "sleep 5",
+				Shell:      "/bin/sh",
+				Timeout:    "30s",
+				Background: true,
+			},
+			expectError: false,
+		},
+		{
+			name: "background echo command",
+			req: &Req{
+				Cmd:        "echo 'background test'",
+				Shell:      "/bin/sh",
+				Timeout:    "30s",
+				Background: true,
+			},
+			expectError: false,
+		},
+		{
+			name: "empty command background",
+			req: &Req{
+				Cmd:        "",
+				Shell:      "/bin/sh",
+				Background: true,
+			},
+			expectError: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Track if callbacks were called
+			beforeCalled := false
+			afterCalled := false
+
+			// Set up callbacks for testing
+			tt.req.cb = &Callback{
+				before: func(cmd string, shell string, workdir string) {
+					beforeCalled = true
+				},
+				after: func(result *Result) {
+					afterCalled = true
+				},
+			}
+
+			result, err := tt.req.Do()
+
+			if tt.expectError {
+				if err == nil {
+					t.Errorf("Do() expected error but got none")
+				}
+				return
+			}
+
+			if err != nil {
+				t.Errorf("Do() unexpected error: %v", err)
+				return
+			}
+
+			// Verify callbacks were called
+			if !beforeCalled {
+				t.Error("before callback was not called")
+			}
+			if !afterCalled {
+				t.Error("after callback was not called")
+			}
+
+			// Check basic result structure
+			if result == nil {
+				t.Error("Do() returned nil result")
+				return
+			}
+
+			// For background execution, verify specific behaviors
+			if tt.req.Background {
+				// Status should be -1 for background execution
+				if result.Status != -1 {
+					t.Errorf("Expected status -1 for background execution, got: %d", result.Status)
+				}
+
+				// Code should be -1 for background process
+				if result.Res.Code != -1 {
+					t.Errorf("Expected exit code -1 for background process, got: %d", result.Res.Code)
+				}
+
+				// PID should be greater than 0
+				if result.Res.PID <= 0 {
+					t.Errorf("Expected PID > 0 for background process, got: %d", result.Res.PID)
+				}
+
+				// Stdout and Stderr should be empty for background execution
+				if result.Res.Stdout != "" {
+					t.Errorf("Expected empty stdout for background execution, got: %s", result.Res.Stdout)
+				}
+				if result.Res.Stderr != "" {
+					t.Errorf("Expected empty stderr for background execution, got: %s", result.Res.Stderr)
+				}
+
+				// RT should be very small (just startup time)
+				if result.RT > time.Second {
+					t.Errorf("Expected RT < 1s for background execution, got: %v", result.RT)
+				}
+			}
+
+			// Check that RT field is populated
+			if result.RT <= 0 {
+				t.Errorf("RT should be greater than 0, got: %v", result.RT)
+			}
+
+			// Check request fields are preserved
+			if result.Req.Cmd != tt.req.Cmd {
+				t.Errorf("Req.Cmd = %v, want %v", result.Req.Cmd, tt.req.Cmd)
+			}
+		})
+	}
+}
+
+func TestExecuteBackground(t *testing.T) {
+	tests := []struct {
+		name        string
+		data        map[string]any
+		expectError bool
+	}{
+		{
+			name: "background command execution",
+			data: map[string]any{
+				"cmd":        "sleep 3",
+				"shell":      "/bin/sh",
+				"background": "true",
+			},
+			expectError: false,
+		},
+		{
+			name: "background command with bool",
+			data: map[string]any{
+				"cmd":        "echo 'test'",
+				"shell":      "/bin/sh",
+				"background": true,
+			},
+			expectError: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Track if callbacks were called
+			beforeCalled := false
+			afterCalled := false
+
+			before := WithBefore(func(cmd string, shell string, workdir string) {
+				beforeCalled = true
+			})
+			after := WithAfter(func(result *Result) {
+				afterCalled = true
+			})
+
+			result, err := Execute(tt.data, before, after)
+
+			if tt.expectError {
+				if err == nil {
+					t.Errorf("Execute() expected error but got none")
+				}
+				return
+			}
+
+			if err != nil {
+				t.Errorf("Execute() unexpected error: %v", err)
+				return
+			}
+
+			// Verify callbacks were called
+			if !beforeCalled {
+				t.Error("before callback was not called")
+			}
+			if !afterCalled {
+				t.Error("after callback was not called")
+			}
+
+			if result == nil {
+				t.Error("Execute() returned nil result")
+				return
+			}
+
+			// Check that it's background execution
+			if status, exists := result["status"]; exists {
+				if statusInt, ok := status.(int); ok && statusInt == -1 {
+					// Verify PID exists in response
+					if res, exists := result["res"]; exists {
+						if resMap, ok := res.(map[string]any); ok {
+							if pid, exists := resMap["pid"]; exists {
+								if pidInt, ok := pid.(int); ok {
+									if pidInt <= 0 {
+										t.Errorf("Expected PID > 0 for background process, got: %d", pidInt)
+									}
+								} else {
+									t.Error("Expected PID to be int")
+								}
+							} else {
+								t.Error("Expected 'pid' field in res for background execution")
+							}
+						}
+					}
+				}
+			}
+		})
 	}
 }
