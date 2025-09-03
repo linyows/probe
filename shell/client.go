@@ -15,18 +15,20 @@ import (
 )
 
 type Req struct {
-	Cmd     string            `map:"cmd" validate:"required"`
-	Shell   string            `map:"shell"`
-	Workdir string            `map:"workdir"`
-	Timeout string            `map:"timeout"`
-	Env     map[string]string `map:"env"`
-	cb      *Callback
+	Cmd        string            `map:"cmd" validate:"required"`
+	Shell      string            `map:"shell"`
+	Workdir    string            `map:"workdir"`
+	Timeout    string            `map:"timeout"`
+	Env        map[string]string `map:"env"`
+	Background bool              `map:"background"`
+	cb         *Callback
 }
 
 type Res struct {
 	Code   int    `map:"code"`
 	Stdout string `map:"stdout"`
 	Stderr string `map:"stderr"`
+	PID    int    `map:"pid"`
 }
 
 type Result struct {
@@ -243,7 +245,26 @@ func (r *Req) Do() (*Result, error) {
 		stderrChan <- output
 	}()
 
-	// Wait for command completion
+	// For background execution, return immediately with PID
+	if r.Background {
+		result.RT = time.Since(start)
+		result.Res = Res{
+			Code:   -1, // Indicate background process (not finished)
+			Stdout: "",
+			Stderr: "",
+			PID:    cmd.Process.Pid,
+		}
+		result.Status = -1 // Indicate background execution
+		
+		// callback after
+		if r.cb != nil && r.cb.after != nil {
+			r.cb.after(result)
+		}
+		
+		return result, nil
+	}
+
+	// Wait for command completion (synchronous execution)
 	cmdErr := cmd.Wait()
 	result.RT = time.Since(start)
 
@@ -272,6 +293,7 @@ func (r *Req) Do() (*Result, error) {
 		Code:   exitCode,
 		Stdout: string(stdoutBytes),
 		Stderr: string(stderrBytes),
+		PID:    cmd.Process.Pid,
 	}
 	result.Status = status
 
