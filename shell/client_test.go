@@ -1,6 +1,8 @@
 package shell
 
 import (
+	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -44,6 +46,46 @@ func TestValidateShellPath(t *testing.T) {
 			err := validateShellPath(tt.shell)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("validateShellPath() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestValidateWorkdir(t *testing.T) {
+	// Create a temporary directory for testing
+	tempDir, err := os.MkdirTemp("", "workdir_test")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer func() {
+		if err := os.RemoveAll(tempDir); err != nil {
+			t.Logf("Failed to cleanup temp dir: %v", err)
+		}
+	}()
+
+	// Get current working directory
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("Failed to get current working directory: %v", err)
+	}
+
+	tests := []struct {
+		name    string
+		workdir string
+		wantErr bool
+	}{
+		{"absolute path exists", tempDir, false},
+		{"absolute path not exists", "/nonexistent/path", true},
+		{"relative path exists", ".", false},
+		{"relative path not exists", "nonexistent", true},
+		{"current directory", wd, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateWorkdir(tt.workdir)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("validateWorkdir() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
 	}
@@ -121,6 +163,17 @@ func TestDo(t *testing.T) {
 			expectError: true,
 			checkOutput: false,
 		},
+		{
+			name: "command with relative workdir",
+			req: &Req{
+				Cmd:     "pwd",
+				Shell:   "/bin/sh",
+				Workdir: ".",
+				Timeout: "5s",
+			},
+			expectError: false,
+			checkOutput: true,
+		},
 	}
 
 	for _, tt := range tests {
@@ -178,9 +231,18 @@ func TestDo(t *testing.T) {
 			}
 
 			if tt.checkOutput {
-				// For echo command, stdout should contain "Hello World"
-				if !strings.Contains(result.Res.Stdout, "Hello World") {
-					t.Errorf("Expected stdout to contain 'Hello World', got: %s", result.Res.Stdout)
+				// Different checks based on command type
+				if tt.req.Cmd == "echo 'Hello World'" {
+					// For echo command, stdout should contain "Hello World"
+					if !strings.Contains(result.Res.Stdout, "Hello World") {
+						t.Errorf("Expected stdout to contain 'Hello World', got: %s", result.Res.Stdout)
+					}
+				} else if tt.req.Cmd == "pwd" && tt.req.Workdir == "." {
+					// For pwd command with relative workdir, should output current directory
+					expectedPath, _ := filepath.Abs(tt.req.Workdir)
+					if !strings.Contains(result.Res.Stdout, expectedPath) {
+						t.Errorf("Expected stdout to contain current directory path '%s', got: %s", expectedPath, result.Res.Stdout)
+					}
 				}
 
 				// Successful command should have status 0
@@ -548,6 +610,26 @@ func TestDoBackground(t *testing.T) {
 				if result.RT > time.Second {
 					t.Errorf("Expected RT < 1s for background execution, got: %v", result.RT)
 				}
+
+				// Log field should be present and point to tmp directory
+				if result.Res.Log == "" {
+					t.Error("Expected log field to be populated for background execution")
+				} else {
+					// Verify log path is in tmp directory
+					if !strings.HasPrefix(result.Res.Log, os.TempDir()) {
+						t.Errorf("Expected log path to be in tmp directory, got: %s", result.Res.Log)
+					}
+					// Verify log filename format
+					filename := filepath.Base(result.Res.Log)
+					if !strings.HasPrefix(filename, "probe-shell-action.") || !strings.HasSuffix(filename, ".log") {
+						t.Errorf("Expected log filename format 'probe-shell-action.<hash>.log', got: %s", filename)
+					}
+					// Verify hash length (8 characters)
+					parts := strings.Split(filename, ".")
+					if len(parts) != 3 || len(parts[1]) != 8 {
+						t.Errorf("Expected hash to be 8 characters, got filename: %s", filename)
+					}
+				}
 			}
 
 			// Check that RT field is populated
@@ -645,6 +727,25 @@ func TestExecuteBackground(t *testing.T) {
 								}
 							} else {
 								t.Error("Expected 'pid' field in res for background execution")
+							}
+
+							// Verify log field exists and is correctly formatted
+							if log, exists := resMap["log"]; exists {
+								if logStr, ok := log.(string); ok {
+									// Verify log path is in tmp directory
+									if !strings.HasPrefix(logStr, os.TempDir()) {
+										t.Errorf("Expected log path to be in tmp directory, got: %s", logStr)
+									}
+									// Verify log filename format
+									filename := filepath.Base(logStr)
+									if !strings.HasPrefix(filename, "probe-shell-action.") || !strings.HasSuffix(filename, ".log") {
+										t.Errorf("Expected log filename format 'probe-shell-action.<hash>.log', got: %s", filename)
+									}
+								} else {
+									t.Error("Expected log to be string")
+								}
+							} else {
+								t.Error("Expected 'log' field in res for background execution")
 							}
 						}
 					}
