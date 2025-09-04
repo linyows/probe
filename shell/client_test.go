@@ -1,6 +1,8 @@
 package shell
 
 import (
+	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -44,6 +46,42 @@ func TestValidateShellPath(t *testing.T) {
 			err := validateShellPath(tt.shell)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("validateShellPath() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestValidateWorkdir(t *testing.T) {
+	// Create a temporary directory for testing
+	tempDir, err := os.MkdirTemp("", "workdir_test")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	// Get current working directory
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("Failed to get current working directory: %v", err)
+	}
+
+	tests := []struct {
+		name    string
+		workdir string
+		wantErr bool
+	}{
+		{"absolute path exists", tempDir, false},
+		{"absolute path not exists", "/nonexistent/path", true},
+		{"relative path exists", ".", false},
+		{"relative path not exists", "nonexistent", true},
+		{"current directory", wd, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateWorkdir(tt.workdir)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("validateWorkdir() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
 	}
@@ -121,6 +159,17 @@ func TestDo(t *testing.T) {
 			expectError: true,
 			checkOutput: false,
 		},
+		{
+			name: "command with relative workdir",
+			req: &Req{
+				Cmd:     "pwd",
+				Shell:   "/bin/sh",
+				Workdir: ".",
+				Timeout: "5s",
+			},
+			expectError: false,
+			checkOutput: true,
+		},
 	}
 
 	for _, tt := range tests {
@@ -178,9 +227,18 @@ func TestDo(t *testing.T) {
 			}
 
 			if tt.checkOutput {
-				// For echo command, stdout should contain "Hello World"
-				if !strings.Contains(result.Res.Stdout, "Hello World") {
-					t.Errorf("Expected stdout to contain 'Hello World', got: %s", result.Res.Stdout)
+				// Different checks based on command type
+				if tt.req.Cmd == "echo 'Hello World'" {
+					// For echo command, stdout should contain "Hello World"
+					if !strings.Contains(result.Res.Stdout, "Hello World") {
+						t.Errorf("Expected stdout to contain 'Hello World', got: %s", result.Res.Stdout)
+					}
+				} else if tt.req.Cmd == "pwd" && tt.req.Workdir == "." {
+					// For pwd command with relative workdir, should output current directory
+					expectedPath, _ := filepath.Abs(tt.req.Workdir)
+					if !strings.Contains(result.Res.Stdout, expectedPath) {
+						t.Errorf("Expected stdout to contain current directory path '%s', got: %s", expectedPath, result.Res.Stdout)
+					}
 				}
 
 				// Successful command should have status 0
