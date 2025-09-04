@@ -606,6 +606,26 @@ func TestDoBackground(t *testing.T) {
 				if result.RT > time.Second {
 					t.Errorf("Expected RT < 1s for background execution, got: %v", result.RT)
 				}
+
+				// Log field should be present and point to tmp directory
+				if result.Res.Log == "" {
+					t.Error("Expected log field to be populated for background execution")
+				} else {
+					// Verify log path is in tmp directory
+					if !strings.HasPrefix(result.Res.Log, os.TempDir()) {
+						t.Errorf("Expected log path to be in tmp directory, got: %s", result.Res.Log)
+					}
+					// Verify log filename format
+					filename := filepath.Base(result.Res.Log)
+					if !strings.HasPrefix(filename, "probe-shell-action.") || !strings.HasSuffix(filename, ".log") {
+						t.Errorf("Expected log filename format 'probe-shell-action.<hash>.log', got: %s", filename)
+					}
+					// Verify hash length (8 characters)
+					parts := strings.Split(filename, ".")
+					if len(parts) != 3 || len(parts[1]) != 8 {
+						t.Errorf("Expected hash to be 8 characters, got filename: %s", filename)
+					}
+				}
 			}
 
 			// Check that RT field is populated
@@ -703,6 +723,25 @@ func TestExecuteBackground(t *testing.T) {
 								}
 							} else {
 								t.Error("Expected 'pid' field in res for background execution")
+							}
+
+							// Verify log field exists and is correctly formatted
+							if log, exists := resMap["log"]; exists {
+								if logStr, ok := log.(string); ok {
+									// Verify log path is in tmp directory
+									if !strings.HasPrefix(logStr, os.TempDir()) {
+										t.Errorf("Expected log path to be in tmp directory, got: %s", logStr)
+									}
+									// Verify log filename format
+									filename := filepath.Base(logStr)
+									if !strings.HasPrefix(filename, "probe-shell-action.") || !strings.HasSuffix(filename, ".log") {
+										t.Errorf("Expected log filename format 'probe-shell-action.<hash>.log', got: %s", filename)
+									}
+								} else {
+									t.Error("Expected log to be string")
+								}
+							} else {
+								t.Error("Expected 'log' field in res for background execution")
 							}
 						}
 					}

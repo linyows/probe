@@ -32,6 +32,7 @@ type Res struct {
 	Stdout string `map:"stdout"`
 	Stderr string `map:"stderr"`
 	PID    int    `map:"pid"`
+	Log    string `map:"log"`
 }
 
 type Result struct {
@@ -217,15 +218,12 @@ func (r *Req) Do() (*Result, error) {
 
 	// For background execution, setup log file and start process
 	if r.Background {
-		// Get current working directory for log file
-		cwd, err := os.Getwd()
-		if err != nil {
-			return result, fmt.Errorf("failed to get current working directory: %w", err)
-		}
+		// Use tmp directory for log file
+		tmpDir := os.TempDir()
 
 		// Generate hash from command for unique log filename
 		hash := fmt.Sprintf("%x", md5.Sum([]byte(params.cmd)))[:8]
-		logPath := filepath.Join(cwd, fmt.Sprintf("bg-cmd-%s.log", hash))
+		logPath := filepath.Join(tmpDir, fmt.Sprintf("probe-shell-action.%s.log", hash))
 
 		// Create log file
 		logFile, err := os.Create(logPath)
@@ -256,6 +254,7 @@ func (r *Req) Do() (*Result, error) {
 			Stdout: "",
 			Stderr: "",
 			PID:    cmd.Process.Pid,
+			Log:    logPath,
 		}
 		result.Status = -1 // Indicate background execution
 		
