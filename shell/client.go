@@ -257,12 +257,12 @@ func (r *Req) Do() (*Result, error) {
 			Log:    logPath,
 		}
 		result.Status = -1 // Indicate background execution
-		
+
 		// callback after
 		if r.cb != nil && r.cb.after != nil {
 			r.cb.after(result)
 		}
-		
+
 		return result, nil
 	}
 

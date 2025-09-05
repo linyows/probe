@@ -159,7 +159,7 @@ func (e *Expr) Options(env any) []ex.Option {
 				if len(params) != 1 {
 					return nil, fmt.Errorf("parse_int requires exactly 1 parameter")
 				}
-				
+
 				switch v := params[0].(type) {
 				case string:
 					i, err := strconv.ParseInt(v, 10, 64)
@@ -429,11 +429,11 @@ func isWholeStringTemplate(input string) bool {
 	if !strings.HasPrefix(trimmed, templateStart) || !strings.HasSuffix(trimmed, templateEnd) {
 		return false
 	}
-	
+
 	// Count template markers to ensure there's exactly one pair
 	startCount := strings.Count(trimmed, templateStart)
 	endCount := strings.Count(trimmed, templateEnd)
-	
+
 	return startCount == 1 && endCount == 1
 }
 
@@ -443,7 +443,7 @@ func extractTemplateExpression(input string) string {
 	if !strings.HasPrefix(trimmed, templateStart) || !strings.HasSuffix(trimmed, templateEnd) {
 		return ""
 	}
-	
+
 	// Remove template markers and trim whitespace
 	expression := trimmed[len(templateStart) : len(trimmed)-len(templateEnd)]
 	return strings.TrimSpace(expression)
@@ -519,7 +519,7 @@ func (e *Expr) EvalTemplateWithTypePreservation(input string, env any) (any, err
 		if expression == "" {
 			return "", fmt.Errorf("failed to extract expression from template: %s", input)
 		}
-		
+
 		// Use Eval directly to preserve type
 		return e.Eval(expression, env)
 	}

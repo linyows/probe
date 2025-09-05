@@ -465,7 +465,7 @@ func (st *Step) handleWait(jCtx *JobContext) {
 	if st.Wait == "" {
 		return
 	}
-	
+
 	// Evaluate wait expression template first
 	waitExpr, err := st.Expr.EvalTemplate(st.Wait, st.ctx)
 	if err != nil {

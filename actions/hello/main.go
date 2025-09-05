@@ -20,7 +20,7 @@ func (a *Action) Run(args []string, with map[string]any) (map[string]any, error)
 	for k, v := range with {
 		res[k] = v
 	}
-	res["status"] = 0 // Always success for hello action (ExitStatusSuccess)
+	res["status"] = 0   // Always success for hello action (ExitStatusSuccess)
 	res["dump"] = false // Don't dump request/response for hello action
 
 	// Return in expected structure

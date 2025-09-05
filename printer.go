@@ -539,7 +539,7 @@ func (p *Printer) generateTestFailure(testExpr string, result interface{}, req, 
 			}
 		}
 	}
-	
+
 	output := fmt.Sprintf("       %s %#v\n", colorInfo().Sprintf("request:"), req)
 	output += fmt.Sprintf("       %s %#v\n", colorInfo().Sprintf("response:"), res)
 	return output

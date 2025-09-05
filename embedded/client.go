@@ -121,8 +121,8 @@ func (r *Req) Do() (*Result, error) {
 
 	// Only return error for system-level failures (file not found, parsing errors, etc.)
 	// Test failures should not be treated as plugin errors
-	if !success && errorMsg != "" && 
-		errorMsg != "job execution failed" && 
+	if !success && errorMsg != "" &&
+		errorMsg != "job execution failed" &&
 		!strings.Contains(errorMsg, "execution error in job_start: job execution failed") {
 		detailedError := fmt.Sprintf("embedded job execution failed: %s", errorMsg)
 		if report != "" {

@@ -360,19 +360,19 @@ func TestCustomFunctions(t *testing.T) {
 		for _, tt := range tests {
 			t.Run(tt.name, func(t *testing.T) {
 				result, err := expr.Eval(tt.input, tt.env)
-				
+
 				if tt.wantErr {
 					if err == nil {
 						t.Errorf("expected error but got none")
 					}
 					return
 				}
-				
+
 				if err != nil {
 					t.Errorf("unexpected error: %v", err)
 					return
 				}
-				
+
 				if result != tt.expected {
 					t.Errorf("expected %v, got %v", tt.expected, result)
 				}
@@ -383,7 +383,7 @@ func TestCustomFunctions(t *testing.T) {
 
 func TestWholeStringTemplateTypePreservation(t *testing.T) {
 	expr := &Expr{}
-	
+
 	t.Run("integer type preservation", func(t *testing.T) {
 		result, err := expr.EvalTemplateWithTypePreservation("{{ vars.count }}", map[string]any{
 			"vars": map[string]any{"count": 123},
@@ -520,20 +520,20 @@ func TestHelperFunctions(t *testing.T) {
 
 func TestEvalTemplateMapTypePreservation(t *testing.T) {
 	expr := &Expr{}
-	
+
 	input := map[string]any{
-		"number":       "{{ vars.count }}",
-		"price":        "{{ vars.price }}",
-		"enabled":      "{{ vars.enabled }}",
-		"message":      "{{ vars.message }}",
-		"partial":      "Count: {{ vars.count }}",
-		"multiple":     "{{ vars.name }} is {{ vars.age }}",
-		"unchanged":    "static value",
+		"number":    "{{ vars.count }}",
+		"price":     "{{ vars.price }}",
+		"enabled":   "{{ vars.enabled }}",
+		"message":   "{{ vars.message }}",
+		"partial":   "Count: {{ vars.count }}",
+		"multiple":  "{{ vars.name }} is {{ vars.age }}",
+		"unchanged": "static value",
 		"nested": map[string]any{
 			"inner_number": "{{ vars.inner }}",
 		},
 	}
-	
+
 	env := map[string]any{
 		"vars": map[string]any{
 			"count":   123,
@@ -545,9 +545,9 @@ func TestEvalTemplateMapTypePreservation(t *testing.T) {
 			"inner":   456,
 		},
 	}
-	
+
 	result := expr.EvalTemplateMap(input, env)
-	
+
 	// Check type preservation
 	if result["number"] != 123 {
 		t.Errorf("number: expected 123 (int), got %v (%T)", result["number"], result["number"])
@@ -561,7 +561,7 @@ func TestEvalTemplateMapTypePreservation(t *testing.T) {
 	if result["message"] != "hello" {
 		t.Errorf("message: expected \"hello\" (string), got %v (%T)", result["message"], result["message"])
 	}
-	
+
 	// Check string templates remain string
 	if result["partial"] != "Count: 123" {
 		t.Errorf("partial: expected \"Count: 123\", got %v", result["partial"])
@@ -569,12 +569,12 @@ func TestEvalTemplateMapTypePreservation(t *testing.T) {
 	if result["multiple"] != "John is 30" {
 		t.Errorf("multiple: expected \"John is 30\", got %v", result["multiple"])
 	}
-	
+
 	// Check unchanged values
 	if result["unchanged"] != "static value" {
 		t.Errorf("unchanged: expected \"static value\", got %v", result["unchanged"])
 	}
-	
+
 	// Check nested maps
 	nested, ok := result["nested"].(map[string]any)
 	if !ok {
