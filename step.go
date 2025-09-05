@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"regexp"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -28,7 +29,6 @@ type Step struct {
 }
 
 func (st *Step) Do(jCtx *JobContext) {
-
 	// 1. Preparation phase: validation, wait, skip check
 	name, shouldContinue := st.prepare(jCtx)
 	if !shouldContinue {
@@ -465,8 +465,15 @@ func (st *Step) handleWait(jCtx *JobContext) {
 	if st.Wait == "" {
 		return
 	}
+	
+	// Evaluate wait expression template first
+	waitExpr, err := st.Expr.EvalTemplate(st.Wait, st.ctx)
+	if err != nil {
+		jCtx.Printer.PrintError("wait expression evaluation error: %v", err)
+		return
+	}
 
-	duration, err := st.parseWaitDuration(st.Wait)
+	duration, err := st.parseWaitDuration(waitExpr)
 	if err != nil {
 		jCtx.Printer.PrintError("wait duration parsing error: %v", err)
 		return
@@ -537,8 +544,22 @@ func (st *Step) getWaitTimeForDisplay() string {
 		return ""
 	}
 
-	duration, err := st.parseWaitDuration(st.Wait)
+	// Note: st.ctx might not be fully initialized when this is called during result creation
+	// So we need to handle template evaluation carefully
+	waitExpr := st.Wait
+	if st.Expr != nil {
+		if evaluated, err := st.Expr.EvalTemplate(st.Wait, st.ctx); err == nil {
+			waitExpr = evaluated
+		}
+	}
+
+	duration, err := st.parseWaitDuration(waitExpr)
 	if err != nil {
+		// If template evaluation failed and we still have template syntax, return empty
+		// This prevents display errors during result creation
+		if strings.Contains(waitExpr, "{{") {
+			return ""
+		}
 		return ""
 	}
 
