@@ -49,9 +49,11 @@ jobs:
         wait-on:
           http-get://localhost:8080/status/200
 
-    - name: Run shell.yml by custom action
-      uses: linyows/probe-action@v1
-      with:
-        paths: |
-          examples/realtime-print.yml
-          examples/embedded-job.yml
+    - name: Run shell.yml by local probe binary
+      env:
+        FORCE_COLOR: '1'
+        TERM: xterm-256color
+      run: |
+        make
+        ./probe examples/realtime-print.yml
+        ./probe examples/embedded-job.yml
