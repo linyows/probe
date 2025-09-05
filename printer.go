@@ -531,6 +531,15 @@ func (p *Printer) generateEchoOutput(content string, err error) string {
 
 // generateTestFailure formats test failure output with request/response info
 func (p *Printer) generateTestFailure(testExpr string, result interface{}, req, res map[string]any) string {
+	// Check if response has dump field set to false
+	if res != nil {
+		if dump, exists := res["dump"]; exists {
+			if dumpBool, ok := dump.(bool); ok && !dumpBool {
+				return "" // Don't dump request/response if dump is false
+			}
+		}
+	}
+
 	output := fmt.Sprintf("       %s %#v\n", colorInfo().Sprintf("request:"), req)
 	output += fmt.Sprintf("       %s %#v\n", colorInfo().Sprintf("response:"), res)
 	return output

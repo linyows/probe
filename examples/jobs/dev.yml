@@ -44,4 +44,3 @@ steps:
   test: res.code == 200
   echo: |
     Response Body: {{res.body}}
-  test: res.code == 200

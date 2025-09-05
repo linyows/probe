@@ -282,7 +282,7 @@ func MapToStructByTags(params map[string]any, dest any) error {
 						// Type-safe assignment based on field type
 						fieldType := field.Type()
 						valueType := reflect.TypeOf(v)
-						
+
 						if valueType == fieldType {
 							// Direct assignment if types match
 							field.Set(reflect.ValueOf(v))
