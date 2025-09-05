@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/goccy/go-yaml"
@@ -23,6 +24,7 @@ type Res struct {
 	Outputs map[string]any `map:"outputs"`
 	Report  string         `map:"report"`
 	Error   string         `map:"error"`
+	Dump    bool           `map:"dump"`
 }
 
 type Result struct {
@@ -108,6 +110,7 @@ func (r *Req) Do() (*Result, error) {
 		Outputs: outputs,
 		Report:  report,
 		Error:   errorMsg,
+		Dump:    false, // Don't dump request/response for embedded jobs
 	}
 	result.Status = code
 
@@ -116,9 +119,16 @@ func (r *Req) Do() (*Result, error) {
 		r.cb.after(result)
 	}
 
-	// Return error if execution failed
-	if !success && errorMsg != "" {
-		return result, fmt.Errorf("embedded job execution failed: %s", errorMsg)
+	// Only return error for system-level failures (file not found, parsing errors, etc.)
+	// Test failures should not be treated as plugin errors
+	if !success && errorMsg != "" && 
+		errorMsg != "job execution failed" && 
+		!strings.Contains(errorMsg, "execution error in job_start: job execution failed") {
+		detailedError := fmt.Sprintf("embedded job execution failed: %s", errorMsg)
+		if report != "" {
+			detailedError += "\nEmbedded job details:\n" + report
+		}
+		return result, fmt.Errorf("%s", detailedError)
 	}
 
 	return result, nil
