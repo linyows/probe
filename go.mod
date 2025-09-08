@@ -8,7 +8,7 @@ require (
 	github.com/briandowns/spinner v1.23.2
 	github.com/chromedp/chromedp v0.14.1
 	github.com/emersion/go-imap/v2 v2.0.0-beta.6
-	github.com/emersion/go-message v0.18.1
+	github.com/emersion/go-message v0.18.2
 	github.com/expr-lang/expr v1.16.9
 	github.com/fatih/color v1.18.0
 	github.com/go-playground/validator/v10 v10.4.1
