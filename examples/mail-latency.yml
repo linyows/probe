@@ -1,0 +1,11 @@
+name: Mail Latency Workflow
+description: Test workflow for mail-latency action
+jobs:
+- name: mail-latency-job
+  steps:
+  - name: Mail Latency Analysis
+    uses: mail-latency
+    with:
+      mail_dir: "mail/testdata/mail"
+      output_dir: "/tmp"
+    test: res.status == 0 && res.output_file != ""
