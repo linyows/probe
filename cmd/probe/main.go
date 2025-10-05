@@ -16,6 +16,7 @@ import (
 	"github.com/linyows/probe/actions/hello"
 	http "github.com/linyows/probe/actions/http"
 	imapaction "github.com/linyows/probe/actions/imap"
+	maillatencyaction "github.com/linyows/probe/actions/mail-latency"
 	"github.com/linyows/probe/actions/shell"
 	"github.com/linyows/probe/actions/smtp"
 	sshaction "github.com/linyows/probe/actions/ssh"
@@ -278,6 +279,10 @@ func (c *Cmd) runBuiltinActions(name string) {
 	case "imap":
 		if !c.mocking {
 			imapaction.Serve()
+		}
+	case "mail-latency":
+		if !c.mocking {
+			maillatencyaction.Serve()
 		}
 
 	default:
