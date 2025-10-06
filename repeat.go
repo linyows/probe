@@ -106,7 +106,8 @@ type Repeat struct {
 func (r *Repeat) Validate() error {
 	maxCount := getMaxRepeatCount()
 	if r.Count >= maxCount {
-		return fmt.Errorf("repeat count %d exceeds maximum allowed value %d (set via %s environment variable)", r.Count, maxCount, EnvMaxRepeatCount)
+		return fmt.Errorf("repeat count %d exceeds maximum allowed value of %d. To allow higher values, set %s environment variable (e.g., %s=%d)",
+			r.Count, maxCount, EnvMaxRepeatCount, EnvMaxRepeatCount, r.Count+1)
 	}
 	return nil
 }
@@ -122,7 +123,8 @@ type StepRetry struct {
 func (s *StepRetry) Validate() error {
 	maxAttempts := getMaxAttempts()
 	if s.MaxAttempts > maxAttempts {
-		return fmt.Errorf("max_attempts %d exceeds maximum allowed value %d (set via %s environment variable)", s.MaxAttempts, maxAttempts, EnvMaxAttempts)
+		return fmt.Errorf("max_attempts %d exceeds maximum allowed value of %d. To allow higher values, set %s environment variable (e.g., %s=%d)",
+			s.MaxAttempts, maxAttempts, EnvMaxAttempts, EnvMaxAttempts, s.MaxAttempts)
 	}
 	return nil
 }
