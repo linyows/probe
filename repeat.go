@@ -2,10 +2,42 @@ package probe
 
 import (
 	"fmt"
+	"os"
 	"regexp"
 	"strconv"
 	"time"
 )
+
+const (
+	// DefaultMaxRepeatCount is the default upper limit for repeat count
+	DefaultMaxRepeatCount = 10000
+	// DefaultMaxAttempts is the default upper limit for max attempts
+	DefaultMaxAttempts = 10000
+	// EnvMaxRepeatCount is the environment variable name for overriding max repeat count
+	EnvMaxRepeatCount = "PROBE_MAX_REPEAT_COUNT"
+	// EnvMaxAttempts is the environment variable name for overriding max attempts
+	EnvMaxAttempts = "PROBE_MAX_ATTEMPTS"
+)
+
+// getMaxRepeatCount returns the max repeat count from environment variable or default
+func getMaxRepeatCount() int {
+	if v := os.Getenv(EnvMaxRepeatCount); v != "" {
+		if max, err := strconv.Atoi(v); err == nil && max > 0 {
+			return max
+		}
+	}
+	return DefaultMaxRepeatCount
+}
+
+// getMaxAttempts returns the max attempts from environment variable or default
+func getMaxAttempts() int {
+	if v := os.Getenv(EnvMaxAttempts); v != "" {
+		if max, err := strconv.Atoi(v); err == nil && max > 0 {
+			return max
+		}
+	}
+	return DefaultMaxAttempts
+}
 
 // Interval represents a time interval that can be specified as a number (seconds) or duration string
 type Interval struct {
@@ -66,13 +98,31 @@ func (i Interval) MarshalYAML() (interface{}, error) {
 
 // Repeat defines the repeat configuration for jobs
 type Repeat struct {
-	Count    int      `yaml:"count" validate:"required,gte=0,lt=10000"`
+	Count    int      `yaml:"count" validate:"required,gte=0"`
 	Interval Interval `yaml:"interval"`
+}
+
+// Validate performs custom validation for Repeat
+func (r *Repeat) Validate() error {
+	maxCount := getMaxRepeatCount()
+	if r.Count >= maxCount {
+		return fmt.Errorf("repeat count %d exceeds maximum allowed value %d (set via %s environment variable)", r.Count, maxCount, EnvMaxRepeatCount)
+	}
+	return nil
 }
 
 // StepRetry defines the retry configuration for steps until success (status 0)
 type StepRetry struct {
-	MaxAttempts  int      `yaml:"max_attempts" validate:"required,gte=1,lte=10000"`
+	MaxAttempts  int      `yaml:"max_attempts" validate:"required,gte=1"`
 	Interval     Interval `yaml:"interval"`
 	InitialDelay Interval `yaml:"initial_delay,omitempty"`
+}
+
+// Validate performs custom validation for StepRetry
+func (s *StepRetry) Validate() error {
+	maxAttempts := getMaxAttempts()
+	if s.MaxAttempts > maxAttempts {
+		return fmt.Errorf("max_attempts %d exceeds maximum allowed value %d (set via %s environment variable)", s.MaxAttempts, maxAttempts, EnvMaxAttempts)
+	}
+	return nil
 }
