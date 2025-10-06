@@ -261,6 +261,7 @@ func TestActionsServer_Run(t *testing.T) {
 
 			if resp == nil {
 				t.Fatal("response should not be nil")
+				return
 			}
 
 			// Convert result back to map for comparison
