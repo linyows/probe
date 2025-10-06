@@ -453,7 +453,7 @@ func TestRepeatFunctionality_EdgeCases(t *testing.T) {
 func TestEnvironmentVariableOverride(t *testing.T) {
 	t.Run("default max repeat count", func(t *testing.T) {
 		// Ensure environment variable is not set
-		os.Unsetenv(EnvMaxRepeatCount)
+		_ = os.Unsetenv(EnvMaxRepeatCount)
 
 		max := getMaxRepeatCount()
 		if max != DefaultMaxRepeatCount {
@@ -464,8 +464,10 @@ func TestEnvironmentVariableOverride(t *testing.T) {
 	t.Run("custom max repeat count via env", func(t *testing.T) {
 		// Set custom max via environment variable
 		customMax := 50000
-		os.Setenv(EnvMaxRepeatCount, fmt.Sprintf("%d", customMax))
-		defer os.Unsetenv(EnvMaxRepeatCount)
+		if err := os.Setenv(EnvMaxRepeatCount, fmt.Sprintf("%d", customMax)); err != nil {
+			t.Fatalf("Failed to set environment variable: %v", err)
+		}
+		defer func() { _ = os.Unsetenv(EnvMaxRepeatCount) }()
 
 		max := getMaxRepeatCount()
 		if max != customMax {
@@ -475,7 +477,7 @@ func TestEnvironmentVariableOverride(t *testing.T) {
 
 	t.Run("default max attempts", func(t *testing.T) {
 		// Ensure environment variable is not set
-		os.Unsetenv(EnvMaxAttempts)
+		_ = os.Unsetenv(EnvMaxAttempts)
 
 		max := getMaxAttempts()
 		if max != DefaultMaxAttempts {
@@ -486,8 +488,10 @@ func TestEnvironmentVariableOverride(t *testing.T) {
 	t.Run("custom max attempts via env", func(t *testing.T) {
 		// Set custom max via environment variable
 		customMax := 25000
-		os.Setenv(EnvMaxAttempts, fmt.Sprintf("%d", customMax))
-		defer os.Unsetenv(EnvMaxAttempts)
+		if err := os.Setenv(EnvMaxAttempts, fmt.Sprintf("%d", customMax)); err != nil {
+			t.Fatalf("Failed to set environment variable: %v", err)
+		}
+		defer func() { _ = os.Unsetenv(EnvMaxAttempts) }()
 
 		max := getMaxAttempts()
 		if max != customMax {
@@ -497,8 +501,10 @@ func TestEnvironmentVariableOverride(t *testing.T) {
 
 	t.Run("invalid env value falls back to default", func(t *testing.T) {
 		// Set invalid value
-		os.Setenv(EnvMaxRepeatCount, "invalid")
-		defer os.Unsetenv(EnvMaxRepeatCount)
+		if err := os.Setenv(EnvMaxRepeatCount, "invalid"); err != nil {
+			t.Fatalf("Failed to set environment variable: %v", err)
+		}
+		defer func() { _ = os.Unsetenv(EnvMaxRepeatCount) }()
 
 		max := getMaxRepeatCount()
 		if max != DefaultMaxRepeatCount {
@@ -508,8 +514,10 @@ func TestEnvironmentVariableOverride(t *testing.T) {
 
 	t.Run("negative env value falls back to default", func(t *testing.T) {
 		// Set negative value
-		os.Setenv(EnvMaxRepeatCount, "-100")
-		defer os.Unsetenv(EnvMaxRepeatCount)
+		if err := os.Setenv(EnvMaxRepeatCount, "-100"); err != nil {
+			t.Fatalf("Failed to set environment variable: %v", err)
+		}
+		defer func() { _ = os.Unsetenv(EnvMaxRepeatCount) }()
 
 		max := getMaxRepeatCount()
 		if max != DefaultMaxRepeatCount {
@@ -520,7 +528,7 @@ func TestEnvironmentVariableOverride(t *testing.T) {
 
 func TestRepeatValidation(t *testing.T) {
 	t.Run("valid repeat count", func(t *testing.T) {
-		os.Unsetenv(EnvMaxRepeatCount)
+		_ = os.Unsetenv(EnvMaxRepeatCount)
 
 		r := &Repeat{Count: 100}
 		err := r.Validate()
@@ -530,7 +538,7 @@ func TestRepeatValidation(t *testing.T) {
 	})
 
 	t.Run("repeat count at default limit", func(t *testing.T) {
-		os.Unsetenv(EnvMaxRepeatCount)
+		_ = os.Unsetenv(EnvMaxRepeatCount)
 
 		r := &Repeat{Count: DefaultMaxRepeatCount}
 		err := r.Validate()
@@ -540,7 +548,7 @@ func TestRepeatValidation(t *testing.T) {
 	})
 
 	t.Run("repeat count exceeds default limit", func(t *testing.T) {
-		os.Unsetenv(EnvMaxRepeatCount)
+		_ = os.Unsetenv(EnvMaxRepeatCount)
 
 		r := &Repeat{Count: DefaultMaxRepeatCount + 1}
 		err := r.Validate()
@@ -551,8 +559,10 @@ func TestRepeatValidation(t *testing.T) {
 
 	t.Run("repeat count valid with custom limit", func(t *testing.T) {
 		customMax := 50000
-		os.Setenv(EnvMaxRepeatCount, fmt.Sprintf("%d", customMax))
-		defer os.Unsetenv(EnvMaxRepeatCount)
+		if err := os.Setenv(EnvMaxRepeatCount, fmt.Sprintf("%d", customMax)); err != nil {
+			t.Fatalf("Failed to set environment variable: %v", err)
+		}
+		defer func() { _ = os.Unsetenv(EnvMaxRepeatCount) }()
 
 		r := &Repeat{Count: 20000}
 		err := r.Validate()
@@ -563,8 +573,10 @@ func TestRepeatValidation(t *testing.T) {
 
 	t.Run("repeat count exceeds custom limit", func(t *testing.T) {
 		customMax := 50000
-		os.Setenv(EnvMaxRepeatCount, fmt.Sprintf("%d", customMax))
-		defer os.Unsetenv(EnvMaxRepeatCount)
+		if err := os.Setenv(EnvMaxRepeatCount, fmt.Sprintf("%d", customMax)); err != nil {
+			t.Fatalf("Failed to set environment variable: %v", err)
+		}
+		defer func() { _ = os.Unsetenv(EnvMaxRepeatCount) }()
 
 		r := &Repeat{Count: customMax}
 		err := r.Validate()
@@ -576,7 +588,7 @@ func TestRepeatValidation(t *testing.T) {
 
 func TestStepRetryValidation(t *testing.T) {
 	t.Run("valid max attempts", func(t *testing.T) {
-		os.Unsetenv(EnvMaxAttempts)
+		_ = os.Unsetenv(EnvMaxAttempts)
 
 		s := &StepRetry{MaxAttempts: 100}
 		err := s.Validate()
@@ -586,7 +598,7 @@ func TestStepRetryValidation(t *testing.T) {
 	})
 
 	t.Run("max attempts at default limit", func(t *testing.T) {
-		os.Unsetenv(EnvMaxAttempts)
+		_ = os.Unsetenv(EnvMaxAttempts)
 
 		s := &StepRetry{MaxAttempts: DefaultMaxAttempts}
 		err := s.Validate()
@@ -596,7 +608,7 @@ func TestStepRetryValidation(t *testing.T) {
 	})
 
 	t.Run("max attempts exceeds default limit", func(t *testing.T) {
-		os.Unsetenv(EnvMaxAttempts)
+		_ = os.Unsetenv(EnvMaxAttempts)
 
 		s := &StepRetry{MaxAttempts: DefaultMaxAttempts + 1}
 		err := s.Validate()
@@ -607,8 +619,10 @@ func TestStepRetryValidation(t *testing.T) {
 
 	t.Run("max attempts valid with custom limit", func(t *testing.T) {
 		customMax := 25000
-		os.Setenv(EnvMaxAttempts, fmt.Sprintf("%d", customMax))
-		defer os.Unsetenv(EnvMaxAttempts)
+		if err := os.Setenv(EnvMaxAttempts, fmt.Sprintf("%d", customMax)); err != nil {
+			t.Fatalf("Failed to set environment variable: %v", err)
+		}
+		defer func() { _ = os.Unsetenv(EnvMaxAttempts) }()
 
 		s := &StepRetry{MaxAttempts: 15000}
 		err := s.Validate()
@@ -619,8 +633,10 @@ func TestStepRetryValidation(t *testing.T) {
 
 	t.Run("max attempts exceeds custom limit", func(t *testing.T) {
 		customMax := 25000
-		os.Setenv(EnvMaxAttempts, fmt.Sprintf("%d", customMax))
-		defer os.Unsetenv(EnvMaxAttempts)
+		if err := os.Setenv(EnvMaxAttempts, fmt.Sprintf("%d", customMax)); err != nil {
+			t.Fatalf("Failed to set environment variable: %v", err)
+		}
+		defer func() { _ = os.Unsetenv(EnvMaxAttempts) }()
 
 		s := &StepRetry{MaxAttempts: customMax + 1}
 		err := s.Validate()
