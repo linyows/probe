@@ -7,7 +7,7 @@ require (
 	github.com/chromedp/chromedp v0.14.1
 	github.com/emersion/go-imap/v2 v2.0.0-beta.7
 	github.com/emersion/go-message v0.18.2
-	github.com/expr-lang/expr v1.17.0
+	github.com/expr-lang/expr v1.17.6
 	github.com/fatih/color v1.18.0
 	github.com/go-playground/validator/v10 v10.27.0
 	github.com/go-sql-driver/mysql v1.9.3
