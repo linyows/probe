@@ -183,7 +183,11 @@ func (e *Executor) appendRepeatStepResults(ctx *JobContext) {
 
 	// Create StepResults for repeat steps and add them to Result
 	for i, step := range e.job.Steps {
-		if counter, exists := ctx.StepCounters[i]; exists {
+		ctx.countersMu.Lock()
+		counter, exists := ctx.StepCounters[i]
+		ctx.countersMu.Unlock()
+
+		if exists {
 			hasTest := step.Test != ""
 
 			// Determine status based on repeat counter results
