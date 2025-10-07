@@ -2,6 +2,7 @@ package probe
 
 import (
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -103,8 +104,8 @@ func (e *Executor) executeJobRepeatLoopAsync(ctx JobContext) bool {
 	_, total := ctx.JobScheduler.GetRepeatInfo(jobID)
 
 	var wg sync.WaitGroup
-	var mu sync.Mutex
-	overallSuccess := true
+	var overallSuccess atomic.Bool
+	overallSuccess.Store(true)
 
 	interval := e.job.Repeat.Interval.Duration
 	ticker := time.NewTicker(interval)
@@ -125,10 +126,8 @@ func (e *Executor) executeJobRepeatLoopAsync(ctx JobContext) bool {
 			err := e.job.Start(execCtx)
 
 			if err != nil {
-				mu.Lock()
-				overallSuccess = false
+				overallSuccess.Store(false)
 				e.workflow.SetExitStatus(true)
-				mu.Unlock()
 			}
 		}(current)
 
@@ -143,7 +142,7 @@ func (e *Executor) executeJobRepeatLoopAsync(ctx JobContext) bool {
 	// Wait for all goroutines to complete
 	wg.Wait()
 
-	return overallSuccess
+	return overallSuccess.Load()
 }
 
 // sleepBetweenRepeats handles the interval sleep between job repetitions
