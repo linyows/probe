@@ -1,5 +1,7 @@
 package probe
 
+import "sync"
+
 // ResponseTime provides response time information for expressions
 type ResponseTime struct {
 	Duration string  `expr:"duration"`
@@ -55,6 +57,7 @@ type JobContext struct {
 	RepeatCurrent int
 	RepeatTotal   int
 	StepCounters  map[int]StepRepeatCounter // step index -> counter
+	countersMu    sync.Mutex                // protects StepCounters for concurrent access
 	// Print writer
 	Printer *Printer
 	// Result for managing job-level output

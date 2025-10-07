@@ -287,14 +287,15 @@ func (st *Step) getEchoOutput(printer *Printer) string {
 }
 
 func (st *Step) handleRepeatExecution(jCtx *JobContext, name string) {
-
 	// Initialize counter if first execution
+	jCtx.countersMu.Lock()
 	counter, exists := jCtx.StepCounters[st.Idx]
 	if !exists {
 		counter = StepRepeatCounter{
 			Name: name,
 		}
 	}
+	jCtx.countersMu.Unlock()
 
 	// Execute test and update counter
 	hasTest := st.Test != ""
@@ -317,7 +318,9 @@ func (st *Step) handleRepeatExecution(jCtx *JobContext, name string) {
 	counter.LastResult = testResult
 
 	// Store updated counter
+	jCtx.countersMu.Lock()
 	jCtx.StepCounters[st.Idx] = counter
+	jCtx.countersMu.Unlock()
 
 	// Display on first execution and final execution only
 	isFinalExecution := jCtx.RepeatCurrent == jCtx.RepeatTotal
@@ -614,19 +617,23 @@ func (st *Step) handleSkip(name string, jCtx *JobContext) {
 // handleSkipRepeatExecution handles skipped step in repeat mode
 func (st *Step) handleSkipRepeatExecution(jCtx *JobContext, name string) {
 	// Initialize counter if first execution
+	jCtx.countersMu.Lock()
 	counter, exists := jCtx.StepCounters[st.Idx]
 	if !exists {
 		counter = StepRepeatCounter{
 			Name: name,
 		}
 	}
+	jCtx.countersMu.Unlock()
 
 	// Count as successful (skipped is not a failure)
 	counter.SuccessCount++
 	counter.LastResult = true
 
 	// Store updated counter
+	jCtx.countersMu.Lock()
 	jCtx.StepCounters[st.Idx] = counter
+	jCtx.countersMu.Unlock()
 
 	// Display on first execution and final execution only
 	isFinalExecution := jCtx.RepeatCurrent == jCtx.RepeatTotal
