@@ -100,6 +100,7 @@ func (i Interval) MarshalYAML() (interface{}, error) {
 type Repeat struct {
 	Count    int      `yaml:"count" validate:"required,gte=0"`
 	Interval Interval `yaml:"interval"`
+	Async    bool     `yaml:"async,omitempty"`
 }
 
 // Validate performs custom validation for Repeat
