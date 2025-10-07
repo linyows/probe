@@ -1,6 +1,7 @@
 package probe
 
 import (
+	"sync"
 	"time"
 )
 
@@ -216,5 +217,6 @@ func (w *Workflow) newJobContext(c Config, vars map[string]any) (JobContext, err
 		Result:       rs,
 		JobScheduler: scheduler,
 		Outputs:      w.outputs,
+		countersMu:   &sync.Mutex{},
 	}, nil
 }
