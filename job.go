@@ -2,6 +2,7 @@ package probe
 
 import (
 	"fmt"
+	"sync"
 	"time"
 )
 
@@ -218,7 +219,8 @@ func (j *Job) RunIndependently(vars map[string]any, printer *Printer, jobID stri
 		Config: Config{
 			Verbose: printer.verbose,
 		},
-		Printer: printer,
+		Printer:    printer,
+		countersMu: &sync.Mutex{},
 	}
 
 	success := true

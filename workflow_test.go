@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"reflect"
+	"sync"
 	"testing"
 	"time"
 )
@@ -731,6 +732,7 @@ func TestJobContextRepeatTracking(t *testing.T) {
 		RepeatTotal:   10,
 		StepCounters:  make(map[int]StepRepeatCounter),
 		Printer:       newBufferPrinter(),
+		countersMu:    &sync.Mutex{},
 	}
 
 	// Test initial state
@@ -773,6 +775,7 @@ func TestStepRepeatCounterUpdate(t *testing.T) {
 		RepeatTotal:   10,
 		StepCounters:  make(map[int]StepRepeatCounter),
 		Printer:       newBufferPrinter(),
+		countersMu:    &sync.Mutex{},
 	}
 
 	step := &Step{

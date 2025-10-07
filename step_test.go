@@ -937,6 +937,7 @@ func TestStep_finalize(t *testing.T) {
 				IsRepeating:  tt.isRepeating,
 				Printer:      newBufferPrinter(),
 				StepCounters: make(map[int]StepRepeatCounter),
+				countersMu:   &sync.Mutex{},
 			}
 
 			// Note: This test mainly verifies that the correct code path is taken
