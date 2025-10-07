@@ -2,6 +2,7 @@ package probe
 
 import (
 	"testing"
+	"time"
 )
 
 // Test basic executor creation and interface compliance
@@ -102,6 +103,58 @@ func TestJobExecutor_Integration_WithMockJob(t *testing.T) {
 
 		if executor == nil {
 			t.Error("Executor creation failed")
+		}
+	})
+}
+
+func TestExecutor_AsyncRepeat(t *testing.T) {
+	t.Run("async flag should be recognized", func(t *testing.T) {
+		// Test that async flag is properly set and recognized
+		asyncRepeat := &Repeat{
+			Count:    10,
+			Interval: Interval{Duration: 10 * time.Millisecond},
+			Async:    true,
+		}
+
+		if !asyncRepeat.Async {
+			t.Error("Async flag should be true")
+		}
+
+		syncRepeat := &Repeat{
+			Count:    10,
+			Interval: Interval{Duration: 10 * time.Millisecond},
+			Async:    false,
+		}
+
+		if syncRepeat.Async {
+			t.Error("Async flag should be false")
+		}
+	})
+
+	t.Run("async repeat structure is valid", func(t *testing.T) {
+		workflow := &Workflow{Name: "test-workflow"}
+		job := &Job{
+			Name: "test-job",
+			ID:   "test-job",
+			Repeat: &Repeat{
+				Count:    5,
+				Interval: Interval{Duration: 10 * time.Millisecond},
+				Async:    true,
+			},
+			Steps: []*Step{},
+		}
+
+		executor := NewExecutor(workflow, job)
+		if executor == nil {
+			t.Fatal("Executor should not be nil")
+		}
+
+		if job.Repeat == nil {
+			t.Fatal("Job repeat should not be nil")
+		}
+
+		if !job.Repeat.Async {
+			t.Error("Job repeat async flag should be true")
 		}
 	})
 }

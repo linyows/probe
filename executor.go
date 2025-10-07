@@ -1,6 +1,7 @@
 package probe
 
 import (
+	"sync"
 	"time"
 )
 
@@ -68,6 +69,12 @@ func (e *Executor) setupContext(ctx JobContext) JobContext {
 
 // executeJobRepeatLoop handles the main execution loop with repeat logic
 func (e *Executor) executeJobRepeatLoop(ctx JobContext) bool {
+	// Check if async execution is enabled
+	if e.job.Repeat != nil && e.job.Repeat.Async {
+		return e.executeJobRepeatLoopAsync(ctx)
+	}
+
+	// Synchronous execution (original behavior)
 	jobID := e.job.ID
 	overallSuccess := true
 
@@ -86,6 +93,55 @@ func (e *Executor) executeJobRepeatLoop(ctx JobContext) bool {
 		ctx.JobScheduler.IncrementRepeatCounter(jobID)
 		e.sleepBetweenRepeats(ctx)
 	}
+
+	return overallSuccess
+}
+
+// executeJobRepeatLoopAsync handles async execution loop with repeat logic
+func (e *Executor) executeJobRepeatLoopAsync(ctx JobContext) bool {
+	jobID := e.job.ID
+	_, total := ctx.JobScheduler.GetRepeatInfo(jobID)
+
+	var wg sync.WaitGroup
+	var mu sync.Mutex
+	overallSuccess := true
+
+	interval := e.job.Repeat.Interval.Duration
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+
+	for ctx.JobScheduler.ShouldRepeatJob(jobID) {
+		current, _ := ctx.JobScheduler.GetRepeatInfo(jobID)
+
+		wg.Add(1)
+		go func(repeatIndex int) {
+			defer wg.Done()
+
+			// Create a copy of context for this goroutine
+			execCtx := ctx
+			execCtx.RepeatCurrent = repeatIndex
+
+			// Execute single run
+			err := e.job.Start(execCtx)
+
+			if err != nil {
+				mu.Lock()
+				overallSuccess = false
+				e.workflow.SetExitStatus(true)
+				mu.Unlock()
+			}
+		}(current)
+
+		ctx.JobScheduler.IncrementRepeatCounter(jobID)
+
+		// Wait for interval before next execution (except for the last one)
+		if current+1 < total {
+			<-ticker.C
+		}
+	}
+
+	// Wait for all goroutines to complete
+	wg.Wait()
 
 	return overallSuccess
 }
