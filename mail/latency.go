@@ -36,6 +36,9 @@ type Latencies struct {
 const (
 	defaultTimezone   = "Asia/Tokyo"
 	defaultTimeformat = "2006-01-02 15:04:05"
+	// RFC1123Z-like format but with _2 to support both single and double digit days
+	// This matches RFC 2822 mail headers like "Wed,  8 Oct 2025 07:11:55 +0000"
+	mailDateFormat = "Mon, _2 Jan 2006 15:04:05 -0700"
 )
 
 func GetLatencies(p string, w io.Writer) error {
@@ -110,7 +113,7 @@ func (l *Latencies) getReturnPathWithParse(s string) string {
 }
 
 func (l *Latencies) getSentTimeWithParse(s string) (time.Time, error) {
-	return time.Parse(time.RFC1123Z, strings.TrimPrefix(s, "Date: "))
+	return time.Parse(mailDateFormat, strings.TrimPrefix(s, "Date: "))
 }
 
 func (l *Latencies) getReceivedTimeWithParse(s string) (time.Time, error) {
@@ -118,7 +121,7 @@ func (l *Latencies) getReceivedTimeWithParse(s string) (time.Time, error) {
 	if len(parts) < 2 {
 		return time.Time{}, fmt.Errorf("malformed Received header")
 	}
-	return time.Parse(time.RFC1123Z, strings.TrimSpace(strings.Split(parts[len(parts)-1], "(")[0]))
+	return time.Parse(mailDateFormat, strings.TrimSpace(strings.Split(parts[len(parts)-1], "(")[0]))
 }
 
 func (l *Latencies) ParseMail(p string) error {
