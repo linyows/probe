@@ -4,7 +4,7 @@ go 1.24.0
 
 require (
 	github.com/briandowns/spinner v1.23.2
-	github.com/chromedp/chromedp v0.14.1
+	github.com/chromedp/chromedp v0.14.2
 	github.com/emersion/go-imap/v2 v2.0.0-beta.7
 	github.com/emersion/go-message v0.18.2
 	github.com/expr-lang/expr v1.17.6
