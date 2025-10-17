@@ -202,8 +202,10 @@ func (p *Printer) printStepRepeatStart(stepIdx int, stepName string, repeatCount
 
 // printStepRepeatResult prints the final result of a repeated step execution
 func (p *Printer) printStepRepeatResult(counter *StepRepeatCounter, hasTest bool, output *strings.Builder) {
+	totalCount := counter.RepeatTotal
+	completedCount := counter.SuccessCount + counter.FailureCount
+
 	if hasTest {
-		totalCount := counter.SuccessCount + counter.FailureCount
 		successRate := float64(counter.SuccessCount) / float64(totalCount) * 100
 		statusIcon := colorSuccess().Sprintf(IconSuccess)
 		if counter.FailureCount > 0 {
@@ -220,10 +222,14 @@ func (p *Printer) printStepRepeatResult(counter *StepRepeatCounter, hasTest bool
 			totalCount,
 			successRate)
 	} else {
-		totalCount := counter.SuccessCount + counter.FailureCount
+		// For no test cases, show completed/total
+		statusIcon := colorNoTest().Sprintf(IconTriangle)
+		if counter.FailureCount > 0 {
+			statusIcon = colorError().Sprintf(IconError)
+		}
 		p.Fprintf(output, "    %s %d/%d completed (no test)\n",
-			colorNoTest().Sprintf(IconTriangle),
-			totalCount,
+			statusIcon,
+			completedCount,
 			totalCount)
 	}
 }
@@ -307,8 +313,8 @@ func (p *Printer) GenerateReport(rs *Result) string {
 	}
 
 	var output strings.Builder
-	totalTime := time.Duration(0)
 	successCount := 0
+	var earliestStart, latestEnd time.Time
 
 	// Generate step results and job summaries for each job in BufferIDs order
 	for _, jobID := range p.BufferIDs {
@@ -317,7 +323,14 @@ func (p *Printer) GenerateReport(rs *Result) string {
 
 			// Calculate job status and duration
 			duration := jr.EndTime.Sub(jr.StartTime)
-			totalTime += duration
+
+			// Track earliest start and latest end time for wall clock calculation
+			if earliestStart.IsZero() || jr.StartTime.Before(earliestStart) {
+				earliestStart = jr.StartTime
+			}
+			if latestEnd.IsZero() || jr.EndTime.After(latestEnd) {
+				latestEnd = jr.EndTime
+			}
 
 			status := StatusSuccess
 			if jr.Status == "skipped" {
@@ -340,8 +353,14 @@ func (p *Printer) GenerateReport(rs *Result) string {
 		}
 	}
 
+	// Calculate actual wall clock time (for parallel jobs)
+	var totalTime float64
+	if !earliestStart.IsZero() && !latestEnd.IsZero() {
+		totalTime = latestEnd.Sub(earliestStart).Seconds()
+	}
+
 	// Generate workflow footer
-	p.generateFooter(totalTime.Seconds(), successCount, len(rs.Jobs), &output)
+	p.generateFooter(totalTime, successCount, len(rs.Jobs), &output)
 
 	return output.String()
 }

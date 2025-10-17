@@ -885,6 +885,7 @@ func TestPrinter_generateReport_WithRepeatStep(t *testing.T) {
 					FailureCount: 2,
 					Name:         "Repeat Step",
 					LastResult:   true,
+					RepeatTotal:  10,
 				},
 			},
 		},

@@ -175,7 +175,7 @@ func (st *Step) handleActionError(err error, name string, jCtx *JobContext) {
 
 	// Handle repeat execution
 	if jCtx.IsRepeating {
-		st.handleRepeatExecution(jCtx, name)
+		st.handleRepeatExecution(jCtx, name, true) // true = hasError
 		return
 	}
 
@@ -221,7 +221,7 @@ func (st *Step) finalize(name string, actionResult map[string]any, jCtx *JobCont
 
 	// Handle repeat execution
 	if jCtx.IsRepeating {
-		st.handleRepeatExecution(jCtx, name)
+		st.handleRepeatExecution(jCtx, name, false) // false = no error
 		return
 	}
 
@@ -286,13 +286,14 @@ func (st *Step) getEchoOutput(printer *Printer) string {
 	return printer.generateEchoOutput(exprOut, err)
 }
 
-func (st *Step) handleRepeatExecution(jCtx *JobContext, name string) {
+func (st *Step) handleRepeatExecution(jCtx *JobContext, name string, hasError bool) {
 	// Initialize counter if first execution
 	jCtx.countersMu.Lock()
 	counter, exists := jCtx.StepCounters[st.Idx]
 	if !exists {
 		counter = StepRepeatCounter{
-			Name: name,
+			Name:        name,
+			RepeatTotal: jCtx.RepeatTotal,
 		}
 	}
 	jCtx.countersMu.Unlock()
@@ -300,7 +301,12 @@ func (st *Step) handleRepeatExecution(jCtx *JobContext, name string) {
 	// Execute test and update counter
 	hasTest := st.Test != ""
 	testResult := true
-	if hasTest {
+
+	// If there was an error, always count as failure
+	if hasError {
+		counter.FailureCount++
+		testResult = false
+	} else if hasTest {
 		_, testResult = st.DoTest(jCtx.Printer)
 		if !testResult {
 			jCtx.SetFailed()
@@ -312,7 +318,7 @@ func (st *Step) handleRepeatExecution(jCtx *JobContext, name string) {
 			counter.FailureCount++
 		}
 	} else {
-		// No test - just count as executed
+		// No test and no error - count as success
 		counter.SuccessCount++
 	}
 	counter.LastResult = testResult
@@ -621,7 +627,8 @@ func (st *Step) handleSkipRepeatExecution(jCtx *JobContext, name string) {
 	counter, exists := jCtx.StepCounters[st.Idx]
 	if !exists {
 		counter = StepRepeatCounter{
-			Name: name,
+			Name:        name,
+			RepeatTotal: jCtx.RepeatTotal,
 		}
 	}
 	jCtx.countersMu.Unlock()
