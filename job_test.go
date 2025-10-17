@@ -234,7 +234,6 @@ func TestJob_shouldSkip(t *testing.T) {
 				Outputs: NewOutputs(),
 				Printer: newBufferPrinter(),
 			}
-			job.ctx = &ctx
 
 			expr := &Expr{}
 			result := job.shouldSkip(expr, ctx)
@@ -281,7 +280,6 @@ func TestJob_shouldSkip_errorHandling(t *testing.T) {
 				Outputs: NewOutputs(),
 				Printer: newBufferPrinter(),
 			}
-			job.ctx = &ctx
 
 			expr := &Expr{}
 			result := job.shouldSkip(expr, ctx)
@@ -314,7 +312,6 @@ func TestJob_handleSkip(t *testing.T) {
 		Printer: newBufferPrinter(),
 		Config:  Config{Verbose: false},
 	}
-	job.ctx = &ctx
 
 	// Call handleSkip
 	job.handleSkip(ctx)
