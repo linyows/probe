@@ -313,8 +313,8 @@ func (p *Printer) GenerateReport(rs *Result) string {
 	}
 
 	var output strings.Builder
-	totalTime := time.Duration(0)
 	successCount := 0
+	var earliestStart, latestEnd time.Time
 
 	// Generate step results and job summaries for each job in BufferIDs order
 	for _, jobID := range p.BufferIDs {
@@ -323,7 +323,14 @@ func (p *Printer) GenerateReport(rs *Result) string {
 
 			// Calculate job status and duration
 			duration := jr.EndTime.Sub(jr.StartTime)
-			totalTime += duration
+
+			// Track earliest start and latest end time for wall clock calculation
+			if earliestStart.IsZero() || jr.StartTime.Before(earliestStart) {
+				earliestStart = jr.StartTime
+			}
+			if latestEnd.IsZero() || jr.EndTime.After(latestEnd) {
+				latestEnd = jr.EndTime
+			}
 
 			status := StatusSuccess
 			if jr.Status == "skipped" {
@@ -346,8 +353,14 @@ func (p *Printer) GenerateReport(rs *Result) string {
 		}
 	}
 
+	// Calculate actual wall clock time (for parallel jobs)
+	var totalTime float64
+	if !earliestStart.IsZero() && !latestEnd.IsZero() {
+		totalTime = latestEnd.Sub(earliestStart).Seconds()
+	}
+
 	// Generate workflow footer
-	p.generateFooter(totalTime.Seconds(), successCount, len(rs.Jobs), &output)
+	p.generateFooter(totalTime, successCount, len(rs.Jobs), &output)
 
 	return output.String()
 }
