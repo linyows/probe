@@ -793,7 +793,7 @@ func TestStepRepeatCounterUpdate(t *testing.T) {
 	// Execute multiple times
 	for i := 1; i <= 3; i++ {
 		jCtx.RepeatCurrent = i
-		step.handleRepeatExecution(jCtx, "Test Step")
+		step.handleRepeatExecution(jCtx, "Test Step", false) // false = no error
 	}
 
 	// Check final counter state

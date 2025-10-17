@@ -187,20 +187,24 @@ func (e *Executor) appendRepeatStepResults(ctx *JobContext) {
 		ctx.countersMu.Unlock()
 
 		if exists {
+			// Ensure RepeatTotal is set (in case it wasn't set earlier)
+			if counter.RepeatTotal == 0 {
+				counter.RepeatTotal = ctx.RepeatTotal
+			}
+
 			hasTest := step.Test != ""
 
 			// Determine status based on repeat counter results
 			var status StatusType
-			if hasTest {
-				if counter.FailureCount == 0 {
-					status = StatusSuccess
-				} else if counter.SuccessCount == 0 {
-					status = StatusError
-				} else {
-					status = StatusWarning
-				}
+			if counter.FailureCount == 0 {
+				// No failures - success
+				status = StatusSuccess
+			} else if counter.SuccessCount == 0 {
+				// All failures - error
+				status = StatusError
 			} else {
-				status = StatusWarning // No test, so warning status
+				// Mixed results - warning
+				status = StatusWarning
 			}
 
 			// Create StepResult with repeat counter
