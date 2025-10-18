@@ -184,14 +184,18 @@ func (e *Executor) appendRepeatStepResults(ctx *JobContext) {
 	for i, step := range e.job.Steps {
 		ctx.countersMu.Lock()
 		counter, exists := ctx.StepCounters[i]
-		ctx.countersMu.Unlock()
 
 		if exists {
 			// Ensure RepeatTotal is set (in case it wasn't set earlier)
 			if counter.RepeatTotal == 0 {
 				counter.RepeatTotal = ctx.RepeatTotal
+				// Update the map with the modified counter
+				ctx.StepCounters[i] = counter
 			}
+		}
+		ctx.countersMu.Unlock()
 
+		if exists {
 			hasTest := step.Test != ""
 
 			// Determine status based on repeat counter results

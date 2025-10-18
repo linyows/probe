@@ -14,14 +14,14 @@ type Job struct {
 	Repeat   *Repeat  `yaml:"repeat"`
 	Defaults any      `yaml:"defaults"`
 	SkipIf   string   `yaml:"skipif,omitempty"`
-	ctx      *JobContext
 }
 
 func (j *Job) Start(ctx JobContext) error {
 	// Set current job ID in context (already set by Executor.setJobID())
 	ctx.CurrentJobID = j.ID
 
-	j.ctx = &ctx
+	// Use local pointer instead of j.ctx to avoid race conditions in async mode
+	ctxPtr := &ctx
 	expr := &Expr{}
 
 	// Validate steps before execution
@@ -29,18 +29,18 @@ func (j *Job) Start(ctx JobContext) error {
 		return NewExecutionError("job_start", "step validation failed", err)
 	}
 
-	if err := j.expandJobName(expr, ctx); err != nil {
+	if err := j.expandJobName(expr, ctxPtr); err != nil {
 		return NewExecutionError("job_start", "failed to expand job name", err)
 	}
 
 	// Check if job should be skipped
-	if j.shouldSkip(expr, ctx) {
-		j.handleSkip(ctx)
+	if j.shouldSkip(expr, *ctxPtr) {
+		j.handleSkip(*ctxPtr)
 		return nil
 	}
 
-	j.executeSteps(expr, ctx)
-	if j.ctx.Failed {
+	j.executeSteps(expr, ctxPtr)
+	if ctxPtr.Failed {
 		return NewExecutionError("job_start", "job execution failed", nil).
 			WithContext("job_name", j.Name)
 	}
@@ -48,13 +48,13 @@ func (j *Job) Start(ctx JobContext) error {
 }
 
 // expandJobName evaluates and sets the job name, printing it if appropriate
-func (j *Job) expandJobName(expr *Expr, ctx JobContext) error {
+func (j *Job) expandJobName(expr *Expr, ctx *JobContext) error {
 	if j.Name == "" {
 		j.Name = "Unknown Job"
 		return nil
 	}
 
-	name, err := expr.EvalTemplate(j.Name, ctx)
+	name, err := expr.EvalTemplate(j.Name, *ctx)
 	if err != nil {
 		return err
 	}
@@ -72,29 +72,29 @@ func (j *Job) expandJobName(expr *Expr, ctx JobContext) error {
 }
 
 // executeSteps runs all steps in the job, handling iterations appropriately
-func (j *Job) executeSteps(expr *Expr, ctx JobContext) {
+func (j *Job) executeSteps(expr *Expr, ctx *JobContext) {
 	idx := 0
 	for _, st := range j.Steps {
 		st.Expr = expr
 
 		if len(st.Iteration) == 0 {
-			j.executeStep(st, &idx, *j.ctx, nil)
+			j.executeStep(st, &idx, ctx, nil)
 		} else {
-			j.executeStepWithIterations(st, &idx, *j.ctx)
+			j.executeStepWithIterations(st, &idx, ctx)
 		}
 	}
 }
 
 // executeStep executes a single step without iterations
-func (j *Job) executeStep(st *Step, idx *int, ctx JobContext, vars map[string]any) {
+func (j *Job) executeStep(st *Step, idx *int, ctx *JobContext, vars map[string]any) {
 	st.Idx = *idx
 	*idx++
-	st.SetCtx(ctx, vars)
-	st.Do(j.ctx)
+	st.SetCtx(*ctx, vars)
+	st.Do(ctx)
 }
 
 // executeStepWithIterations executes a step multiple times with different variable sets
-func (j *Job) executeStepWithIterations(st *Step, idx *int, ctx JobContext) {
+func (j *Job) executeStepWithIterations(st *Step, idx *int, ctx *JobContext) {
 	for _, vars := range st.Iteration {
 		j.executeStep(st, idx, ctx, vars)
 	}
@@ -169,13 +169,13 @@ func (j *Job) shouldSkip(expr *Expr, ctx JobContext) bool {
 
 	result, err := expr.Eval(j.SkipIf, evalCtx)
 	if err != nil {
-		j.ctx.Printer.PrintError("job skipif evaluation error: %v", err)
+		ctx.Printer.PrintError("job skipif evaluation error: %v", err)
 		return false // Don't skip on evaluation error
 	}
 
 	boolResult, ok := result.(bool)
 	if !ok {
-		j.ctx.Printer.PrintError("job skipif expression must return boolean, got: %T", result)
+		ctx.Printer.PrintError("job skipif expression must return boolean, got: %T", result)
 		return false // Don't skip on type error
 	}
 
@@ -185,9 +185,9 @@ func (j *Job) shouldSkip(expr *Expr, ctx JobContext) bool {
 // handleSkip handles the skipped job logic
 func (j *Job) handleSkip(ctx JobContext) {
 	if ctx.Verbose {
-		j.ctx.Printer.LogDebug("Job '%s' (SKIPPED)", j.Name)
-		j.ctx.Printer.LogDebug("Skip condition: %s", j.SkipIf)
-		j.ctx.Printer.PrintSeparator()
+		ctx.Printer.LogDebug("Job '%s' (SKIPPED)", j.Name)
+		ctx.Printer.LogDebug("Skip condition: %s", j.SkipIf)
+		ctx.Printer.PrintSeparator()
 	}
 
 	// Mark job as skipped in the result
