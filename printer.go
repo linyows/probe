@@ -203,7 +203,6 @@ func (p *Printer) printStepRepeatStart(stepIdx int, stepName string, repeatCount
 // printStepRepeatResult prints the final result of a repeated step execution
 func (p *Printer) printStepRepeatResult(counter *StepRepeatCounter, hasTest bool, output *strings.Builder) {
 	totalCount := counter.RepeatTotal
-	completedCount := counter.SuccessCount + counter.FailureCount
 
 	if hasTest {
 		successRate := float64(counter.SuccessCount) / float64(totalCount) * 100
@@ -222,14 +221,14 @@ func (p *Printer) printStepRepeatResult(counter *StepRepeatCounter, hasTest bool
 			totalCount,
 			successRate)
 	} else {
-		// For no test cases, show completed/total
+		// For no test cases, show success count (completed without errors)
 		statusIcon := colorNoTest().Sprintf(IconTriangle)
 		if counter.FailureCount > 0 {
 			statusIcon = colorError().Sprintf(IconError)
 		}
 		p.Fprintf(output, "    %s %d/%d completed (no test)\n",
 			statusIcon,
-			completedCount,
+			counter.SuccessCount,
 			totalCount)
 	}
 }
