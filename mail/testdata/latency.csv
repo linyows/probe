@@ -1,4 +1,4 @@
-Elapsed Time (sec) - To Sent Time,Elapsed Time (sec) - To Received Time,Sent Time,Last Received Time,End-to-End Latency (sec),First Received Time,Relay Latency (sec),Return Path,File Path
+Sent Time Offset (sec),Received Time Offset (sec),Sent Time,Last Received Time,End-to-End Latency (sec),First Received Time,Relay Latency (sec),Return Path,File Path
 0,0,2024-08-25 16:55:51,2024-08-25 16:55:51,0,2024-08-25 16:55:51,0,alice@msa1.local,1724572551.V802I9c075dM312459.mx1
 220,2658,2024-08-25 16:59:31,2024-08-25 17:40:09,2438,2024-08-25 16:59:38,2431,carol@msa2.local,1724575209.V802I9c13e7M569645.mx2
 240,2227,2024-08-25 16:59:51,2024-08-25 17:32:58,1987,2024-08-25 16:59:52,1986,alice@msa1.local,1724574778.V802I9c11ceM957845.mx1
