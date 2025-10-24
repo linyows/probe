@@ -14,15 +14,17 @@ import (
 )
 
 type Latency struct {
-	ElapsedTimeToSent     time.Duration
-	ElapsedTimeToReceived time.Duration
-	SentTime              time.Time
-	LastReceivedTime      time.Time
-	EndToEnd              time.Duration
-	FirstReceivedTime     time.Time
-	Relay                 time.Duration
-	ReturnPath            string
-	FilePath              string
+	// SentTimeOffset is the time offset from the earliest sent time to when this email was sent
+	SentTimeOffset time.Duration
+	// ReceivedTimeOffset is the time offset from the earliest sent time to when this email was received
+	ReceivedTimeOffset time.Duration
+	SentTime           time.Time
+	LastReceivedTime   time.Time
+	EndToEnd           time.Duration
+	FirstReceivedTime  time.Time
+	Relay              time.Duration
+	ReturnPath         string
+	FilePath           string
 }
 
 type Latencies struct {
@@ -173,8 +175,8 @@ func (l *Latencies) ParseMail(p string) error {
 	row.FirstReceivedTime = receivedTimes[len(receivedTimes)-1]
 	row.EndToEnd = row.LastReceivedTime.Sub(row.SentTime)
 	row.Relay = row.LastReceivedTime.Sub(row.FirstReceivedTime)
-	row.ElapsedTimeToSent = row.SentTime.Sub(l.EarliestTime)
-	row.ElapsedTimeToReceived = row.LastReceivedTime.Sub(l.EarliestTime)
+	row.SentTimeOffset = row.SentTime.Sub(l.EarliestTime)
+	row.ReceivedTimeOffset = row.LastReceivedTime.Sub(l.EarliestTime)
 	l.Data = append(l.Data, row)
 
 	return nil
@@ -185,8 +187,8 @@ func (l *Latencies) writeCSVWithHeader(w io.Writer) error {
 	defer writer.Flush()
 
 	header := []string{
-		"Elapsed Time (sec) - To Sent Time",
-		"Elapsed Time (sec) - To Received Time",
+		"Sent Time Offset (sec)",
+		"Received Time Offset (sec)",
 		"Sent Time",
 		"Last Received Time",
 		"End-to-End Latency (sec)",
@@ -201,8 +203,8 @@ func (l *Latencies) writeCSVWithHeader(w io.Writer) error {
 
 	for _, r := range l.Data {
 		record := []string{
-			fmt.Sprintf("%.0f", r.ElapsedTimeToSent.Seconds()),
-			fmt.Sprintf("%.0f", r.ElapsedTimeToReceived.Seconds()),
+			fmt.Sprintf("%.0f", r.SentTimeOffset.Seconds()),
+			fmt.Sprintf("%.0f", r.ReceivedTimeOffset.Seconds()),
 			r.SentTime.In(l.TimeLocation).Format(l.TimeFormat),
 			r.LastReceivedTime.In(l.TimeLocation).Format(l.TimeFormat),
 			fmt.Sprintf("%.0f", r.EndToEnd.Seconds()),
@@ -252,7 +254,7 @@ func (l *Latencies) Make() error {
 	}
 
 	sort.Slice(l.Data, func(i, j int) bool {
-		return l.Data[i].ElapsedTimeToSent < l.Data[j].ElapsedTimeToSent
+		return l.Data[i].SentTimeOffset < l.Data[j].SentTimeOffset
 	})
 
 	return nil
