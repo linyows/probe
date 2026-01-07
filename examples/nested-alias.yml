@@ -1,0 +1,33 @@
+name: Nested YAML Alias
+
+vars:
+  api_endpoint: "{{ API_ENDPOINT ?? 'http://localhost:8080' }}"
+
+aliases:
+  endpoint: &base_url "{{ vars.api_endpoint }}"
+  headers: &default_headers
+    content-type: application/json
+    accept: application/json
+
+jobs:
+- name: Test Job
+  defaults:
+    http:
+      url: *base_url
+      headers: *default_headers
+
+  steps:
+  - name: Post
+    id: hello
+    uses: http
+    with:
+      post: /post
+      body:
+        message: hello
+    test: |
+      res.code == 200 &&
+      res.body.json.message == "hello"
+    echo: |
+      IP: {{res.body.origin}}
+    outputs:
+      ip: res.body.origin
