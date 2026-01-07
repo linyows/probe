@@ -14,8 +14,8 @@ jobs:
       matrix:
         go-version: [1.24.x]
     steps:
-    - uses: actions/checkout@v4
-    - uses: actions/setup-go@v5
+    - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+    - uses: actions/setup-go@4dc6199c7b1a012772edbd06daecab0f50c9053c # v6.1.0
       with:
         go-version: ${{ matrix.go-version }}
     - name: Run test
@@ -23,14 +23,14 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     - name: Run octocov
-      uses: k1LoW/octocov-action@v0
+      uses: k1LoW/octocov-action@73d561f65d59e66899ed5c87e4621a913b5d5c20 # v1.5.0
 
   example:
     name: Run example
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
-    - uses: actions/setup-go@v5
+    - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+    - uses: actions/setup-go@4dc6199c7b1a012772edbd06daecab0f50c9053c # v6.1.0
       with:
         go-version: 1.24
     - name: Run shell.yml
@@ -42,7 +42,7 @@ jobs:
         ./probe examples/realtime-print.yml
 
     - name: Start server with background
-      uses: JarvusInnovations/background-action@v1.0.7
+      uses: JarvusInnovations/background-action@2428e7b970a846423095c79d43f759abf979a635 # v1.0.7
       with:
         run: |
           make http_server
@@ -50,7 +50,7 @@ jobs:
           http-get://localhost:8080/status/200
 
     - name: Run shell.yml by custom action
-      uses: linyows/probe-action@v1
+      uses: linyows/probe-action@0164e23555aacbaaea03169102262dafeb1ff631 # v1
       with:
         paths: |
           examples/realtime-print.yml
