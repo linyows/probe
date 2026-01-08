@@ -8,6 +8,14 @@ aliases:
   headers: &default_headers
     content-type: application/json
     accept: application/json
+  auth_headers: &a_headers
+    authorization: Bearer xxxxxxxxxxxxx
+  custom_headers: &x_headers
+    x-foo: foo
+  bundle_headers: &b_headers
+    <<: [*a_headers, *x_headers]
+    x-bar: bar
+    x-baz: baz
 
 jobs:
 - name: Test Job
@@ -17,8 +25,7 @@ jobs:
       headers: *default_headers
 
   steps:
-  - name: Post
-    id: hello
+  - name: Post json
     uses: http
     with:
       post: /post
@@ -31,3 +38,19 @@ jobs:
       IP: {{res.body.origin}}
     outputs:
       ip: res.body.origin
+
+  - name: Post with auth
+    uses: http
+    with:
+      headers: *b_headers
+      post: /post
+      body:
+        message: hello
+    test: |
+      res.code == 200 &&
+      hasPrefix(res.body.headers.Authorization[0], "Bearer ") &&
+      res.body.headers["X-Bar"][0] == "bar" &&
+      res.body.headers["X-Baz"][0] == "baz" &&
+      res.body.headers["X-Foo"][0] == "foo"
+    echo: |
+      {{res.body.headers}}
