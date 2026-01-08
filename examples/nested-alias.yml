@@ -16,6 +16,11 @@ aliases:
     <<: [*a_headers, *x_headers]
     x-bar: bar
     x-baz: baz
+  double_mergekey_headers: &d_headers
+    <<: *a_headers
+    <<: *x_headers
+    x-bar: bar
+    x-baz: baz
 
 jobs:
 - name: Test Job
@@ -39,10 +44,26 @@ jobs:
     outputs:
       ip: res.body.origin
 
-  - name: Post with auth
+  - name: Verify mergekey list
     uses: http
     with:
       headers: *b_headers
+      post: /post
+      body:
+        message: hello
+    test: |
+      res.code == 200 &&
+      hasPrefix(res.body.headers.Authorization[0], "Bearer ") &&
+      res.body.headers["X-Bar"][0] == "bar" &&
+      res.body.headers["X-Baz"][0] == "baz" &&
+      res.body.headers["X-Foo"][0] == "foo"
+    echo: |
+      {{res.body.headers}}
+
+  - name: Verify double mergekey
+    uses: http
+    with:
+      headers: *d_headers
       post: /post
       body:
         message: hello
