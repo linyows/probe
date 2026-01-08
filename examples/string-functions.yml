@@ -1,0 +1,37 @@
+name: String Functions Example
+
+jobs:
+  - name: test-string-functions
+    steps:
+      - name: test hasSuffix
+        uses: shell
+        with:
+          cmd: echo "test.json"
+        test: hasSuffix(trim(res.stdout), ".json")
+        outputs:
+          filename: trim(res.stdout)
+
+      - name: test hasPrefix
+        uses: shell
+        with:
+          cmd: echo "https://example.com"
+        test: hasPrefix(trim(res.stdout), "https://")
+        outputs:
+          url: trim(res.stdout)
+
+      - name: test indexOf
+        uses: shell
+        with:
+          cmd: echo "hello world"
+        test: indexOf(res.stdout, "world") >= 0
+        outputs:
+          text: trim(res.stdout)
+          position: indexOf(trim(res.stdout), "world")
+
+      - name: verify indexOf position
+        uses: shell
+        with:
+          cmd: echo "hello world"
+        test: indexOf(trim(res.stdout), "world") == 6
+        echo: |
+          The word "world" is at position {{indexOf(trim(res.stdout), "world")}}
