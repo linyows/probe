@@ -230,6 +230,7 @@ func (c *Cmd) runProbe() int {
 
 	if err := p.Do(); err != nil {
 		_, _ = fmt.Fprintf(c.errWriter, "[ERROR] %v\n", err)
+		return 1
 	}
 	return p.ExitStatus()
 }

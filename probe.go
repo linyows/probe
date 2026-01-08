@@ -66,7 +66,7 @@ func (p *Probe) Load() error {
 	}
 
 	v := validator.New()
-	dec := yaml.NewDecoder(bytes.NewReader([]byte(y)), yaml.Validator(v))
+	dec := yaml.NewDecoder(bytes.NewReader([]byte(y)), yaml.Validator(v), yaml.AllowDuplicateMapKey())
 	if err = dec.Decode(&p.workflow); err != nil {
 		return NewConfigurationError("decode_yaml", "failed to decode YAML workflow", err).
 			WithContext("workflow_path", p.FilePath)

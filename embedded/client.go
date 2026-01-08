@@ -81,7 +81,7 @@ func (r *Req) Do() (*Result, error) {
 	// Parse YAML job
 	job := &probe.Job{}
 	v := validator.New()
-	dec := yaml.NewDecoder(bytes.NewReader(data), yaml.Validator(v))
+	dec := yaml.NewDecoder(bytes.NewReader(data), yaml.Validator(v), yaml.AllowDuplicateMapKey())
 	if err = dec.Decode(job); err != nil {
 		return result, fmt.Errorf("failed to decode YAML job: %w", err)
 	}
