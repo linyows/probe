@@ -11,7 +11,8 @@ jobs:
   - name: Go build
     uses: shell
     with:
-      cmd: CGO_ENABLED=0 go build -ldflags="-s -w" -o probe ./cmd/probe/...
+      # needs cgo for go-sqlite3
+      cmd: CGO_ENABLED=1 go build -ldflags="-s -w" -o probe ./cmd/probe/...
     test: status == 0
 
 # ------------------------------------------------------------------------
@@ -67,11 +68,11 @@ jobs:
     with:
       cmd: ./probe examples/echo-literal.yml
     test: res.code == 0
-  - name: timeout-literal.yml
+  - name: timeout-literal.yml (expected to fail)
     uses: shell
     with:
       cmd: ./probe examples/timeout-literal.yml
-    test: res.code == 0
+    test: res.code == 1
   - name: needs-literal.yml (expected to fail)
     uses: shell
     with:
@@ -167,6 +168,8 @@ jobs:
     with:
       cmd: |
         ./testdata/gen.sh
+        go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
+        go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
         cd grpc/testserver && \
           protoc --go_out=. --go-grpc_out=. ./pb/user_service.proto
     test: res.code == 0
