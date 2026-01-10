@@ -1,0 +1,58 @@
+name: Skipif Literal Examples
+description: skipif functionality with gray colored icons
+
+vars:
+  environment: development
+  skip: true
+
+jobs:
+- name: Environment Setup
+  id: setup
+  steps:
+  - name: Initialize environment
+    uses: hello
+    test: 1 == 1
+
+- name: Job-level (Should skip)
+  id: test
+  needs: [setup]
+  skipif: vars.skip
+  steps:
+  - name: Execute unit tests
+    uses: hello
+    test: 1 == 1
+
+- name: Step-level
+  id: step-level
+  needs: [setup]
+  steps:
+  - name: skipif is true (Should skip)
+    skipif: true
+    uses: hello
+  - name: skipif is false (Should not skip)
+    skipif: false
+    uses: hello
+    test: 1 == 1
+
+- name: Single expr (Should skip)
+  needs: [step-level, test]
+  skipif: vars.environment != "production"
+  steps:
+  - name: Hello
+    uses: hello
+    test: 1 == 1
+
+- name: Double expr (Should not skip)
+  needs: [step-level, test]
+  skipif: vars.environment == "production" && vars.skip
+  steps:
+  - name: Hello
+    uses: hello
+    test: 1 == 1
+
+- name: Cleanup
+  needs: [step-level]
+  steps:
+  - name: Hello
+    uses: hello
+    test: 1 == 1

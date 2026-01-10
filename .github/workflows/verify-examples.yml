@@ -1,0 +1,22 @@
+name: Verify Examples
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  test:
+    name: Verify Examples
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: Install protoc
+      run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
+    - uses: actions/setup-go@v5
+      with:
+        go-version: "1.25"
+    - uses: linyows/probe-action@v1
+      with:
+        path: testdata/verify-examples.yml

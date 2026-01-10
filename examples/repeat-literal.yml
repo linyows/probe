@@ -1,4 +1,5 @@
-name: Repeat job example
+name: Repeat Literal Example
+
 jobs:
 - name: Job with repeat index
   repeat:

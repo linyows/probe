@@ -1,4 +1,5 @@
-name: Iteration Step Example
+name: Iteration Literal Example
+
 jobs:
 - name: Run iteration example
   defaults:

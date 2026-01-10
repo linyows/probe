@@ -1,4 +1,4 @@
-name: Shell Action Retry Examples
+name: Retry Literal Example
 description: Demonstrates shell action retry functionality
 
 jobs:

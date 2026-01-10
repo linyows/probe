@@ -1,0 +1,34 @@
+name: Echo Literal Example
+description: Test echo output with user-specified newlines and indentation
+
+vars:
+  url: http://example.com
+  code: 200
+
+jobs:
+- name: Echo Literal
+  steps:
+  - name: Single line
+    uses: hello
+    echo: Single line output
+
+  - name: Multi-line with explicit newlines
+    uses: hello
+    echo: "Line 1\nLine 2\nLine 3"
+
+  - name: Complex multiline line
+    uses: hello
+    echo: |
+      Header line
+      Indented content
+      More Indented
+      Back to left
+
+      Empty line above
+
+  - name: Template expressions
+    uses: hello
+    echo: |
+      Response URL: {{vars.url}}
+      Status: {{vars.code}}
+      Multiline template result
