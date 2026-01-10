@@ -67,6 +67,11 @@ jobs:
     with:
       cmd: ./probe examples/echo-literal.yml
     test: res.code == 0
+  - name: timeout-literal.yml
+    uses: shell
+    with:
+      cmd: ./probe examples/timeout-literal.yml
+    test: res.code == 0
   - name: needs-literal.yml (expected to fail)
     uses: shell
     with:
