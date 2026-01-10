@@ -1285,3 +1285,164 @@ func TestStepContext_RepeatIndex(t *testing.T) {
 		})
 	}
 }
+
+// SlowMockActionRunner is a mock that simulates slow action execution
+type SlowMockActionRunner struct {
+	delay time.Duration
+}
+
+func (m *SlowMockActionRunner) RunActions(name string, args []string, with map[string]any, verbose bool) (map[string]any, error) {
+	time.Sleep(m.delay)
+	return map[string]any{"status": 0}, nil
+}
+
+func TestStep_executeSingleAction_DefaultTimeout(t *testing.T) {
+	step := &Step{
+		Uses: "test-action",
+		Expr: &Expr{},
+		// No Timeout specified - should use DefaultStepTimeout
+	}
+
+	// Mock runner that completes quickly
+	mock := NewMockActionRunner()
+	mock.SetResult("test-action", map[string]any{"status": 0})
+
+	jCtx := &JobContext{
+		Config: Config{Verbose: false},
+	}
+
+	start := time.Now()
+	result, err := step.executeSingleAction(mock, map[string]any{}, jCtx)
+	duration := time.Since(start)
+
+	if err != nil {
+		t.Errorf("Expected no error, got %v", err)
+	}
+	if result == nil {
+		t.Error("Expected result, got nil")
+	}
+	// Should complete quickly (well under default timeout)
+	if duration > 1*time.Second {
+		t.Errorf("Expected quick completion, took %v", duration)
+	}
+}
+
+func TestStep_executeSingleAction_CustomTimeout(t *testing.T) {
+	step := &Step{
+		Uses:    "test-action",
+		Timeout: Interval{Duration: 2 * time.Second},
+		Expr:    &Expr{},
+	}
+
+	// Mock runner that takes 3 seconds (longer than timeout)
+	slowMock := &SlowMockActionRunner{delay: 3 * time.Second}
+
+	jCtx := &JobContext{
+		Config: Config{Verbose: false},
+	}
+
+	start := time.Now()
+	result, err := step.executeSingleAction(slowMock, map[string]any{}, jCtx)
+	duration := time.Since(start)
+
+	// Should timeout
+	if err == nil {
+		t.Error("Expected timeout error, got nil")
+	}
+	if !strings.Contains(err.Error(), "timed out") {
+		t.Errorf("Expected timeout error, got: %v", err)
+	}
+	if result != nil {
+		t.Errorf("Expected nil result on timeout, got %v", result)
+	}
+	// Should timeout around 2 seconds
+	if duration < 1900*time.Millisecond || duration > 2500*time.Millisecond {
+		t.Errorf("Expected timeout around 2s, took %v", duration)
+	}
+}
+
+func TestStep_executeSingleAction_CompletesBeforeTimeout(t *testing.T) {
+	step := &Step{
+		Uses:    "test-action",
+		Timeout: Interval{Duration: 3 * time.Second},
+		Expr:    &Expr{},
+	}
+
+	// Mock runner that takes 1 second (less than timeout)
+	slowMock := &SlowMockActionRunner{delay: 1 * time.Second}
+
+	jCtx := &JobContext{
+		Config: Config{Verbose: false},
+	}
+
+	start := time.Now()
+	result, err := step.executeSingleAction(slowMock, map[string]any{}, jCtx)
+	duration := time.Since(start)
+
+	// Should complete successfully
+	if err != nil {
+		t.Errorf("Expected no error, got %v", err)
+	}
+	if result == nil {
+		t.Error("Expected result, got nil")
+	}
+	if result["status"] != 0 {
+		t.Errorf("Expected status=0, got %v", result["status"])
+	}
+	// Should complete around 1 second
+	if duration < 900*time.Millisecond || duration > 1500*time.Millisecond {
+		t.Errorf("Expected completion around 1s, took %v", duration)
+	}
+}
+
+func TestStep_executeActionWithRetry_Timeout(t *testing.T) {
+	step := &Step{
+		Uses:    "test-action",
+		Timeout: Interval{Duration: 500 * time.Millisecond},
+		Retry: &StepRetry{
+			MaxAttempts: 3,
+			Interval:    Interval{Duration: 100 * time.Millisecond},
+		},
+		Expr: &Expr{},
+	}
+
+	// Mock runner that takes 1 second per attempt (longer than timeout)
+	slowMock := &SlowMockActionRunner{delay: 1 * time.Second}
+
+	jCtx := &JobContext{
+		Config:  Config{Verbose: false},
+		Printer: newBufferPrinter(),
+	}
+
+	start := time.Now()
+	result, err := step.executeActionWithRetry(slowMock, map[string]any{}, jCtx, "test")
+	duration := time.Since(start)
+
+	// First attempt should timeout at 500ms
+	if err == nil {
+		t.Error("Expected timeout error, got nil")
+	}
+	if !strings.Contains(err.Error(), "timed out") {
+		t.Errorf("Expected timeout error, got: %v", err)
+	}
+
+	// Should timeout on first attempt around 500ms, then retry with interval
+	// Total: ~500ms (timeout) + 100ms (interval) + 500ms (timeout) + 100ms (interval) + 500ms (timeout) = ~1700ms
+	expectedMin := 1500 * time.Millisecond
+	expectedMax := 2000 * time.Millisecond
+	if duration < expectedMin || duration > expectedMax {
+		t.Errorf("Expected retry with timeout around 1700ms, took %v", duration)
+	}
+
+	// On timeout, result should be nil
+	if result != nil {
+		t.Errorf("Expected nil result on timeout, got %v", result)
+	}
+}
+
+func TestStep_DefaultStepTimeout_Value(t *testing.T) {
+	expected := 5 * time.Minute
+	if DefaultStepTimeout != expected {
+		t.Errorf("DefaultStepTimeout = %v, want %v", DefaultStepTimeout, expected)
+	}
+}
