@@ -38,6 +38,8 @@ jobs:
     with:
       cmd: ./probe examples/shell.yml
     test: res.code == 0
+    echo: |
+      {{res.stdout}}
   - name: fail.yml (expected to fail)
     uses: shell
     with:
