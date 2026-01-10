@@ -1,0 +1,331 @@
+name: Verify All Examples
+description: |
+  This workflow validates the workflows under examples/*.
+  The following software is required: go, docker, mysqladmin, pg_isready
+
+jobs:
+# ------------------------------------------------------------------------
+- name: Basic Workflow Tests
+  id: basic
+  steps:
+  - name: shell.yml
+    uses: shell
+    with:
+      cmd: probe examples/shell.yml
+    test: res.code == 0
+  - name: fail.yml (expected to fail)
+    uses: shell
+    with:
+      cmd: probe examples/fail.yml
+    test: res.code == 1
+  - name: realtime-print.yml
+    uses: shell
+    with:
+      cmd: probe examples/realtime-print.yml
+    test: res.code == 0
+  - name: retry-literal.yml
+    uses: shell
+    with:
+      cmd: probe examples/retry-literal.yml
+    test: res.code == 0
+  - name: outputs-literal.yml
+    uses: shell
+    with:
+      cmd: probe examples/outputs-literal.yml
+    test: res.code == 0
+  - name: skipif-literal.yml
+    uses: shell
+    with:
+      cmd: probe examples/skipif-literal.yml
+    test: res.code == 0
+  - name: echo-literal.yml
+    uses: shell
+    with:
+      cmd: probe examples/echo-literal.yml
+    test: res.code == 0
+  - name: needs-literal.yml (expected to fail)
+    uses: shell
+    with:
+      cmd: probe examples/needs-literal.yml
+    test: res.code == 1
+
+# ------------------------------------------------------------------------
+- name: HTTP Server Start
+  id: http_server
+  steps:
+  - name: Start HTTP server in background
+    uses: shell
+    with:
+      background: true
+      cmd: go run github.com/mccutchen/go-httpbin/v2/cmd/go-httpbin@latest -host 127.0.0.1 -port 8080
+    test: status == -1
+    outputs:
+      http_pid: res.pid
+      http_log: res.log
+    echo: |
+      PID: {{ res.pid }}
+      Log: {{ res.log }}
+  - name: Wait for HTTP server to be ready
+    uses: http
+    with:
+      url: http://localhost:8080
+      get: /get
+    retry:
+      max_attempts: 5
+      interval: "1s"
+      initial_delay: "2s"
+    test: res.code == 200
+
+- name: HTTP Workflow Tests
+  id: http
+  needs: [http_server]
+  steps:
+  - name: http.yml
+    uses: shell
+    with:
+      cmd: probe examples/http.yml
+    test: res.code == 0
+  - name: truncate-print.yml
+    uses: shell
+    with:
+      cmd: probe examples/truncate-print.yml
+    test: res.code == 0
+#  - name: yaml-shared.yml and yaml-alias.yml
+#    uses: shell
+#    with:
+#      cmd: probe examples/yaml-shared.yml,examples/yaml-alias.yml
+#    test: res.code == 0
+  - name: nested-alias.yml
+    uses: shell
+    with:
+      cmd: probe examples/nested-alias.yml
+    test: res.code == 0
+  - name: iteration-literal.yml
+    uses: shell
+    with:
+      cmd: probe examples/iteration-literal.yml
+    test: res.code == 0
+  - name: repeat-literal.yml (expected to fail)
+    uses: shell
+    with:
+      cmd: probe examples/repeat-literal.yml
+    test: res.code == 1
+  - name: embedded-job.yml
+    uses: shell
+    with:
+      cmd: probe examples/embedded-job.yml
+    test: res.code == 0
+  - name: expr-functions.yml
+    uses: shell
+    with:
+      cmd: probe examples/expr-functions.yml
+    test: res.code == 0
+  - name: Stop HTTP server
+    uses: shell
+    with: # Use Process Group ID
+      cmd: "kill -TERM -{{ outputs.http_pid }}"
+    test: status == 0
+
+# ------------------------------------------------------------------------
+- name: GRPC Servers Start
+  id: grpc_server
+  steps:
+  - name: Generate keys and protobuf
+    uses: shell
+    with:
+      cmd: |
+        ./testdata/gen.sh
+        cd grpc/testserver && \
+          protoc --go_out=. --go-grpc_out=. ./pb/user_service.proto
+    test: res.code == 0
+  - name: Start GRPC server in background
+    uses: shell
+    with:
+      background: true
+      cmd: go run grpc/testserver/*.go
+    test: status == -1
+    outputs:
+      grpc_pid: res.pid
+      grpc_log: res.log
+    echo: |
+      PID: {{ res.pid }}
+      Log: {{ res.log }}
+  - name: Start GRPC server (TLS) in background
+    uses: shell
+    with:
+      background: true
+      cmd: |
+        go run grpc/testserver/*.go -tls -port=50052 \
+          -cert="./testdata/certs/server.crt" \
+          -key="./testdata/certs/server.key"
+    test: status == -1
+    outputs:
+      grpctls_pid: res.pid
+      grpctls_log: res.log
+    echo: |
+      PID: {{ res.pid }}
+      Log: {{ res.log }}
+
+- name: GRPC Workflow Tests
+  id: grpc
+  needs: [grpc_server]
+  steps:
+  - name: grpc.yml
+    uses: shell
+    with:
+      cmd: probe examples/grpc.yml
+    test: res.code == 0
+  - name: Stop GRPC server
+    uses: shell
+    with: # Use Process Group ID
+      cmd: "kill -TERM -{{ outputs.grpc_pid }}"
+    test: status == 0
+  - name: Stop GRPC server with TLS
+    uses: shell
+    with: # Use Process Group ID
+      cmd: "kill -TERM -{{ outputs.grpctls_pid }}"
+    test: status == 0
+
+# ------------------------------------------------------------------------
+- name: SQLite Workflow Tests
+  id: sqlite
+  steps:
+  - name: sqlite.yml
+    uses: shell
+    with:
+      cmd: probe examples/sqlite.yml
+    test: res.code == 0
+
+# ------------------------------------------------------------------------
+- name: Postgres Server Start
+  id: postgres_container
+  steps:
+  - name: Start PostgreSQL container
+    uses: shell
+    with:
+      background: true
+      cmd: |
+        docker run --rm -p 15432:5432 --name probe-postgres --tmpfs /var/lib/postgres \
+          -e POSTGRES_USER=probe -e POSTGRES_PASSWORD=password -e POSTGRES_DB=postgres postgres:16
+    test: status == -1
+    outputs:
+      postgres_pid: res.pid
+      postgres_log: res.log
+    echo: |
+      PID: {{ res.pid }}
+      Log: {{ res.log }}
+  - name: Wait for PostgreSQL server to be ready
+    uses: shell
+    with:
+      cmd: |
+        pg_isready -h 127.0.0.1 -p 15432 -U probe -d postgres -q
+    retry:
+      max_attempts: 15
+      interval: "3s"
+      initial_delay: "2s"
+    test: res.code == 0
+
+- name: PostgreSQL Workflow Tests
+  needs: [postgres_container]
+  id: postgres
+  steps:
+  - name: postgres.yml
+    uses: shell
+    with:
+      cmd: |
+        POSTGRES_PORT=15432 POSTGRES_USER=probe POSTGRES_PASS=password \
+          probe examples/postgres.yml
+    test: res.code == 0
+  - name: Stop PostgreSQL container
+    uses: shell
+    with:
+      cmd: docker stop probe-postgres
+    test: status == 0
+
+# ------------------------------------------------------------------------
+- name: MySQL Server Start
+  id: mysql_container
+  steps:
+  - name: Start MySQL container
+    uses: shell
+    with:
+      background: true
+      cmd: |
+        docker run --rm -p 13306:3306 --name probe-mysql --tmpfs /var/lib/mysql \
+          -e MYSQL_ROOT_PASSWORD=password -e MYSQL_DATABASE=mysql mysql:8.4
+    test: status == -1
+    outputs:
+      mysql_pid: res.pid
+      mysql_log: res.log
+    echo: |
+      PID: {{ res.pid }}
+      Log: {{ res.log }}
+  - name: Wait for MySQL server to be ready
+    uses: shell
+    with:
+      cmd: |
+        MYSQL_PWD=password \
+          mysqladmin ping -uroot -h127.0.0.1 -P13306
+    retry:
+      max_attempts: 15
+      interval: "3s"
+      initial_delay: "2s"
+    test: res.code == 0
+
+- name: MySQL Workflow Tests
+  needs: [mysql_container]
+  id: mysql
+  steps:
+  - name: mysql.yml
+    uses: shell
+    with:
+      cmd: |
+        MYSQL_PORT=13306 MYSQL_PASS=password \
+          probe examples/mysql.yml
+    test: res.code == 0
+  - name: Stop MySQL container
+    uses: shell
+    with:
+      cmd: docker stop probe-mysql
+    test: status == 0
+
+
+#- name: SMTP Tests
+#  id: smtp
+#  needs: [basic]
+#  steps:
+#  - name: Test smtp.yml
+#    uses: shell
+#    with:
+#      cmd: SMTP_ADDR={{SMTP_ADDR ?? 'localhost:2525'}} probe examples/smtp.yml
+#    test: res.code == 0
+#
+#- name: IMAP Tests
+#  id: imap
+#  needs: [basic]
+#  steps:
+#  - name: Test imap.yml
+#    uses: shell
+#    with:
+#      cmd: probe examples/imap.yml
+#    test: res.code == 0
+#
+#- name: SSH Tests
+#  id: ssh
+#  needs: [basic]
+#  steps:
+#  - name: Test ssh.yml
+#    uses: shell
+#    with:
+#      cmd: probe examples/ssh.yml
+#    test: res.code == 0
+#
+#- name: Browser Tests
+#  id: browser
+#  needs: [basic]
+#  steps:
+#  - name: Test browser.yml
+#    uses: shell
+#    with:
+#      cmd: probe examples/browser.yml
+#    test: res.code == 0
