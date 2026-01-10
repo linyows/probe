@@ -1,0 +1,29 @@
+name: Timeout Literal Example
+description: Test step timeout functionality
+
+jobs:
+- name: Test default timeout (5min)
+  steps:
+  - name: Quick command (should succeed)
+    uses: shell
+    with:
+      cmd: "echo 'This completes quickly'"
+    test: res.code == 0
+
+- name: Test custom timeout
+  steps:
+  - name: Command with 3s timeout (should timeout)
+    uses: shell
+    with:
+      cmd: "sleep 10"
+    timeout: 3s
+    test: res.code == 0
+
+- name: Test short timeout success
+  steps:
+  - name: Command within timeout (should succeed)
+    uses: shell
+    with:
+      cmd: "sleep 1"
+    timeout: 5s
+    test: res.code == 0

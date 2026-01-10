@@ -1,11 +1,18 @@
 package probe
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"regexp"
 	"strconv"
 	"strings"
 	"time"
+)
+
+const (
+	// DefaultStepTimeout is the default timeout for action execution
+	DefaultStepTimeout = 5 * time.Minute
 )
 
 type Step struct {
@@ -21,6 +28,7 @@ type Step struct {
 	SkipIf       string            `yaml:"skipif,omitempty"`
 	Outputs      map[string]string `yaml:"outputs,omitempty"`
 	Retry        *StepRetry        `yaml:"retry,omitempty"`
+	Timeout      Interval          `yaml:"timeout,omitempty"`
 	err          error
 	ctx          StepContext
 	Idx          int          `yaml:"-"`
@@ -99,11 +107,35 @@ func (st *Step) executeAction(name string, jCtx *JobContext) (map[string]any, er
 
 // executeSingleAction executes action once without retry
 func (st *Step) executeSingleAction(runner ActionRunner, expW map[string]any, jCtx *JobContext) (map[string]any, error) {
-	ret, err := runner.RunActions(st.Uses, []string{}, expW, jCtx.Verbose)
-	if err != nil {
-		return nil, err
+	// Determine timeout duration
+	timeout := DefaultStepTimeout
+	if st.Timeout.Duration > 0 {
+		timeout = st.Timeout.Duration
 	}
-	return ret, nil
+
+	// Create context with timeout
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	// Execute action in goroutine
+	type result struct {
+		ret map[string]any
+		err error
+	}
+	resultCh := make(chan result, 1)
+
+	go func() {
+		ret, err := runner.RunActions(st.Uses, []string{}, expW, jCtx.Verbose)
+		resultCh <- result{ret: ret, err: err}
+	}()
+
+	// Wait for either completion or timeout
+	select {
+	case res := <-resultCh:
+		return res.ret, res.err
+	case <-ctx.Done():
+		return nil, errors.New("action execution timed out after " + timeout.String())
+	}
 }
 
 // executeActionWithRetry executes action with retry logic until status == 0
