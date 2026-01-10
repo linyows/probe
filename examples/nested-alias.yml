@@ -53,10 +53,10 @@ jobs:
         message: hello
     test: |
       res.code == 200 &&
-      hasPrefix(res.body.headers.Authorization[0], "Bearer ") &&
-      res.body.headers["X-Bar"][0] == "bar" &&
-      res.body.headers["X-Baz"][0] == "baz" &&
-      res.body.headers["X-Foo"][0] == "foo"
+      res.body.headers.Authorization, "Bearer xxxxxxxxxxxxx" &&
+      res.body.headers["X-Bar"] == "bar" &&
+      res.body.headers["X-Baz"] == "baz" &&
+      res.body.headers["X-Foo"] == "foo"
     echo: |
       {{res.body.headers}}
 
@@ -69,9 +69,9 @@ jobs:
         message: hello
     test: |
       res.code == 200 &&
-      hasPrefix(res.body.headers.Authorization[0], "Bearer ") &&
-      res.body.headers["X-Bar"][0] == "bar" &&
-      res.body.headers["X-Baz"][0] == "baz" &&
-      res.body.headers["X-Foo"][0] == "foo"
+      res.body.headers.Authorization, "Bearer xxxxxxxxxxxxx" &&
+      res.body.headers["X-Bar"] == "bar" &&
+      res.body.headers["X-Baz"] == "baz" &&
+      res.body.headers["X-Foo"] == "foo"
     echo: |
       {{res.body.headers}}
