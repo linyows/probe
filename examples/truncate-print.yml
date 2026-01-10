@@ -1,4 +1,4 @@
-name: Truncate Strings Test
+name: Truncate Strings Example
 
 jobs:
 - name: Display truncated text

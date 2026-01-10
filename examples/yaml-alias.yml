@@ -1,6 +1,8 @@
-name: Using Alias Example
+name: Yaml Alias by Concating Files
+description: With yaml-shared.yml
+
 jobs:
-- name: Use Alias Headers
+- name: Alias headers
   defaults:
     http:
       url: http://localhost:8080

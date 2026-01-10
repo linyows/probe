@@ -1,13 +1,8 @@
 name: Fail Example
+
 jobs:
 - name: Run fail example
-  defaults:
-    http:
-      url: http://localhost:8080
   steps:
   - name: Fail
-    uses: http
-    with:
-      delete: /delete
-    test: |
-      res.code == 201
+    uses: hello
+    test: true == false

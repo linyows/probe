@@ -1,4 +1,4 @@
-name: Test Outputs Variables
+name: Outputs Literal Example
 
 x_defaults: &defaults
   http:
