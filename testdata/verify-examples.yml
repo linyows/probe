@@ -263,7 +263,7 @@ jobs:
     with:
       cmd: |
         POSTGRES_PORT=15432 POSTGRES_USER=probe POSTGRES_PASS=password \
-          probe examples/postgres.yml
+          ./probe examples/postgres.yml
     test: res.code == 0
   - name: Stop PostgreSQL container
     uses: shell
@@ -311,7 +311,7 @@ jobs:
     with:
       cmd: |
         MYSQL_PORT=13306 MYSQL_PASS=password \
-          probe examples/mysql.yml
+          ./probe examples/mysql.yml
     test: res.code == 0
   - name: Stop MySQL container
     uses: shell
