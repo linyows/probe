@@ -5,8 +5,32 @@ description: |
 
 jobs:
 # ------------------------------------------------------------------------
+- name: Build probe
+  id: build
+  steps:
+  - name: Go build
+    uses: shell
+    with:
+      cmd: CGO_ENABLED=0 go build -ldflags="-s -w" -o probe ./cmd/probe/...
+    test: status == 0
+
+# ------------------------------------------------------------------------
+- name: Container Image
+  id: image
+  steps:
+  - name: Pull container images
+    uses: shell
+    with:
+      cmd: |
+        docker pull kennethreitz/httpbin:latest
+        docker pull postgres:16
+        docker pull mysql:8.4
+    test: status == 0
+
+# ------------------------------------------------------------------------
 - name: Basic Workflow Tests
   id: basic
+  needs: [build]
   steps:
   - name: shell.yml
     uses: shell
@@ -52,12 +76,14 @@ jobs:
 # ------------------------------------------------------------------------
 - name: HTTP Server Start
   id: http_server
+  needs: [image]
   steps:
   - name: Start HTTP server in background
     uses: shell
     with:
       background: true
-      cmd: go run github.com/mccutchen/go-httpbin/v2/cmd/go-httpbin@latest -host 127.0.0.1 -port 8080
+      #cmd: go run github.com/mccutchen/go-httpbin/v2/cmd/go-httpbin@latest -host 127.0.0.1 -port 8080
+      cmd: "docker run --rm -p 8080:80 --name probe-httpbin kennethreitz/httpbin:latest"
     test: status == -1
     outputs:
       http_pid: res.pid
@@ -78,7 +104,7 @@ jobs:
 
 - name: HTTP Workflow Tests
   id: http
-  needs: [http_server]
+  needs: [build, http_server]
   steps:
   - name: http.yml
     uses: shell
@@ -122,8 +148,9 @@ jobs:
     test: res.code == 0
   - name: Stop HTTP server
     uses: shell
-    with: # Use Process Group ID
-      cmd: "kill -TERM -{{ outputs.http_pid }}"
+    with:
+      #cmd: "kill -TERM -{{ outputs.http_pid }}"
+      cmd: docker stop probe-httpbin
     test: status == 0
 
 # ------------------------------------------------------------------------
@@ -168,7 +195,7 @@ jobs:
 
 - name: GRPC Workflow Tests
   id: grpc
-  needs: [grpc_server]
+  needs: [build, grpc_server]
   steps:
   - name: grpc.yml
     uses: shell
@@ -189,6 +216,7 @@ jobs:
 # ------------------------------------------------------------------------
 - name: SQLite Workflow Tests
   id: sqlite
+  needs: [build]
   steps:
   - name: sqlite.yml
     uses: shell
@@ -199,6 +227,7 @@ jobs:
 # ------------------------------------------------------------------------
 - name: Postgres Server Start
   id: postgres_container
+  needs: [image]
   steps:
   - name: Start PostgreSQL container
     uses: shell
@@ -226,7 +255,7 @@ jobs:
     test: res.code == 0
 
 - name: PostgreSQL Workflow Tests
-  needs: [postgres_container]
+  needs: [build, postgres_container]
   id: postgres
   steps:
   - name: postgres.yml
@@ -245,6 +274,7 @@ jobs:
 # ------------------------------------------------------------------------
 - name: MySQL Server Start
   id: mysql_container
+  needs: [image]
   steps:
   - name: Start MySQL container
     uses: shell
@@ -273,7 +303,7 @@ jobs:
     test: res.code == 0
 
 - name: MySQL Workflow Tests
-  needs: [mysql_container]
+  needs: [build, mysql_container]
   id: mysql
   steps:
   - name: mysql.yml
