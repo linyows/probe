@@ -26,6 +26,7 @@ jobs:
         docker pull kennethreitz/httpbin:latest
         docker pull postgres:16
         docker pull mysql:8.4
+      timeout: 5m
     test: status == 0
 
 # ------------------------------------------------------------------------
@@ -55,12 +56,6 @@ jobs:
     uses: shell
     with:
       cmd: ./probe examples/retry-literal.yml
-    test: res.code == 0
-    echo: "{{res.stdout}}"
-  - name: outputs-literal.yml
-    uses: shell
-    with:
-      cmd: ./probe examples/outputs-literal.yml
     test: res.code == 0
     echo: "{{res.stdout}}"
   - name: skipif-literal.yml
@@ -130,6 +125,12 @@ jobs:
     uses: shell
     with:
       cmd: ./probe examples/truncate-print.yml
+    test: res.code == 0
+    echo: "{{res.stdout}}"
+  - name: outputs-literal.yml
+    uses: shell
+    with:
+      cmd: ./probe examples/outputs-literal.yml
     test: res.code == 0
     echo: "{{res.stdout}}"
 #  - name: yaml-shared.yml and yaml-alias.yml
