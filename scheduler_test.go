@@ -16,7 +16,9 @@ func TestJobScheduler_MarkJobsWithFailedDependencies(t *testing.T) {
 			ID:    "level1",
 			Steps: []*Step{},
 		}
-		scheduler.AddJob(job1)
+		if err := scheduler.AddJob(job1); err != nil {
+			t.Fatalf("Failed to add job1: %v", err)
+		}
 
 		// Level 2 job that depends on level1
 		job2 := &Job{
@@ -25,7 +27,9 @@ func TestJobScheduler_MarkJobsWithFailedDependencies(t *testing.T) {
 			Needs: []string{"level1"},
 			Steps: []*Step{},
 		}
-		scheduler.AddJob(job2)
+		if err := scheduler.AddJob(job2); err != nil {
+			t.Fatalf("Failed to add job2: %v", err)
+		}
 
 		// Level 3 job that depends on level2
 		job3 := &Job{
@@ -34,7 +38,9 @@ func TestJobScheduler_MarkJobsWithFailedDependencies(t *testing.T) {
 			Needs: []string{"level2"},
 			Steps: []*Step{},
 		}
-		scheduler.AddJob(job3)
+		if err := scheduler.AddJob(job3); err != nil {
+			t.Fatalf("Failed to add job3: %v", err)
+		}
 
 		// Simulate level1 completing with failure
 		scheduler.SetJobStatus("level1", JobCompleted, false)
@@ -87,7 +93,9 @@ func TestJobScheduler_MarkJobsWithFailedDependencies(t *testing.T) {
 			ID:    "job1",
 			Steps: []*Step{},
 		}
-		scheduler.AddJob(job1)
+		if err := scheduler.AddJob(job1); err != nil {
+			t.Fatalf("Failed to add job1: %v", err)
+		}
 
 		// Job that depends on job1
 		job2 := &Job{
@@ -96,7 +104,9 @@ func TestJobScheduler_MarkJobsWithFailedDependencies(t *testing.T) {
 			Needs: []string{"job1"},
 			Steps: []*Step{},
 		}
-		scheduler.AddJob(job2)
+		if err := scheduler.AddJob(job2); err != nil {
+			t.Fatalf("Failed to add job2: %v", err)
+		}
 
 		// Independent job
 		job3 := &Job{
@@ -104,7 +114,9 @@ func TestJobScheduler_MarkJobsWithFailedDependencies(t *testing.T) {
 			ID:    "job3",
 			Steps: []*Step{},
 		}
-		scheduler.AddJob(job3)
+		if err := scheduler.AddJob(job3); err != nil {
+			t.Fatalf("Failed to add job3: %v", err)
+		}
 
 		// Simulate job1 completing with failure
 		scheduler.SetJobStatus("job1", JobCompleted, false)
