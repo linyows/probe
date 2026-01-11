@@ -140,8 +140,8 @@ func (w *Workflow) updateSkippedJobsOutput(skippedJobs []string, rs *Result) {
 		if jr, exists := rs.Jobs[jobID]; exists {
 			jr.mutex.Lock()
 			jr.EndTime = jr.StartTime // Set end time same as start time (0 duration)
-			jr.Status = "Skipped"
-			jr.Success = false
+			jr.Status = "skipped"
+			jr.Success = true // Skipped jobs are considered successful (same as skipif)
 			jr.mutex.Unlock()
 		}
 	}
