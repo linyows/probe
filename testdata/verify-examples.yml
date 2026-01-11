@@ -5,8 +5,8 @@ description: |
 
 jobs:
 # ------------------------------------------------------------------------
-- name: Build probe
-  id: build
+- name: Setup
+  id: setup
   steps:
   - name: Go build
     uses: shell
@@ -14,25 +14,29 @@ jobs:
       # needs cgo for go-sqlite3
       cmd: CGO_ENABLED=1 go build -ldflags="-s -w" -o probe ./cmd/probe/...
     test: status == 0
-
-# ------------------------------------------------------------------------
-- name: Container Image
-  id: image
-  steps:
-  - name: Pull container images
+  - name: Pull httpbin images
     uses: shell
     with:
-      cmd: |
-        docker pull kennethreitz/httpbin:latest
-        docker pull postgres:16
-        docker pull mysql:8.4
-      timeout: 5m
+      cmd: docker pull kennethreitz/httpbin:latest
+      timeout: 3m
+    test: status == 0
+  - name: Pull postgres images
+    uses: shell
+    with:
+      cmd: docker pull postgres:16
+      timeout: 3m
+    test: status == 0
+  - name: Pull mysql images
+    uses: shell
+    with:
+      cmd: docker pull mysql:8.4
+      timeout: 3m
     test: status == 0
 
 # ------------------------------------------------------------------------
 - name: Basic Workflow Tests
   id: basic
-  needs: [build]
+  needs: [setup]
   steps:
   - name: shell.yml
     uses: shell
@@ -85,7 +89,7 @@ jobs:
 # ------------------------------------------------------------------------
 - name: HTTP Server Start
   id: http_server
-  needs: [image]
+  needs: [setup]
   steps:
   - name: Start HTTP server in background
     uses: shell
@@ -113,7 +117,7 @@ jobs:
 
 - name: HTTP Workflow Tests
   id: http
-  needs: [build, http_server]
+  needs: [http_server]
   steps:
   - name: http.yml
     uses: shell
@@ -178,6 +182,7 @@ jobs:
 # ------------------------------------------------------------------------
 - name: GRPC Servers Start
   id: grpc_server
+  needs: [setup]
   steps:
   - name: Generate keys and protobuf
     uses: shell
@@ -219,7 +224,7 @@ jobs:
 
 - name: GRPC Workflow Tests
   id: grpc
-  needs: [build, grpc_server]
+  needs: [grpc_server]
   steps:
   - name: grpc.yml
     uses: shell
@@ -241,7 +246,7 @@ jobs:
 # ------------------------------------------------------------------------
 - name: SQLite Workflow Tests
   id: sqlite
-  needs: [build]
+  needs: [setup]
   steps:
   - name: sqlite.yml
     uses: shell
@@ -253,7 +258,7 @@ jobs:
 # ------------------------------------------------------------------------
 - name: Postgres Server Start
   id: postgres_container
-  needs: [image]
+  needs: [setup]
   steps:
   - name: Start PostgreSQL container
     uses: shell
@@ -272,8 +277,7 @@ jobs:
   - name: Wait for PostgreSQL server to be ready
     uses: shell
     with:
-      cmd: |
-        pg_isready -h 127.0.0.1 -p 15432 -U probe -d postgres -q
+      cmd: pg_isready -h 127.0.0.1 -p 15432 -U probe -d postgres -q
     retry:
       max_attempts: 15
       interval: "3s"
@@ -281,7 +285,7 @@ jobs:
     test: res.code == 0
 
 - name: PostgreSQL Workflow Tests
-  needs: [build, postgres_container]
+  needs: [postgres_container]
   id: postgres
   steps:
   - name: postgres.yml
@@ -301,7 +305,7 @@ jobs:
 # ------------------------------------------------------------------------
 - name: MySQL Server Start
   id: mysql_container
-  needs: [image]
+  needs: [setup]
   steps:
   - name: Start MySQL container
     uses: shell
@@ -320,9 +324,7 @@ jobs:
   - name: Wait for MySQL server to be ready
     uses: shell
     with:
-      cmd: |
-        MYSQL_PWD=password \
-          mysqladmin ping -uroot -h127.0.0.1 -P13306
+      cmd: MYSQL_PWD=password mysqladmin ping -uroot -h127.0.0.1 -P13306
     retry:
       max_attempts: 15
       interval: "3s"
@@ -330,7 +332,7 @@ jobs:
     test: res.code == 0
 
 - name: MySQL Workflow Tests
-  needs: [build, mysql_container]
+  needs: [mysql_container]
   id: mysql
   steps:
   - name: mysql.yml
