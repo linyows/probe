@@ -1,45 +1,52 @@
 name: Needs Literal Example
 
 jobs:
-- name: First job
+- name: 1st job
   id: first
   steps:
-  - name: Hello
+  - name: 1st Hello
     uses: hello
     test: 1 == 1
 
-- name: Second job A (Twice)
+- name: 2nd job-A (Twice)
   id: second-a
   needs: [first]
   repeat:
     count: 2
     interval: 3
   steps:
-  - name: Hello
+  - name: 2nd-a Hello
     uses: hello
     test: 1 == 1
 
-- name: Second job B
+- name: 2nd job-B
   id: second-b
   needs: [first]
   steps:
-  - name: Hello
+  - name: 2nd-b Hello
     uses: hello
     test: 1 == 1
 
-- name: Third job C after Second job B (Should Fail)
-  id: third-c
+- name: 3rd job after 2nd job-B (Should Fail)
+  id: third
   needs: [second-b]
   steps:
-  - name: Hello
+  - name: 3rd Hello
     uses: hello
     test: 1 == 2
 
-- name: Fourth job D after Third job C (Should not run)
-  id: fourth-d
-  needs: [third-c]
+- name: 4th job after 3rd job (Should not run)
+  id: fourth
+  needs: [third]
   steps:
-  - name: Hello
+  - name: 4th Hello (failed level-2)
+    uses: hello
+    test: 1 == 1
+
+- name: 5th job after 4th job (Should not run)
+  needs: [fourth]
+  steps:
+  - name: 5th Hello (failed level-3)
     uses: hello
     test: 1 == 1
 
@@ -47,12 +54,12 @@ jobs:
   id: cleanup
   needs: [second-a, second-b]
   steps:
-  - name: Hello
+  - name: Cleanup Hello
     uses: hello
     test: 1 == 1
 
 - name: Standalone job
   steps:
-  - name: Hello
+  - name: Standalone Hello
     uses: hello
     test: 1 == 1

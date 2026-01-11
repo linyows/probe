@@ -254,7 +254,7 @@ func (js *JobScheduler) MarkJobsWithFailedDependencies() []string {
 		// Check if any dependency has failed
 		hasFailedDependency := false
 		for _, dep := range job.Needs {
-			if js.status[dep] == JobCompleted && !js.results[dep] {
+			if js.status[dep] == JobFailed || (js.status[dep] == JobCompleted && !js.results[dep]) {
 				hasFailedDependency = true
 				break
 			}
