@@ -5,6 +5,13 @@ on:
     branches:
       - main
   pull_request:
+  workflow_dispatch:
+    inputs:
+      options:
+        description: 'Additional options for probe (e.g., --verbose)'
+        required: false
+        default: ''
+        type: string
 
 jobs:
   test:
@@ -20,3 +27,4 @@ jobs:
     - uses: linyows/probe-action@0164e23555aacbaaea03169102262dafeb1ff631 # v1
       with:
         path: testdata/verify-examples.yml
+        options: ${{ github.event.inputs.options }}
