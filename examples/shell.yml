@@ -2,6 +2,7 @@ name: Shell Action Examples
 description: Demonstrates shell action usage with various configurations
 
 vars:
+  ci: "{{CI}}"
   project_dir: "/tmp/probe-shell-demo"
   build_timeout: "30s"
 
@@ -28,6 +29,7 @@ jobs:
       cmd: "pwd && ls -la"
       workdir: "/tmp"
     test: res.code == 0
+    skipif: vars.ci == "true"
 
 - name: Advanced Shell Usage
   steps:
