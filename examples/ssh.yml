@@ -6,6 +6,7 @@ vars:
   port: "{{SSH_PORT ?? 22}}"
   user: "{{SSH_USER ?? ''}}"
   pass: "{{SSH_PASS ?? ''}}"
+  key_file: "{{SSH_KEY_FILE ?? '~/.ssh/id_rsa'}}"
 
 jobs:
 - name: SSH Connection Test
@@ -18,7 +19,7 @@ jobs:
       timeout: 30s
       strict_host_check: false
       known_hosts: ~/.ssh/known_hosts
-      key_file: ~/.ssh/id_rsa
+      key_file: "{{vars.key_file}}"
 
   steps:
   - name: Get hostname

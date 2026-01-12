@@ -26,10 +26,15 @@ jobs:
   - name: Working directory example
     uses: shell
     with:
-      cmd: "pwd && ls -la"
+      cmd: |
+        mkdir -p /tmp/probe-workdir-test
+        cd /tmp/probe-workdir-test
+        pwd
+        ls -la
+        cd -
+        rm -rf /tmp/probe-workdir-test
       workdir: "/tmp"
     test: res.code == 0
-    skipif: vars.ci == "true"
 
 - name: Advanced Shell Usage
   steps:
