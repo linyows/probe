@@ -17,6 +17,6 @@ jobs:
         message: hello
     test: |
       res.code == 200 &&
-      res.body.form.message[0] == "hello"
+      res.body.headers["X-Foobar"] == "bazbazbaz"
     echo: |
-      X-Foobar: {{res.body.headers["X-Foobar"]}}
+      Request Headers: {{res.body.headers}}

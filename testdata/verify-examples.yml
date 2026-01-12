@@ -137,11 +137,12 @@ jobs:
       cmd: ./probe examples/outputs-literal.yml
     test: res.code == 0
     echo: "{{res.stdout}}"
-#  - name: yaml-shared.yml and yaml-alias.yml
-#    uses: shell
-#    with:
-#      cmd: ./probe examples/yaml-shared.yml,examples/yaml-alias.yml
-#    test: res.code == 0
+  - name: yaml-shared.yml and yaml-alias.yml
+    uses: shell
+    with:
+      cmd: ./probe examples/yaml-shared.yml,examples/yaml-alias.yml
+    test: res.code == 0
+    echo: "{{res.stdout}}"
   - name: nested-alias.yml
     uses: shell
     with:
