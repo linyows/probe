@@ -32,6 +32,12 @@ jobs:
       cmd: docker pull mysql:8.4
       timeout: 3m
     test: status == 0
+  - name: Pull openssh images
+    uses: shell
+    with:
+      cmd: docker pull linuxserver/openssh-server:latest
+      timeout: 3m
+    test: status == 0
 
 # ------------------------------------------------------------------------
 - name: Basic Workflow Tests
@@ -91,6 +97,11 @@ jobs:
   id: http_server
   needs: [setup]
   steps:
+  - name: Cleanup old HTTP container
+    uses: shell
+    with:
+      cmd: docker stop probe-httpbin 2>/dev/null || true
+    test: status == 0
   - name: Start HTTP server in background
     uses: shell
     with:
@@ -261,6 +272,11 @@ jobs:
   id: postgres_container
   needs: [setup]
   steps:
+  - name: Cleanup old PostgreSQL container
+    uses: shell
+    with:
+      cmd: docker stop probe-postgres 2>/dev/null || true
+    test: status == 0
   - name: Start PostgreSQL container
     uses: shell
     with:
@@ -308,6 +324,11 @@ jobs:
   id: mysql_container
   needs: [setup]
   steps:
+  - name: Cleanup old MySQL container
+    uses: shell
+    with:
+      cmd: docker stop probe-mysql 2>/dev/null || true
+    test: status == 0
   - name: Start MySQL container
     uses: shell
     with:
@@ -350,6 +371,76 @@ jobs:
       cmd: docker stop probe-mysql
     test: status == 0
 
+# ------------------------------------------------------------------------
+- name: SSH Server Start
+  id: ssh_container
+  needs: [setup]
+  steps:
+  - name: Cleanup old SSH container
+    uses: shell
+    with:
+      cmd: docker stop probe-ssh 2>/dev/null || true
+    test: status == 0
+  - name: Generate SSH test key
+    uses: shell
+    with:
+      cmd: |
+        rm -rf ./testdata/ssh
+        mkdir -p ./testdata/ssh
+        ssh-keygen -t rsa -b 2048 -f ./testdata/ssh/test_key -N "" -C "probe-test"
+        chmod 600 ./testdata/ssh/test_key
+        chmod 644 ./testdata/ssh/test_key.pub
+    test: res.code == 0
+  - name: Start SSH container
+    uses: shell
+    with:
+      background: true
+      cmd: |
+        docker run --rm -p 2222:2222 --name probe-ssh \
+          -e PUID=1000 \
+          -e PGID=1000 \
+          -e USER_NAME=probe \
+          -e SUDO_ACCESS=true \
+          -e PUBLIC_KEY="$(cat ./testdata/ssh/test_key.pub)" \
+          linuxserver/openssh-server:latest
+    test: status == -1
+    outputs:
+      ssh_pid: res.pid
+      ssh_log: res.log
+    echo: |
+      PID: {{ res.pid }}
+      Log: {{ res.log }}
+  - name: Wait for SSH server to be ready
+    uses: shell
+    with:
+      cmd: |
+        ssh -i ./testdata/ssh/test_key -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+          -p 2222 probe@127.0.0.1 "echo ready"
+    retry:
+      max_attempts: 30
+      interval: "3s"
+      initial_delay: "5s"
+    test: res.code == 0
+
+- name: SSH Workflow Tests
+  needs: [ssh_container]
+  id: ssh
+  steps:
+  - name: ssh.yml
+    uses: shell
+    with:
+      cmd: |
+        SSH_HOST=127.0.0.1 SSH_PORT=2222 SSH_USER=probe \
+          SSH_KEY_FILE=./testdata/ssh/test_key \
+          ./probe examples/ssh.yml
+    test: res.code == 0
+    echo: "{{res.stdout}}"
+  - name: Stop SSH container
+    uses: shell
+    with:
+      cmd: docker stop probe-ssh
+    test: status == 0
+
 
 #- name: SMTP Tests
 #  id: smtp
@@ -369,16 +460,6 @@ jobs:
 #    uses: shell
 #    with:
 #      cmd: ./probe examples/imap.yml
-#    test: res.code == 0
-#
-#- name: SSH Tests
-#  id: ssh
-#  needs: [basic]
-#  steps:
-#  - name: Test ssh.yml
-#    uses: shell
-#    with:
-#      cmd: ./probe examples/ssh.yml
 #    test: res.code == 0
 #
 #- name: Browser Tests
