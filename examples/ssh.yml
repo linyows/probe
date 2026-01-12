@@ -18,7 +18,6 @@ jobs:
       password: "{{vars.pass}}"
       timeout: 30s
       strict_host_check: false
-      known_hosts: ~/.ssh/known_hosts
       key_file: "{{vars.key_file}}"
 
   steps:
