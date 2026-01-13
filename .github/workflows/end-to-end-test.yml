@@ -15,7 +15,7 @@ on:
 
 jobs:
   test:
-    name: Test all workflows in examples dir
+    name: Verify all examples
     runs-on: ubuntu-latest
     steps:
     - name: Install dependencies
