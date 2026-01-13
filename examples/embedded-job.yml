@@ -2,14 +2,9 @@ name: Embedded Job
 
 vars:
   testenv: "{{TESTENV ?? 'dev'}}"
-  url: "{{TESTURL ?? 'http://localhost:8080'}}"
 
 jobs:
 - name: First job
-  defaults:
-    http:
-      url: "{{ vars.url }}"
-
   steps:
   - name: Get ID
     id: shell
@@ -29,18 +24,14 @@ jobs:
         name: foobar
         testenv: "{{ vars.testenv }}"
         id: "{{ outputs.shell.login }}"
-        url: "{{ vars.url }}"
     test: res.code == 0
     outputs:
       id: res.outputs.myid
       token: res.outputs.mytoken
 
-  - name: POST with outputs of embedded job
-    uses: http
+  - name: Echo with outputs of embedded job
+    uses: shell
     with:
-      post: /post
-      headers:
-        authorization: "Bearer {{outputs.auth.token}}"
-        content-type: application/json
-    test: res.code == 200
-    echo: "{{res.body.headers.Authorization}}"
+      cmd: echo "Token={{outputs.auth.token}}"
+    test: res.code == 0
+    echo: "Authorization: Bearer {{outputs.auth.token}}"

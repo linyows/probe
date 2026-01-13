@@ -2,42 +2,36 @@ name: Expr-Function Example
 
 jobs:
 - name: Run match json example
-  defaults:
-    http:
-      url: http://localhost:8080
-      headers:
-        content-type: application/json
-        accept: application/json
   steps:
   - name: Match Regexp
-    uses: http
+    uses: shell
     with:
-      post: /post
-      body:
+      cmd: echo '{"id":12345,"name":"probe"}'
+    vars:
+      result:
         id: 12345
         name: probe
-    test: |
-      res.code == 200 &&
-      match_json(res.body.json, vars.expected)
-    echo: diff_json(res.body.json, vars.expected)
-    vars:
       expected:
         id: /^\d{5}$/
         name: /^\w+$/
+    test: |
+      res.code == 0 &&
+      match_json(vars.result, vars.expected)
+    echo: diff_json(vars.result, vars.expected)
   - name: Mismatch Regexp
-    uses: http
+    uses: shell
     with:
-      post: /post
-      body:
-        id: ABC
-        name:
-    test: |
-      res.code == 200
-    echo: diff_json(res.body.json, vars.expected)
+      cmd: echo '{"id":"ABC","name":null}'
     vars:
+      result:
+        id: ABC
+        name: null
       expected:
         id: /^\d{5}$/
         name: /^\w+$/
+    test: |
+      res.code == 0
+    echo: diff_json(vars.result, vars.expected)
 
 - name: Test string functions
   steps:

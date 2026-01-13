@@ -1,77 +1,71 @@
 name: Nested YAML Alias
 
 vars:
-  api_endpoint: "{{ API_ENDPOINT ?? 'http://localhost:8080' }}"
+  test_value: "{{ TEST_VALUE ?? 'test' }}"
 
 aliases:
-  endpoint: &base_url "{{ vars.api_endpoint }}"
-  headers: &default_headers
+  base_value: &base_value "{{ vars.test_value }}"
+  default_config: &default_config
     content-type: application/json
     accept: application/json
-  auth_headers: &a_headers
+  auth_config: &a_config
     authorization: Bearer xxxxxxxxxxxxx
-  custom_headers: &x_headers
+  custom_config: &x_config
     x-foo: foo
-  bundle_headers: &b_headers
-    <<: [*a_headers, *x_headers]
+  bundle_config: &b_config
+    <<: [*a_config, *x_config]
     x-bar: bar
     x-baz: baz
-  double_mergekey_headers: &d_headers
-    <<: *a_headers
-    <<: *x_headers
+  double_mergekey_config: &d_config
+    <<: *a_config
+    <<: *x_config
     x-bar: bar
     x-baz: baz
 
 jobs:
 - name: Test Job
-  defaults:
-    http:
-      url: *base_url
-      headers: *default_headers
-
   steps:
-  - name: Post json
-    uses: http
+  - name: Test basic alias
+    uses: shell
     with:
-      post: /post
-      body:
-        message: hello
+      cmd: echo "hello"
+    vars:
+      base: *base_value
+      config: *default_config
     test: |
-      res.code == 200 &&
-      res.body.json.message == "hello"
+      res.code == 0 &&
+      replace(res.stdout, '\n', '') == "hello"
     echo: |
-      IP: {{res.body.origin}}
+      Base value: {{vars.base}}
     outputs:
-      ip: res.body.origin
+      result: replace(res.stdout, '\n', '')
 
   - name: Verify mergekey list
-    uses: http
+    uses: shell
     with:
-      headers: *b_headers
-      post: /post
-      body:
-        message: hello
+      cmd: echo "testing mergekey"
+    vars:
+      config: *b_config
     test: |
-      res.code == 200 &&
-      res.body.headers.Authorization == "Bearer xxxxxxxxxxxxx" &&
-      res.body.headers["X-Bar"] == "bar" &&
-      res.body.headers["X-Baz"] == "baz" &&
-      res.body.headers["X-Foo"] == "foo"
+      res.code == 0 &&
+      vars.config.authorization == "Bearer xxxxxxxxxxxxx" &&
+      vars.config["x-bar"] == "bar" &&
+      vars.config["x-baz"] == "baz" &&
+      vars.config["x-foo"] == "foo"
     echo: |
-      {{res.body.headers}}
+      Config: {{vars.config}}
 
   - name: Verify double mergekey
-    uses: http
+    uses: shell
     with:
-      headers: *d_headers
-      post: /post
-      body:
-        message: hello
+      cmd: echo "testing double mergekey"
+    vars:
+      config: *d_config
     test: |
-      res.code == 200 &&
-      res.body.headers.Authorization == "Bearer xxxxxxxxxxxxx" &&
-      res.body.headers["X-Bar"] == "bar" &&
-      res.body.headers["X-Baz"] == "baz" &&
-      res.body.headers["X-Foo"] == "foo"
+      res.code == 0 &&
+      vars.config.authorization == "Bearer xxxxxxxxxxxxx" &&
+      vars.config["x-bar"] == "bar" &&
+      vars.config["x-baz"] == "baz" &&
+      vars.config["x-foo"] == "foo"
     echo: |
-      {{res.body.headers}}
+      Config: {{vars.config}}

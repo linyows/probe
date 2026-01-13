@@ -1,47 +1,35 @@
 name: Outputs Literal Example
 
-x_defaults: &defaults
-  http:
-    url: http://localhost:8080
-    headers:
-      content-type: application/json
-
 jobs:
 - name: Test Job 1
   id: job1
-  defaults: *defaults
   steps:
-  - name: Get my IP with set to outputs
+  - name: Get identifier with set to outputs
     id: step1
-    uses: http
+    uses: shell
     with:
-      get: /get
+      cmd: echo "test-identifier-12345"
     outputs:
-      token: res.body.origin
+      token: replace(res.stdout, '\n', '')
 
-  - name: Post by outputs ip
-    uses: http
+  - name: Use outputs identifier
+    uses: shell
     with:
-      post: /post
-      body:
-        myip: "{{outputs.step1.token}}"
+      cmd: echo "Identifier is {{outputs.step1.token}}"
     vars:
       foo:
         bar: "{{outputs.step1.token}}"
     echo: |
-      IP from res: {{res.body.json.myip}}
+      Identifier from stdout: {{replace(res.stdout, '\n', '')}}
       bar from vars:{{vars.foo.bar}}
 
 - name: Test Job 2
   needs: [job1]
-  defaults: *defaults
   steps:
   - name: Use shared outputs over job
-    uses: http
+    uses: shell
     with:
-      post: /post
-      body:
-        myip: "{{outputs.step1.token}}"
+      cmd: echo "Using identifier {{outputs.step1.token}}"
     echo: |
       Full: {{outputs.step1.token }}
       Short: {{outputs.token}}

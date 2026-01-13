@@ -1,3 +1,2 @@
 shared:
-  headers: &x_foobar_headers
-    X-FooBar: bazbazbaz
+  test_value: &x_foobar_value "bazbazbaz"
