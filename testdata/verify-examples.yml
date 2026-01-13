@@ -35,7 +35,19 @@ jobs:
   - name: Pull openssh images
     uses: shell
     with:
-      cmd: docker pull linuxserver/openssh-server:latest
+      cmd: docker pull linuxserver/openssh-server:version-10.2_p1-r0
+      timeout: 3m
+    test: status == 0
+  - name: Pull mailpit images
+    uses: shell
+    with:
+      cmd: docker pull axllent/mailpit:v1.28
+      timeout: 3m
+    test: status == 0
+  - name: Pull greenmail images
+    uses: shell
+    with:
+      cmd: docker pull greenmail/standalone:2.1.0
       timeout: 3m
     test: status == 0
 
@@ -402,7 +414,7 @@ jobs:
           -e USER_NAME=probe \
           -e SUDO_ACCESS=true \
           -e PUBLIC_KEY="$(cat ./testdata/ssh/test_key.pub)" \
-          linuxserver/openssh-server:latest
+          linuxserver/openssh-server:version-10.2_p1-r0
     test: status == -1
     outputs:
       ssh_pid: res.pid
@@ -441,26 +453,120 @@ jobs:
       cmd: docker stop probe-ssh
     test: status == 0
 
+# ------------------------------------------------------------------------
+- name: SMTP Server Start
+  id: smtp_container
+  needs: [setup]
+  steps:
+  - name: Cleanup old SMTP container
+    uses: shell
+    with:
+      cmd: docker stop probe-smtp 2>/dev/null || true
+    test: status == 0
+  - name: Start SMTP container
+    uses: shell
+    with:
+      background: true
+      cmd: |
+        docker run --rm -p 1025:1025 -p 8025:8025 --name probe-smtp \
+          axllent/mailpit:v1.28
+    test: status == -1
+    outputs:
+      smtp_pid: res.pid
+      smtp_log: res.log
+    echo: |
+      PID: {{ res.pid }}
+      Log: {{ res.log }}
+  - name: Wait for SMTP server to be ready
+    uses: http
+    with:
+      url: http://localhost:8025
+      get: /api/v1/info
+    retry:
+      max_attempts: 15
+      interval: "2s"
+      initial_delay: "2s"
+    test: res.code == 200
 
-#- name: SMTP Tests
-#  id: smtp
-#  needs: [basic]
-#  steps:
-#  - name: Test smtp.yml
-#    uses: shell
-#    with:
-#      cmd: SMTP_ADDR={{SMTP_ADDR ?? 'localhost:2525'}} probe examples/smtp.yml
-#    test: res.code == 0
-#
-#- name: IMAP Tests
-#  id: imap
-#  needs: [basic]
-#  steps:
-#  - name: Test imap.yml
-#    uses: shell
-#    with:
-#      cmd: ./probe examples/imap.yml
-#    test: res.code == 0
+- name: SMTP Workflow Tests
+  needs: [smtp_container]
+  id: smtp
+  steps:
+  - name: smtp.yml
+    uses: shell
+    with:
+      cmd: |
+        SMTP_ADDR=localhost:1025 FROM_ADDR=sender@example.com \
+          TO_ADDR=recipient@example.com \
+          ./probe examples/smtp.yml
+    test: res.code == 0
+    echo: "{{res.stdout}}"
+  - name: Stop SMTP container
+    uses: shell
+    with:
+      cmd: docker stop probe-smtp
+    test: status == 0
+
+# ------------------------------------------------------------------------
+- name: IMAP Server Start
+  id: imap_container
+  needs: [setup]
+  steps:
+  - name: Cleanup old IMAP container
+    uses: shell
+    with:
+      cmd: docker stop probe-imap 2>/dev/null || true
+    test: status == 0
+  - name: Start IMAP container
+    uses: shell
+    with:
+      background: true
+      cmd: |
+        docker run --rm -p 3025:3025 -p 3143:3143 -p 3993:3993 -p 8080:8080 --name probe-imap \
+          -e GREENMAIL_OPTS='-Dgreenmail.setup.test.all -Dgreenmail.hostname=0.0.0.0 -Dgreenmail.users=test:password@example.com' \
+          greenmail/standalone:2.1.0
+    test: status == -1
+    outputs:
+      imap_pid: res.pid
+      imap_log: res.log
+    echo: |
+      PID: {{ res.pid }}
+      Log: {{ res.log }}
+  - name: Wait for IMAP server to be ready
+    uses: http
+    with:
+      url: http://localhost:8080
+      get: /api/service/readiness
+    retry:
+      max_attempts: 15
+      interval: "2s"
+      initial_delay: "3s"
+    test: res.code == 200
+
+- name: IMAP Workflow Tests
+  needs: [imap_container]
+  id: imap
+  steps:
+  - name: imap.yml
+    uses: shell
+    with:
+      cmd: |
+        MAIL_HOST=localhost MAIL_PORT=3143 \
+          MAIL_USER=test MAIL_PASS=password \
+          MAIL_TO=test@example.com \
+          MAIL_SETUP=true SMTP_HOST=localhost SMTP_PORT=3025 \
+          TLS_ENABLED=false \
+          SKIP_SEARCH_TESTS=true \
+          ./probe examples/imap.yml
+    test: res.code == 0
+    echo: "{{res.stdout}}"
+  - name: Stop IMAP container
+    uses: shell
+    with:
+      cmd: docker stop probe-imap
+    test: status == 0
+
+
 #
 #- name: Browser Tests
 #  id: browser
