@@ -18,16 +18,16 @@ jobs:
     name: Test all workflows in examples dir
     runs-on: ubuntu-latest
     steps:
-    - name: Checkout
-      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
     - name: Install protoc
       run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
+    - name: Checkout
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
     - name: Setup go
       uses: actions/setup-go@4dc6199c7b1a012772edbd06daecab0f50c9053c # v6.1.0
       with:
-        go-version: go.mod
+        go-version: 1.25
     - name: Run probe
       uses: linyows/probe-action@0164e23555aacbaaea03169102262dafeb1ff631 # v1
       with:
-        path: testdata/verify-examples.yml
+        path: testdata/e2e-test.yml
         options: ${{ github.event.inputs.options }}
