@@ -32,10 +32,11 @@ type Bulk struct {
 }
 
 type DeliveryResult struct {
-	Sent   int
-	Failed int
-	Total  int
-	Error  string
+	Sent     int
+	Failed   int
+	Total    int
+	Sessions int
+	Error    string
 }
 
 func (b *Bulk) Deliver() {
@@ -46,49 +47,54 @@ func (b *Bulk) Deliver() {
 }
 
 func (b *Bulk) DeliverWithResult() DeliveryResult {
+	type sendResult struct {
+		count int
+		err   error
+	}
+
 	var wg sync.WaitGroup
-	errCh := make(chan error, b.Session)
+	resultCh := make(chan sendResult, b.Session)
 
 	for i := 0; i < b.Session; i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			if err := b.Send(); err != nil {
-				errCh <- err
-			} else {
-				errCh <- nil
-			}
+			count, err := b.Send()
+			resultCh <- sendResult{count: count, err: err}
 		}()
 	}
 
 	wg.Wait()
-	close(errCh)
+	close(resultCh)
 
-	success := 0
-	fail := 0
+	totalSent := 0
+	sessionsSuccess := 0
+	sessionsFailed := 0
 	var lastError string
-	for err := range errCh {
-		if err != nil {
-			fmt.Printf("[ERROR] Send failed: %v\n", err)
-			fail++
-			lastError = err.Error()
+	for result := range resultCh {
+		if result.err != nil {
+			fmt.Printf("[ERROR] Send failed: %v\n", result.err)
+			sessionsFailed++
+			lastError = result.err.Error()
 		} else {
-			success++
+			sessionsSuccess++
+			totalSent += result.count
 		}
 	}
 
 	return DeliveryResult{
-		Sent:   success,
-		Failed: fail,
-		Total:  success + fail,
-		Error:  lastError,
+		Sent:     totalSent,
+		Failed:   sessionsFailed,
+		Total:    totalSent,
+		Sessions: sessionsSuccess + sessionsFailed,
+		Error:    lastError,
 	}
 }
 
-func (b *Bulk) Send() error {
+func (b *Bulk) Send() (int, error) {
 	n := b.calcMessageNumEachSession()
 	if n == 0 {
-		return nil
+		return 0, nil
 	}
 
 	m := &Mail{
@@ -100,7 +106,11 @@ func (b *Bulk) Send() error {
 		MessageCount:     n,
 	}
 
-	return m.Send()
+	err := m.Send()
+	if err != nil {
+		return 0, err
+	}
+	return n, nil
 }
 
 func (b *Bulk) calcMessageNumEachSession() int {
