@@ -8,28 +8,19 @@ jobs:
     uses: browser
     with:
       headless: true
-      timeout: 60s
+      timeout: 30s
       actions:
       - name: navigate
-        url: https://pkg.go.dev/time
+        url: https://www.google.com/
       - name: wait_visible
-        selector: body > footer
+        selector: body
       - name: text
-        id: overview
-        selector: ".Documentation-overview > pre"
-      - name: click
-        selector: "#example-After"
-      - name: value
-        id: area
-        selector: "#example-After textarea"
+        id: title
+        selector: "title"
     test: res.code == 0
     echo: |
-      Overview Pre:
-      {{res.results.overview}}
-      -----
-
-      TextArea:
-      {{res.results.area}}
+      Title:
+      {{res.results.title}}
       -----
     outputs:
       load_time: res.time_ms
