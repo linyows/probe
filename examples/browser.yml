@@ -8,7 +8,7 @@ jobs:
     uses: browser
     with:
       headless: true
-      timeout: 30s
+      timeout: 60s
       actions:
       - name: navigate
         url: https://pkg.go.dev/time
