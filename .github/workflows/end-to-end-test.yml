@@ -18,8 +18,8 @@ jobs:
     name: Test all workflows in examples dir
     runs-on: ubuntu-latest
     steps:
-    - name: Install protoc
-      run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
+    - name: Install dependencies
+      run: sudo apt-get update && sudo apt-get install -y protobuf-compiler xvfb x11-utils
     - name: Setup Chrome
       uses: browser-actions/setup-chrome@latest
     - name: Checkout
@@ -28,11 +28,10 @@ jobs:
       uses: actions/setup-go@4dc6199c7b1a012772edbd06daecab0f50c9053c # v6.1.0
       with:
         go-version: 1.25
-    - name: Build probe
-      run: CGO_ENABLED=1 go build -o probe ./cmd/probe/...
-    - name: Run E2E tests with xvfb
-      uses: GabrielBB/xvfb-action@v1
+    - name: Run probe
+      uses: linyows/probe-action@0164e23555aacbaaea03169102262dafeb1ff631 # v1
       env:
         FORCE_COLOR: 1
       with:
-        run: ./probe testdata/e2e-test.yml ${{ github.event.inputs.options }}
+        path: testdata/e2e-test.yml
+        options: ${{ github.event.inputs.options }}
