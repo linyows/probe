@@ -3,6 +3,9 @@ description: |
   This workflow validates the workflows under examples/*.
   The following software is required: go, docker, mysqladmin, pg_isready
 
+vars:
+  ci: "{{ CI ?? '' }}"
+
 jobs:
 # ------------------------------------------------------------------------
 - name: Setup
@@ -570,10 +573,39 @@ jobs:
   id: browser
   needs: [setup]
   steps:
+  - name: Start Xvfb in background
+    uses: shell
+    skipif: vars.ci == ""
+    with:
+      background: true
+      cmd: Xvfb :99 -screen 0 1920x1080x24 -ac -nolisten tcp
+    test: status == -1
+    outputs:
+      xvfb_pid: res.pid
+    echo: |
+      Xvfb PID: {{ res.pid }}
+  - name: Wait for Xvfb to be ready
+    uses: shell
+    skipif: vars.ci == ""
+    with:
+      cmd: xdpyinfo -display :99 >/dev/null 2>&1
+    retry:
+      max_attempts: 20
+      interval: "0.5s"
+      initial_delay: "0.5s"
+    test: res.code == 0
   - name: browser.yml
     uses: shell
     with:
       cmd: ./probe examples/browser.yml
       timeout: 2m
+      env:
+        DISPLAY: ":99"
     test: res.code == 0
     echo: "{{res.stdout}}"
+  - name: Stop Xvfb
+    uses: shell
+    skipif: vars.ci == ""
+    with:
+      cmd: "kill {{ outputs.xvfb_pid }}"
+    test: status == 0
