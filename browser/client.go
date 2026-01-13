@@ -201,8 +201,9 @@ func (req *Req) buildChromeDPOptions() []chromedp.ExecAllocatorOption {
 func (req *Req) createBrowserContext() (context.Context, context.CancelFunc, error) {
 	cdpOpts := req.buildChromeDPOptions()
 
-	// Create allocator context
-	allocCtx, allocCancel := chromedp.NewExecAllocator(context.Background(), cdpOpts...)
+	// Create allocator context with timeout for Chrome startup and WebSocket connection
+	allocBaseCtx, allocBaseCancel := context.WithTimeout(context.Background(), req.Timeout)
+	allocCtx, allocCancel := chromedp.NewExecAllocator(allocBaseCtx, cdpOpts...)
 	// Create context with timeout
 	ctx, cancel := chromedp.NewContext(allocCtx, chromedp.WithDebugf(func(s string, i ...interface{}) {
 		// Callback
@@ -217,6 +218,7 @@ func (req *Req) createBrowserContext() (context.Context, context.CancelFunc, err
 		timeoutCancel()
 		cancel()
 		allocCancel()
+		allocBaseCancel()
 	}
 
 	return ctx, cancelFunc, nil
