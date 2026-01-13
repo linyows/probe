@@ -28,8 +28,9 @@ jobs:
       uses: actions/setup-go@4dc6199c7b1a012772edbd06daecab0f50c9053c # v6.1.0
       with:
         go-version: 1.25
-    - name: Run probe
-      uses: linyows/probe-action@0164e23555aacbaaea03169102262dafeb1ff631 # v1
+    - name: Build probe
+      run: CGO_ENABLED=1 go build -o probe ./cmd/probe/...
+    - name: Run E2E tests with xvfb
+      uses: GabrielBB/xvfb-action@v1
       with:
-        path: testdata/e2e-test.yml
-        options: ${{ github.event.inputs.options }}
+        run: ./probe testdata/e2e-test.yml ${{ github.event.inputs.options }}
