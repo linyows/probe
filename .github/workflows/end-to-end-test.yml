@@ -30,8 +30,6 @@ jobs:
         go-version: 1.25
     - name: Run probe
       uses: linyows/probe-action@0164e23555aacbaaea03169102262dafeb1ff631 # v1
-      env:
-        FORCE_COLOR: 1
       with:
         path: testdata/e2e-test.yml
         options: ${{ github.event.inputs.options }}
