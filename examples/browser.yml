@@ -11,7 +11,7 @@ jobs:
     uses: browser
     with:
       headless: true
-      timeout: 30s
+      timeout: 1m
       actions:
       - name: navigate
         url: https://www.google.com/
@@ -36,7 +36,7 @@ jobs:
       window_w: 1280
       window_h: 800
       headless: "{{ vars.ci != '' }}"
-      timeout: 30s
+      timeout: 1m
       actions:
       - name: navigate
         url: https://www.google.com/
