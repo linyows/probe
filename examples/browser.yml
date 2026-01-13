@@ -1,6 +1,9 @@
 name: Browser Examples
 description: Minimal test to verify browser can start
 
+vars:
+  ci: "{{ CI ?? '' }}"
+
 jobs:
 - name: Get element text
   steps:
@@ -32,7 +35,7 @@ jobs:
     with:
       window_w: 1280
       window_h: 800
-      headless: false
+      headless: "{{ vars.ci != '' }}"
       timeout: 30s
       actions:
       - name: navigate
