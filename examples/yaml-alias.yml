@@ -2,21 +2,16 @@ name: Yaml Alias by Concating Files
 description: With yaml-shared.yml
 
 jobs:
-- name: Alias headers
-  defaults:
-    http:
-      url: http://localhost:8080
+- name: Alias test value
   steps:
-  - name: Post
-    uses: http
+  - name: Test alias value
+    uses: shell
     with:
-      post: /post
-      headers:
-        <<: *x_foobar_headers
-      body:
-        message: hello
+      cmd: echo *x_foobar_value
+    vars:
+      test_value: *x_foobar_value
     test: |
-      res.code == 200 &&
-      res.body.headers["X-Foobar"] == "bazbazbaz"
+      res.code == 0 &&
+      vars.test_value == "bazbazbaz"
     echo: |
-      Request Headers: {{res.body.headers}}
+      Test value: {{vars.test_value}}

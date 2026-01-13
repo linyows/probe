@@ -103,51 +103,6 @@ jobs:
     with:
       cmd: ./probe examples/needs-literal.yml
     test: res.code == 1
-
-# ------------------------------------------------------------------------
-- name: HTTP Server Start
-  id: http_server
-  needs: [setup]
-  steps:
-  - name: Cleanup old HTTP container
-    uses: shell
-    with:
-      cmd: docker stop probe-httpbin 2>/dev/null || true
-    test: status == 0
-  - name: Start HTTP server in background
-    uses: shell
-    with:
-      background: true
-      #cmd: go run github.com/mccutchen/go-httpbin/v2/cmd/go-httpbin@latest -host 127.0.0.1 -port 8080
-      cmd: "docker run --rm -p 8080:80 --name probe-httpbin kennethreitz/httpbin:latest"
-    test: status == -1
-    outputs:
-      http_pid: res.pid
-      http_log: res.log
-    echo: |
-      PID: {{ res.pid }}
-      Log: {{ res.log }}
-  - name: Wait for HTTP server to be ready
-    uses: http
-    with:
-      url: http://localhost:8080
-      get: /get
-    retry:
-      max_attempts: 5
-      interval: "1s"
-      initial_delay: "2s"
-    test: res.code == 200
-
-- name: HTTP Workflow Tests
-  id: http
-  needs: [http_server]
-  steps:
-  - name: http.yml
-    uses: shell
-    with:
-      cmd: ./probe examples/http.yml
-    test: res.code == 0
-    echo: "{{res.stdout}}"
   - name: truncate-print.yml
     uses: shell
     with:
@@ -196,10 +151,54 @@ jobs:
       cmd: ./probe examples/expr-functions.yml
     test: res.code == 0
     echo: "{{res.stdout}}"
+
+# ------------------------------------------------------------------------
+- name: HTTP Server Start
+  id: http_server
+  needs: [setup]
+  steps:
+  - name: Cleanup old HTTP container
+    uses: shell
+    with:
+      cmd: docker stop probe-httpbin 2>/dev/null || true
+    test: status == 0
+  - name: Start HTTP server in background
+    uses: shell
+    with:
+      background: true
+      #cmd: go run github.com/mccutchen/go-httpbin/v2/cmd/go-httpbin@latest -host 127.0.0.1 -port 8080
+      cmd: "docker run --rm -p 8080:80 --name probe-httpbin kennethreitz/httpbin:latest"
+    test: status == -1
+    outputs:
+      http_pid: res.pid
+      http_log: res.log
+    echo: |
+      PID: {{ res.pid }}
+      Log: {{ res.log }}
+  - name: Wait for HTTP server to be ready
+    uses: http
+    with:
+      url: http://localhost:8080
+      get: /get
+    retry:
+      max_attempts: 5
+      interval: "1s"
+      initial_delay: "2s"
+    test: res.code == 200
+
+- name: HTTP Workflow Tests
+  id: http
+  needs: [http_server]
+  steps:
+  - name: http.yml
+    uses: shell
+    with:
+      cmd: ./probe examples/http.yml
+    test: res.code == 0
+    echo: "{{res.stdout}}"
   - name: Stop HTTP server
     uses: shell
     with:
-      #cmd: "kill -TERM -{{ outputs.http_pid }}"
       cmd: docker stop probe-httpbin
     test: status == 0
 
