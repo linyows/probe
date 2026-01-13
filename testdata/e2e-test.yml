@@ -574,5 +574,6 @@ jobs:
     uses: shell
     with:
       cmd: ./probe examples/browser.yml
+      timeout: 2m
     test: res.code == 0
     echo: "{{res.stdout}}"
