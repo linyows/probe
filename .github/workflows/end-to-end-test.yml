@@ -32,5 +32,7 @@ jobs:
       run: CGO_ENABLED=1 go build -o probe ./cmd/probe/...
     - name: Run E2E tests with xvfb
       uses: GabrielBB/xvfb-action@v1
+      env:
+        FORCE_COLOR: 1
       with:
         run: ./probe testdata/e2e-test.yml ${{ github.event.inputs.options }}
