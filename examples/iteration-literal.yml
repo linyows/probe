@@ -2,24 +2,14 @@ name: Iteration Literal Example
 
 jobs:
 - name: Run iteration example
-  defaults:
-    http:
-      url: http://localhost:8080
-      headers:
-        content-type: application/json
-        accept: application/json
   steps:
-  - name: "3 times iterations: {{vars.name}}"
-    uses: http
+  - name: "4 times iterations: {{vars.name}}"
+    uses: shell
     with:
-      post: /post
-      body:
-        id: "{{vars.id}}"
-        name: "{{vars.name}}"
-        role: "{{vars.role}}"
+      cmd: echo "ID={{vars.id}} Name={{vars.name}} Role={{vars.role}}"
     test: |
-      res.code == 200 &&
-      res.body.json.name == vars.name
+      res.code == 0 &&
+      indexOf(res.stdout, vars.name) >= 0
     echo: "{{vars}}"
     vars:
       id: 1234
@@ -29,4 +19,4 @@ jobs:
     - {id: 2000, name: foo, role: user}
     - {id: -3000, name: bar, role: editor}
     - {id: 0.123, name: baz, role: guest}
-    - {id: "5000", name: baz, role: guest}
+    - {id: "5000", name: qux, role: guest}

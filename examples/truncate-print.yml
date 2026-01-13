@@ -2,19 +2,11 @@ name: Truncate Strings Example
 
 jobs:
 - name: Display truncated text
-  defaults:
-    http:
-      url: http://localhost:8080
-      headers:
-        content-type: application/json
-        accept: application/json
   steps:
-  - name: Post long content
-    uses: http
+  - name: Generate long content
+    uses: shell
     with:
-      post: /post
-      body:
-        content: "{{random_str(2000)}}"
+      cmd: echo "{{random_str(2000)}}"
     test: |
-      res.code == 200
-    echo: "Response body: {{res.body}}"
+      res.code == 0
+    echo: "Output: {{res.stdout}}"
