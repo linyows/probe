@@ -565,14 +565,14 @@ jobs:
       cmd: docker stop probe-imap
     test: status == 0
 
-
-#
-#- name: Browser Tests
-#  id: browser
-#  needs: [basic]
-#  steps:
-#  - name: Test browser.yml
-#    uses: shell
-#    with:
-#      cmd: ./probe examples/browser.yml
-#    test: res.code == 0
+# ------------------------------------------------------------------------
+- name: Browser Tests
+  id: browser
+  needs: [setup]
+  steps:
+  - name: browser.yml
+    uses: shell
+    with:
+      cmd: ./probe examples/browser.yml
+    test: res.code == 0
+    echo: "{{res.stdout}}"
