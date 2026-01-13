@@ -522,7 +522,7 @@ jobs:
     with:
       background: true
       cmd: |
-        docker run --rm -p 3025:3025 -p 3143:3143 -p 3993:3993 -p 8080:8080 --name probe-imap \
+        docker run --rm -p 3025:3025 -p 3143:3143 -p 3993:3993 -p 8081:8080 --name probe-imap \
           -e GREENMAIL_OPTS='-Dgreenmail.setup.test.all -Dgreenmail.hostname=0.0.0.0 -Dgreenmail.users=test:password@example.com' \
           greenmail/standalone:2.1.0
     test: status == -1
@@ -535,7 +535,7 @@ jobs:
   - name: Wait for IMAP server to be ready
     uses: http
     with:
-      url: http://localhost:8080
+      url: http://localhost:8081
       get: /api/service/readiness
     retry:
       max_attempts: 15
