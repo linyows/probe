@@ -14,16 +14,15 @@ jobs:
       timeout: 1m
       actions:
       - name: navigate
-        url: https://www.google.com/
+        url: https://example.com/
       - name: wait_visible
-        selector: body
+        selector: h1
       - name: text
-        id: title
-        selector: "title"
-    test: res.code == 0
+        id: heading
+        selector: "h1"
+    test: res.code == 0 && res.results.heading != ""
     echo: |
-      Title:
-      {{res.results.title}}
+      Heading: {{res.results.heading}}
       -----
     outputs:
       load_time: res.time_ms
