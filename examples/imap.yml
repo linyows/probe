@@ -6,6 +6,12 @@ vars:
   user: "{{MAIL_USER}}"
   pass: "{{MAIL_PASS}}"
   port: "{{MAIL_PORT ?? 993}}"
+  smtp_host: "{{SMTP_HOST ?? MAIL_HOST ?? 'localhost'}}"
+  smtp_port: "{{SMTP_PORT ?? 3025}}"
+  mail_setup: "{{MAIL_SETUP ?? ''}}"
+  tls_enabled: "{{TLS_ENABLED ?? 'true'}}"
+  mail_to: "{{MAIL_TO ?? MAIL_USER}}"
+  skip_search_tests: "{{SKIP_SEARCH_TESTS ?? ''}}"
 
 jobs:
 - name: Email Authentication
@@ -15,12 +21,34 @@ jobs:
       port: "{{vars.port}}"
       username: "{{vars.user}}"
       password: "{{vars.pass}}"
-      tls: true
+      tls: "{{vars.tls_enabled == 'true'}}"
   steps:
+  - name: Send test emails for IMAP testing
+    uses: smtp
+    with:
+      addr: "{{vars.smtp_host}}:{{vars.smtp_port}}"
+      from: "sender@example.com"
+      to: "{{vars.mail_to}}"
+      subject: Test Email for IMAP
+      myhostname: probe-test.local
+      session: 1
+      message: 5
+      length: 1000
+    skipif: vars.mail_setup == ''
+    test: |
+      res.code == 0 && res.sent == 5
+    echo: |
+      Test emails sent: {{res.sent}}
+  # Wait is necessary to ensure mail server completes asynchronous processing
+  # (receiving emails and placing them into mailbox) before IMAP operations
+  - name: Wait mail receiving
+    uses: hello
+    skipif: vars.mail_setup == ''
+    wait: 1s
+
   - name: List
     uses: imap
     with:
-      tls: true
       commands:
       - name: list
         reference: "INBOX"
@@ -32,7 +60,6 @@ jobs:
   - name: Select to INBOX
     uses: imap
     with:
-      tls: true
       commands:
       - name: select
         mailbox: INBOX
@@ -43,7 +70,6 @@ jobs:
   - name: UID Search on INBOX
     uses: imap
     with:
-      tls: true
       commands:
       - name: select
         mailbox: INBOX
@@ -52,6 +78,7 @@ jobs:
           #before: 2025-01-01
           flags: [seen]
           #not_flags: [seen]
+    skipif: vars.skip_search_tests != ''
     test: status == 0
     echo: |
       Search: {{res.data.search}}
@@ -59,7 +86,6 @@ jobs:
   - name: UID Fetch after UID Search
     uses: imap
     with:
-      tls: true
       commands:
       - name: select
         mailbox: INBOX
@@ -67,6 +93,7 @@ jobs:
         criteria:
           flags: [seen]
       - name: uid fetch
+    skipif: vars.skip_search_tests != ''
     test: status == 0 && len(res.data.fetch.messages) > 0
     echo: |
       Subject: {{res.data.fetch.messages[0].subject}}
@@ -78,7 +105,6 @@ jobs:
   - name: UID Fetch Return-Path Header after UID Search
     uses: imap
     with:
-      tls: true
       commands:
       - name: select
         mailbox: INBOX
@@ -87,6 +113,7 @@ jobs:
           flags: [seen]
       - name: uid fetch
         dataitem: "BODY[HEADER.FIELDS (Return-Path)]"
+    skipif: vars.skip_search_tests != ''
     test: status == 0 && len(res.data.fetch.messages) > 0
     echo: |
       Headers: {{res.data.fetch.messages[0].headers}}
@@ -94,11 +121,10 @@ jobs:
   - name: Get error
     uses: imap
     with:
-      tls: true
       commands:
       - name: search
         criteria:
-          bodies: [@@@nothing@@@]
+          bodies: ["@@@nothing@@@"]
       - name: uid fetch
         dataitem: all
     test: status == 1
