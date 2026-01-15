@@ -1,0 +1,7 @@
+digraph example {
+    n1 [label="Start"];
+    n2 [label="Process"];
+    n3 [label="End"];
+    n1 -> n2;
+    n2 -> n3;
+}
