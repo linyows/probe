@@ -42,6 +42,7 @@ type Cmd struct {
 	Version      bool
 	Verbose      bool
 	RT           bool
+	Graph        bool
 	validFlags   []string
 	ver          string
 	rev          string
@@ -52,7 +53,7 @@ type Cmd struct {
 
 func newCmd() *Cmd {
 	return &Cmd{
-		validFlags: []string{"help", "h", "version", "rt", "verbose", "v"},
+		validFlags: []string{"help", "h", "version", "rt", "verbose", "v", "graph"},
 		ver:        version,
 		rev:        commit,
 		outWriter:  os.Stdout,
@@ -99,6 +100,8 @@ func (c *Cmd) parseArgs(args []string) error {
 				c.RT = true
 			case "verbose", "v":
 				c.Verbose = true
+			case "graph":
+				c.Graph = true
 			}
 		} else {
 			// Non-flag arguments
@@ -178,6 +181,7 @@ func (c *Cmd) printOptions() {
 		{"", "--version", "Show version information"},
 		{"", "--rt", "Show response time"},
 		{"-v", "--verbose", "Show verbose log"},
+		{"", "--graph", "Show job dependency graph"},
 	}
 
 	for _, opt := range options {
@@ -214,6 +218,12 @@ func (c *Cmd) start(args []string) int {
 		_, _ = fmt.Fprintf(c.errWriter, "[ERROR] workflow is required\n")
 		return 1
 
+	case c.Graph:
+		if !c.mocking {
+			return c.runGraph()
+		}
+		return 0
+
 	default:
 		if !c.mocking {
 			return c.runProbe()
@@ -233,6 +243,17 @@ func (c *Cmd) runProbe() int {
 		return 1
 	}
 	return p.ExitStatus()
+}
+
+func (c *Cmd) runGraph() int {
+	p := probe.New(c.WorkflowPath, c.Verbose)
+	graph, err := p.Graph()
+	if err != nil {
+		_, _ = fmt.Fprintf(c.errWriter, "[ERROR] %v\n", err)
+		return 1
+	}
+	_, _ = fmt.Fprint(c.outWriter, graph)
+	return 0
 }
 
 func (c *Cmd) printVersion() {

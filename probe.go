@@ -53,6 +53,14 @@ func (p *Probe) ExitStatus() int {
 	return p.workflow.exitStatus
 }
 
+// Graph returns the ASCII art representation of the workflow job dependencies
+func (p *Probe) Graph() (string, error) {
+	if err := p.Load(); err != nil {
+		return "", err
+	}
+	return p.workflow.RenderDependencyGraph(), nil
+}
+
 func (p *Probe) Load() error {
 	files, err := p.yamlFiles()
 	if err != nil {
