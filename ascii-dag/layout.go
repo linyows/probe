@@ -42,48 +42,6 @@ func (d *DAG) calculateLevels() []levelInfo {
 	return result
 }
 
-// calculateLevelsForSubgraph calculates levels for a specific subgraph.
-func (d *DAG) calculateLevelsForSubgraph(subgraphIndices []int) []levelInfo {
-	n := len(d.nodes)
-	levels := make([]int, n)
-
-	// Build set of subgraph node IDs for quick lookup
-	subgraphNodeIDs := make(map[int]bool)
-	for _, idx := range subgraphIndices {
-		subgraphNodeIDs[d.nodes[idx].id] = true
-	}
-
-	// Fixed-point iteration
-	changed := true
-	for changed {
-		changed = false
-		for _, e := range d.edges {
-			// Only process edges within this subgraph
-			if !subgraphNodeIDs[e.from] || !subgraphNodeIDs[e.to] {
-				continue
-			}
-
-			fromIdx := d.nodeIndex(e.from)
-			toIdx := d.nodeIndex(e.to)
-			if fromIdx < 0 || toIdx < 0 {
-				continue
-			}
-
-			newLevel := levels[fromIdx] + 1
-			if newLevel > levels[toIdx] {
-				levels[toIdx] = newLevel
-				changed = true
-			}
-		}
-	}
-
-	result := make([]levelInfo, len(subgraphIndices))
-	for i, idx := range subgraphIndices {
-		result[i] = levelInfo{index: idx, level: levels[idx]}
-	}
-	return result
-}
-
 // reduceCrossings reduces edge crossings using median heuristic (Sugiyama).
 func (d *DAG) reduceCrossings(levels [][]int, maxLevel int) {
 	for pass := 0; pass < d.crossingReductionPasses; pass++ {
@@ -205,63 +163,4 @@ func (d *DAG) orderByMedianChildren(levelNodes []int, childLevel []int) {
 	for i, nm := range medians {
 		levelNodes[i] = nm.idx
 	}
-}
-
-// findSubgraphs finds disconnected subgraphs in the DAG.
-func (d *DAG) findSubgraphs() [][]int {
-	n := len(d.nodes)
-	visited := make([]bool, n)
-	var subgraphs [][]int
-
-	for i := 0; i < n; i++ {
-		if !visited[i] {
-			subgraph := make([]int, 0)
-			d.collectConnected(i, visited, &subgraph)
-			subgraphs = append(subgraphs, subgraph)
-		}
-	}
-
-	return subgraphs
-}
-
-// collectConnected collects all nodes connected to the given node.
-func (d *DAG) collectConnected(startIdx int, visited []bool, subgraph *[]int) {
-	stack := []int{startIdx}
-
-	for len(stack) > 0 {
-		idx := stack[len(stack)-1]
-		stack = stack[:len(stack)-1]
-
-		if visited[idx] {
-			continue
-		}
-		visited[idx] = true
-		*subgraph = append(*subgraph, idx)
-
-		nodeID := d.nodes[idx].id
-
-		// Follow edges in both directions
-		for _, e := range d.edges {
-			if e.from == nodeID {
-				if childIdx := d.nodeIndex(e.to); childIdx >= 0 && !visited[childIdx] {
-					stack = append(stack, childIdx)
-				}
-			}
-			if e.to == nodeID {
-				if parentIdx := d.nodeIndex(e.from); parentIdx >= 0 && !visited[parentIdx] {
-					stack = append(stack, parentIdx)
-				}
-			}
-		}
-	}
-}
-
-// isSubgraphSimpleChain checks if a subgraph is a simple chain (no branching).
-func (d *DAG) isSubgraphSimpleChain(subgraphIndices []int) bool {
-	for _, idx := range subgraphIndices {
-		if d.parentsCount(idx) > 1 || d.childrenCount(idx) > 1 {
-			return false
-		}
-	}
-	return true
 }

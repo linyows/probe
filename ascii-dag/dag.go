@@ -161,32 +161,6 @@ func (d *DAG) nodeIndex(id int) int {
 	return -1
 }
 
-// getChildren returns the child node IDs.
-func (d *DAG) getChildren(nodeID int) []int {
-	idx := d.nodeIndex(nodeID)
-	if idx < 0 {
-		return nil
-	}
-	children := make([]int, len(d.children[idx]))
-	for i, childIdx := range d.children[idx] {
-		children[i] = d.nodes[childIdx].id
-	}
-	return children
-}
-
-// getParents returns the parent node IDs.
-func (d *DAG) getParents(nodeID int) []int {
-	idx := d.nodeIndex(nodeID)
-	if idx < 0 {
-		return nil
-	}
-	parents := make([]int, len(d.parents[idx]))
-	for i, parentIdx := range d.parents[idx] {
-		parents[i] = d.nodes[parentIdx].id
-	}
-	return parents
-}
-
 // getChildrenIndices returns the indices of child nodes.
 func (d *DAG) getChildrenIndices(nodeIdx int) []int {
 	if nodeIdx < 0 || nodeIdx >= len(d.children) {

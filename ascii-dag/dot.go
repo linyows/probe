@@ -30,7 +30,7 @@ func ParseDOTFile(filename string, opts ...Option) (*DAG, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to open file: %w", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	return ParseDOTReader(f, opts...)
 }
 
@@ -84,8 +84,6 @@ var (
 	closeBraceRe = regexp.MustCompile(`^\s*\}\s*$`)
 	// Match empty or whitespace-only lines
 	emptyLineRe = regexp.MustCompile(`^\s*$`)
-	// Match node identifier (quoted or unquoted)
-	nodeIdentRe = regexp.MustCompile(`(\w+|"[^"]*")`)
 )
 
 func (p *dotParser) parse(content string) error {
@@ -310,12 +308,17 @@ func isValidIdentifier(s string) bool {
 	}
 	// Simple check: alphanumeric and underscore, not starting with digit
 	for i, c := range s {
+		isLower := c >= 'a' && c <= 'z'
+		isUpper := c >= 'A' && c <= 'Z'
+		isDigit := c >= '0' && c <= '9'
+		isUnderscore := c == '_'
+
 		if i == 0 {
-			if !((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_') {
+			if !isLower && !isUpper && !isUnderscore {
 				return false
 			}
 		} else {
-			if !((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_') {
+			if !isLower && !isUpper && !isDigit && !isUnderscore {
 				return false
 			}
 		}
@@ -336,24 +339,23 @@ func (d *DAG) WriteDOT(w io.Writer, graphName string) {
 		graphName = "G"
 	}
 
-	fmt.Fprintf(w, "digraph %s {\n", graphName)
+	_, _ = fmt.Fprintf(w, "digraph %s {\n", graphName)
 
 	// Write nodes with labels
-	for i, n := range d.nodes {
+	for _, n := range d.nodes {
 		label := n.label
 		if label == "" {
 			label = fmt.Sprintf("%d", n.id)
 		}
 		// Escape quotes in label
 		label = strings.ReplaceAll(label, `"`, `\"`)
-		fmt.Fprintf(w, "    n%d [label=\"%s\"];\n", n.id, label)
-		_ = i // suppress unused warning
+		_, _ = fmt.Fprintf(w, "    n%d [label=\"%s\"];\n", n.id, label)
 	}
 
 	// Write edges
 	for _, e := range d.edges {
-		fmt.Fprintf(w, "    n%d -> n%d;\n", e.from, e.to)
+		_, _ = fmt.Fprintf(w, "    n%d -> n%d;\n", e.from, e.to)
 	}
 
-	fmt.Fprintln(w, "}")
+	_, _ = fmt.Fprintln(w, "}")
 }

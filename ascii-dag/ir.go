@@ -57,12 +57,6 @@ type LayoutEdge struct {
 	EdgeIndex int // For consistent coloring
 }
 
-// lineOccupancy tracks what's on each line for scanline rendering.
-type lineOccupancy struct {
-	nodeIndices []int
-	edgeIndices []int
-}
-
 // LayoutIR is the intermediate representation of the layout.
 type LayoutIR struct {
 	nodes      []LayoutNode
@@ -70,9 +64,8 @@ type LayoutIR struct {
 	width      int
 	height     int
 	levelCount int
-	levels     [][]int       // Node indices per level
-	idToIndex  map[int]int   // O(1) node ID lookup
-	yIndex     []lineOccupancy // Lazy-built spatial index
+	levels     [][]int     // Node indices per level
+	idToIndex  map[int]int // O(1) node ID lookup
 }
 
 // Nodes returns the layout nodes.
@@ -106,43 +99,6 @@ func (ir *LayoutIR) NodeByID(id int) *LayoutNode {
 		return &ir.nodes[idx]
 	}
 	return nil
-}
-
-// buildYIndex builds the spatial index for scanline rendering.
-func (ir *LayoutIR) buildYIndex() {
-	if ir.yIndex != nil {
-		return
-	}
-
-	ir.yIndex = make([]lineOccupancy, ir.height)
-
-	// Add nodes to their lines
-	for i, node := range ir.nodes {
-		if node.Y >= 0 && node.Y < ir.height {
-			ir.yIndex[node.Y].nodeIndices = append(ir.yIndex[node.Y].nodeIndices, i)
-		}
-	}
-
-	// Add edges to the lines they cross
-	for i, edge := range ir.edges {
-		minY := edge.FromY
-		maxY := edge.ToY
-		if minY > maxY {
-			minY, maxY = maxY, minY
-		}
-		for y := minY; y <= maxY && y < ir.height; y++ {
-			ir.yIndex[y].edgeIndices = append(ir.yIndex[y].edgeIndices, i)
-		}
-	}
-}
-
-// getLineOccupancy returns what's on a specific line.
-func (ir *LayoutIR) getLineOccupancy(y int) *lineOccupancy {
-	ir.buildYIndex()
-	if y < 0 || y >= len(ir.yIndex) {
-		return nil
-	}
-	return &ir.yIndex[y]
 }
 
 // ComputeLayout computes the layout intermediate representation.

@@ -74,10 +74,7 @@ func (d *DAG) renderChainFrom(sb *strings.Builder, startIdx int) {
 	visited := make(map[int]bool)
 	current := startIdx
 
-	for {
-		if visited[current] {
-			break
-		}
+	for !visited[current] {
 		visited[current] = true
 
 		if current != startIdx {
@@ -332,11 +329,12 @@ func (d *DAG) drawDivergence(line []rune, connections []connection, centerXs []i
 
 		// Draw corners and source connection
 		if srcX >= 0 && srcX < len(line) {
-			if srcX == minX {
+			switch srcX {
+			case minX:
 				line[srcX] = cornerUR
-			} else if srcX == maxX {
+			case maxX:
 				line[srcX] = cornerUL
-			} else {
+			default:
 				line[srcX] = teeUp
 			}
 		}
@@ -344,16 +342,17 @@ func (d *DAG) drawDivergence(line []rune, connections []connection, centerXs []i
 		// Draw target corners: ┌ for leftmost, ┐ for rightmost, ┬ for middle
 		for _, conn := range conns {
 			if conn.toX >= 0 && conn.toX < len(line) {
-				if conn.toX == srcX {
+				switch conn.toX {
+				case srcX:
 					// Target is at source position - use cross if middle, otherwise keep source char
 					if conn.toX > minX && conn.toX < maxX {
 						line[conn.toX] = cross // ┼
 					}
-				} else if conn.toX == minX {
+				case minX:
 					line[conn.toX] = cornerUR // ┌
-				} else if conn.toX == maxX {
+				case maxX:
 					line[conn.toX] = cornerUL // ┐
-				} else {
+				default:
 					line[conn.toX] = teeDown // ┬
 				}
 			}
@@ -417,9 +416,10 @@ func (d *DAG) drawConvergence(line []rune, connections []connection, centerXs []
 		// Middle sources just get horizontal line (no ┴)
 		for _, conn := range conns {
 			if conn.fromX >= 0 && conn.fromX < len(line) {
-				if conn.fromX == minX {
+				switch conn.fromX {
+				case minX:
 					line[conn.fromX] = cornerDR // └
-				} else if conn.fromX == maxX {
+				case maxX:
 					line[conn.fromX] = cornerDL // ┘
 				}
 				// Middle sources: leave as horizontal line (already drawn)
@@ -474,9 +474,10 @@ func (d *DAG) drawMixed(line []rune, connections []connection, centerXs []int) {
 			}
 			for x := minX; x <= maxX; x++ {
 				if x >= 0 && x < len(line) {
-					if line[x] == ' ' {
+					switch line[x] {
+					case ' ':
 						line[x] = hLine
-					} else if line[x] == vLine {
+					case vLine:
 						line[x] = cross
 					}
 				}
@@ -535,163 +536,5 @@ func (d *DAG) drawSimple(line []rune, connections []connection) {
 				}
 			}
 		}
-	}
-}
-
-// drawNode draws a node on the grid.
-func (d *DAG) drawNode(grid [][]rune, node *LayoutNode, idx int) {
-	formatted := d.formatNode(idx)
-	runes := []rune(formatted)
-
-	for i, r := range runes {
-		x := node.X + i
-		if x < len(grid[node.Y]) {
-			grid[node.Y][x] = r
-		}
-	}
-}
-
-// drawEdge draws an edge on the grid.
-func (d *DAG) drawEdge(grid [][]rune, edge LayoutEdge) {
-	switch path := edge.Path.(type) {
-	case EdgePathDirect:
-		d.drawDirectEdge(grid, edge)
-	case EdgePathCorner:
-		d.drawCornerEdge(grid, edge, path.HorizontalY)
-	case EdgePathSideChannel:
-		d.drawSideChannelEdge(grid, edge, path)
-	case EdgePathMultiSegment:
-		d.drawMultiSegmentEdge(grid, edge, path)
-	}
-}
-
-// drawDirectEdge draws a direct vertical edge.
-func (d *DAG) drawDirectEdge(grid [][]rune, edge LayoutEdge) {
-	x := edge.FromX
-	for y := edge.FromY; y < edge.ToY; y++ {
-		if y >= 0 && y < len(grid) && x >= 0 && x < len(grid[y]) {
-			if y == edge.ToY-1 {
-				grid[y][x] = arrowDown
-			} else {
-				grid[y][x] = vLine
-			}
-		}
-	}
-}
-
-// drawCornerEdge draws an L-shaped edge.
-func (d *DAG) drawCornerEdge(grid [][]rune, edge LayoutEdge, horizontalY int) {
-	fromX := edge.FromX
-	toX := edge.ToX
-
-	// Vertical line from source
-	for y := edge.FromY; y <= horizontalY; y++ {
-		if y >= 0 && y < len(grid) && fromX >= 0 && fromX < len(grid[y]) {
-			if grid[y][fromX] == ' ' {
-				grid[y][fromX] = vLine
-			}
-		}
-	}
-
-	// Horizontal line
-	minX, maxX := fromX, toX
-	if minX > maxX {
-		minX, maxX = maxX, minX
-	}
-
-	if horizontalY >= 0 && horizontalY < len(grid) {
-		for x := minX; x <= maxX; x++ {
-			if x >= 0 && x < len(grid[horizontalY]) {
-				current := grid[horizontalY][x]
-				if current == ' ' {
-					grid[horizontalY][x] = hLine
-				} else if current == vLine {
-					grid[horizontalY][x] = cross
-				}
-			}
-		}
-
-		// Draw corners
-		if fromX >= 0 && fromX < len(grid[horizontalY]) {
-			if fromX < toX {
-				grid[horizontalY][fromX] = cornerDR
-			} else {
-				grid[horizontalY][fromX] = cornerDL
-			}
-		}
-		if toX >= 0 && toX < len(grid[horizontalY]) {
-			if fromX < toX {
-				grid[horizontalY][toX] = cornerUL
-			} else {
-				grid[horizontalY][toX] = cornerUR
-			}
-		}
-	}
-
-	// Vertical line to target
-	for y := horizontalY + 1; y < edge.ToY; y++ {
-		if y >= 0 && y < len(grid) && toX >= 0 && toX < len(grid[y]) {
-			if grid[y][toX] == ' ' {
-				grid[y][toX] = vLine
-			}
-		}
-	}
-
-	// Arrow at target
-	if edge.ToY-1 >= 0 && edge.ToY-1 < len(grid) && toX >= 0 && toX < len(grid[edge.ToY-1]) {
-		grid[edge.ToY-1][toX] = arrowDown
-	}
-}
-
-// drawSideChannelEdge draws a side-channel routed edge.
-func (d *DAG) drawSideChannelEdge(grid [][]rune, edge LayoutEdge, path EdgePathSideChannel) {
-	// Similar to corner edge but with side routing
-	d.drawCornerEdge(grid, edge, path.StartY)
-}
-
-// drawMultiSegmentEdge draws a multi-segment edge through waypoints.
-func (d *DAG) drawMultiSegmentEdge(grid [][]rune, edge LayoutEdge, path EdgePathMultiSegment) {
-	points := make([][2]int, 0, len(path.Waypoints)+2)
-	points = append(points, [2]int{edge.FromX, edge.FromY})
-	points = append(points, path.Waypoints...)
-	points = append(points, [2]int{edge.ToX, edge.ToY})
-
-	for i := 0; i < len(points)-1; i++ {
-		from := points[i]
-		to := points[i+1]
-
-		if from[0] == to[0] {
-			// Vertical segment
-			minY, maxY := from[1], to[1]
-			if minY > maxY {
-				minY, maxY = maxY, minY
-			}
-			for y := minY; y <= maxY; y++ {
-				if y >= 0 && y < len(grid) && from[0] >= 0 && from[0] < len(grid[y]) {
-					if grid[y][from[0]] == ' ' {
-						grid[y][from[0]] = vLine
-					}
-				}
-			}
-		} else {
-			// Horizontal segment
-			minX, maxX := from[0], to[0]
-			if minX > maxX {
-				minX, maxX = maxX, minX
-			}
-			y := from[1]
-			if y >= 0 && y < len(grid) {
-				for x := minX; x <= maxX; x++ {
-					if x >= 0 && x < len(grid[y]) && grid[y][x] == ' ' {
-						grid[y][x] = hLine
-					}
-				}
-			}
-		}
-	}
-
-	// Arrow at target
-	if edge.ToY-1 >= 0 && edge.ToY-1 < len(grid) && edge.ToX >= 0 && edge.ToX < len(grid[edge.ToY-1]) {
-		grid[edge.ToY-1][edge.ToX] = arrowDown
 	}
 }
