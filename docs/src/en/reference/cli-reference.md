@@ -84,7 +84,7 @@ probe --help
 
 ### `--version`
 
-**Type:** Boolean flag  
+**Type:** Boolean flag
 **Description:** Show version information and exit
 
 **Example:**
@@ -98,6 +98,33 @@ Probe Version 1.2.3
 Build: abc1234
 Go Version: go1.20.1
 ```
+
+### `--graph`
+
+**Type:** Boolean flag
+**Default:** `false`
+**Description:** Display job dependency graph as ASCII art without executing the workflow
+
+**Example:**
+```bash
+probe --graph workflow.yml
+```
+
+**Output Example:**
+```
+     [Setup]
+        ↓
+     [Build]
+      ↓   ↓
+[Test A] [Test B]
+      ↓   ↓
+    [Deploy]
+```
+
+This is useful for:
+- Visualizing workflow structure before execution
+- Debugging job dependency configurations
+- Documentation and communication
 
 ## Environment Variables
 
