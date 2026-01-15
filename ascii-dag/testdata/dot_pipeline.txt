@@ -1,0 +1,1 @@
+[Parse] → [Analyze] → [Optimize] → [CodeGen] → [Link]

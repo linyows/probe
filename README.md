@@ -90,12 +90,16 @@ probe ./workflow.yml --verbose
 
 # Show response times
 probe ./workflow.yml --rt
+
+# Show job dependency graph
+probe ./workflow.yml --graph
 ```
 
 ### CLI Options
 - `<workflow>`: Specify YAML workflow file path
 - `--verbose`: Enable detailed output
 - `--rt`: Show response times
+- `--graph`: Display job dependency graph as ASCII art
 - `--help`: Show help information
 
 Workflow Syntax
