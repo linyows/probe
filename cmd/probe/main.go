@@ -42,7 +42,7 @@ type Cmd struct {
 	Version      bool
 	Verbose      bool
 	RT           bool
-	Graph        bool
+	DagAscii     bool
 	validFlags   []string
 	ver          string
 	rev          string
@@ -53,7 +53,7 @@ type Cmd struct {
 
 func newCmd() *Cmd {
 	return &Cmd{
-		validFlags: []string{"help", "h", "version", "rt", "verbose", "v", "graph"},
+		validFlags: []string{"help", "h", "version", "rt", "verbose", "v", "dag-ascii"},
 		ver:        version,
 		rev:        commit,
 		outWriter:  os.Stdout,
@@ -100,8 +100,8 @@ func (c *Cmd) parseArgs(args []string) error {
 				c.RT = true
 			case "verbose", "v":
 				c.Verbose = true
-			case "graph":
-				c.Graph = true
+			case "dag-ascii":
+				c.DagAscii = true
 			}
 		} else {
 			// Non-flag arguments
@@ -181,7 +181,7 @@ func (c *Cmd) printOptions() {
 		{"", "--version", "Show version information"},
 		{"", "--rt", "Show response time"},
 		{"-v", "--verbose", "Show verbose log"},
-		{"", "--graph", "Show job dependency graph"},
+		{"", "--dag-ascii", "Show job dependency graph as ASCII art"},
 	}
 
 	for _, opt := range options {
@@ -218,9 +218,9 @@ func (c *Cmd) start(args []string) int {
 		_, _ = fmt.Fprintf(c.errWriter, "[ERROR] workflow is required\n")
 		return 1
 
-	case c.Graph:
+	case c.DagAscii:
 		if !c.mocking {
-			return c.runGraph()
+			return c.runDagAscii()
 		}
 		return 0
 
@@ -245,9 +245,9 @@ func (c *Cmd) runProbe() int {
 	return p.ExitStatus()
 }
 
-func (c *Cmd) runGraph() int {
+func (c *Cmd) runDagAscii() int {
 	p := probe.New(c.WorkflowPath, c.Verbose)
-	graph, err := p.Graph()
+	graph, err := p.DagAscii()
 	if err != nil {
 		_, _ = fmt.Fprintf(c.errWriter, "[ERROR] %v\n", err)
 		return 1
