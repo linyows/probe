@@ -5,7 +5,7 @@ import (
 )
 
 const (
-	// Node border characters
+	// Node border characters (string)
 	nodeTopLeft     = "╭"
 	nodeTopRight    = "╮"
 	nodeBottomLeft  = "╰"
@@ -21,6 +21,19 @@ const (
 	stepBullet         = "○"
 	stepBulletEmbedded = "↗"
 	ellipsis           = "…"
+
+	// Connection line characters (rune)
+	connVertical          = '│'
+	connHorizontal        = '─'
+	connTeeRight          = '├'
+	connTeeLeft           = '┤'
+	connTeeDown           = '┬'
+	connTeeUp             = '┴'
+	connCross             = '┼'
+	connCornerTopLeft     = '┌'
+	connCornerTopRight    = '┐'
+	connCornerBottomLeft  = '└'
+	connCornerBottomRight = '┘'
 
 	// Node dimensions
 	fixedNodeWidth = 25
@@ -88,7 +101,7 @@ func (r *DagAsciiRenderer) Render() string {
 	}
 
 	r.calculateLevels()
-	r.createBoxes()
+	r.createNodes()
 
 	var result []string
 
@@ -99,7 +112,7 @@ func (r *DagAsciiRenderer) Render() string {
 			result = append(result, connections...)
 		}
 
-		// Render boxes at this level
+		// Render nodes at this level
 		levelLines := r.renderLevel(level)
 		result = append(result, levelLines...)
 	}
@@ -189,8 +202,8 @@ func (r *DagAsciiRenderer) calculateLevels() {
 	}
 }
 
-// createBoxes creates DagAsciiJobNode for each job
-func (r *DagAsciiRenderer) createBoxes() {
+// createNodes creates DagAsciiJobNode for each job
+func (r *DagAsciiRenderer) createNodes() {
 	for i, job := range r.workflow.Jobs {
 		jobID := job.ID
 		if jobID == "" {
@@ -200,10 +213,10 @@ func (r *DagAsciiRenderer) createBoxes() {
 		// Check if this job has children (other jobs depend on it)
 		hasChildren := len(r.children[jobID]) > 0
 
-		box := &DagAsciiJobNode{
+		node := &DagAsciiJobNode{
 			Job:         &r.workflow.Jobs[i],
 			JobID:       jobID,
-			Width:       fixedNodeWidth, // Use fixed width for all boxes
+			Width:       fixedNodeWidth, // Use fixed width for all nodes
 			HasChildren: hasChildren,
 		}
 
@@ -211,28 +224,28 @@ func (r *DagAsciiRenderer) createBoxes() {
 		for level, jobIndices := range r.levels {
 			for _, idx := range jobIndices {
 				if idx == i {
-					box.Level = level
+					node.Level = level
 					break
 				}
 			}
 		}
 
-		box.Lines = r.renderDagAsciiJobNode(box)
-		r.nodes[i] = box
+		node.Lines = r.renderDagAsciiJobNode(node)
+		r.nodes[i] = node
 	}
 }
 
-// renderDagAsciiJobNode renders a single job box
-func (r *DagAsciiRenderer) renderDagAsciiJobNode(box *DagAsciiJobNode) []string {
+// renderDagAsciiJobNode renders a single job node
+func (r *DagAsciiRenderer) renderDagAsciiJobNode(node *DagAsciiJobNode) []string {
 	var lines []string
-	width := box.Width
+	width := node.Width
 	innerWidth := width - 2 // Width inside borders
 
 	// Top border
 	lines = append(lines, nodeTopLeft+strings.Repeat(nodeHorizontal, innerWidth)+nodeTopRight)
 
 	// Job name (centered, truncate with ellipsis if too long)
-	name := truncateWithEllipsis(box.Job.Name, innerWidth-2) // -2 for padding
+	name := truncateWithEllipsis(node.Job.Name, innerWidth-2) // -2 for padding
 	padding := innerWidth - runeWidth(name)
 	leftPad := padding / 2
 	rightPad := padding - leftPad
@@ -242,7 +255,7 @@ func (r *DagAsciiRenderer) renderDagAsciiJobNode(box *DagAsciiJobNode) []string 
 	lines = append(lines, nodeTeeRight+strings.Repeat(nodeHorizontal, innerWidth)+nodeTeeLeft)
 
 	// Steps
-	for _, step := range box.Job.Steps {
+	for _, step := range node.Job.Steps {
 		stepName := step.Name
 		if stepName == "" {
 			stepName = step.Uses
@@ -267,7 +280,7 @@ func (r *DagAsciiRenderer) renderDagAsciiJobNode(box *DagAsciiJobNode) []string 
 	}
 
 	// Bottom border - use ┬ in center if job has children
-	if box.HasChildren {
+	if node.HasChildren {
 		leftWidth := (innerWidth - 1) / 2
 		rightWidth := innerWidth - 1 - leftWidth
 		bottomBorder := nodeBottomLeft + strings.Repeat(nodeHorizontal, leftWidth) + nodeTeeDown + strings.Repeat(nodeHorizontal, rightWidth) + nodeBottomRight
@@ -306,87 +319,87 @@ func flagsToChar(flags int) rune {
 
 	switch {
 	case fromAbove && toBelow && fromLeft && toRight:
-		return '┼'
+		return connCross
 	case fromAbove && toBelow && fromLeft:
-		return '┤'
+		return connTeeLeft
 	case fromAbove && toBelow && toRight:
-		return '├'
+		return connTeeRight
 	case fromAbove && fromLeft && toRight:
-		return '┴'
+		return connTeeUp
 	case toBelow && fromLeft && toRight:
-		return '┬'
+		return connTeeDown
 	case fromAbove && toBelow:
-		return '│'
+		return connVertical
 	case fromLeft && toRight:
-		return '─'
+		return connHorizontal
 	case fromAbove && toRight:
-		return '└'
+		return connCornerBottomLeft
 	case fromAbove && fromLeft:
-		return '┘'
+		return connCornerBottomRight
 	case toBelow && toRight:
-		return '┌'
+		return connCornerTopLeft
 	case toBelow && fromLeft:
-		return '┐'
+		return connCornerTopRight
 	case fromAbove:
-		return '│'
+		return connVertical
 	case toBelow:
-		return '│'
+		return connVertical
 	case fromLeft, toRight:
-		return '─'
+		return connHorizontal
 	default:
 		return ' '
 	}
 }
 
-// renderLevel renders all boxes at a given level side by side
+// renderLevel renders all nodes at a given level side by side
 func (r *DagAsciiRenderer) renderLevel(level int) []string {
 	jobIndices := r.levels[level]
 	if len(jobIndices) == 0 {
 		return nil
 	}
 
-	// Get boxes for this level
-	var levelBoxes []*DagAsciiJobNode
+	// Get nodes for this level
+	var levelNodes []*DagAsciiJobNode
 	for _, idx := range jobIndices {
-		levelBoxes = append(levelBoxes, r.nodes[idx])
+		levelNodes = append(levelNodes, r.nodes[idx])
 	}
 
 	// Find max height
 	maxHeight := 0
-	for _, box := range levelBoxes {
-		if len(box.Lines) > maxHeight {
-			maxHeight = len(box.Lines)
+	for _, node := range levelNodes {
+		if len(node.Lines) > maxHeight {
+			maxHeight = len(node.Lines)
 		}
 	}
 
 	// Calculate positions and set center X
 	spacing := 2
 	currentX := 0
-	for _, box := range levelBoxes {
-		box.CenterX = currentX + box.Width/2
-		currentX += box.Width + spacing
+	for _, node := range levelNodes {
+		node.CenterX = currentX + node.Width/2
+		currentX += node.Width + spacing
 	}
 
 	// Render lines
 	var result []string
 	for lineIdx := 0; lineIdx < maxHeight; lineIdx++ {
 		var line strings.Builder
-		for i, box := range levelBoxes {
+		for i, node := range levelNodes {
 			if i > 0 {
 				line.WriteString(strings.Repeat(" ", spacing))
 			}
-			if lineIdx < len(box.Lines) {
-				line.WriteString(box.Lines[lineIdx])
+			if lineIdx < len(node.Lines) {
+				line.WriteString(node.Lines[lineIdx])
 			} else {
-				// Box ended but other boxes continue - draw vertical line if this job has children
-				if box.HasChildren {
+				// Node ended but other nodes continue - draw vertical line if this job has children
+				if node.HasChildren {
 					// Draw vertical line at center position
-					centerPos := box.Width / 2
+					centerPos := node.Width / 2
 					line.WriteString(strings.Repeat(" ", centerPos))
 					line.WriteString("│")
-					line.WriteString(strings.Repeat(" ", box.Width-centerPos-1))
+					line.WriteString(strings.Repeat(" ", node.Width-centerPos-1))
 				} else {
-					line.WriteString(strings.Repeat(" ", box.Width))
+					line.WriteString(strings.Repeat(" ", node.Width))
 				}
 			}
 		}
@@ -439,11 +452,11 @@ func (r *DagAsciiRenderer) renderConnections(fromLevel int) []string {
 func (r *DagAsciiRenderer) buildConnectionMap(parentIndices, childIndices []int) map[int][]int {
 	connections := make(map[int][]int)
 	for _, childIdx := range childIndices {
-		childBox := r.nodes[childIdx]
+		childNode := r.nodes[childIdx]
 		for _, parentIdx := range parentIndices {
-			parentBox := r.nodes[parentIdx]
-			for _, need := range childBox.Job.Needs {
-				if need == parentBox.JobID {
+			parentNode := r.nodes[parentIdx]
+			for _, need := range childNode.Job.Needs {
+				if need == parentNode.JobID {
 					connections[childIdx] = append(connections[childIdx], parentIdx)
 					break
 				}
@@ -459,9 +472,9 @@ func (r *DagAsciiRenderer) calculateLevelPositions(jobIndices []int) (positions 
 	positions = make(map[int]int)
 	currentX := 0
 	for _, idx := range jobIndices {
-		box := r.nodes[idx]
-		positions[idx] = currentX + box.Width/2
-		currentX += box.Width + spacing
+		node := r.nodes[idx]
+		positions[idx] = currentX + node.Width/2
+		currentX += node.Width + spacing
 	}
 	if currentX > 0 {
 		totalWidth = currentX - spacing

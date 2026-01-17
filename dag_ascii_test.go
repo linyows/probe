@@ -362,7 +362,7 @@ func TestFixedBoxWidth(t *testing.T) {
 
 	renderer := NewDagAsciiRenderer(w)
 	renderer.calculateLevels()
-	renderer.createBoxes()
+	renderer.createNodes()
 
 	// Both boxes should have the same fixed width
 	if renderer.nodes[0].Width != fixedNodeWidth {
