@@ -91,15 +91,15 @@ probe ./workflow.yml --verbose
 # レスポンス時間を表示
 probe ./workflow.yml --rt
 
-# ジョブ依存関係グラフを表示
-probe ./workflow.yml --graph
+# ジョブ依存関係グラフをASCIIアートで表示
+probe ./workflow.yml --dag-ascii
 ```
 
 ### CLIオプション
 - `<workflow>`: YAMLワークフローファイルパスを指定
 - `--verbose`: 詳細出力を有効化
 - `--rt`: レスポンス時間を表示
-- `--graph`: ジョブ依存関係をASCIIアートで表示
+- `--dag-ascii`: ジョブ依存関係をASCIIアートで表示
 - `--help`: ヘルプ情報を表示
 
 ワークフロー構文
