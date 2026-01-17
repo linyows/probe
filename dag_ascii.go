@@ -239,7 +239,7 @@ func (r *DagAsciiRenderer) renderDagAsciiJobNode(box *DagAsciiJobNode) []string 
 	lines = append(lines, nodeVertical+strings.Repeat(" ", leftPad)+name+strings.Repeat(" ", rightPad)+nodeVertical)
 
 	// Separator
-	lines = append(lines, nodeTeeRight+strings.Repeat(nodeHorizontal, innerWidth)+"┤")
+	lines = append(lines, nodeTeeRight+strings.Repeat(nodeHorizontal, innerWidth)+nodeTeeLeft)
 
 	// Steps
 	for _, step := range box.Job.Steps {
