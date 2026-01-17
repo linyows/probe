@@ -220,3 +220,13 @@ func (w *Workflow) newJobContext(c Config, vars map[string]any) (JobContext, err
 		countersMu:   &sync.Mutex{},
 	}, nil
 }
+
+// RenderDagAscii renders the workflow job dependencies as ASCII art with steps
+func (w *Workflow) RenderDagAscii() string {
+	if len(w.Jobs) == 0 {
+		return ""
+	}
+
+	renderer := NewDagAsciiRenderer(w)
+	return renderer.Render()
+}

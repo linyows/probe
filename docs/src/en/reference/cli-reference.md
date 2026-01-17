@@ -99,30 +99,46 @@ Build: abc1234
 Go Version: go1.20.1
 ```
 
-### `--graph`
+### `--dag-ascii`
 
 **Type:** Boolean flag
 **Default:** `false`
-**Description:** Display job dependency graph as ASCII art without executing the workflow
+**Description:** Display job dependency graph as ASCII art without executing the workflow. Shows jobs with their steps in boxes.
 
 **Example:**
 ```bash
-probe --graph workflow.yml
+probe --dag-ascii workflow.yml
 ```
 
 **Output Example:**
 ```
-     [Setup]
-        ↓
-     [Build]
-      ↓   ↓
-[Test A] [Test B]
-      ↓   ↓
-    [Deploy]
+╭───────────────────────╮
+│         Setup         │
+├───────────────────────┤
+│ ○ Initialize          │
+╰───────────┬───────────╯
+            │
+            │
+            ↓
+╭───────────────────────╮
+│         Build         │
+├───────────────────────┤
+│ ○ Compile             │
+│ ○ Package             │
+╰───────────┬───────────╯
+            │
+            ├──────────────────────────┐
+            ↓                          ↓
+╭───────────────────────╮  ╭───────────────────────╮
+│        Test A         │  │        Test B         │
+├───────────────────────┤  ├───────────────────────┤
+│ ○ Run tests           │  │ ○ Run tests           │
+╰───────────────────────╯  ╰───────────────────────╯
 ```
 
 This is useful for:
 - Visualizing workflow structure before execution
+- Understanding job dependencies and their steps
 - Debugging job dependency configurations
 - Documentation and communication
 
