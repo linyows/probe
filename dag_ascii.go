@@ -280,7 +280,14 @@ func (r *DagAsciiRenderer) expandPath(path string) string {
 	return expanded
 }
 
-// resolvePath resolves a relative path, trying multiple base directories
+// resolvePath resolves a (potentially relative) path using a fixed priority order:
+//  1. If the path is absolute, it is returned as-is.
+//  2. If workflow.basePath is set, first try the path relative to the workflow
+//     directory (workflow.basePath/path).
+//  3. If not found, try the path relative to the parent of the workflow directory
+//     (for project-root relative paths; parentDir/path).
+//  4. If still not found, fall back to resolving the path from the current working
+//     directory using filepath.Abs, which matches the runtime's default behavior.
 func (r *DagAsciiRenderer) resolvePath(path string) string {
 	if filepath.IsAbs(path) {
 		return path
