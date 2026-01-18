@@ -755,7 +755,7 @@ func TestDagAsciiRenderer_Golden(t *testing.T) {
 			goldenPath := filepath.Join("testdata", "dag_ascii", tc.name+".golden.txt")
 
 			if os.Getenv("UPDATE_GOLDEN") == "1" {
-				err := os.WriteFile(goldenPath, []byte(actual), 0644)
+				err := os.WriteFile(goldenPath, []byte(actual), 0o600)
 				if err != nil {
 					t.Fatalf("failed to write golden file: %v", err)
 				}
