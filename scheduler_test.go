@@ -1,6 +1,7 @@
 package probe
 
 import (
+	"strings"
 	"testing"
 )
 
@@ -137,6 +138,118 @@ func TestJobScheduler_MarkJobsWithFailedDependencies(t *testing.T) {
 		// job3 should be runnable
 		if !scheduler.CanRunJob("job3") {
 			t.Error("Expected job3 to be runnable")
+		}
+	})
+}
+
+func TestJobScheduler_ValidateDependencies(t *testing.T) {
+	t.Run("no circular dependency", func(t *testing.T) {
+		scheduler := NewJobScheduler()
+
+		// A -> B -> C (no cycle)
+		jobA := &Job{ID: "A", Name: "A", Needs: []string{"B"}}
+		jobB := &Job{ID: "B", Name: "B", Needs: []string{"C"}}
+		jobC := &Job{ID: "C", Name: "C"}
+
+		_ = scheduler.AddJob(jobA)
+		_ = scheduler.AddJob(jobB)
+		_ = scheduler.AddJob(jobC)
+
+		err := scheduler.ValidateDependencies()
+		if err != nil {
+			t.Errorf("expected no error, got: %v", err)
+		}
+	})
+
+	t.Run("simple circular dependency A -> B -> A", func(t *testing.T) {
+		scheduler := NewJobScheduler()
+
+		jobA := &Job{ID: "A", Name: "A", Needs: []string{"B"}}
+		jobB := &Job{ID: "B", Name: "B", Needs: []string{"A"}}
+
+		_ = scheduler.AddJob(jobA)
+		_ = scheduler.AddJob(jobB)
+
+		err := scheduler.ValidateDependencies()
+		if err == nil {
+			t.Error("expected circular dependency error, got nil")
+		}
+		if !strings.Contains(err.Error(), "circular dependency") {
+			t.Errorf("expected error message to contain 'circular dependency', got: %v", err)
+		}
+	})
+
+	t.Run("three node circular dependency A -> B -> C -> A", func(t *testing.T) {
+		scheduler := NewJobScheduler()
+
+		jobA := &Job{ID: "A", Name: "A", Needs: []string{"B"}}
+		jobB := &Job{ID: "B", Name: "B", Needs: []string{"C"}}
+		jobC := &Job{ID: "C", Name: "C", Needs: []string{"A"}}
+
+		_ = scheduler.AddJob(jobA)
+		_ = scheduler.AddJob(jobB)
+		_ = scheduler.AddJob(jobC)
+
+		err := scheduler.ValidateDependencies()
+		if err == nil {
+			t.Error("expected circular dependency error, got nil")
+		}
+		if !strings.Contains(err.Error(), "circular dependency") {
+			t.Errorf("expected error message to contain 'circular dependency', got: %v", err)
+		}
+	})
+
+	t.Run("self reference A -> A", func(t *testing.T) {
+		scheduler := NewJobScheduler()
+
+		jobA := &Job{ID: "A", Name: "A", Needs: []string{"A"}}
+		_ = scheduler.AddJob(jobA)
+
+		err := scheduler.ValidateDependencies()
+		if err == nil {
+			t.Error("expected circular dependency error, got nil")
+		}
+		if !strings.Contains(err.Error(), "circular dependency") {
+			t.Errorf("expected error message to contain 'circular dependency', got: %v", err)
+		}
+	})
+
+	t.Run("non-existent dependency", func(t *testing.T) {
+		scheduler := NewJobScheduler()
+
+		jobA := &Job{ID: "A", Name: "A", Needs: []string{"nonexistent"}}
+		_ = scheduler.AddJob(jobA)
+
+		err := scheduler.ValidateDependencies()
+		if err == nil {
+			t.Error("expected non-existent dependency error, got nil")
+		}
+		if !strings.Contains(err.Error(), "non-existent") {
+			t.Errorf("expected error message to contain 'non-existent', got: %v", err)
+		}
+	})
+
+	t.Run("diamond dependency (no cycle)", func(t *testing.T) {
+		scheduler := NewJobScheduler()
+
+		//     A
+		//    / \
+		//   B   C
+		//    \ /
+		//     D
+		jobA := &Job{ID: "A", Name: "A", Needs: []string{"B", "C"}}
+		jobB := &Job{ID: "B", Name: "B", Needs: []string{"D"}}
+		jobC := &Job{ID: "C", Name: "C", Needs: []string{"D"}}
+		jobD := &Job{ID: "D", Name: "D"}
+
+		_ = scheduler.AddJob(jobA)
+		_ = scheduler.AddJob(jobB)
+		_ = scheduler.AddJob(jobC)
+		_ = scheduler.AddJob(jobD)
+
+		err := scheduler.ValidateDependencies()
+		if err != nil {
+			t.Errorf("expected no error for diamond dependency, got: %v", err)
 		}
 	})
 }
