@@ -88,6 +88,14 @@ func (p *Probe) Load() error {
 			WithContext("workflow_path", p.FilePath)
 	}
 
+	// Set base path for resolving relative paths in embedded actions
+	if len(files) > 0 {
+		absPath, err := filepath.Abs(files[0])
+		if err == nil {
+			p.workflow.basePath = filepath.Dir(absPath)
+		}
+	}
+
 	p.setDefaultsToSteps()
 
 	// Additional validation and ID initialization

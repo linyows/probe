@@ -620,7 +620,7 @@ func TestEnv(t *testing.T) {
 	}
 }
 
-func TestEvalVars(t *testing.T) {
+func Test_evalVars(t *testing.T) {
 	tests := []struct {
 		name     string
 		wf       *Workflow

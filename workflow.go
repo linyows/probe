@@ -12,6 +12,8 @@ type Workflow struct {
 	Vars        map[string]any `yaml:"vars"`
 	exitStatus  int
 	env         map[string]string
+	// basePath is the directory containing the workflow file (used for resolving relative paths)
+	basePath string
 	// Shared outputs across all jobs
 	outputs *Outputs
 	printer *Printer
@@ -179,6 +181,7 @@ func (w *Workflow) Env() map[string]string {
 	return w.env
 }
 
+// evalVars evaluates template variables in workflow vars using environment variables
 func (w *Workflow) evalVars() (map[string]any, error) {
 	env := StrmapToAnymap(w.Env())
 	vars := make(map[string]any)

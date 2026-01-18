@@ -1,7 +1,12 @@
 package probe
 
 import (
+	"bytes"
+	"os"
+	"path/filepath"
 	"strings"
+
+	"github.com/goccy/go-yaml"
 )
 
 const (
@@ -21,6 +26,14 @@ const (
 	stepBullet         = "○"
 	stepBulletEmbedded = "↗"
 	ellipsis           = "…"
+
+	// Tree characters for embedded steps
+	treeBranch = "├"
+	treeEnd    = "└"
+
+	// ANSI escape codes for dim text
+	ansiDim   = "\033[2m"
+	ansiReset = "\033[0m"
 
 	// Connection line characters (rune)
 	connVertical          = '│'
@@ -52,12 +65,13 @@ type DagAsciiJobNode struct {
 
 // DagAsciiRenderer renders detailed workflow graphs with job nodes and steps
 type DagAsciiRenderer struct {
-	workflow   *Workflow
-	nodes      []*DagAsciiJobNode
-	levels     [][]int             // levels[level] = []jobIndex
-	jobIDToIdx map[string]int      // jobID -> index in workflow.Jobs
-	children   map[string][]string // jobID -> list of child jobIDs (jobs that depend on this job)
-	parents    map[string][]string // jobID -> list of parent jobIDs (jobs this job depends on)
+	workflow      *Workflow
+	nodes         []*DagAsciiJobNode
+	levels        [][]int             // levels[level] = []jobIndex
+	jobIDToIdx    map[string]int      // jobID -> index in workflow.Jobs
+	children      map[string][]string // jobID -> list of child jobIDs (jobs that depend on this job)
+	parents       map[string][]string // jobID -> list of parent jobIDs (jobs this job depends on)
+	evaluatedVars map[string]any      // cached evaluated vars (lazy loaded)
 }
 
 // NewDagAsciiRenderer creates a new DagAsciiRenderer
@@ -235,6 +249,89 @@ func (r *DagAsciiRenderer) createNodes() {
 	}
 }
 
+// getEvaluatedVars returns evaluated vars with lazy loading
+func (r *DagAsciiRenderer) getEvaluatedVars() map[string]any {
+	if r.evaluatedVars == nil {
+		vars, err := r.workflow.evalVars()
+		if err == nil {
+			r.evaluatedVars = vars
+		}
+	}
+	return r.evaluatedVars
+}
+
+// expandPath expands template variables in the path using evaluated workflow vars
+func (r *DagAsciiRenderer) expandPath(path string) string {
+	vars := r.getEvaluatedVars()
+	if vars == nil {
+		return path
+	}
+
+	// Build environment with evaluated vars
+	env := map[string]any{
+		"vars": vars,
+	}
+
+	expr := &Expr{}
+	expanded, err := expr.EvalTemplate(path, env)
+	if err != nil {
+		return path // Return original path if expansion fails
+	}
+	return expanded
+}
+
+// resolvePath resolves a relative path, trying multiple base directories
+func (r *DagAsciiRenderer) resolvePath(path string) string {
+	if filepath.IsAbs(path) {
+		return path
+	}
+
+	// Try workflow directory first
+	if r.workflow.basePath != "" {
+		workflowRelPath := filepath.Join(r.workflow.basePath, path)
+		if _, err := os.Stat(workflowRelPath); err == nil {
+			return workflowRelPath
+		}
+
+		// Try parent of workflow directory (for project-root relative paths)
+		parentDir := filepath.Dir(r.workflow.basePath)
+		if parentDir != r.workflow.basePath {
+			parentRelPath := filepath.Join(parentDir, path)
+			if _, err := os.Stat(parentRelPath); err == nil {
+				return parentRelPath
+			}
+		}
+	}
+
+	// Fall back to current directory (matches runtime behavior)
+	absPath, err := filepath.Abs(path)
+	if err != nil {
+		return path
+	}
+	return absPath
+}
+
+// loadEmbeddedJob loads a job definition from an embedded YAML file
+func loadEmbeddedJob(path string) (*Job, error) {
+	absPath, err := filepath.Abs(path)
+	if err != nil {
+		return nil, err
+	}
+
+	data, err := os.ReadFile(absPath)
+	if err != nil {
+		return nil, err
+	}
+
+	job := &Job{}
+	dec := yaml.NewDecoder(bytes.NewReader(data))
+	if err = dec.Decode(job); err != nil {
+		return nil, err
+	}
+
+	return job, nil
+}
+
 // renderDagAsciiJobNode renders a single job node
 func (r *DagAsciiRenderer) renderDagAsciiJobNode(node *DagAsciiJobNode) []string {
 	var lines []string
@@ -277,6 +374,65 @@ func (r *DagAsciiRenderer) renderDagAsciiJobNode(node *DagAsciiJobNode) []string
 			stepLine = stepLine + strings.Repeat(" ", innerWidth-stepLineWidth)
 		}
 		lines = append(lines, nodeVertical+stepLine+nodeVertical)
+
+		// Render embedded steps if this is an embedded action
+		if step.Uses == "embedded" {
+			if pathVal, ok := step.With["path"]; ok {
+				if pathStr, ok := pathVal.(string); ok {
+					// Expand template variables in path and resolve relative to workflow directory
+					expandedPath := r.expandPath(pathStr)
+					resolvedPath := r.resolvePath(expandedPath)
+					embeddedJob, err := loadEmbeddedJob(resolvedPath)
+					if err == nil && len(embeddedJob.Steps) > 0 {
+						// Render each embedded step with tree characters
+						for i, embStep := range embeddedJob.Steps {
+							embStepName := embStep.Name
+							if embStepName == "" {
+								embStepName = embStep.Uses
+							}
+
+							// Use ├ for non-last items, └ for last item
+							var treeChar string
+							if i == len(embeddedJob.Steps)-1 {
+								treeChar = treeEnd
+							} else {
+								treeChar = treeBranch
+							}
+
+							// Format: "   ├ stepname" or "   └ stepname"
+							embPrefix := "   " + treeChar + " "
+							embPrefixWidth := runeWidth(embPrefix)
+							maxEmbStepNameWidth := innerWidth - embPrefixWidth
+							truncatedEmbStepName := truncateWithEllipsis(embStepName, maxEmbStepNameWidth)
+							embStepLine := embPrefix + truncatedEmbStepName
+
+							// Pad to inner width
+							embStepLineWidth := runeWidth(embStepLine)
+							if embStepLineWidth < innerWidth {
+								embStepLine = embStepLine + strings.Repeat(" ", innerWidth-embStepLineWidth)
+							}
+							lines = append(lines, nodeVertical+embStepLine+nodeVertical)
+						}
+
+						// Add filename at the end with dim color (aligned with tree characters)
+						filename := filepath.Base(expandedPath)
+						filePrefix := "   "
+						filePrefixWidth := runeWidth(filePrefix)
+						maxFilenameWidth := innerWidth - filePrefixWidth
+						truncatedFilename := truncateWithEllipsis(filename, maxFilenameWidth)
+						// Apply dim color
+						dimFilename := ansiDim + truncatedFilename + ansiReset
+						// Calculate padding based on non-colored text length
+						fileLine := filePrefix + dimFilename
+						actualWidth := filePrefixWidth + runeWidth(truncatedFilename)
+						if actualWidth < innerWidth {
+							fileLine = filePrefix + dimFilename + strings.Repeat(" ", innerWidth-actualWidth)
+						}
+						lines = append(lines, nodeVertical+fileLine+nodeVertical)
+					}
+				}
+			}
+		}
 	}
 
 	// Bottom border - use ┬ in center if job has children
