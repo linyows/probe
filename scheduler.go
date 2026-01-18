@@ -2,8 +2,11 @@ package probe
 
 import (
 	"fmt"
+	"strings"
 	"sync"
 	"time"
+
+	"github.com/linyows/probe/dag"
 )
 
 type JobStatus int
@@ -110,37 +113,27 @@ func (js *JobScheduler) ValidateDependencies() error {
 }
 
 func (js *JobScheduler) checkCircularDependencies() error {
-	visited := make(map[string]bool)
-	recStack := make(map[string]bool)
-
+	// Collect all job IDs
+	allIDs := make([]string, 0, len(js.jobs))
 	for jobID := range js.jobs {
-		if !visited[jobID] {
-			if js.hasCycleDFS(jobID, visited, recStack) {
-				return fmt.Errorf("circular dependency detected involving job '%s'", jobID)
-			}
+		allIDs = append(allIDs, jobID)
+	}
+
+	// Define dependency getter function
+	getDeps := func(jobID string) []string {
+		if job, ok := js.jobs[jobID]; ok {
+			return job.Needs
 		}
+		return nil
+	}
+
+	// Use dag package to detect cycles
+	cycle := dag.DetectCycleFn(allIDs, getDeps)
+	if cycle != nil {
+		return fmt.Errorf("circular dependency detected: %s", strings.Join(cycle, " -> "))
 	}
 
 	return nil
-}
-
-func (js *JobScheduler) hasCycleDFS(jobID string, visited, recStack map[string]bool) bool {
-	visited[jobID] = true
-	recStack[jobID] = true
-
-	job := js.jobs[jobID]
-	for _, dep := range job.Needs {
-		if !visited[dep] {
-			if js.hasCycleDFS(dep, visited, recStack) {
-				return true
-			}
-		} else if recStack[dep] {
-			return true
-		}
-	}
-
-	recStack[jobID] = false
-	return false
 }
 
 func (js *JobScheduler) CanRunJob(jobID string) bool {
