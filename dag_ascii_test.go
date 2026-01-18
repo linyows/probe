@@ -9,6 +9,7 @@ The golden tests cover comprehensive DAG patterns for ASCII rendering:
 	----------------------|--------------------------|------------------------------------------
 	Basic                 | single                   | Single job
 	                      | embedded_action          | Jobs with embedded actions (↗ bullet)
+	                      | embedded_expanded        | Embedded action with path expands steps
 	                      | truncated_long_names     | Long names truncated with ellipsis (…)
 	                      | linear_two               | A → B
 	                      | linear_three             | A → B → C
@@ -534,6 +535,18 @@ func getDagAsciiGoldenTestCases() []dagAsciiGoldenTestCase {
 					{Name: "Test", ID: "test", Needs: []string{"setup"}, Steps: []*Step{
 						{Name: "Run tests", Uses: "go"},
 						{Name: "Upload coverage", Uses: "embedded"},
+					}},
+				},
+			},
+		},
+		{
+			// Embedded action with path expands internal steps
+			name: "embedded_expanded",
+			workflow: &Workflow{
+				basePath: "testdata",
+				Jobs: []Job{
+					{Name: "Deploy", ID: "deploy", Steps: []*Step{
+						{Name: "Run job", Uses: "embedded", With: map[string]any{"path": "./embedded-success-job.yml"}},
 					}},
 				},
 			},
