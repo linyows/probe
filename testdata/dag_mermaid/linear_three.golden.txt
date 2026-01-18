@@ -1,0 +1,13 @@
+flowchart LR
+    subgraph build["Build"]
+        build_step0["Compile"]
+    end
+    subgraph test["Test"]
+        test_step0["Run tests"]
+    end
+    subgraph deploy["Deploy"]
+        deploy_step0["Deploy app"]
+    end
+
+    build --> test
+    test --> deploy

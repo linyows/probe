@@ -93,6 +93,9 @@ probe ./workflow.yml --rt
 
 # ジョブ依存関係グラフをASCIIアートで表示
 probe ./workflow.yml --dag-ascii
+
+# ジョブ依存関係グラフをMermaid形式で表示
+probe ./workflow.yml --dag-mermaid
 ```
 
 ### CLIオプション
@@ -100,6 +103,7 @@ probe ./workflow.yml --dag-ascii
 - `--verbose`: 詳細出力を有効化
 - `--rt`: レスポンス時間を表示
 - `--dag-ascii`: ジョブ依存関係をASCIIアートで表示
+- `--dag-mermaid`: ジョブ依存関係をMermaid形式で表示
 - `--help`: ヘルプ情報を表示
 
 ワークフロー構文

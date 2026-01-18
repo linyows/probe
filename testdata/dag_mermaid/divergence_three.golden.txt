@@ -1,0 +1,17 @@
+flowchart LR
+    subgraph build["Build"]
+        build_step0["Compile"]
+    end
+    subgraph unit_test["Unit Test"]
+        unit_test_step0["Run unit"]
+    end
+    subgraph integration["Integration"]
+        integration_step0["Run integ"]
+    end
+    subgraph lint["Lint"]
+        lint_step0["Run lint"]
+    end
+
+    build --> unit_test
+    build --> integration
+    build --> lint

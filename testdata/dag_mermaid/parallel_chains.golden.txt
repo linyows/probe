@@ -1,0 +1,16 @@
+flowchart LR
+    subgraph build_app["Build App"]
+        build_app_step0["Compile app"]
+    end
+    subgraph test_app["Test App"]
+        test_app_step0["Test app"]
+    end
+    subgraph build_lib["Build Lib"]
+        build_lib_step0["Compile lib"]
+    end
+    subgraph test_lib["Test Lib"]
+        test_lib_step0["Test lib"]
+    end
+
+    build_app --> test_app
+    build_lib --> test_lib

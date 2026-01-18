@@ -1,0 +1,12 @@
+flowchart LR
+    subgraph build["Build"]
+        build_step0["Compile"]
+    end
+    subgraph test["Test"]
+        test_step0["Run tests"]
+    end
+    subgraph docs["Docs"]
+        docs_step0["Build docs"]
+    end
+
+    build --> test

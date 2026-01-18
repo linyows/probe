@@ -101,7 +101,7 @@ func TestCmd_usage(t *testing.T) {
 }
 
 func TestCmd_start(t *testing.T) {
-	help := " __  __  __  __  __\n|  ||  ||  ||  || _|\n|  ||  /| |||  /|  |\n| | |  \\| |||  \\| _|\n|_| |_\\_|__||__||__|\n\nProbe - A YAML-based workflow automation tool.\nhttps://github.com/linyows/probe (ver: dev, rev: unknown)\n\nUsage: probe [options] <workflow-file>\n\nArguments:\n  workflow-file    Path to YAML workflow file(s). Multiple files can be \n                   specified with comma-separated paths (e.g., \"base.yml,override.yml\")\n                   to merge configurations.\n\nOptions:\n  -h, --help       Show command usage\n      --version    Show version information\n      --rt         Show response time\n  -v, --verbose    Show verbose log\n      --dag-ascii  Show job dependency graph as ASCII art\n"
+	help := " __  __  __  __  __\n|  ||  ||  ||  || _|\n|  ||  /| |||  /|  |\n| | |  \\| |||  \\| _|\n|_| |_\\_|__||__||__|\n\nProbe - A YAML-based workflow automation tool.\nhttps://github.com/linyows/probe (ver: dev, rev: unknown)\n\nUsage: probe [options] <workflow-file>\n\nArguments:\n  workflow-file    Path to YAML workflow file(s). Multiple files can be \n                   specified with comma-separated paths (e.g., \"base.yml,override.yml\")\n                   to merge configurations.\n\nOptions:\n  -h, --help       Show command usage\n      --version    Show version information\n      --rt         Show response time\n  -v, --verbose    Show verbose log\n      --dag-ascii  Show job dependency graph as ASCII art\n      --dag-mermaid Show job dependency graph in Mermaid format\n"
 
 	tests := []struct {
 		name           string
@@ -285,7 +285,7 @@ func TestCmd_start(t *testing.T) {
 			}
 
 			// Check validFlags
-			expectedFlags := []string{"help", "h", "version", "rt", "verbose", "v", "dag-ascii"}
+			expectedFlags := []string{"help", "h", "version", "rt", "verbose", "v", "dag-ascii", "dag-mermaid"}
 			if len(c.validFlags) != len(expectedFlags) {
 				t.Errorf("start(%v) validFlags length = %d, want %d", tt.args, len(c.validFlags), len(expectedFlags))
 			}

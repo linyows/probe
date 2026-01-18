@@ -43,6 +43,7 @@ type Cmd struct {
 	Verbose      bool
 	RT           bool
 	DagAscii     bool
+	DagMermaid   bool
 	validFlags   []string
 	ver          string
 	rev          string
@@ -53,7 +54,7 @@ type Cmd struct {
 
 func newCmd() *Cmd {
 	return &Cmd{
-		validFlags: []string{"help", "h", "version", "rt", "verbose", "v", "dag-ascii"},
+		validFlags: []string{"help", "h", "version", "rt", "verbose", "v", "dag-ascii", "dag-mermaid"},
 		ver:        version,
 		rev:        commit,
 		outWriter:  os.Stdout,
@@ -102,6 +103,8 @@ func (c *Cmd) parseArgs(args []string) error {
 				c.Verbose = true
 			case "dag-ascii":
 				c.DagAscii = true
+			case "dag-mermaid":
+				c.DagMermaid = true
 			}
 		} else {
 			// Non-flag arguments
@@ -182,6 +185,7 @@ func (c *Cmd) printOptions() {
 		{"", "--rt", "Show response time"},
 		{"-v", "--verbose", "Show verbose log"},
 		{"", "--dag-ascii", "Show job dependency graph as ASCII art"},
+		{"", "--dag-mermaid", "Show job dependency graph in Mermaid format"},
 	}
 
 	for _, opt := range options {
@@ -224,6 +228,12 @@ func (c *Cmd) start(args []string) int {
 		}
 		return 0
 
+	case c.DagMermaid:
+		if !c.mocking {
+			return c.runDagMermaid()
+		}
+		return 0
+
 	default:
 		if !c.mocking {
 			return c.runProbe()
@@ -248,6 +258,17 @@ func (c *Cmd) runProbe() int {
 func (c *Cmd) runDagAscii() int {
 	p := probe.New(c.WorkflowPath, c.Verbose)
 	graph, err := p.DagAscii()
+	if err != nil {
+		_, _ = fmt.Fprintf(c.errWriter, "[ERROR] %v\n", err)
+		return 1
+	}
+	_, _ = fmt.Fprint(c.outWriter, graph)
+	return 0
+}
+
+func (c *Cmd) runDagMermaid() int {
+	p := probe.New(c.WorkflowPath, c.Verbose)
+	graph, err := p.DagMermaid()
 	if err != nil {
 		_, _ = fmt.Fprintf(c.errWriter, "[ERROR] %v\n", err)
 		return 1
