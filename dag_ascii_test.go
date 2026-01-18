@@ -1,6 +1,49 @@
+/*
+Package probe provides DAG ASCII rendering tests.
+
+# Golden Test Cases
+
+The golden tests cover comprehensive DAG patterns for ASCII rendering:
+
+	Category              | Case Name                | Structure
+	----------------------|--------------------------|------------------------------------------
+	Basic                 | single                   | Single job
+	                      | embedded_action          | Jobs with embedded actions (↗ bullet)
+	                      | truncated_long_names     | Long names truncated with ellipsis (…)
+	                      | linear_two               | A → B
+	                      | linear_three             | A → B → C
+	Divergence            | divergence_two           | A → [B, C]
+	                      | divergence_three         | A → [B, C, D]
+	                      | divergence_uneven_steps  | A → [B(3 steps), C] (uneven heights)
+	Convergence           | convergence_two          | [A, B] → C
+	                      | convergence_three        | [A, B, C] → D
+	                      | convergence_uneven_steps | [A(3 steps), B] → C (uneven heights)
+	                      | multi_child_convergence  | [A, B] → [C(both), D(A only)]
+	Complex               | diamond                  | A → [B, C] → D
+	                      | hourglass                | [A, B] → C → [D, E]
+	Parallel              | parallel_roots           | [A], [B] (independent)
+	                      | parallel_chains          | [A→B], [C→D] (independent chains)
+	Mixed                 | mixed_standalone         | A → B, C (standalone)
+	                      | sorted_children_first    | Jobs with children sorted before others
+	                      | wide_divergence          | A → [B, C, D, E]
+
+# Usage
+
+Run golden tests:
+
+	go test -run TestDagAsciiRenderer_Golden -v
+
+Update golden files when output format changes:
+
+	UPDATE_GOLDEN=1 go test -run TestDagAsciiRenderer_Golden
+
+Golden files are stored in testdata/dag_ascii/*.golden.txt
+*/
 package probe
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -453,5 +496,280 @@ func TestRenderDagAsciiJobNode_EmbeddedAction(t *testing.T) {
 	// Check embedded step uses ↗
 	if !strings.Contains(lines[4], "↗") {
 		t.Errorf("expected embedded step to have ↗ bullet: %s", lines[4])
+	}
+}
+
+// dagAsciiGoldenTestCase defines a golden test case for DAG ASCII rendering.
+type dagAsciiGoldenTestCase struct {
+	name     string    // Test case name, used as golden file name (e.g., "diamond" -> "diamond.golden.txt")
+	workflow *Workflow // Workflow to render
+}
+
+// getDagAsciiGoldenTestCases returns all golden test cases covering various DAG patterns:
+//   - Basic: single job, embedded actions (↗ bullet), truncation (…), linear chains (2-3 levels)
+//   - Divergence: one parent to multiple children (2-4 branches), including uneven step counts
+//   - Convergence: multiple parents to one child (2-3 parents), including uneven step counts
+//   - Complex: diamond (diverge then converge), hourglass (converge then diverge)
+//   - Parallel: independent roots, independent chains
+//   - Mixed: combinations with standalone jobs, sorting verification (children-first)
+func getDagAsciiGoldenTestCases() []dagAsciiGoldenTestCase {
+	return []dagAsciiGoldenTestCase{
+		{
+			name: "single",
+			workflow: &Workflow{
+				Jobs: []Job{
+					{Name: "Build", ID: "build", Steps: []*Step{{Name: "Compile", Uses: "go"}}},
+				},
+			},
+		},
+		{
+			name: "embedded_action",
+			workflow: &Workflow{
+				Jobs: []Job{
+					{Name: "Setup", ID: "setup", Steps: []*Step{
+						{Name: "Checkout", Uses: "git"},
+						{Name: "Set env vars", Uses: "embedded"},
+						{Name: "Validate config", Uses: "embedded"},
+					}},
+					{Name: "Test", ID: "test", Needs: []string{"setup"}, Steps: []*Step{
+						{Name: "Run tests", Uses: "go"},
+						{Name: "Upload coverage", Uses: "embedded"},
+					}},
+				},
+			},
+		},
+		{
+			// Long job names and step names should be truncated with ellipsis (…)
+			// fixedNodeWidth=25, innerWidth=23, job name max=21, step name max=20
+			name: "truncated_long_names",
+			workflow: &Workflow{
+				Jobs: []Job{
+					{Name: "Build Application Server", ID: "build", Steps: []*Step{
+						{Name: "Initialize build environment", Uses: "setup"},
+						{Name: "Compile source code", Uses: "go"},
+					}},
+					{Name: "Run Integration Tests", ID: "test", Needs: []string{"build"}, Steps: []*Step{
+						{Name: "Setup test database connection", Uses: "db"},
+						{Name: "Execute integration test suite", Uses: "go"},
+					}},
+				},
+			},
+		},
+		{
+			name: "linear_two",
+			workflow: &Workflow{
+				Jobs: []Job{
+					{Name: "Build", ID: "build", Steps: []*Step{{Name: "Compile", Uses: "go"}}},
+					{Name: "Test", ID: "test", Needs: []string{"build"}, Steps: []*Step{{Name: "Run tests", Uses: "go"}}},
+				},
+			},
+		},
+		{
+			name: "linear_three",
+			workflow: &Workflow{
+				Jobs: []Job{
+					{Name: "Build", ID: "build", Steps: []*Step{{Name: "Compile", Uses: "go"}}},
+					{Name: "Test", ID: "test", Needs: []string{"build"}, Steps: []*Step{{Name: "Run tests", Uses: "go"}}},
+					{Name: "Deploy", ID: "deploy", Needs: []string{"test"}, Steps: []*Step{{Name: "Deploy app", Uses: "deploy"}}},
+				},
+			},
+		},
+		{
+			name: "divergence_two",
+			workflow: &Workflow{
+				Jobs: []Job{
+					{Name: "Build", ID: "build", Steps: []*Step{{Name: "Compile", Uses: "go"}}},
+					{Name: "Unit Test", ID: "unit-test", Needs: []string{"build"}, Steps: []*Step{{Name: "Run unit", Uses: "go"}}},
+					{Name: "Lint", ID: "lint", Needs: []string{"build"}, Steps: []*Step{{Name: "Run lint", Uses: "lint"}}},
+				},
+			},
+		},
+		{
+			name: "divergence_three",
+			workflow: &Workflow{
+				Jobs: []Job{
+					{Name: "Build", ID: "build", Steps: []*Step{{Name: "Compile", Uses: "go"}}},
+					{Name: "Unit Test", ID: "unit-test", Needs: []string{"build"}, Steps: []*Step{{Name: "Run unit", Uses: "go"}}},
+					{Name: "Integration", ID: "integration", Needs: []string{"build"}, Steps: []*Step{{Name: "Run integ", Uses: "go"}}},
+					{Name: "Lint", ID: "lint", Needs: []string{"build"}, Steps: []*Step{{Name: "Run lint", Uses: "lint"}}},
+				},
+			},
+		},
+		{
+			name: "divergence_uneven_steps",
+			workflow: &Workflow{
+				Jobs: []Job{
+					{Name: "Build", ID: "build", Steps: []*Step{{Name: "Compile", Uses: "go"}}},
+					{Name: "Unit Test", ID: "unit-test", Needs: []string{"build"}, Steps: []*Step{
+						{Name: "Setup", Uses: "go"},
+						{Name: "Run unit", Uses: "go"},
+						{Name: "Teardown", Uses: "go"},
+					}},
+					{Name: "Lint", ID: "lint", Needs: []string{"build"}, Steps: []*Step{{Name: "Run lint", Uses: "lint"}}},
+				},
+			},
+		},
+		{
+			name: "convergence_two",
+			workflow: &Workflow{
+				Jobs: []Job{
+					{Name: "Build Linux", ID: "build-linux", Steps: []*Step{{Name: "Compile", Uses: "go"}}},
+					{Name: "Build Mac", ID: "build-mac", Steps: []*Step{{Name: "Compile", Uses: "go"}}},
+					{Name: "Release", ID: "release", Needs: []string{"build-linux", "build-mac"}, Steps: []*Step{{Name: "Upload", Uses: "release"}}},
+				},
+			},
+		},
+		{
+			name: "convergence_three",
+			workflow: &Workflow{
+				Jobs: []Job{
+					{Name: "Build Linux", ID: "build-linux", Steps: []*Step{{Name: "Compile", Uses: "go"}}},
+					{Name: "Build Mac", ID: "build-mac", Steps: []*Step{{Name: "Compile", Uses: "go"}}},
+					{Name: "Build Win", ID: "build-win", Steps: []*Step{{Name: "Compile", Uses: "go"}}},
+					{Name: "Release", ID: "release", Needs: []string{"build-linux", "build-mac", "build-win"}, Steps: []*Step{{Name: "Upload", Uses: "release"}}},
+				},
+			},
+		},
+		{
+			name: "convergence_uneven_steps",
+			workflow: &Workflow{
+				Jobs: []Job{
+					{Name: "Build Linux", ID: "build-linux", Steps: []*Step{
+						{Name: "Setup env", Uses: "setup"},
+						{Name: "Compile", Uses: "go"},
+						{Name: "Package", Uses: "tar"},
+					}},
+					{Name: "Build Mac", ID: "build-mac", Steps: []*Step{{Name: "Compile", Uses: "go"}}},
+					{Name: "Release", ID: "release", Needs: []string{"build-linux", "build-mac"}, Steps: []*Step{{Name: "Upload", Uses: "release"}}},
+				},
+			},
+		},
+		{
+			name: "multi_child_convergence",
+			workflow: &Workflow{
+				Jobs: []Job{
+					{Name: "Build", ID: "build", Steps: []*Step{{Name: "Compile", Uses: "go"}}},
+					{Name: "Lint", ID: "lint", Steps: []*Step{{Name: "Run lint", Uses: "lint"}}},
+					{Name: "Unit Test", ID: "unit-test", Needs: []string{"build", "lint"}, Steps: []*Step{{Name: "Run unit", Uses: "go"}}},
+					{Name: "Deploy", ID: "deploy", Needs: []string{"build"}, Steps: []*Step{{Name: "Deploy app", Uses: "deploy"}}},
+				},
+			},
+		},
+		{
+			name: "diamond",
+			workflow: &Workflow{
+				Jobs: []Job{
+					{Name: "Build", ID: "build", Steps: []*Step{{Name: "Compile", Uses: "go"}}},
+					{Name: "Unit Test", ID: "unit-test", Needs: []string{"build"}, Steps: []*Step{{Name: "Run unit", Uses: "go"}}},
+					{Name: "Lint", ID: "lint", Needs: []string{"build"}, Steps: []*Step{{Name: "Run lint", Uses: "lint"}}},
+					{Name: "Deploy", ID: "deploy", Needs: []string{"unit-test", "lint"}, Steps: []*Step{{Name: "Deploy app", Uses: "deploy"}}},
+				},
+			},
+		},
+		{
+			name: "hourglass",
+			workflow: &Workflow{
+				Jobs: []Job{
+					{Name: "Build Linux", ID: "build-linux", Steps: []*Step{{Name: "Compile", Uses: "go"}}},
+					{Name: "Build Mac", ID: "build-mac", Steps: []*Step{{Name: "Compile", Uses: "go"}}},
+					{Name: "Integration", ID: "integration", Needs: []string{"build-linux", "build-mac"}, Steps: []*Step{{Name: "Test all", Uses: "go"}}},
+					{Name: "Deploy Prod", ID: "deploy-prod", Needs: []string{"integration"}, Steps: []*Step{{Name: "Deploy", Uses: "deploy"}}},
+					{Name: "Deploy Stage", ID: "deploy-stage", Needs: []string{"integration"}, Steps: []*Step{{Name: "Deploy", Uses: "deploy"}}},
+				},
+			},
+		},
+		{
+			name: "parallel_roots",
+			workflow: &Workflow{
+				Jobs: []Job{
+					{Name: "Build App", ID: "build-app", Steps: []*Step{{Name: "Compile app", Uses: "go"}}},
+					{Name: "Build Lib", ID: "build-lib", Steps: []*Step{{Name: "Compile lib", Uses: "go"}}},
+				},
+			},
+		},
+		{
+			name: "parallel_chains",
+			workflow: &Workflow{
+				Jobs: []Job{
+					{Name: "Build App", ID: "build-app", Steps: []*Step{{Name: "Compile app", Uses: "go"}}},
+					{Name: "Test App", ID: "test-app", Needs: []string{"build-app"}, Steps: []*Step{{Name: "Test app", Uses: "go"}}},
+					{Name: "Build Lib", ID: "build-lib", Steps: []*Step{{Name: "Compile lib", Uses: "go"}}},
+					{Name: "Test Lib", ID: "test-lib", Needs: []string{"build-lib"}, Steps: []*Step{{Name: "Test lib", Uses: "go"}}},
+				},
+			},
+		},
+		{
+			name: "mixed_standalone",
+			workflow: &Workflow{
+				Jobs: []Job{
+					{Name: "Build", ID: "build", Steps: []*Step{{Name: "Compile", Uses: "go"}}},
+					{Name: "Test", ID: "test", Needs: []string{"build"}, Steps: []*Step{{Name: "Run tests", Uses: "go"}}},
+					{Name: "Docs", ID: "docs", Steps: []*Step{{Name: "Build docs", Uses: "docs"}}},
+				},
+			},
+		},
+		{
+			// Jobs with children should be sorted before jobs without children at the same level.
+			// Definition order: [Docs(no children), Notify(no children), Build(has children), Lint(no children)]
+			// Expected display order: [Build, Docs, Notify, Lint] (Build first because it has children)
+			name: "sorted_children_first",
+			workflow: &Workflow{
+				Jobs: []Job{
+					{Name: "Docs", ID: "docs", Steps: []*Step{{Name: "Build docs", Uses: "docs"}}},
+					{Name: "Notify", ID: "notify", Steps: []*Step{{Name: "Send notification", Uses: "slack"}}},
+					{Name: "Build", ID: "build", Steps: []*Step{{Name: "Compile", Uses: "go"}}},
+					{Name: "Lint", ID: "lint", Steps: []*Step{{Name: "Run lint", Uses: "lint"}}},
+					{Name: "Test", ID: "test", Needs: []string{"build"}, Steps: []*Step{{Name: "Run tests", Uses: "go"}}},
+				},
+			},
+		},
+		{
+			name: "wide_divergence",
+			workflow: &Workflow{
+				Jobs: []Job{
+					{Name: "Build", ID: "build", Steps: []*Step{{Name: "Compile", Uses: "go"}}},
+					{Name: "Unit Test", ID: "unit-test", Needs: []string{"build"}, Steps: []*Step{{Name: "Run unit", Uses: "go"}}},
+					{Name: "Integration", ID: "integration", Needs: []string{"build"}, Steps: []*Step{{Name: "Run integ", Uses: "go"}}},
+					{Name: "E2E Test", ID: "e2e", Needs: []string{"build"}, Steps: []*Step{{Name: "Run e2e", Uses: "e2e"}}},
+					{Name: "Lint", ID: "lint", Needs: []string{"build"}, Steps: []*Step{{Name: "Run lint", Uses: "lint"}}},
+				},
+			},
+		},
+	}
+}
+
+// TestDagAsciiRenderer_Golden performs golden file testing for DAG ASCII rendering.
+// It compares the actual output against expected output stored in testdata/dag_ascii/*.golden.txt.
+//
+// To update golden files when the output format intentionally changes:
+//
+//	UPDATE_GOLDEN=1 go test -run TestDagAsciiRenderer_Golden
+func TestDagAsciiRenderer_Golden(t *testing.T) {
+	testCases := getDagAsciiGoldenTestCases()
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			renderer := NewDagAsciiRenderer(tc.workflow)
+			actual := renderer.Render()
+
+			goldenPath := filepath.Join("testdata", "dag_ascii", tc.name+".golden.txt")
+
+			if os.Getenv("UPDATE_GOLDEN") == "1" {
+				err := os.WriteFile(goldenPath, []byte(actual), 0644)
+				if err != nil {
+					t.Fatalf("failed to write golden file: %v", err)
+				}
+				return
+			}
+
+			expected, err := os.ReadFile(goldenPath)
+			if err != nil {
+				t.Fatalf("failed to read golden file %s: %v\nRun with UPDATE_GOLDEN=1 to create it", goldenPath, err)
+			}
+
+			if actual != string(expected) {
+				t.Errorf("output does not match golden file %s\n\nExpected:\n%s\n\nActual:\n%s\n\nRun with UPDATE_GOLDEN=1 to update", goldenPath, string(expected), actual)
+			}
+		})
 	}
 }
