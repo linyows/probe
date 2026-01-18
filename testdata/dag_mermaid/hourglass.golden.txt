@@ -1,0 +1,21 @@
+flowchart LR
+    subgraph build_linux["Build Linux"]
+        build_linux_step0["Compile"]
+    end
+    subgraph build_mac["Build Mac"]
+        build_mac_step0["Compile"]
+    end
+    subgraph integration["Integration"]
+        integration_step0["Test all"]
+    end
+    subgraph deploy_prod["Deploy Prod"]
+        deploy_prod_step0["Deploy"]
+    end
+    subgraph deploy_stage["Deploy Stage"]
+        deploy_stage_step0["Deploy"]
+    end
+
+    build_linux --> integration
+    build_mac --> integration
+    integration --> deploy_prod
+    integration --> deploy_stage

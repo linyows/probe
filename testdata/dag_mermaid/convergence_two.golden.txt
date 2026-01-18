@@ -1,0 +1,13 @@
+flowchart LR
+    subgraph build_linux["Build Linux"]
+        build_linux_step0["Compile"]
+    end
+    subgraph build_mac["Build Mac"]
+        build_mac_step0["Compile"]
+    end
+    subgraph release["Release"]
+        release_step0["Upload"]
+    end
+
+    build_linux --> release
+    build_mac --> release

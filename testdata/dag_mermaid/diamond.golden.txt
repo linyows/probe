@@ -1,0 +1,18 @@
+flowchart LR
+    subgraph build["Build"]
+        build_step0["Compile"]
+    end
+    subgraph unit_test["Unit Test"]
+        unit_test_step0["Run unit"]
+    end
+    subgraph lint["Lint"]
+        lint_step0["Run lint"]
+    end
+    subgraph deploy["Deploy"]
+        deploy_step0["Deploy app"]
+    end
+
+    build --> unit_test
+    build --> lint
+    unit_test --> deploy
+    lint --> deploy

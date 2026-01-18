@@ -61,6 +61,14 @@ func (p *Probe) DagAscii() (string, error) {
 	return p.workflow.RenderDagAscii(), nil
 }
 
+// DagMermaid returns the Mermaid format representation of the workflow job dependencies
+func (p *Probe) DagMermaid() (string, error) {
+	if err := p.Load(); err != nil {
+		return "", err
+	}
+	return p.workflow.RenderDagMermaid(), nil
+}
+
 func (p *Probe) Load() error {
 	files, err := p.yamlFiles()
 	if err != nil {
