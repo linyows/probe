@@ -93,6 +93,9 @@ probe ./workflow.yml --rt
 
 # Show job dependency graph as ASCII art
 probe ./workflow.yml --dag-ascii
+
+# Show job dependency graph in Mermaid format
+probe ./workflow.yml --dag-mermaid
 ```
 
 ### CLI Options
@@ -100,6 +103,7 @@ probe ./workflow.yml --dag-ascii
 - `--verbose`: Enable detailed output
 - `--rt`: Show response times
 - `--dag-ascii`: Display job dependency graph as ASCII art
+- `--dag-mermaid`: Display job dependency graph in Mermaid format
 - `--help`: Show help information
 
 Workflow Syntax

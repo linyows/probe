@@ -142,6 +142,45 @@ probe --dag-ascii workflow.yml
 - ジョブ依存関係の設定をデバッグ
 - ドキュメントやコミュニケーション
 
+### `--dag-mermaid`
+
+**型:** ブールフラグ
+**デフォルト:** `false`
+**説明:** ワークフローを実行せずにジョブ依存関係をMermaidフローチャート形式で表示。出力はGitHub、GitLab、Notionなどのマークダウンビューアで直接レンダリングできます。
+
+**例:**
+```bash
+probe --dag-mermaid workflow.yml
+```
+
+**出力例:**
+```mermaid
+flowchart LR
+    subgraph build["Build"]
+        build_step0["Compile"]
+    end
+    subgraph unit_test["Unit Test"]
+        unit_test_step0["Run unit"]
+    end
+    subgraph lint["Lint"]
+        lint_step0["Run lint"]
+    end
+    subgraph deploy["Deploy"]
+        deploy_step0["Deploy app"]
+    end
+
+    build --> unit_test
+    build --> lint
+    unit_test --> deploy
+    lint --> deploy
+```
+
+以下の用途に便利です：
+- レンダリングされたダイアグラム付きドキュメントの生成
+- Wikiやドキュメントでのワークフロー構造の共有
+- 自動レンダリング用にMarkdownファイルへの埋め込み
+- プレゼンテーション用のビジュアル表現の作成
+
 ## 環境変数
 
 以下の環境変数がProbeの動作に影響します：

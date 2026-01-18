@@ -142,6 +142,45 @@ This is useful for:
 - Debugging job dependency configurations
 - Documentation and communication
 
+### `--dag-mermaid`
+
+**Type:** Boolean flag
+**Default:** `false`
+**Description:** Display job dependency graph in Mermaid flowchart format without executing the workflow. The output can be directly rendered in GitHub, GitLab, Notion, and other Markdown viewers.
+
+**Example:**
+```bash
+probe --dag-mermaid workflow.yml
+```
+
+**Output Example:**
+```mermaid
+flowchart LR
+    subgraph build["Build"]
+        build_step0["Compile"]
+    end
+    subgraph unit_test["Unit Test"]
+        unit_test_step0["Run unit"]
+    end
+    subgraph lint["Lint"]
+        lint_step0["Run lint"]
+    end
+    subgraph deploy["Deploy"]
+        deploy_step0["Deploy app"]
+    end
+
+    build --> unit_test
+    build --> lint
+    unit_test --> deploy
+    lint --> deploy
+```
+
+This is useful for:
+- Generating documentation with rendered diagrams
+- Sharing workflow structure in wikis and documentation
+- Embedding in Markdown files for automatic rendering
+- Creating visual representations for presentations
+
 ## Environment Variables
 
 The following environment variables affect Probe's behavior:
