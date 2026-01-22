@@ -1,12 +1,8 @@
 package probe
 
 import (
-	"bytes"
-	"os"
 	"path/filepath"
 	"strings"
-
-	"github.com/goccy/go-yaml"
 )
 
 const (
@@ -65,23 +61,22 @@ type DagAsciiJobNode struct {
 
 // DagAsciiRenderer renders detailed workflow graphs with job nodes and steps
 type DagAsciiRenderer struct {
-	workflow      *Workflow
-	nodes         []*DagAsciiJobNode
-	levels        [][]int             // levels[level] = []jobIndex
-	jobIDToIdx    map[string]int      // jobID -> index in workflow.Jobs
-	children      map[string][]string // jobID -> list of child jobIDs (jobs that depend on this job)
-	parents       map[string][]string // jobID -> list of parent jobIDs (jobs this job depends on)
-	evaluatedVars map[string]any      // cached evaluated vars (lazy loaded)
+	DagRendererBase
+	nodes      []*DagAsciiJobNode
+	levels     [][]int             // levels[level] = []jobIndex
+	jobIDToIdx map[string]int      // jobID -> index in workflow.Jobs
+	children   map[string][]string // jobID -> list of child jobIDs (jobs that depend on this job)
+	parents    map[string][]string // jobID -> list of parent jobIDs (jobs this job depends on)
 }
 
 // NewDagAsciiRenderer creates a new DagAsciiRenderer
 func NewDagAsciiRenderer(w *Workflow) *DagAsciiRenderer {
 	r := &DagAsciiRenderer{
-		workflow:   w,
-		nodes:      make([]*DagAsciiJobNode, len(w.Jobs)),
-		jobIDToIdx: make(map[string]int),
-		children:   make(map[string][]string),
-		parents:    make(map[string][]string),
+		DagRendererBase: NewDagRendererBase(w),
+		nodes:           make([]*DagAsciiJobNode, len(w.Jobs)),
+		jobIDToIdx:      make(map[string]int),
+		children:        make(map[string][]string),
+		parents:         make(map[string][]string),
 	}
 
 	// Build job ID to index mapping
@@ -249,96 +244,6 @@ func (r *DagAsciiRenderer) createNodes() {
 	}
 }
 
-// getEvaluatedVars returns evaluated vars with lazy loading
-func (r *DagAsciiRenderer) getEvaluatedVars() map[string]any {
-	if r.evaluatedVars == nil {
-		vars, err := r.workflow.evalVars()
-		if err == nil {
-			r.evaluatedVars = vars
-		}
-	}
-	return r.evaluatedVars
-}
-
-// expandPath expands template variables in the path using evaluated workflow vars
-func (r *DagAsciiRenderer) expandPath(path string) string {
-	vars := r.getEvaluatedVars()
-	if vars == nil {
-		return path
-	}
-
-	// Build environment with evaluated vars
-	env := map[string]any{
-		"vars": vars,
-	}
-
-	expr := &Expr{}
-	expanded, err := expr.EvalTemplate(path, env)
-	if err != nil {
-		return path // Return original path if expansion fails
-	}
-	return expanded
-}
-
-// resolvePath resolves a (potentially relative) path using a fixed priority order:
-//  1. If the path is absolute, it is returned as-is.
-//  2. If workflow.basePath is set, first try the path relative to the workflow
-//     directory (workflow.basePath/path).
-//  3. If not found, try the path relative to the parent of the workflow directory
-//     (for project-root relative paths; parentDir/path).
-//  4. If still not found, fall back to resolving the path from the current working
-//     directory using filepath.Abs, which matches the runtime's default behavior.
-func (r *DagAsciiRenderer) resolvePath(path string) string {
-	if filepath.IsAbs(path) {
-		return path
-	}
-
-	// Try workflow directory first
-	if r.workflow.basePath != "" {
-		workflowRelPath := filepath.Join(r.workflow.basePath, path)
-		if _, err := os.Stat(workflowRelPath); err == nil {
-			return workflowRelPath
-		}
-
-		// Try parent of workflow directory (for project-root relative paths)
-		parentDir := filepath.Dir(r.workflow.basePath)
-		if parentDir != r.workflow.basePath {
-			parentRelPath := filepath.Join(parentDir, path)
-			if _, err := os.Stat(parentRelPath); err == nil {
-				return parentRelPath
-			}
-		}
-	}
-
-	// Fall back to current directory (matches runtime behavior)
-	absPath, err := filepath.Abs(path)
-	if err != nil {
-		return path
-	}
-	return absPath
-}
-
-// loadEmbeddedJob loads a job definition from an embedded YAML file
-func loadEmbeddedJob(path string) (*Job, error) {
-	absPath, err := filepath.Abs(path)
-	if err != nil {
-		return nil, err
-	}
-
-	data, err := os.ReadFile(absPath)
-	if err != nil {
-		return nil, err
-	}
-
-	job := &Job{}
-	dec := yaml.NewDecoder(bytes.NewReader(data))
-	if err = dec.Decode(job); err != nil {
-		return nil, err
-	}
-
-	return job, nil
-}
-
 // renderDagAsciiJobNode renders a single job node
 func (r *DagAsciiRenderer) renderDagAsciiJobNode(node *DagAsciiJobNode) []string {
 	var lines []string
@@ -387,9 +292,9 @@ func (r *DagAsciiRenderer) renderDagAsciiJobNode(node *DagAsciiJobNode) []string
 			if pathVal, ok := step.With["path"]; ok {
 				if pathStr, ok := pathVal.(string); ok {
 					// Expand template variables in path and resolve relative to workflow directory
-					expandedPath := r.expandPath(pathStr)
-					resolvedPath := r.resolvePath(expandedPath)
-					embeddedJob, err := loadEmbeddedJob(resolvedPath)
+					expandedPath := r.ExpandPath(pathStr)
+					resolvedPath := r.ResolvePath(expandedPath)
+					embeddedJob, err := LoadEmbeddedJob(resolvedPath)
 					if err == nil && len(embeddedJob.Steps) > 0 {
 						// Render each embedded step with tree characters
 						for i, embStep := range embeddedJob.Steps {

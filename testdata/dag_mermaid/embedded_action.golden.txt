@@ -1,0 +1,12 @@
+flowchart LR
+    subgraph setup["Setup"]
+        setup_step0["Checkout"]
+        setup_step1["Set env vars"]
+        setup_step2["Validate config"]
+    end
+    subgraph test["Test"]
+        test_step0["Run tests"]
+        test_step1["Upload coverage"]
+    end
+
+    setup --> test

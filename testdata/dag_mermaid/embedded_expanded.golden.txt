@@ -1,0 +1,7 @@
+flowchart LR
+    subgraph deploy["Deploy"]
+        deploy_step0["Run job"]
+        deploy_step1["Simple success step"]
+        deploy_step2["Another success step"]
+    end
+

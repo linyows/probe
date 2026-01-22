@@ -8,15 +8,15 @@ import (
 
 // DagMermaidRenderer renders workflow graphs in Mermaid format
 type DagMermaidRenderer struct {
-	workflow   *Workflow
+	DagRendererBase
 	jobIDToIdx map[string]int
 }
 
 // NewDagMermaidRenderer creates a new DagMermaidRenderer
 func NewDagMermaidRenderer(w *Workflow) *DagMermaidRenderer {
 	r := &DagMermaidRenderer{
-		workflow:   w,
-		jobIDToIdx: make(map[string]int),
+		DagRendererBase: NewDagRendererBase(w),
+		jobIDToIdx:      make(map[string]int),
 	}
 
 	// Build job ID to index mapping
@@ -51,14 +51,41 @@ func (r *DagMermaidRenderer) Render() string {
 		// Create subgraph for job with steps
 		if len(job.Steps) > 0 {
 			sb.WriteString(fmt.Sprintf("    subgraph %s[\"%s\"]\n", safeID, displayName))
-			for i, step := range job.Steps {
+			stepIndex := 0
+			for _, step := range job.Steps {
 				stepName := step.Name
 				if stepName == "" {
 					stepName = step.Uses
 				}
-				stepID := fmt.Sprintf("%s_step%d", safeID, i)
+				stepID := fmt.Sprintf("%s_step%d", safeID, stepIndex)
 				stepLabel := r.escapeLabel(stepName)
 				sb.WriteString(fmt.Sprintf("        %s[\"%s\"]\n", stepID, stepLabel))
+				stepIndex++
+
+				// Render embedded steps if this is an embedded action
+				if step.Uses == "embedded" {
+					if pathVal, ok := step.With["path"]; ok {
+						if pathStr, ok := pathVal.(string); ok {
+							// Expand template variables in path and resolve relative to workflow directory
+							expandedPath := r.ExpandPath(pathStr)
+							resolvedPath := r.ResolvePath(expandedPath)
+							embeddedJob, err := LoadEmbeddedJob(resolvedPath)
+							if err == nil && len(embeddedJob.Steps) > 0 {
+								// Render each embedded step
+								for _, embStep := range embeddedJob.Steps {
+									embStepName := embStep.Name
+									if embStepName == "" {
+										embStepName = embStep.Uses
+									}
+									embStepID := fmt.Sprintf("%s_step%d", safeID, stepIndex)
+									embStepLabel := r.escapeLabel(embStepName)
+									sb.WriteString(fmt.Sprintf("        %s[\"%s\"]\n", embStepID, embStepLabel))
+									stepIndex++
+								}
+							}
+						}
+					}
+				}
 			}
 			sb.WriteString("    end\n")
 		} else {
