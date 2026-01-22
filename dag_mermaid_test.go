@@ -282,6 +282,63 @@ func TestRenderDagMermaid_Empty(t *testing.T) {
 	}
 }
 
+func TestDagMermaidRenderer_EmbeddedAction(t *testing.T) {
+	w := &Workflow{
+		Jobs: []Job{
+			{
+				Name: "Test",
+				ID:   "test",
+				Steps: []*Step{
+					{Name: "Normal Step", Uses: "hello"},
+					{Name: "Embedded Step", Uses: "embedded"},
+				},
+			},
+		},
+	}
+
+	renderer := NewDagMermaidRenderer(w)
+	result := renderer.Render()
+
+	// Check that output contains both steps
+	if !strings.Contains(result, "Normal Step") {
+		t.Errorf("expected output to contain 'Normal Step', got:\n%s", result)
+	}
+	if !strings.Contains(result, "Embedded Step") {
+		t.Errorf("expected output to contain 'Embedded Step', got:\n%s", result)
+	}
+}
+
+func TestDagMermaidRenderer_EmbeddedExpanded(t *testing.T) {
+	w := &Workflow{
+		basePath: "testdata",
+		Jobs: []Job{
+			{
+				Name: "Deploy",
+				ID:   "deploy",
+				Steps: []*Step{
+					{Name: "Run job", Uses: "embedded", With: map[string]any{"path": "./embedded-success-job.yml"}},
+				},
+			},
+		},
+	}
+
+	renderer := NewDagMermaidRenderer(w)
+	result := renderer.Render()
+
+	// Check that output contains the parent step
+	if !strings.Contains(result, "Run job") {
+		t.Errorf("expected output to contain 'Run job', got:\n%s", result)
+	}
+
+	// Check that output contains expanded embedded steps
+	if !strings.Contains(result, "Simple success step") {
+		t.Errorf("expected output to contain 'Simple success step' from embedded job, got:\n%s", result)
+	}
+	if !strings.Contains(result, "Another success step") {
+		t.Errorf("expected output to contain 'Another success step' from embedded job, got:\n%s", result)
+	}
+}
+
 // dagMermaidGoldenTestCase defines a golden test case for DAG Mermaid rendering.
 type dagMermaidGoldenTestCase struct {
 	name     string    // Test case name, used as golden file name
@@ -296,6 +353,34 @@ func getDagMermaidGoldenTestCases() []dagMermaidGoldenTestCase {
 			workflow: &Workflow{
 				Jobs: []Job{
 					{Name: "Build", ID: "build", Steps: []*Step{{Name: "Compile", Uses: "go"}}},
+				},
+			},
+		},
+		{
+			name: "embedded_action",
+			workflow: &Workflow{
+				Jobs: []Job{
+					{Name: "Setup", ID: "setup", Steps: []*Step{
+						{Name: "Checkout", Uses: "git"},
+						{Name: "Set env vars", Uses: "embedded"},
+						{Name: "Validate config", Uses: "embedded"},
+					}},
+					{Name: "Test", ID: "test", Needs: []string{"setup"}, Steps: []*Step{
+						{Name: "Run tests", Uses: "go"},
+						{Name: "Upload coverage", Uses: "embedded"},
+					}},
+				},
+			},
+		},
+		{
+			// Embedded action with path expands internal steps
+			name: "embedded_expanded",
+			workflow: &Workflow{
+				basePath: "testdata",
+				Jobs: []Job{
+					{Name: "Deploy", ID: "deploy", Steps: []*Step{
+						{Name: "Run job", Uses: "embedded", With: map[string]any{"path": "./embedded-success-job.yml"}},
+					}},
 				},
 			},
 		},
