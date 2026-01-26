@@ -3,6 +3,7 @@ package probe
 import (
 	"context"
 	"fmt"
+	"math"
 	"os"
 	"os/exec"
 	"reflect"
@@ -68,8 +69,13 @@ func (m *ActionsClient) Run(args []string, with map[string]any) (map[string]any,
 	}
 
 	// Convert protobuf.Struct back to map[string]any
+	// Apply convertFloatToInt to restore integer types that were converted to float64 by protobuf
 	if runRes.Result != nil {
-		return runRes.Result.AsMap(), nil
+		result := runRes.Result.AsMap()
+		if converted, ok := convertFloatToInt(result).(map[string]any); ok {
+			return converted, nil
+		}
+		return result, nil
 	}
 
 	return map[string]any{}, nil
@@ -86,9 +92,15 @@ func (m *ActionsServer) Run(ctx context.Context, req *pb.RunRequest) (*pb.RunRes
 	}
 
 	// Convert protobuf.Struct to map[string]any
+	// Apply convertFloatToInt to restore integer types that were converted to float64 by protobuf
 	var withMap map[string]any
 	if req.With != nil {
-		withMap = req.With.AsMap()
+		result := req.With.AsMap()
+		if converted, ok := convertFloatToInt(result).(map[string]any); ok {
+			withMap = converted
+		} else {
+			withMap = result
+		}
 	} else {
 		withMap = make(map[string]any)
 	}
@@ -226,6 +238,38 @@ func convertForProtobuf(value any) any {
 			return result
 		}
 		// Return as-is for supported types (string, int, float64, bool, etc.)
+		return value
+	}
+}
+
+// convertFloatToInt converts float64 values that represent integers back to int64.
+// This is needed because protobuf.Struct converts all numbers to float64,
+// which causes large integers like Unix timestamps to display in E notation.
+func convertFloatToInt(value any) any {
+	if value == nil {
+		return nil
+	}
+
+	switch v := value.(type) {
+	case float64:
+		// Check if the float64 is actually an integer value
+		if v == math.Trunc(v) && v >= math.MinInt64 && v <= math.MaxInt64 {
+			return int64(v)
+		}
+		return v
+	case map[string]any:
+		result := make(map[string]any)
+		for k, val := range v {
+			result[k] = convertFloatToInt(val)
+		}
+		return result
+	case []any:
+		result := make([]any, len(v))
+		for i, val := range v {
+			result[i] = convertFloatToInt(val)
+		}
+		return result
+	default:
 		return value
 	}
 }

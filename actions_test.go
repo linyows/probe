@@ -454,3 +454,70 @@ func TestStepWithMockRunner(t *testing.T) {
 		}
 	}
 }
+
+func TestConvertFloatToInt(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    any
+		expected any
+	}{
+		{"nil value", nil, nil},
+		{"float64 integer value", float64(1767851301), int64(1767851301)},
+		{"float64 with decimal", float64(0.091026392), float64(0.091026392)},
+		{"float64 zero", float64(0), int64(0)},
+		{"float64 negative integer", float64(-12345), int64(-12345)},
+		{"string unchanged", "test", "test"},
+		{"bool unchanged", true, true},
+		{"int64 unchanged", int64(12345), int64(12345)},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := convertFloatToInt(tt.input)
+			if result != tt.expected {
+				t.Errorf("convertFloatToInt(%v) = %v (%T), want %v (%T)",
+					tt.input, result, result, tt.expected, tt.expected)
+			}
+		})
+	}
+}
+
+func TestConvertFloatToInt_Map(t *testing.T) {
+	input := map[string]any{
+		"time":  float64(1767851301),
+		"value": float64(0.091),
+		"name":  "test",
+	}
+
+	result := convertFloatToInt(input).(map[string]any)
+
+	if result["time"] != int64(1767851301) {
+		t.Errorf("time = %v (%T), want int64(1767851301)", result["time"], result["time"])
+	}
+	if result["value"] != float64(0.091) {
+		t.Errorf("value = %v (%T), want float64(0.091)", result["value"], result["value"])
+	}
+	if result["name"] != "test" {
+		t.Errorf("name = %v, want test", result["name"])
+	}
+}
+
+func TestConvertFloatToInt_Array(t *testing.T) {
+	input := []any{
+		map[string]any{
+			"name":  "api.response.time",
+			"time":  float64(1767851301),
+			"value": float64(0.091026392),
+		},
+	}
+
+	result := convertFloatToInt(input).([]any)
+	m := result[0].(map[string]any)
+
+	if m["time"] != int64(1767851301) {
+		t.Errorf("time = %v (%T), want int64(1767851301)", m["time"], m["time"])
+	}
+	if m["value"] != float64(0.091026392) {
+		t.Errorf("value = %v (%T), want float64(0.091026392)", m["value"], m["value"])
+	}
+}
