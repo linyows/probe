@@ -1446,3 +1446,33 @@ func TestStep_DefaultStepTimeout_Value(t *testing.T) {
 		t.Errorf("DefaultStepTimeout = %v, want %v", DefaultStepTimeout, expected)
 	}
 }
+
+func TestParseExitStatus(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    any
+		expected int
+	}{
+		{"nil", nil, int(ExitStatusFailure)},
+		{"int 0", int(0), int(ExitStatusSuccess)},
+		{"int 1", int(1), int(ExitStatusFailure)},
+		{"int64 0", int64(0), int(ExitStatusSuccess)},
+		{"int64 1", int64(1), int(ExitStatusFailure)},
+		{"float64 0", float64(0), int(ExitStatusSuccess)},
+		{"float64 1", float64(1), int(ExitStatusFailure)},
+		{"string 0", "0", int(ExitStatusSuccess)},
+		{"string 1", "1", int(ExitStatusFailure)},
+		{"ExitStatus success", ExitStatusSuccess, int(ExitStatusSuccess)},
+		{"ExitStatus failure", ExitStatusFailure, int(ExitStatusFailure)},
+		{"unknown type", []int{0}, int(ExitStatusFailure)},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := parseExitStatus(tt.input)
+			if result != tt.expected {
+				t.Errorf("parseExitStatus(%v) = %d, want %d", tt.input, result, tt.expected)
+			}
+		})
+	}
+}

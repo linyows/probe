@@ -166,7 +166,15 @@ func (st *Step) executeActionWithRetry(runner ActionRunner, expW map[string]any,
 		// Check for success (status == 0)
 		if err == nil {
 			if status, ok := result["status"]; ok {
-				if statusInt, isInt := status.(int); isInt && statusInt == int(ExitStatusSuccess) {
+				var statusInt int
+				var isInt bool
+				switch v := status.(type) {
+				case int:
+					statusInt, isInt = v, true
+				case int64:
+					statusInt, isInt = int(v), true
+				}
+				if isInt && statusInt == int(ExitStatusSuccess) {
 					if jCtx.Verbose {
 						jCtx.Printer.LogDebug("Action succeeded on attempt %d", attempt)
 					}
@@ -466,6 +474,9 @@ func parseExitStatus(status any) int {
 	switch v := status.(type) {
 	case int:
 		return v
+	case int64:
+		// Handle integers converted from protobuf float64 by convertFloatToInt
+		return int(v)
 	case float64:
 		// Handle JSON numbers which are parsed as float64
 		return int(v)
