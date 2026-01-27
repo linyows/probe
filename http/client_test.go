@@ -2,6 +2,8 @@ package http
 
 import (
 	"encoding/json"
+	"io"
+	hp "net/http"
 	"reflect"
 	"strings"
 	"testing"
@@ -209,6 +211,151 @@ func TestResolveMethodAndURL(t *testing.T) {
 				if actualValue != expectedValue {
 					t.Errorf("Expected %s=%s, got %s=%s", key, expectedValue, key, actualValue)
 				}
+			}
+		})
+	}
+}
+
+func TestRequestBodyJSONConversion(t *testing.T) {
+	httpmock.Activate()
+	defer httpmock.DeactivateAndReset()
+
+	tests := []struct {
+		name         string
+		data         map[string]any
+		expectedBody string
+	}{
+		{
+			name: "array body with map[string]any headers",
+			data: map[string]any{
+				"url":    "http://localhost:8080/api",
+				"method": "POST",
+				"headers": map[string]any{
+					"content-type": "application/json",
+				},
+				"body": []any{
+					map[string]any{"name": "metric1", "value": 1.5, "time": 1234567890},
+					map[string]any{"name": "metric2", "value": 2.5, "time": 1234567891},
+				},
+			},
+			expectedBody: `[{"name":"metric1","time":1234567890,"value":1.5},{"name":"metric2","time":1234567891,"value":2.5}]`,
+		},
+		{
+			name: "array body with map[string]string headers",
+			data: map[string]any{
+				"url":    "http://localhost:8080/api",
+				"method": "POST",
+				"headers": map[string]string{
+					"content-type": "application/json",
+				},
+				"body": []any{
+					map[string]any{"name": "test", "value": 100},
+				},
+			},
+			expectedBody: `[{"name":"test","value":100}]`,
+		},
+		{
+			name: "array body with map[string]interface{} headers",
+			data: map[string]any{
+				"url":    "http://localhost:8080/api",
+				"method": "POST",
+				"headers": map[string]interface{}{
+					"content-type": "application/json",
+				},
+				"body": []any{
+					map[string]any{"id": 1},
+				},
+			},
+			expectedBody: `[{"id":1}]`,
+		},
+		{
+			name: "array body with Content-Type (capital case)",
+			data: map[string]any{
+				"url":    "http://localhost:8080/api",
+				"method": "POST",
+				"headers": map[string]any{
+					"Content-Type": "application/json",
+				},
+				"body": []any{
+					map[string]any{"key": "value"},
+				},
+			},
+			expectedBody: `[{"key":"value"}]`,
+		},
+		{
+			name: "map body with application/json",
+			data: map[string]any{
+				"url":    "http://localhost:8080/api",
+				"method": "POST",
+				"headers": map[string]any{
+					"content-type": "application/json",
+				},
+				"body": map[string]any{
+					"name":  "test",
+					"value": 42,
+				},
+			},
+			expectedBody: `{"name":"test","value":42}`,
+		},
+		{
+			name: "string body should not be converted",
+			data: map[string]any{
+				"url":    "http://localhost:8080/api",
+				"method": "POST",
+				"headers": map[string]any{
+					"content-type": "application/json",
+				},
+				"body": `{"already":"json"}`,
+			},
+			expectedBody: `{"already":"json"}`,
+		},
+		{
+			name: "non-json content-type should not convert body",
+			data: map[string]any{
+				"url":    "http://localhost:8080/api",
+				"method": "POST",
+				"headers": map[string]any{
+					"content-type": "text/plain",
+				},
+				"body": "plain text body",
+			},
+			expectedBody: "plain text body",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var capturedBody string
+			httpmock.Reset()
+			httpmock.RegisterResponder("POST", "http://localhost:8080/api",
+				func(req *hp.Request) (*hp.Response, error) {
+					body, _ := io.ReadAll(req.Body)
+					capturedBody = string(body)
+					return httpmock.NewStringResponse(200, "OK"), nil
+				})
+
+			_, err := Request(tt.data)
+			if err != nil {
+				t.Fatalf("Request failed: %v", err)
+			}
+
+			// For JSON bodies, parse and compare to handle key ordering differences
+			if strings.HasPrefix(tt.expectedBody, "[") || strings.HasPrefix(tt.expectedBody, "{") {
+				var expectedJSON, actualJSON any
+				if err := json.Unmarshal([]byte(tt.expectedBody), &expectedJSON); err == nil {
+					if err := json.Unmarshal([]byte(capturedBody), &actualJSON); err == nil {
+						expectedBytes, _ := json.Marshal(expectedJSON)
+						actualBytes, _ := json.Marshal(actualJSON)
+						if string(expectedBytes) != string(actualBytes) {
+							t.Errorf("Body mismatch:\nExpected: %s\nGot: %s", tt.expectedBody, capturedBody)
+						}
+						return
+					}
+				}
+			}
+
+			if capturedBody != tt.expectedBody {
+				t.Errorf("Body mismatch:\nExpected: %s\nGot: %s", tt.expectedBody, capturedBody)
 			}
 		})
 	}

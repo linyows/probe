@@ -251,14 +251,40 @@ func Request(data map[string]any, opts ...Option) (map[string]any, error) {
 	}
 
 	// Handle body conversion for JSON content-type by checking headers
-	if headers, ok := data["headers"].(map[string]any); ok {
-		if contentType, exists := headers["content-type"]; exists && contentType == "application/json" {
-			if bodyData, bodyExists := data["body"]; bodyExists {
-				if bodyMap, isMap := bodyData.(map[string]any); isMap {
-					// Convert body map to JSON string
-					if jsonBytes, err := json.Marshal(bodyMap); err == nil {
-						m["body"] = string(jsonBytes)
-					}
+	if bodyData, bodyExists := data["body"]; bodyExists {
+		isJSON := false
+		if headers, ok := data["headers"].(map[string]any); ok {
+			for k, v := range headers {
+				if strings.EqualFold(k, "content-type") && v == "application/json" {
+					isJSON = true
+					break
+				}
+			}
+		} else if headers, ok := data["headers"].(map[string]string); ok {
+			for k, v := range headers {
+				if strings.EqualFold(k, "content-type") && v == "application/json" {
+					isJSON = true
+					break
+				}
+			}
+		} else if headers, ok := data["headers"].(map[string]interface{}); ok {
+			for k, v := range headers {
+				if strings.EqualFold(k, "content-type") && v == "application/json" {
+					isJSON = true
+					break
+				}
+			}
+		}
+		if isJSON {
+			// Convert body to JSON string (supports both map and slice)
+			switch body := bodyData.(type) {
+			case map[string]any:
+				if jsonBytes, err := json.Marshal(body); err == nil {
+					m["body"] = string(jsonBytes)
+				}
+			case []any:
+				if jsonBytes, err := json.Marshal(body); err == nil {
+					m["body"] = string(jsonBytes)
 				}
 			}
 		}
