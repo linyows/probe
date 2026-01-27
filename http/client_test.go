@@ -216,6 +216,139 @@ func TestResolveMethodAndURL(t *testing.T) {
 	}
 }
 
+func TestHasJSONContentType(t *testing.T) {
+	tests := []struct {
+		name     string
+		headers  any
+		expected bool
+	}{
+		{
+			name:     "map[string]any with content-type lowercase",
+			headers:  map[string]any{"content-type": "application/json"},
+			expected: true,
+		},
+		{
+			name:     "map[string]any with Content-Type capitalized",
+			headers:  map[string]any{"Content-Type": "application/json"},
+			expected: true,
+		},
+		{
+			name:     "map[string]string with content-type",
+			headers:  map[string]string{"content-type": "application/json"},
+			expected: true,
+		},
+		{
+			name:     "map[string]interface{} with content-type",
+			headers:  map[string]interface{}{"content-type": "application/json"},
+			expected: true,
+		},
+		{
+			name:     "non-json content-type",
+			headers:  map[string]any{"content-type": "text/plain"},
+			expected: false,
+		},
+		{
+			name:     "no content-type header",
+			headers:  map[string]any{"accept": "application/json"},
+			expected: false,
+		},
+		{
+			name:     "nil headers",
+			headers:  nil,
+			expected: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := hasJSONContentType(tt.headers)
+			if result != tt.expected {
+				t.Errorf("hasJSONContentType() = %v, want %v", result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestMarshalBodyIfJSON(t *testing.T) {
+	tests := []struct {
+		name         string
+		data         map[string]any
+		expectedBody any
+	}{
+		{
+			name: "marshal array body",
+			data: map[string]any{
+				"headers": map[string]any{"content-type": "application/json"},
+				"body":    []any{map[string]any{"id": 1}, map[string]any{"id": 2}},
+			},
+			expectedBody: `[{"id":1},{"id":2}]`,
+		},
+		{
+			name: "marshal map body",
+			data: map[string]any{
+				"headers": map[string]any{"content-type": "application/json"},
+				"body":    map[string]any{"name": "test"},
+			},
+			expectedBody: `{"name":"test"}`,
+		},
+		{
+			name: "string body unchanged",
+			data: map[string]any{
+				"headers": map[string]any{"content-type": "application/json"},
+				"body":    `{"already":"json"}`,
+			},
+			expectedBody: nil, // not modified
+		},
+		{
+			name: "non-json content-type unchanged",
+			data: map[string]any{
+				"headers": map[string]any{"content-type": "text/plain"},
+				"body":    []any{map[string]any{"id": 1}},
+			},
+			expectedBody: nil, // not modified
+		},
+		{
+			name: "no body",
+			data: map[string]any{
+				"headers": map[string]any{"content-type": "application/json"},
+			},
+			expectedBody: nil, // not modified
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			m := make(map[string]any)
+			MarshalBodyIfJSON(tt.data, m)
+
+			if tt.expectedBody == nil {
+				if _, exists := m["body"]; exists {
+					t.Errorf("MarshalBodyIfJSON() should not set body, got %v", m["body"])
+				}
+			} else {
+				body, exists := m["body"]
+				if !exists {
+					t.Errorf("MarshalBodyIfJSON() should set body")
+					return
+				}
+				// Compare JSON
+				var expected, actual any
+				if err := json.Unmarshal([]byte(tt.expectedBody.(string)), &expected); err != nil {
+					t.Fatalf("Failed to parse expected JSON: %v", err)
+				}
+				if err := json.Unmarshal([]byte(body.(string)), &actual); err != nil {
+					t.Fatalf("Failed to parse actual JSON: %v", err)
+				}
+				expectedBytes, _ := json.Marshal(expected)
+				actualBytes, _ := json.Marshal(actual)
+				if string(expectedBytes) != string(actualBytes) {
+					t.Errorf("MarshalBodyIfJSON() = %v, want %v", body, tt.expectedBody)
+				}
+			}
+		})
+	}
+}
+
 func TestRequestBodyJSONConversion(t *testing.T) {
 	httpmock.Activate()
 	defer httpmock.DeactivateAndReset()
