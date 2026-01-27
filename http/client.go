@@ -238,6 +238,54 @@ func ResolveMethodAndURL(data map[string]any) error {
 	return nil
 }
 
+// hasJSONContentType checks if headers contain Content-Type: application/json
+// Supports multiple header map types and case-insensitive matching
+func hasJSONContentType(headers any) bool {
+	checkHeader := func(k string, v any) bool {
+		return strings.EqualFold(k, "content-type") && v == "application/json"
+	}
+
+	switch h := headers.(type) {
+	case map[string]any: // also matches map[string]interface{}
+		for k, v := range h {
+			if checkHeader(k, v) {
+				return true
+			}
+		}
+	case map[string]string:
+		for k, v := range h {
+			if checkHeader(k, v) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// MarshalBodyIfJSON converts body to JSON string when Content-Type is application/json
+// Supports map[string]any and []any body types
+func MarshalBodyIfJSON(data, m map[string]any) {
+	bodyData, bodyExists := data["body"]
+	if !bodyExists {
+		return
+	}
+
+	if !hasJSONContentType(data["headers"]) {
+		return
+	}
+
+	switch body := bodyData.(type) {
+	case map[string]any:
+		if jsonBytes, err := json.Marshal(body); err == nil {
+			m["body"] = string(jsonBytes)
+		}
+	case []any:
+		if jsonBytes, err := json.Marshal(body); err == nil {
+			m["body"] = string(jsonBytes)
+		}
+	}
+}
+
 func Request(data map[string]any, opts ...Option) (map[string]any, error) {
 	// Create a copy to avoid modifying the original data
 	m := make(map[string]any)
@@ -250,19 +298,8 @@ func Request(data map[string]any, opts ...Option) (map[string]any, error) {
 		return map[string]any{}, err
 	}
 
-	// Handle body conversion for JSON content-type by checking headers
-	if headers, ok := data["headers"].(map[string]any); ok {
-		if contentType, exists := headers["content-type"]; exists && contentType == "application/json" {
-			if bodyData, bodyExists := data["body"]; bodyExists {
-				if bodyMap, isMap := bodyData.(map[string]any); isMap {
-					// Convert body map to JSON string
-					if jsonBytes, err := json.Marshal(bodyMap); err == nil {
-						m["body"] = string(jsonBytes)
-					}
-				}
-			}
-		}
-	}
+	// Handle body conversion for JSON content-type
+	MarshalBodyIfJSON(data, m)
 
 	m = probe.HeaderToStringValue(m)
 
