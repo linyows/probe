@@ -16,6 +16,7 @@ jobs:
     with:
       # needs cgo for go-sqlite3
       cmd: CGO_ENABLED=1 go build -ldflags="-s -w" -o probe ./cmd/probe/...
+      timeout: 5m
     test: status == 0
   - name: Pull httpbin images
     uses: shell
