@@ -184,18 +184,16 @@ func (req *Req) parseData(data map[string]any, opts []Option) error {
 }
 
 func (req *Req) buildChromeDPOptions() []chromedp.ExecAllocatorOption {
-	return []chromedp.ExecAllocatorOption{
-		chromedp.NoFirstRun,
-		chromedp.NoDefaultBrowserCheck,
+	// Start from DefaultExecAllocatorOptions to include all recommended flags
+	// (disable-extensions, enable-automation, disable-sync, etc.)
+	opts := append(chromedp.DefaultExecAllocatorOptions[:],
 		chromedp.DisableGPU,
 		chromedp.NoSandbox,
 		chromedp.WindowSize(req.WindowW, req.WindowH),
 		chromedp.Flag("headless", req.Headless),
-		chromedp.Flag("disable-dev-shm-usage", true),
-		chromedp.Flag("disable-background-timer-throttling", true),
-		chromedp.Flag("disable-backgrounding-occluded-windows", true),
-		chromedp.Flag("disable-renderer-backgrounding", true),
-	}
+		chromedp.WSURLReadTimeout(req.Timeout),
+	)
+	return opts
 }
 
 func (req *Req) createBrowserContext() (context.Context, context.CancelFunc, error) {
