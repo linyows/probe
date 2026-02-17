@@ -17,7 +17,7 @@ require (
 	github.com/jarcoal/httpmock v1.4.1
 	github.com/lib/pq v1.11.1
 	github.com/mattn/go-isatty v0.0.20
-	github.com/mattn/go-sqlite3 v1.14.33
+	github.com/mattn/go-sqlite3 v1.14.34
 	github.com/stretchr/testify v1.11.1
 	golang.org/x/crypto v0.48.0
 	google.golang.org/grpc v1.79.1
