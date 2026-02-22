@@ -43,7 +43,7 @@ jobs:
         github.event.comment.author_association == 'OWNER' ||
         github.event.comment.author_association == 'COLLABORATOR'))
     steps:
-    - name: Get PR ref for comment trigger
+    - name: Get PR info for comment trigger
       if: github.event_name == 'issue_comment'
       id: pr
       uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
@@ -54,7 +54,7 @@ jobs:
             repo: context.repo.repo,
             pull_number: context.issue.number
           });
-          core.setOutput('ref', pr.head.ref);
+          core.setOutput('ref', `refs/pull/${context.issue.number}/head`);
           core.setOutput('sha', pr.head.sha);
 
     - name: Add reaction to comment
@@ -71,7 +71,7 @@ jobs:
 
     - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
       with:
-        ref: ${{ steps.pr.outputs.ref || github.ref }}
+        ref: ${{ steps.pr.outputs.sha || github.sha }}
 
     - name: Install dependencies
       run: sudo apt-get update && sudo apt-get install -y protobuf-compiler xvfb x11-utils
@@ -82,7 +82,7 @@ jobs:
     - name: Setup go
       uses: actions/setup-go@4dc6199c7b1a012772edbd06daecab0f50c9053c # v6.1.0
       with:
-        go-version: 1.25
+        go-version-file: go.mod
     - name: Run probe
       uses: linyows/probe-action@0164e23555aacbaaea03169102262dafeb1ff631 # v1
       with:
