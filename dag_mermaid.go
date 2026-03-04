@@ -50,7 +50,7 @@ func (r *DagMermaidRenderer) Render() string {
 
 		// Create subgraph for job with steps
 		if len(job.Steps) > 0 {
-			sb.WriteString(fmt.Sprintf("    subgraph %s[\"%s\"]\n", safeID, displayName))
+			fmt.Fprintf(&sb, "    subgraph %s[\"%s\"]\n", safeID, displayName)
 			stepIndex := 0
 			for _, step := range job.Steps {
 				stepName := step.Name
@@ -59,7 +59,7 @@ func (r *DagMermaidRenderer) Render() string {
 				}
 				stepID := fmt.Sprintf("%s_step%d", safeID, stepIndex)
 				stepLabel := r.escapeLabel(stepName)
-				sb.WriteString(fmt.Sprintf("        %s[\"%s\"]\n", stepID, stepLabel))
+				fmt.Fprintf(&sb, "        %s[\"%s\"]\n", stepID, stepLabel)
 				stepIndex++
 
 				// Render embedded steps if this is an embedded action
@@ -79,7 +79,7 @@ func (r *DagMermaidRenderer) Render() string {
 									}
 									embStepID := fmt.Sprintf("%s_step%d", safeID, stepIndex)
 									embStepLabel := r.escapeLabel(embStepName)
-									sb.WriteString(fmt.Sprintf("        %s[\"%s\"]\n", embStepID, embStepLabel))
+									fmt.Fprintf(&sb, "        %s[\"%s\"]\n", embStepID, embStepLabel)
 									stepIndex++
 								}
 							}
@@ -90,7 +90,7 @@ func (r *DagMermaidRenderer) Render() string {
 			sb.WriteString("    end\n")
 		} else {
 			// Job without steps - simple node
-			sb.WriteString(fmt.Sprintf("    %s[\"%s\"]\n", safeID, displayName))
+			fmt.Fprintf(&sb, "    %s[\"%s\"]\n", safeID, displayName)
 		}
 	}
 
@@ -107,7 +107,7 @@ func (r *DagMermaidRenderer) Render() string {
 
 		for _, need := range job.Needs {
 			safeNeedID := r.sanitizeID(need)
-			sb.WriteString(fmt.Sprintf("    %s --> %s\n", safeNeedID, safeJobID))
+			fmt.Fprintf(&sb, "    %s --> %s\n", safeNeedID, safeJobID)
 		}
 	}
 
