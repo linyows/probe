@@ -43,38 +43,38 @@ func setupMockServer(t *testing.T) (*MockServer, string) {
 
 func TestBulkDeliverWithResult(t *testing.T) {
 	tests := []struct {
-		name            string
-		session         int
-		message         int
-		expectedSent    int
+		name             string
+		session          int
+		message          int
+		expectedSent     int
 		expectedSessions int
 	}{
 		{
-			name:            "Single session, single message",
-			session:         1,
-			message:         1,
-			expectedSent:    1,
+			name:             "Single session, single message",
+			session:          1,
+			message:          1,
+			expectedSent:     1,
 			expectedSessions: 1,
 		},
 		{
-			name:            "Single session, multiple messages",
-			session:         1,
-			message:         5,
-			expectedSent:    5,
+			name:             "Single session, multiple messages",
+			session:          1,
+			message:          5,
+			expectedSent:     5,
 			expectedSessions: 1,
 		},
 		{
-			name:            "Multiple sessions, multiple messages",
-			session:         3,
-			message:         10,
-			expectedSent:    10,
+			name:             "Multiple sessions, multiple messages",
+			session:          3,
+			message:          10,
+			expectedSent:     10,
 			expectedSessions: 3,
 		},
 		{
-			name:            "Sessions equal to messages",
-			session:         5,
-			message:         5,
-			expectedSent:    5,
+			name:             "Sessions equal to messages",
+			session:          5,
+			message:          5,
+			expectedSent:     5,
 			expectedSessions: 5,
 		},
 	}
@@ -190,4 +190,3 @@ func TestBulkSend(t *testing.T) {
 		})
 	}
 }
-

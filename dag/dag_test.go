@@ -211,7 +211,7 @@ type Task struct {
 	deps []string
 }
 
-func (t Task) ID() string           { return t.name }
+func (t Task) ID() string             { return t.name }
 func (t Task) Dependencies() []string { return t.deps }
 
 func TestDetectCycle_Interface(t *testing.T) {

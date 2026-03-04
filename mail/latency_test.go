@@ -87,9 +87,9 @@ func TestGetReceivedTimeWithParse(t *testing.T) {
 			wantErr:  false,
 		},
 		{
-			name:     "malformed header without semicolon",
-			input:    "Received: from mx.example.com",
-			wantErr:  true,
+			name:    "malformed header without semicolon",
+			input:   "Received: from mx.example.com",
+			wantErr: true,
 		},
 	}
 

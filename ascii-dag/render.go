@@ -181,10 +181,10 @@ func (d *DAG) renderVertical(sb *strings.Builder) {
 
 // connection represents a connection between two nodes
 type connection struct {
-	fromIdx    int
-	toIdx      int
-	fromX      int // center X of source
-	toX        int // center X of target
+	fromIdx int
+	toIdx   int
+	fromX   int // center X of source
+	toX     int // center X of target
 }
 
 // drawConnections draws the connections between two levels
