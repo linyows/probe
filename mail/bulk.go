@@ -165,7 +165,8 @@ func insertLF(s string, length int) string {
 	var result strings.Builder
 	for i := 0; i < n; i += length {
 		if i+length < len(s) {
-			result.WriteString(s[i:i+length] + "\n")
+			result.WriteString(s[i : i+length])
+			result.WriteByte('\n')
 		} else {
 			result.WriteString(s[i:])
 		}

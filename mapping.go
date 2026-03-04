@@ -161,7 +161,7 @@ func MapToStructByTags(params map[string]any, dest any) error {
 		} else if field.Type() == reflect.TypeFor[map[string]string]() {
 			v, ok := params[mapTag].(map[string]any)
 			if !ok && validateTag == labelRequired {
-				return fmt.Errorf("expected map[string]interface{} for field '%s'", mapTag)
+				return fmt.Errorf("expected map[string]any for field '%s'", mapTag)
 			} else {
 				existingMap := field.Interface().(map[string]string)
 				mergedMap := MergeStringMaps(existingMap, v)
