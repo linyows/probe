@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math/rand/v2"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -266,18 +267,14 @@ func (e *Expr) isSafeEnvKey(key string) bool {
 
 	// Allow basic result variables
 	safeKeys := []string{"res", "result", "data", "response", "body", "status", "headers", "host", "name", "service", "authorization", "url", "repeat_index"}
-	for _, safe := range safeKeys {
-		if strings.ToLower(key) == safe {
-			return true
-		}
+	if slices.Contains(safeKeys, strings.ToLower(key)) {
+		return true
 	}
 
 	// Allow test environment variables but block real secrets
 	testEnvVars := []string{"TOKEN", "HOST", "URL", "PORT"}
-	for _, testVar := range testEnvVars {
-		if upperKey == testVar {
-			return true
-		}
+	if slices.Contains(testEnvVars, upperKey) {
+		return true
 	}
 
 	// Allow environment variables that are commonly used in tests/configs (but not secrets)
@@ -476,19 +473,19 @@ func (e *Expr) EvalTemplate(input string, env any) (string, error) {
 		// Security: Validate individual expression
 		if err := e.validateExpression(expression); err != nil {
 			evalError = fmt.Errorf("template expression validation failed: %w", err)
-			return []byte(fmt.Sprintf("[SecurityError: %s]", err.Error()))
+			return fmt.Appendf(nil, "[SecurityError: %s]", err.Error())
 		}
 
 		// Evaluate the expression using expr
 		program, err := ex.Compile(expression, e.Options(env)...)
 		if err != nil {
-			return []byte(fmt.Sprintf("[CompileError: %s]", err.Error()))
+			return fmt.Appendf(nil, "[CompileError: %s]", err.Error())
 		}
 
 		// Security: Execute with timeout protection
 		output, err := e.executeWithTimeout(program, env)
 		if err != nil {
-			return []byte(fmt.Sprintf("[RuntimeError: %s]", err.Error()))
+			return fmt.Appendf(nil, "[RuntimeError: %s]", err.Error())
 		}
 
 		// Convert the output to string with size limit

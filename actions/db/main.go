@@ -40,7 +40,7 @@ func (a *Action) Run(args []string, with map[string]any) (map[string]any, error)
 
 	// Execute database query with logger callbacks
 	result, err := cl.ExecuteQuery(with,
-		cl.WithBefore(func(query string, params []interface{}) {
+		cl.WithBefore(func(query string, params []any) {
 			a.log.Debug("executing database query", "query", query, "params", params)
 		}),
 		cl.WithAfter(func(result *cl.Result) {

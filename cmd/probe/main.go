@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"slices"
 	"strings"
 
 	"github.com/fatih/color"
@@ -75,7 +76,7 @@ func newBufferCmd() *Cmd {
 func (c *Cmd) parseArgs(args []string) error {
 	var nonFlagArgs []string
 
-	for i := 0; i < len(args); i++ {
+	for i := range args {
 		arg := args[i]
 
 		if strings.HasPrefix(arg, "-") {
@@ -121,12 +122,7 @@ func (c *Cmd) parseArgs(args []string) error {
 }
 
 func (c *Cmd) isValidFlag(flagName string) bool {
-	for _, validFlag := range c.validFlags {
-		if flagName == validFlag {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(c.validFlags, flagName)
 }
 
 func (c *Cmd) isValid(flag string) bool {
@@ -134,13 +130,7 @@ func (c *Cmd) isValid(flag string) bool {
 		flag = flag[:idx]
 	}
 
-	for _, validFlag := range c.validFlags {
-		if strings.TrimLeft(flag, "-") == validFlag {
-			return true
-		}
-	}
-
-	return false
+	return slices.Contains(c.validFlags, strings.TrimLeft(flag, "-"))
 }
 
 func (c *Cmd) usage() {

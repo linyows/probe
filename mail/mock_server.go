@@ -102,8 +102,8 @@ func (s *MockServerSession) handle(conn net.Conn) {
 			continue
 		}
 
-		commands := strings.Split(line, crlf)
-		for _, cmd := range commands {
+		commands := strings.SplitSeq(line, crlf)
+		for cmd := range commands {
 			s.handleCommand(cmd)
 		}
 

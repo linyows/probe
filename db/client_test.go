@@ -100,7 +100,7 @@ func TestReqStruct(t *testing.T) {
 		DSN:     "mysql://user:pass@localhost:3306/testdb",
 		Query:   "SELECT 1",
 		Timeout: "30s",
-		Params:  []interface{}{"param1"},
+		Params:  []any{"param1"},
 	}
 
 	if req.DSN == "" {
@@ -212,7 +212,7 @@ func TestExecuteQuery(t *testing.T) {
 			beforeCalled := false
 			afterCalled := false
 
-			before := WithBefore(func(query string, params []interface{}) {
+			before := WithBefore(func(query string, params []any) {
 				beforeCalled = true
 			})
 			after := WithAfter(func(result *Result) {
@@ -247,9 +247,9 @@ func TestExecuteQuery(t *testing.T) {
 func TestWithBefore(t *testing.T) {
 	called := false
 	var capturedQuery string
-	var capturedParams []interface{}
+	var capturedParams []any
 
-	option := WithBefore(func(query string, params []interface{}) {
+	option := WithBefore(func(query string, params []any) {
 		called = true
 		capturedQuery = query
 		capturedParams = params
@@ -264,7 +264,7 @@ func TestWithBefore(t *testing.T) {
 	}
 
 	// Test the callback
-	testParams := []interface{}{"param1", "param2"}
+	testParams := []any{"param1", "param2"}
 	cb.before("SELECT * FROM test", testParams)
 
 	if !called {
@@ -300,7 +300,7 @@ func TestWithAfter(t *testing.T) {
 		Status: 1,
 		Res: Res{
 			Code:         1,
-			Rows:         []interface{}{},
+			Rows:         []any{},
 			RowsAffected: 0,
 			Error:        "test error",
 		},

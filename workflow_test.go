@@ -370,7 +370,7 @@ func TestParallelExecution_EdgeCases(t *testing.T) {
 	t.Run("many jobs parallel execution", func(t *testing.T) {
 		// Create a workflow with many jobs to test parallel execution limits
 		jobs := make([]Job, 10)
-		for i := 0; i < 10; i++ {
+		for i := range 10 {
 			jobs[i] = Job{
 				Name:  fmt.Sprintf("job-%d", i),
 				Steps: []*Step{},
@@ -950,7 +950,7 @@ func TestWorkflowBuffer_ConcurrentAccess(t *testing.T) {
 
 	// Goroutine 1: Add step results
 	go func() {
-		for i := 0; i < 10; i++ {
+		for i := range 10 {
 			stepResult := StepResult{
 				Index:  i,
 				Name:   "Step " + string(rune('0'+i)),
@@ -963,7 +963,7 @@ func TestWorkflowBuffer_ConcurrentAccess(t *testing.T) {
 
 	// Goroutine 2: Read job buffer
 	go func() {
-		for i := 0; i < 5; i++ {
+		for range 5 {
 			jobResult := wb.Jobs[jobID]
 			if jobResult != nil {
 				_ = len(jobResult.StepResults)

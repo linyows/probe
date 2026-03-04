@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	hp "net/http"
 	"net/url"
 	"path"
@@ -65,9 +66,7 @@ func mergeHeaders(defaultHeaders, customHeaders map[string]string) map[string]st
 	result := make(map[string]string)
 
 	// First, copy all default headers
-	for key, value := range defaultHeaders {
-		result[key] = value
-	}
+	maps.Copy(result, defaultHeaders)
 
 	// Then, add/override with custom headers, removing case-insensitive duplicates
 	for customKey, customValue := range customHeaders {
@@ -289,9 +288,7 @@ func MarshalBodyIfJSON(data, m map[string]any) {
 func Request(data map[string]any, opts ...Option) (map[string]any, error) {
 	// Create a copy to avoid modifying the original data
 	m := make(map[string]any)
-	for k, v := range data {
-		m[k] = v
-	}
+	maps.Copy(m, data)
 
 	// Resolve HTTP method fields (get, post, etc.) to method and url
 	if err := ResolveMethodAndURL(m); err != nil {
@@ -310,7 +307,7 @@ func Request(data map[string]any, opts ...Option) (map[string]any, error) {
 		if headers, ok := headersInterface.(map[string]string); ok {
 			customHeaders = headers
 			hclog.Default().Info("DEBUG: Headers matched map[string]string")
-		} else if headersInterfaceMap, ok := headersInterface.(map[string]interface{}); ok {
+		} else if headersInterfaceMap, ok := headersInterface.(map[string]any); ok {
 			// Convert map[string]interface{} to map[string]string
 			customHeaders = make(map[string]string)
 			for k, v := range headersInterfaceMap {

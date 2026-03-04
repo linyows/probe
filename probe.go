@@ -135,9 +135,9 @@ func (p *Probe) readYamlFiles(paths []string) (string, error) {
 // yamlFiles resolves paths and returns a list of YAML (.yml and .yaml) files
 func (p *Probe) yamlFiles() ([]string, error) {
 	var files []string
-	paths := strings.Split(p.FilePath, ",")
+	paths := strings.SplitSeq(p.FilePath, ",")
 
-	for _, path := range paths {
+	for path := range paths {
 		path = strings.TrimSpace(path)
 
 		// Check if it's a single file or a directory

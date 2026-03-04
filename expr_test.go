@@ -1038,7 +1038,7 @@ func TestNewCustomFunctionsEdgeCases(t *testing.T) {
 	t.Run("unixtime consistency", func(t *testing.T) {
 		// Call unixtime multiple times in quick succession
 		results := make([]int64, 3)
-		for i := 0; i < 3; i++ {
+		for i := range 3 {
 			result, err := expr.Eval("unixtime()", env)
 			if err != nil {
 				t.Errorf("unexpected error: %v", err)

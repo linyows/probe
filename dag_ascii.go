@@ -2,22 +2,23 @@ package probe
 
 import (
 	"path/filepath"
+	"slices"
 	"strings"
 )
 
 const (
 	// Node border characters (string)
-	nodeTopLeft     = "╭"
-	nodeTopRight    = "╮"
-	nodeBottomLeft  = "╰"
-	nodeBottomRight = "╯"
-	nodeHorizontal  = "─"
-	nodeVertical    = "│"
-	nodeTeeRight    = "├"
-	nodeTeeDown     = "┬"
-	nodeTeeUp       = "┴"
-	nodeTeeLeft     = "┤"
-	nodeCross       = "┼"
+	nodeTopLeft        = "╭"
+	nodeTopRight       = "╮"
+	nodeBottomLeft     = "╰"
+	nodeBottomRight    = "╯"
+	nodeHorizontal     = "─"
+	nodeVertical       = "│"
+	nodeTeeRight       = "├"
+	nodeTeeDown        = "┬"
+	nodeTeeUp          = "┴"
+	nodeTeeLeft        = "┤"
+	nodeCross          = "┼"
 	arrowDown          = "↓"
 	stepBullet         = "○"
 	stepBulletEmbedded = "↗"
@@ -231,11 +232,8 @@ func (r *DagAsciiRenderer) createNodes() {
 
 		// Find level for this job
 		for level, jobIndices := range r.levels {
-			for _, idx := range jobIndices {
-				if idx == i {
-					node.Level = level
-					break
-				}
+			if slices.Contains(jobIndices, i) {
+				node.Level = level
 			}
 		}
 
@@ -523,11 +521,8 @@ func (r *DagAsciiRenderer) buildConnectionMap(parentIndices, childIndices []int)
 		childNode := r.nodes[childIdx]
 		for _, parentIdx := range parentIndices {
 			parentNode := r.nodes[parentIdx]
-			for _, need := range childNode.Job.Needs {
-				if need == parentNode.JobID {
-					connections[childIdx] = append(connections[childIdx], parentIdx)
-					break
-				}
+			if slices.Contains(childNode.Job.Needs, parentNode.JobID) {
+				connections[childIdx] = append(connections[childIdx], parentIdx)
 			}
 		}
 	}

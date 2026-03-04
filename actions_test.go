@@ -3,6 +3,7 @@ package probe
 import (
 	"context"
 	"errors"
+	"maps"
 	"testing"
 
 	"github.com/linyows/probe/pb"
@@ -38,9 +39,7 @@ func (m *MockActionsClient) Run(args []string, with map[string]any) (map[string]
 	}
 
 	// Include parameters in result
-	for k, v := range with {
-		result[k] = v
-	}
+	maps.Copy(result, with)
 
 	return result, nil
 }

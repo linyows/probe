@@ -481,17 +481,17 @@ func (p *Printer) PrintHeader(name, description string) {
 }
 
 // generateError generates an error message string
-func (p *Printer) generateError(format string, args ...interface{}) string {
+func (p *Printer) generateError(format string, args ...any) string {
 	return fmt.Sprintf("%s: %s\n", colorError().Sprintf("Error"), fmt.Sprintf(format, args...))
 }
 
 // PrintError prints an error message
-func (p *Printer) PrintError(format string, args ...interface{}) {
+func (p *Printer) PrintError(format string, args ...any) {
 	p.Fprint(p.errWriter, p.generateError(format, args...))
 }
 
 // PrintVerbose prints verbose output (only if verbose mode is enabled)
-func (p *Printer) PrintVerbose(format string, args ...interface{}) {
+func (p *Printer) PrintVerbose(format string, args ...any) {
 	if p.verbose {
 		p.Fprintf(p.errWriter, format, args...)
 	}
@@ -505,24 +505,24 @@ func (p *Printer) PrintSeparator() {
 }
 
 // generateLogDebug generates debug message string
-func (p *Printer) generateLogDebug(format string, args ...interface{}) string {
+func (p *Printer) generateLogDebug(format string, args ...any) string {
 	return fmt.Sprintf("[DEBUG] %s\n", fmt.Sprintf(format, args...))
 }
 
 // LogDebug prints debug messages (only in verbose mode)
-func (p *Printer) LogDebug(format string, args ...interface{}) {
+func (p *Printer) LogDebug(format string, args ...any) {
 	if p.verbose {
 		p.Fprint(p.errWriter, p.generateLogDebug(format, args...))
 	}
 }
 
 // generateLogError generates error log message string
-func (p *Printer) generateLogError(format string, args ...interface{}) string {
+func (p *Printer) generateLogError(format string, args ...any) string {
 	return fmt.Sprintf("%s\n", colorError().Sprintf("[ERROR] %s", fmt.Sprintf(format, args...)))
 }
 
 // LogError prints error messages to stderr
-func (p *Printer) LogError(format string, args ...interface{}) {
+func (p *Printer) LogError(format string, args ...any) {
 	p.Fprint(os.Stderr, p.generateLogError(format, args...))
 }
 
@@ -548,7 +548,7 @@ func (p *Printer) generateEchoOutput(content string, err error) string {
 }
 
 // generateTestFailure formats test failure output with request/response info
-func (p *Printer) generateTestFailure(testExpr string, result interface{}, req, res map[string]any) string {
+func (p *Printer) generateTestFailure(testExpr string, result any, req, res map[string]any) string {
 	// Check if response has dump field set to false
 	if res != nil {
 		if dump, exists := res["dump"]; exists {
@@ -573,7 +573,7 @@ func (p *Printer) generateTestError(testExpr string, err error) string {
 }
 
 // generateTestTypeMismatch formats test type mismatch error output
-func (p *Printer) generateTestTypeMismatch(testExpr string, result interface{}) string {
+func (p *Printer) generateTestTypeMismatch(testExpr string, result any) string {
 	txt := fmt.Sprintf("Test: `%s` = %v\n", testExpr, result)
 	if p.verbose {
 		p.LogDebug("%s", txt)
@@ -582,7 +582,7 @@ func (p *Printer) generateTestTypeMismatch(testExpr string, result interface{}) 
 }
 
 // PrintTestResult prints test result in verbose mode
-func (p *Printer) PrintTestResult(success bool, testExpr string, context interface{}) {
+func (p *Printer) PrintTestResult(success bool, testExpr string, context any) {
 	var resultStr string
 	if success {
 		resultStr = colorSuccess().Sprintf("Success")
@@ -596,9 +596,9 @@ func (p *Printer) PrintTestResult(success bool, testExpr string, context interfa
 func (p *Printer) PrintEchoContent(content string) {
 	// Add indent to all lines, including after user-specified newlines
 	indent := "       "
-	lines := strings.Split(content, "\n")
+	lines := strings.SplitSeq(content, "\n")
 
-	for _, line := range lines {
+	for line := range lines {
 		p.LogDebug("%s%s", indent, line)
 	}
 }

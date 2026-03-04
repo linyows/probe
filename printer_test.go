@@ -306,19 +306,19 @@ func TestPrinter_generateError(t *testing.T) {
 	tests := []struct {
 		name   string
 		format string
-		args   []interface{}
+		args   []any
 		want   string
 	}{
 		{
 			name:   "simple error",
 			format: "Something went wrong",
-			args:   []interface{}{},
+			args:   []any{},
 			want:   "Error: Something went wrong\n",
 		},
 		{
 			name:   "formatted error",
 			format: "Failed to process %s with code %d",
-			args:   []interface{}{"file.txt", 404},
+			args:   []any{"file.txt", 404},
 			want:   "Error: Failed to process file.txt with code 404\n",
 		},
 	}
@@ -339,19 +339,19 @@ func TestPrinter_generateLogDebug(t *testing.T) {
 	tests := []struct {
 		name   string
 		format string
-		args   []interface{}
+		args   []any
 		want   string
 	}{
 		{
 			name:   "simple debug",
 			format: "Debug message",
-			args:   []interface{}{},
+			args:   []any{},
 			want:   "[DEBUG] Debug message\n",
 		},
 		{
 			name:   "formatted debug",
 			format: "Processing item %d of %d",
-			args:   []interface{}{5, 10},
+			args:   []any{5, 10},
 			want:   "[DEBUG] Processing item 5 of 10\n",
 		},
 	}
@@ -376,19 +376,19 @@ func TestPrinter_generateLogError(t *testing.T) {
 	tests := []struct {
 		name   string
 		format string
-		args   []interface{}
+		args   []any
 		want   string
 	}{
 		{
 			name:   "simple log error",
 			format: "Critical error occurred",
-			args:   []interface{}{},
+			args:   []any{},
 			want:   "[ERROR] Critical error occurred\n",
 		},
 		{
 			name:   "formatted log error",
 			format: "Database connection failed: %s",
-			args:   []interface{}{"timeout"},
+			args:   []any{"timeout"},
 			want:   "[ERROR] Database connection failed: timeout\n",
 		},
 	}
@@ -1161,7 +1161,7 @@ func TestPrinter_generateTestFailure(t *testing.T) {
 	tests := []struct {
 		name     string
 		testExpr string
-		result   interface{}
+		result   any
 		req      map[string]any
 		res      map[string]any
 		expected string
@@ -1238,7 +1238,7 @@ func TestPrinter_generateTestTypeMismatch(t *testing.T) {
 	tests := []struct {
 		name     string
 		testExpr string
-		result   interface{}
+		result   any
 		expected string
 	}{
 		{
@@ -1280,7 +1280,7 @@ func TestPrinter_PrintTestResult(t *testing.T) {
 		name     string
 		success  bool
 		testExpr string
-		context  interface{}
+		context  any
 		verbose  bool
 		expected string
 	}{
@@ -1517,8 +1517,8 @@ func TestPrinter_generateJobResultsFromStepResults_ReportNewlineFormatting(t *te
 			}
 
 			// Verify that embedded job reports are properly indented with 5 spaces
-			lines := strings.Split(result, "\n")
-			for _, line := range lines {
+			lines := strings.SplitSeq(result, "\n")
+			for line := range lines {
 				if strings.Contains(line, "report") && len(line) > 0 {
 					if !strings.HasPrefix(line, "     ") {
 						t.Errorf("Report lines should be indented with 5 spaces, got line: %q", line)

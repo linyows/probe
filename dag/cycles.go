@@ -1,6 +1,8 @@
 // Package dag provides generic DAG algorithms that work with any data structure.
 package dag
 
+import "slices"
+
 // DetectCycleFn detects a cycle in a graph using a higher-order function.
 // Returns the cycle path if found, nil otherwise.
 //
@@ -83,23 +85,15 @@ func HasCycleFn[ID comparable](allIDs []ID, getDeps func(ID) []ID) bool {
 		visited[id] = true
 		recStack[id] = true
 
-		for _, dep := range getDeps(id) {
-			if dfs(dep) {
-				return true
-			}
+		if slices.ContainsFunc(getDeps(id), dfs) {
+			return true
 		}
 
 		recStack[id] = false
 		return false
 	}
 
-	for _, id := range allIDs {
-		if dfs(id) {
-			return true
-		}
-	}
-
-	return false
+	return slices.ContainsFunc(allIDs, dfs)
 }
 
 // CycleDetectable is an interface for types that can be checked for cycles.

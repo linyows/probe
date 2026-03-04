@@ -183,7 +183,7 @@ func TestCallback_Options(t *testing.T) {
 	var receivedReq *Req
 	var receivedRes *Res
 
-	withInBrowserOpt := WithInBrowser(func(s string, i ...interface{}) {
+	withInBrowserOpt := WithInBrowser(func(s string, i ...any) {
 		// Browser callback function
 	})
 

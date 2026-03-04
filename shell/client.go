@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 	"syscall"
@@ -127,10 +128,8 @@ func validateShellPath(shell string) error {
 		"/usr/bin/dash",
 	}
 
-	for _, allowed := range allowedShells {
-		if shell == allowed {
-			return nil
-		}
+	if slices.Contains(allowedShells, shell) {
+		return nil
 	}
 
 	return fmt.Errorf("shell path not allowed: %s", shell)
@@ -362,8 +361,8 @@ func PrepareRequestData(data map[string]string) error {
 	// Extract environment variables from env__ prefixed keys
 	env := make(map[string]string)
 	for key, value := range data {
-		if strings.HasPrefix(key, "env__") {
-			envKey := strings.TrimPrefix(key, "env__")
+		if after, ok := strings.CutPrefix(key, "env__"); ok {
+			envKey := after
 			env[envKey] = value
 			delete(data, key)
 		}

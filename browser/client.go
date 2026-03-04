@@ -95,7 +95,7 @@ func (m *MockRunner) SetRunFunc(fn func(ctx context.Context, actions ...chromedp
 type Option func(*Callback)
 
 type Callback struct {
-	withInBrowser func(s string, i ...interface{})
+	withInBrowser func(s string, i ...any)
 	before        func(req *Req)
 	after         func(res *Res)
 }
@@ -203,7 +203,7 @@ func (req *Req) createBrowserContext() (context.Context, context.CancelFunc, err
 	allocBaseCtx, allocBaseCancel := context.WithTimeout(context.Background(), req.Timeout)
 	allocCtx, allocCancel := chromedp.NewExecAllocator(allocBaseCtx, cdpOpts...)
 	// Create context with timeout
-	ctx, cancel := chromedp.NewContext(allocCtx, chromedp.WithDebugf(func(s string, i ...interface{}) {
+	ctx, cancel := chromedp.NewContext(allocCtx, chromedp.WithDebugf(func(s string, i ...any) {
 		// Callback
 		if req.cb != nil && req.cb.withInBrowser != nil {
 			req.cb.withInBrowser(s, i)
@@ -455,7 +455,7 @@ func createErrorResult(start time.Time, req *Req, err error) (map[string]any, er
 	return mapResult, err
 }
 
-func WithInBrowser(f func(s string, i ...interface{})) Option {
+func WithInBrowser(f func(s string, i ...any)) Option {
 	return func(c *Callback) {
 		c.withInBrowser = f
 	}

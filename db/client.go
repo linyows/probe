@@ -18,19 +18,19 @@ import (
 )
 
 type Req struct {
-	Driver  string        `map:"driver"`
-	DSN     string        `map:"dsn"`
-	Query   string        `map:"query"`
-	Params  []interface{} `map:"params"`
-	Timeout string        `map:"timeout"`
+	Driver  string `map:"driver"`
+	DSN     string `map:"dsn"`
+	Query   string `map:"query"`
+	Params  []any  `map:"params"`
+	Timeout string `map:"timeout"`
 	cb      *Callback
 }
 
 type Res struct {
-	Code         int           `map:"code"`
-	RowsAffected int64         `map:"rows_affected"`
-	Rows         []interface{} `map:"rows"`
-	Error        string        `map:"error"`
+	Code         int    `map:"code"`
+	RowsAffected int64  `map:"rows_affected"`
+	Rows         []any  `map:"rows"`
+	Error        string `map:"error"`
 }
 
 type Result struct {
@@ -50,7 +50,7 @@ func ParseRequest(with map[string]any) (*Req, string, time.Duration, error) {
 
 	// Manually handle params field because MapToStructByTags doesn't handle []interface{} properly
 	if paramsInput, exists := with["params"]; exists {
-		if paramsList, ok := paramsInput.([]interface{}); ok {
+		if paramsList, ok := paramsInput.([]any); ok {
 			req.Params = paramsList
 		}
 	}
@@ -235,13 +235,13 @@ func (r *Req) executeSelectQuery(db *sql.DB, start time.Time) (res *Result, err 
 		return nil, err
 	}
 
-	var results []interface{}
+	var results []any
 
 	// Scan rows
 	for rows.Next() {
 		// Create a slice for scanning
-		values := make([]interface{}, len(columns))
-		scanArgs := make([]interface{}, len(columns))
+		values := make([]any, len(columns))
+		scanArgs := make([]any, len(columns))
 		for i := range values {
 			scanArgs[i] = &values[i]
 		}
@@ -252,7 +252,7 @@ func (r *Req) executeSelectQuery(db *sql.DB, start time.Time) (res *Result, err 
 		}
 
 		// Create a map for this row
-		rowMap := make(map[string]interface{})
+		rowMap := make(map[string]any)
 		for i, col := range columns {
 			val := values[i]
 			// Convert []byte to string for text fields
@@ -301,7 +301,7 @@ func (r *Req) executeNonSelectQuery(db *sql.DB, start time.Time) (*Result, error
 		Res: Res{
 			Code:         0,
 			RowsAffected: rowsAffected,
-			Rows:         []interface{}{},
+			Rows:         []any{},
 		},
 		RT:     duration,
 		Status: 0, // success
@@ -316,7 +316,7 @@ func (r *Req) createErrorResult(start time.Time, err error) (map[string]any, err
 		Res: Res{
 			Code:         1,
 			RowsAffected: 0,
-			Rows:         []interface{}{},
+			Rows:         []any{},
 			Error:        err.Error(),
 		},
 		RT:     duration,
@@ -335,7 +335,7 @@ func (r *Req) createErrorResult(start time.Time, err error) (map[string]any, err
 type Option func(*Callback)
 
 type Callback struct {
-	before func(query string, params []interface{})
+	before func(query string, params []any)
 	after  func(result *Result)
 }
 
@@ -354,7 +354,7 @@ func ExecuteQuery(data map[string]any, opts ...Option) (map[string]any, error) {
 	return req.Execute(driverDSN, timeout)
 }
 
-func WithBefore(f func(query string, params []interface{})) Option {
+func WithBefore(f func(query string, params []any)) Option {
 	return func(c *Callback) {
 		c.before = f
 	}

@@ -3,6 +3,7 @@ package embedded
 import (
 	"bytes"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"strings"
@@ -187,9 +188,7 @@ func applyDefaults(data, defaults map[string]any) {
 func Execute(data map[string]any, opts ...Option) (map[string]any, error) {
 	// Create a copy to avoid modifying the original data
 	dataCopy := make(map[string]any)
-	for k, v := range data {
-		dataCopy[k] = v
-	}
+	maps.Copy(dataCopy, data)
 
 	m := probe.HeaderToStringValue(dataCopy)
 

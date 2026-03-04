@@ -19,7 +19,7 @@ func (a *Action) Run(args []string, with map[string]any) (map[string]any, error)
 	truncatedParams := probe.TruncateMapStringAny(with, truncateLength)
 	a.log.Debug("received browser action request", "params", truncatedParams)
 
-	within := br.WithInBrowser(func(s string, i ...interface{}) {
+	within := br.WithInBrowser(func(s string, i ...any) {
 		a.log.Debug("chromedp", "message", fmt.Sprintf(s, i...))
 	})
 	before := br.WithBefore(func(req *br.Req) {

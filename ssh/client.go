@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"maps"
 	"net"
 	"os"
 	"path/filepath"
@@ -455,8 +456,8 @@ func PrepareRequestData(data map[string]any) error {
 	// Extract environment variables from env__ prefixed keys
 	env := make(map[string]string)
 	for key, value := range data {
-		if strings.HasPrefix(key, "env__") {
-			envKey := strings.TrimPrefix(key, "env__")
+		if after, ok := strings.CutPrefix(key, "env__"); ok {
+			envKey := after
 			if strValue, ok := value.(string); ok {
 				env[envKey] = strValue
 			} else {
@@ -479,9 +480,7 @@ func PrepareRequestData(data map[string]any) error {
 func Execute(data map[string]any, opts ...Option) (map[string]any, error) {
 	// Create a copy to avoid modifying the original data
 	dataCopy := make(map[string]any)
-	for k, v := range data {
-		dataCopy[k] = v
-	}
+	maps.Copy(dataCopy, data)
 
 	// Prepare request data
 	if err := PrepareRequestData(dataCopy); err != nil {
