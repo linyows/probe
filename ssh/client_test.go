@@ -1,6 +1,7 @@
 package ssh
 
 import (
+	"maps"
 	"testing"
 	"time"
 )
@@ -222,9 +223,7 @@ func TestPrepareRequestData(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Make a copy of input since PrepareRequestData modifies the map
 			data := make(map[string]any)
-			for k, v := range tt.input {
-				data[k] = v
-			}
+			maps.Copy(data, tt.input)
 
 			err := PrepareRequestData(data)
 			if err != nil {

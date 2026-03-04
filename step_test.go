@@ -1217,8 +1217,8 @@ func TestStep_getEchoOutput_Error(t *testing.T) {
 	}
 
 	// Verify indentation is applied even to error messages
-	lines := strings.Split(strings.TrimSuffix(result, "\n"), "\n")
-	for _, line := range lines {
+	lines := strings.SplitSeq(strings.TrimSuffix(result, "\n"), "\n")
+	for line := range lines {
 		if !strings.HasPrefix(line, "       ") {
 			t.Errorf("getEchoOutput() should indent all lines including errors, line without indent: %q", line)
 		}

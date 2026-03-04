@@ -36,7 +36,7 @@ func (d *DAG) calculateLevels() []levelInfo {
 	}
 
 	result := make([]levelInfo, n)
-	for i := 0; i < n; i++ {
+	for i := range n {
 		result[i] = levelInfo{index: i, level: levels[i]}
 	}
 	return result

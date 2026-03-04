@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"os"
 	"time"
 
@@ -335,9 +336,7 @@ type Callback struct {
 func Request(data map[string]any, opts ...Option) (map[string]any, error) {
 	// Create a copy to avoid modifying the original data
 	m := make(map[string]any)
-	for k, v := range data {
-		m[k] = v
-	}
+	maps.Copy(m, data)
 
 	// Handle body conversion for structured data
 	if bodyData, bodyExists := m["body"]; bodyExists {

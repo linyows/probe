@@ -45,8 +45,8 @@ type Interval struct {
 }
 
 // UnmarshalYAML implements custom YAML unmarshaling for Interval
-func (i *Interval) UnmarshalYAML(unmarshal func(interface{}) error) error {
-	var raw interface{}
+func (i *Interval) UnmarshalYAML(unmarshal func(any) error) error {
+	var raw any
 	if err := unmarshal(&raw); err != nil {
 		return err
 	}
@@ -87,7 +87,7 @@ func (i *Interval) UnmarshalYAML(unmarshal func(interface{}) error) error {
 }
 
 // MarshalYAML implements custom YAML marshaling for Interval
-func (i Interval) MarshalYAML() (interface{}, error) {
+func (i Interval) MarshalYAML() (any, error) {
 	// If it's a whole number of seconds, return as integer
 	if i.Duration%time.Second == 0 {
 		return int(i.Duration / time.Second), nil

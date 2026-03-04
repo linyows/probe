@@ -239,7 +239,7 @@ func TestHasJSONContentType(t *testing.T) {
 		},
 		{
 			name:     "map[string]interface{} with content-type",
-			headers:  map[string]interface{}{"content-type": "application/json"},
+			headers:  map[string]any{"content-type": "application/json"},
 			expected: true,
 		},
 		{
@@ -392,7 +392,7 @@ func TestRequestBodyJSONConversion(t *testing.T) {
 			data: map[string]any{
 				"url":    "http://localhost:8080/api",
 				"method": "POST",
-				"headers": map[string]interface{}{
+				"headers": map[string]any{
 					"content-type": "application/json",
 				},
 				"body": []any{

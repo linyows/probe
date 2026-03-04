@@ -1,6 +1,7 @@
 package hello
 
 import (
+	"maps"
 	"os"
 
 	"github.com/hashicorp/go-hclog"
@@ -17,9 +18,7 @@ func (a *Action) Run(args []string, with map[string]any) (map[string]any, error)
 
 	// Create response data
 	res := make(map[string]any)
-	for k, v := range with {
-		res[k] = v
-	}
+	maps.Copy(res, with)
 	res["status"] = 0   // Always success for hello action (ExitStatusSuccess)
 	res["dump"] = false // Don't dump request/response for hello action
 

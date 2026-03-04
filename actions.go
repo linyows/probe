@@ -194,7 +194,7 @@ func convertForProtobuf(value any) any {
 			return result
 		}
 		// Check if it's a pointer using reflection
-		if rv.Kind() == reflect.Ptr {
+		if rv.Kind() == reflect.Pointer {
 			if rv.IsNil() {
 				return nil
 			}

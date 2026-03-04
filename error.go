@@ -24,7 +24,7 @@ type ProbeError struct {
 	Operation string
 	Message   string
 	Cause     error
-	Context   map[string]interface{}
+	Context   map[string]any
 }
 
 func (e *ProbeError) Error() string {
@@ -52,12 +52,12 @@ func NewProbeError(errorType ErrorType, operation, message string, cause error) 
 		Operation: operation,
 		Message:   message,
 		Cause:     cause,
-		Context:   make(map[string]interface{}),
+		Context:   make(map[string]any),
 	}
 }
 
 // WithContext adds context information to the error
-func (e *ProbeError) WithContext(key string, value interface{}) *ProbeError {
+func (e *ProbeError) WithContext(key string, value any) *ProbeError {
 	e.Context[key] = value
 	return e
 }

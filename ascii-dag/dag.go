@@ -3,6 +3,7 @@ package asciidag
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 )
 
@@ -119,10 +120,8 @@ func (d *DAG) AddEdge(from, to int) {
 	toIdx := d.idToIndex[to]
 
 	// Check if edge already exists
-	for _, childIdx := range d.children[fromIdx] {
-		if childIdx == toIdx {
-			return // Edge already exists
-		}
+	if slices.Contains(d.children[fromIdx], toIdx) {
+		return // Edge already exists
 	}
 
 	d.edges = append(d.edges, edge{from: from, to: to})

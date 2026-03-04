@@ -2,6 +2,7 @@ package probe
 
 import (
 	"fmt"
+	"maps"
 	"sync"
 )
 
@@ -99,9 +100,7 @@ func (o *Outputs) GetAll() map[string]any {
 		if stepOutputs, ok := v.(map[string]any); ok {
 			// This is step-based data, create a deep copy
 			copyOutputs := make(map[string]any)
-			for rk, rv := range stepOutputs {
-				copyOutputs[rk] = rv
-			}
+			maps.Copy(copyOutputs, stepOutputs)
 			copy[k] = copyOutputs
 		} else {
 			// This is flat data, copy directly
@@ -123,9 +122,7 @@ func (o *Outputs) GetAllWithFlat() map[string]any {
 		if stepOutputs, ok := v.(map[string]any); ok {
 			// This is step-based data, create a deep copy
 			copyOutputs := make(map[string]any)
-			for rk, rv := range stepOutputs {
-				copyOutputs[rk] = rv
-			}
+			maps.Copy(copyOutputs, stepOutputs)
 			copy[k] = copyOutputs
 		} else {
 			// This is flat data, copy directly

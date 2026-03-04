@@ -2,6 +2,7 @@ package imap
 
 import (
 	"fmt"
+	"maps"
 	"mime"
 	"net"
 	"regexp"
@@ -978,15 +979,11 @@ func (r *Req) Fetch(sequence, dataitem string) (*FetchData, error) {
 						if bodySection.Section.Specifier == imap.PartSpecifierHeader {
 							// Parse headers and add to message.Headers
 							headers := r.parseHeaderData(content)
-							for key, value := range headers {
-								message.Headers[key] = value
-							}
+							maps.Copy(message.Headers, headers)
 						} else if len(bodySection.Section.HeaderFields) > 0 {
 							// Handle HEADER.FIELDS specifically
 							headers := r.parseHeaderData(content)
-							for key, value := range headers {
-								message.Headers[key] = value
-							}
+							maps.Copy(message.Headers, headers)
 						} else if bodySection.Section.Specifier == imap.PartSpecifierText || bodySection.Section.Specifier == "" {
 							// This is text content or full message
 							if message.Body == "" {
@@ -1095,15 +1092,11 @@ func (r *Req) UIDFetch(sequence, dataitem string) (*FetchData, error) {
 						if bodySection.Section.Specifier == imap.PartSpecifierHeader {
 							// Parse headers and add to message.Headers
 							headers := r.parseHeaderData(content)
-							for key, value := range headers {
-								message.Headers[key] = value
-							}
+							maps.Copy(message.Headers, headers)
 						} else if len(bodySection.Section.HeaderFields) > 0 {
 							// Handle HEADER.FIELDS specifically
 							headers := r.parseHeaderData(content)
-							for key, value := range headers {
-								message.Headers[key] = value
-							}
+							maps.Copy(message.Headers, headers)
 						} else if bodySection.Section.Specifier == imap.PartSpecifierText || bodySection.Section.Specifier == "" {
 							// This is text content or full message
 							if message.Body == "" {
@@ -1178,8 +1171,8 @@ func (r *Req) parseSequenceSet(sequence string) (*imap.SeqSet, error) {
 	}
 
 	// Split by comma for multiple ranges/numbers
-	parts := strings.Split(sequence, ",")
-	for _, part := range parts {
+	parts := strings.SplitSeq(sequence, ",")
+	for part := range parts {
 		part = strings.TrimSpace(part)
 		if strings.Contains(part, ":") {
 			// Range
@@ -1232,8 +1225,8 @@ func (r *Req) parseUIDSet(sequence string) (*imap.UIDSet, error) {
 	}
 
 	// Split by comma for multiple ranges/numbers
-	parts := strings.Split(sequence, ",")
-	for _, part := range parts {
+	parts := strings.SplitSeq(sequence, ",")
+	for part := range parts {
 		part = strings.TrimSpace(part)
 		if strings.Contains(part, ":") {
 			// Range
@@ -1408,8 +1401,8 @@ func (r *Req) parseBodySection(bodyItem string) (*imap.FetchItemBodySection, err
 	if strings.HasPrefix(bodyItem, "BODY.PEEK[") {
 		bodySection.Peek = true
 		sectionContent = strings.TrimSuffix(strings.TrimPrefix(bodyItem, "BODY.PEEK["), "]")
-	} else if strings.HasPrefix(bodyItem, "BODY[") {
-		sectionContent = strings.TrimSuffix(strings.TrimPrefix(bodyItem, "BODY["), "]")
+	} else if after, ok := strings.CutPrefix(bodyItem, "BODY["); ok {
+		sectionContent = strings.TrimSuffix(after, "]")
 	} else {
 		return nil, fmt.Errorf("invalid BODY section format: %s", bodyItem)
 	}
@@ -1501,8 +1494,8 @@ func (r *Req) parseBodySection(bodyItem string) (*imap.FetchItemBodySection, err
 	}
 
 	// Handle header field requests (e.g., "HEADER.FIELDS (FROM TO)")
-	if strings.HasPrefix(sectionContent, "HEADER.FIELDS") {
-		headerContent := strings.TrimPrefix(sectionContent, "HEADER.FIELDS")
+	if after, ok := strings.CutPrefix(sectionContent, "HEADER.FIELDS"); ok {
+		headerContent := after
 		headerContent = strings.TrimSpace(headerContent)
 
 		// Check for NOT version

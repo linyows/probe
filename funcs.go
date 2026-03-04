@@ -140,7 +140,7 @@ func deepMatch(src, target any, diffs *[]string, path string) bool {
 // deepMatchWithDiffs recursively compares `src` and `target` and collects differences.
 //
 //nolint:unused // Reserved for future use
-func deepMatchWithDiffs(src, target interface{}, diffs *[]string, path string) bool {
+func deepMatchWithDiffs(src, target any, diffs *[]string, path string) bool {
 	// extendPath constructs a new path for nested keys.
 	extendPath := func(path, key string) string {
 		if path == "" {

@@ -11,7 +11,7 @@ import (
 func TestIntervalUnmarshal(t *testing.T) {
 	tests := []struct {
 		name     string
-		input    interface{}
+		input    any
 		expected time.Duration
 		hasError bool
 	}{
@@ -69,9 +69,9 @@ func TestIntervalUnmarshal(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			var interval Interval
 
-			unmarshalFunc := func(v interface{}) error {
+			unmarshalFunc := func(v any) error {
 				// Simulate the unmarshal behavior
-				if vPtr, ok := v.(*interface{}); ok {
+				if vPtr, ok := v.(*any); ok {
 					*vPtr = tt.input
 					return nil
 				}
@@ -104,7 +104,7 @@ func TestIntervalMarshal(t *testing.T) {
 	tests := []struct {
 		name     string
 		interval Interval
-		expected interface{}
+		expected any
 	}{
 		{
 			name:     "whole seconds",
@@ -645,4 +645,3 @@ func TestStepRetryValidation(t *testing.T) {
 		}
 	})
 }
-

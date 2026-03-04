@@ -2,6 +2,7 @@ package probe
 
 import (
 	"fmt"
+	"maps"
 	"os"
 	"reflect"
 	"strconv"
@@ -29,9 +30,7 @@ const (
 func MergeStringMaps(base map[string]string, over map[string]any) map[string]string {
 	res := make(map[string]string)
 
-	for k, v := range base {
-		res[k] = v
-	}
+	maps.Copy(res, base)
 
 	for k, v := range over {
 		if value, ok := v.(string); ok {
@@ -66,9 +65,7 @@ func MergeMaps(base, over map[string]any) map[string]any {
 	merged := make(map[string]any)
 
 	// Copy all entries from base into the result
-	for key, value := range base {
-		merged[key] = value
-	}
+	maps.Copy(merged, base)
 
 	// Merge entries from over, overriding base's values if keys conflict
 	for key, value := range over {
@@ -161,10 +158,10 @@ func MapToStructByTags(params map[string]any, dest any) error {
 			}
 
 			// when the field is a map[string]string
-		} else if field.Type() == reflect.TypeOf(map[string]string{}) {
-			v, ok := params[mapTag].(map[string]interface{})
+		} else if field.Type() == reflect.TypeFor[map[string]string]() {
+			v, ok := params[mapTag].(map[string]any)
 			if !ok && validateTag == labelRequired {
-				return fmt.Errorf("expected map[string]interface{} for field '%s'", mapTag)
+				return fmt.Errorf("expected map[string]any for field '%s'", mapTag)
 			} else {
 				existingMap := field.Interface().(map[string]string)
 				mergedMap := MergeStringMaps(existingMap, v)
@@ -172,7 +169,7 @@ func MapToStructByTags(params map[string]any, dest any) error {
 			}
 
 			// when the field is []byte
-		} else if field.Type() == reflect.TypeOf([]byte{}) {
+		} else if field.Type() == reflect.TypeFor[[]byte]() {
 			v, ok := params[mapTag].(string)
 			if !ok && validateTag == labelRequired {
 				return fmt.Errorf("expected string for field '%s' to convert to []byte", mapTag)
@@ -204,7 +201,7 @@ func MapToStructByTags(params map[string]any, dest any) error {
 					}
 				}
 
-			} else if fieldType.Type.Elem().Kind() == reflect.Struct || fieldType.Type.Elem().Kind() == reflect.Ptr {
+			} else if fieldType.Type.Elem().Kind() == reflect.Struct || fieldType.Type.Elem().Kind() == reflect.Pointer {
 				sliceParams, ok := params[mapTag].([]any)
 				if !ok && validateTag == labelRequired {
 					return fmt.Errorf("required field '%s' is missing or not a map[string]any", mapTag)
@@ -214,7 +211,7 @@ func MapToStructByTags(params map[string]any, dest any) error {
 						nestedParams, okk := prms.(map[string]any)
 						if okk {
 							var p reflect.Value
-							if elemType.Kind() == reflect.Ptr {
+							if elemType.Kind() == reflect.Pointer {
 								// []*Struct: create new struct and get pointer
 								structType := elemType.Elem()
 								p = reflect.New(structType)
@@ -228,7 +225,7 @@ func MapToStructByTags(params map[string]any, dest any) error {
 								return err
 							}
 
-							if elemType.Kind() == reflect.Ptr {
+							if elemType.Kind() == reflect.Pointer {
 								// []any{map[string]any{}} ===> []*Struct
 								field.Set(reflect.Append(field, p))
 							} else {
@@ -295,7 +292,7 @@ func MapToStructByTags(params map[string]any, dest any) error {
 							// Handle map type conversion
 							if fieldType.Key().Kind() == reflect.String && fieldType.Elem().Kind() == reflect.String {
 								// Convert map[string]interface{} to map[string]string
-								if mapVal, ok := v.(map[string]interface{}); ok {
+								if mapVal, ok := v.(map[string]any); ok {
 									newMap := make(map[string]string)
 									for k, val := range mapVal {
 										newMap[k] = fmt.Sprintf("%v", val)
@@ -357,7 +354,7 @@ func StructToMapByTags(src any) (map[string]any, error) {
 	typ := reflect.TypeOf(src)
 
 	// for pointers, access the actual value
-	if val.Kind() == reflect.Ptr {
+	if val.Kind() == reflect.Pointer {
 		val = val.Elem()
 		typ = typ.Elem()
 	}
@@ -381,12 +378,12 @@ func StructToMapByTags(src any) (map[string]any, error) {
 			result[mapTag] = nestedMap
 
 			// when the field is []byte
-		} else if field.Type() == reflect.TypeOf([]byte{}) {
+		} else if field.Type() == reflect.TypeFor[[]byte]() {
 			if b, ok := field.Interface().([]byte); ok {
 				result[mapTag] = string(b)
 			}
 
-		} else if field.Type() == reflect.TypeOf(map[string]string{}) {
+		} else if field.Type() == reflect.TypeFor[map[string]string]() {
 			// when the field is a map[string]string
 			result[mapTag] = field.Interface()
 

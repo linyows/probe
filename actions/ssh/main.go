@@ -55,7 +55,7 @@ func (a *Action) Run(args []string, with map[string]any) (map[string]any, error)
 	})
 	after := ssh.WithAfter(func(result *ssh.Result) {
 		// Truncate result for logging to prevent log bloat
-		logResult := map[string]interface{}{
+		logResult := map[string]any{
 			"code":   result.Res.Code,
 			"status": result.Status,
 			"rt":     result.RT,
