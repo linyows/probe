@@ -175,6 +175,54 @@ func TestResolveMethodAndURL(t *testing.T) {
 			wantErr: false,
 		},
 		{
+			name: "GET method with relative path and query parameters",
+			input: map[string]any{
+				"get": "/search?q=hello&page=1",
+				"url": "https://api.example.com",
+			},
+			expected: map[string]any{
+				"method": "GET",
+				"url":    "https://api.example.com/search?q=hello&page=1",
+			},
+			wantErr: false,
+		},
+		{
+			name: "POST method with relative path and query parameters",
+			input: map[string]any{
+				"post": "/users?active=true",
+				"url":  "https://api.example.com/v2",
+			},
+			expected: map[string]any{
+				"method": "POST",
+				"url":    "https://api.example.com/v2/users?active=true",
+			},
+			wantErr: false,
+		},
+		{
+			name: "GET method with base URL and route both containing query parameters",
+			input: map[string]any{
+				"get": "/search?q=hello&page=1",
+				"url": "https://api.example.com?token=abc",
+			},
+			expected: map[string]any{
+				"method": "GET",
+				// The route's query parameters overwrite the base URL's query.
+				"url": "https://api.example.com/search?q=hello&page=1",
+			},
+			wantErr: false,
+		},
+		{
+			name: "GET method with complete URL containing query parameters",
+			input: map[string]any{
+				"get": "https://api.example.com/search?q=hello&page=1",
+			},
+			expected: map[string]any{
+				"method": "GET",
+				"url":    "https://api.example.com/search?q=hello&page=1",
+			},
+			wantErr: false,
+		},
+		{
 			name: "Missing URL with relative path",
 			input: map[string]any{
 				"get": "/users",
