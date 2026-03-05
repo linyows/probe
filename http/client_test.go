@@ -199,6 +199,19 @@ func TestResolveMethodAndURL(t *testing.T) {
 			wantErr: false,
 		},
 		{
+			name: "GET method with base URL and route both containing query parameters",
+			input: map[string]any{
+				"get": "/search?q=hello&page=1",
+				"url": "https://api.example.com?token=abc",
+			},
+			expected: map[string]any{
+				"method": "GET",
+				// The route's query parameters overwrite the base URL's query.
+				"url": "https://api.example.com/search?q=hello&page=1",
+			},
+			wantErr: false,
+		},
+		{
 			name: "GET method with complete URL containing query parameters",
 			input: map[string]any{
 				"get": "https://api.example.com/search?q=hello&page=1",
