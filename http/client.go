@@ -227,7 +227,14 @@ func ResolveMethodAndURL(data map[string]any) error {
 			if err != nil {
 				return err
 			}
-			u.Path = path.Join(u.Path, route)
+			routeURL, err := url.Parse(route)
+			if err != nil {
+				return fmt.Errorf("invalid route: %w", err)
+			}
+			u.Path = path.Join(u.Path, routeURL.Path)
+			if routeURL.RawQuery != "" {
+				u.RawQuery = routeURL.RawQuery
+			}
 			data["url"] = u.String()
 		}
 
