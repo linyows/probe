@@ -232,31 +232,40 @@ func (js *JobScheduler) AllJobsCompleted() bool {
 	return true
 }
 
-// MarkJobsWithFailedDependencies marks jobs as failed if their dependencies have failed
+// MarkJobsWithFailedDependencies marks jobs as failed if their dependencies have failed.
+// It iterates until no more jobs are newly marked, propagating failures transitively
+// through multi-level dependency chains.
 func (js *JobScheduler) MarkJobsWithFailedDependencies() []string {
 	js.mutex.Lock()
 	defer js.mutex.Unlock()
 
 	var skippedJobs []string
 
-	for jobID, job := range js.jobs {
-		if js.status[jobID] != JobPending {
-			continue
-		}
+	for {
+		changed := false
+		for jobID, job := range js.jobs {
+			if js.status[jobID] != JobPending {
+				continue
+			}
 
-		// Check if any dependency has failed
-		hasFailedDependency := false
-		for _, dep := range job.Needs {
-			if js.status[dep] == JobFailed || (js.status[dep] == JobCompleted && !js.results[dep]) {
-				hasFailedDependency = true
-				break
+			// Check if any dependency has failed
+			hasFailedDependency := false
+			for _, dep := range job.Needs {
+				if js.status[dep] == JobFailed || (js.status[dep] == JobCompleted && !js.results[dep]) {
+					hasFailedDependency = true
+					break
+				}
+			}
+
+			if hasFailedDependency {
+				js.status[jobID] = JobFailed
+				js.results[jobID] = false
+				skippedJobs = append(skippedJobs, jobID)
+				changed = true
 			}
 		}
-
-		if hasFailedDependency {
-			js.status[jobID] = JobFailed
-			js.results[jobID] = false
-			skippedJobs = append(skippedJobs, jobID)
+		if !changed {
+			break
 		}
 	}
 
