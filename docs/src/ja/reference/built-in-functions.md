@@ -586,7 +586,7 @@ outputs:
 
 JSON文字列をオブジェクトに解析します。
 
-**構文:** `fromjson(json_string)` または `json_string | fromjson`  
+**構文:** `fromjson(json_string)` または `json_string | fromjson`
 **戻り値:** Object
 
 ```yaml
@@ -595,6 +595,40 @@ outputs:
   # JSON文字列をオブジェクトに解析
 
 test: fromjson(res.body.json.metadata).version == "1.0"
+```
+
+### `parse_json`
+
+JSON文字列をオブジェクト（`map[string]any`）または配列（`[]any`）にパースします。shellのstdoutなど、文字列としてJSONを返すアクションのレスポンスからフィールドを抽出するのに便利です。
+
+**構文:** `parse_json(json_string)`
+**戻り値:** Object または Array
+
+```yaml
+# shellのstdoutからフィールドを抽出
+- name: ユーザーデータを取得
+  id: get_user
+  uses: shell
+  with:
+    cmd: curl -s https://api.example.com/user/1
+  outputs:
+    user_id: parse_json(res.stdout).data.id
+    user_name: parse_json(res.stdout).data.name
+  test: parse_json(res.stdout).data.id == 12345
+
+# match_jsonと組み合わせてバリデーション
+- name: JSONレスポンスを検証
+  uses: shell
+  with:
+    cmd: echo '{"status":"ok","count":3}'
+  test: match_json(parse_json(res.stdout), {"status":"ok","count":3})
+
+# JSON配列をパース
+- name: 配列をパース
+  uses: shell
+  with:
+    cmd: echo '[{"id":1},{"id":2}]'
+  test: len(parse_json(res.stdout)) == 2
 ```
 
 ### `jsonpath`

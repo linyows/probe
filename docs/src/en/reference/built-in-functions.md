@@ -600,7 +600,7 @@ outputs:
 
 Parses a JSON string to an object.
 
-**Syntax:** `fromjson(json_string)` or `json_string | fromjson`  
+**Syntax:** `fromjson(json_string)` or `json_string | fromjson`
 **Returns:** Object
 
 ```yaml
@@ -609,6 +609,40 @@ outputs:
   # Parse JSON string to object
 
 test: fromjson(res.json.metadata).version == "1.0"
+```
+
+### `parse_json`
+
+Parses a JSON string into an object (`map[string]any`) or array (`[]any`). Useful for extracting fields from string values such as shell stdout or any action response that returns JSON as a string.
+
+**Syntax:** `parse_json(json_string)`
+**Returns:** Object or Array
+
+```yaml
+# Extract fields from shell stdout
+- name: Get user data
+  id: get_user
+  uses: shell
+  with:
+    cmd: curl -s https://api.example.com/user/1
+  outputs:
+    user_id: parse_json(res.stdout).data.id
+    user_name: parse_json(res.stdout).data.name
+  test: parse_json(res.stdout).data.id == 12345
+
+# Combine with match_json for validation
+- name: Validate JSON response
+  uses: shell
+  with:
+    cmd: echo '{"status":"ok","count":3}'
+  test: match_json(parse_json(res.stdout), {"status":"ok","count":3})
+
+# Parse JSON array
+- name: Parse array
+  uses: shell
+  with:
+    cmd: echo '[{"id":1},{"id":2}]'
+  test: len(parse_json(res.stdout)) == 2
 ```
 
 ### `jsonpath`
