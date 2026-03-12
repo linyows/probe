@@ -17,7 +17,7 @@ jobs:
     test: |
       res.code == 0 &&
       match_json(vars.result, vars.expected)
-    echo: diff_json(vars.result, vars.expected)
+    echo: "{{diff_json(vars.result, vars.expected)}}"
   - name: Mismatch Regexp
     uses: shell
     with:
@@ -31,7 +31,7 @@ jobs:
         name: /^\w+$/
     test: |
       res.code == 0
-    echo: diff_json(vars.result, vars.expected)
+    echo: "{{diff_json(vars.result, vars.expected)}}"
 
 - name: Test string functions
   steps:
@@ -67,3 +67,48 @@ jobs:
     test: indexOf(trim(res.stdout), "world") == 6
     echo: |
       The word "world" is at position {{indexOf(trim(res.stdout), "world")}}
+
+- name: Test parse_json function
+  steps:
+  - name: Parse JSON from stdout and extract fields
+    id: get_user
+    uses: shell
+    with:
+      cmd: echo '{"data":{"id":12345,"name":"probe","tags":["cli","testing"]}}'
+    outputs:
+      user_id: parse_json(res.stdout).data.id
+      user_name: parse_json(res.stdout).data.name
+    test: |
+      res.code == 0 &&
+      parse_json(res.stdout).data.id == 12345 &&
+      parse_json(res.stdout).data.name == "probe"
+
+  - name: Use parsed outputs in next step
+    uses: shell
+    with:
+      cmd: echo "User {{outputs.get_user.user_name}} has ID {{outputs.get_user.user_id}}"
+    test: res.code == 0
+    echo: "{{trim(res.stdout)}}"
+
+  - name: Combine parse_json with match_json
+    uses: shell
+    with:
+      cmd: echo '{"status":"ok","result":{"count":3,"items":["a","b","c"]}}'
+    vars:
+      expected:
+        status: ok
+        result:
+          count: 3
+          items: ["a", "b", "c"]
+    test: |
+      res.code == 0 &&
+      match_json(parse_json(res.stdout), vars.expected)
+    echo: "{{diff_json(parse_json(res.stdout), vars.expected)}}"
+
+  - name: Parse JSON array from stdout
+    uses: shell
+    with:
+      cmd: echo '[{"id":1,"name":"foo"},{"id":2,"name":"bar"}]'
+    test: |
+      res.code == 0 &&
+      len(parse_json(res.stdout)) == 2
