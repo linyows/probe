@@ -199,6 +199,7 @@ test: |
 利用可能な関数：
 - `match_json(actual, expected)`: 正規表現サポート付きJSONパターンマッチング
 - `diff_json(actual, expected)`: JSONオブジェクト間の差分を表示
+- `parse_json(string)`: JSON文字列をオブジェクト/配列にパース
 - `random_int(max)`: ランダムな整数を生成
 - `random_str(length)`: ランダムな文字列を生成
 - `unixtime()`: 現在のUnixタイムスタンプ

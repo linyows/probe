@@ -198,6 +198,22 @@ func (e *Expr) Options(env any) []ex.Option {
 			},
 		),
 		ex.Function(
+			"parse_json",
+			func(params ...any) (any, error) {
+				if len(params) != 1 {
+					return nil, fmt.Errorf("parse_json requires exactly 1 parameter")
+				}
+				s, ok := params[0].(string)
+				if !ok {
+					return nil, fmt.Errorf("parse_json parameter must be a string")
+				}
+				if len(s) > maxStringLength {
+					return nil, fmt.Errorf("parse_json parameter exceeds maximum length (%d chars)", maxStringLength)
+				}
+				return ParseJSON(s)
+			},
+		),
+		ex.Function(
 			"decode_base64",
 			func(params ...any) (any, error) {
 				if len(params) != 1 {

@@ -199,6 +199,7 @@ test: |
 Available functions:
 - `match_json(actual, expected)`: JSON pattern matching with regex support
 - `diff_json(actual, expected)`: Show differences between JSON objects
+- `parse_json(string)`: Parse JSON string into object/array
 - `random_int(max)`: Generate random integer
 - `random_str(length)`: Generate random string
 - `unixtime()`: Current Unix timestamp

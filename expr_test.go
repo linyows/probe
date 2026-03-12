@@ -1241,6 +1241,85 @@ func TestNewCustomFunctionsEdgeCases(t *testing.T) {
 		}
 	})
 
+	t.Run("parse_json", func(t *testing.T) {
+		tests := []struct {
+			name      string
+			input     string
+			env       map[string]any
+			expected  any
+			expectErr bool
+		}{
+			{
+				name:     "parse object and access field",
+				input:    "parse_json(data).name",
+				env:      map[string]any{"data": `{"name": "test", "id": 123}`},
+				expected: "test",
+			},
+			{
+				name:     "parse object and access nested field",
+				input:    "parse_json(data).data.id",
+				env:      map[string]any{"data": `{"data": {"id": 456}}`},
+				expected: float64(456),
+			},
+			{
+				name:     "parse and use with match_json",
+				input:    "match_json(parse_json(data), expected)",
+				env:      map[string]any{"data": `{"name": "test"}`, "expected": map[string]any{"name": "test"}},
+				expected: true,
+			},
+			{
+				name:      "invalid json",
+				input:     "parse_json(data)",
+				env:       map[string]any{"data": "not json"},
+				expectErr: true,
+			},
+			{
+				name:      "non-string parameter",
+				input:     "parse_json(data)",
+				env:       map[string]any{"data": 123},
+				expectErr: true,
+			},
+			{
+				name:      "no parameters",
+				input:     "parse_json()",
+				env:       map[string]any{},
+				expectErr: true,
+			},
+		}
+
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				result, err := expr.Eval(tt.input, tt.env)
+				if tt.expectErr {
+					if err == nil {
+						t.Errorf("expected error but got none")
+					}
+					return
+				}
+				if err != nil {
+					t.Errorf("unexpected error: %v", err)
+					return
+				}
+				if !reflect.DeepEqual(result, tt.expected) {
+					t.Errorf("expected %v (%T), got %v (%T)", tt.expected, tt.expected, result, result)
+				}
+			})
+		}
+	})
+
+	t.Run("parse_json in template", func(t *testing.T) {
+		result, err := expr.EvalTemplate("ID: {{parse_json(data).id}}", map[string]any{
+			"data": `{"id": 42, "name": "test"}`,
+		})
+		if err != nil {
+			t.Errorf("unexpected error: %v", err)
+			return
+		}
+		if result != "ID: 42" {
+			t.Errorf("expected 'ID: 42', got %s", result)
+		}
+	})
+
 	t.Run("base64 functions in templates", func(t *testing.T) {
 		tests := []struct {
 			name     string
