@@ -10,6 +10,7 @@ import (
 
 	"github.com/fatih/color"
 	"github.com/linyows/probe"
+	"github.com/linyows/probe/oas"
 	"github.com/linyows/probe/actions/browser"
 	"github.com/linyows/probe/actions/db"
 	"github.com/linyows/probe/actions/embedded"
@@ -36,21 +37,23 @@ func main() {
 }
 
 type Cmd struct {
-	WorkflowPath string
-	Init         bool
-	Lint         bool
-	Help         bool
-	Version      bool
-	Verbose      bool
-	RT           bool
-	DagAscii     bool
-	DagMermaid   bool
-	validFlags   []string
-	ver          string
-	rev          string
-	outWriter    io.Writer
-	errWriter    io.Writer
-	mocking      bool
+	WorkflowPath   string
+	SubCommand     string
+	SubCommandArgs []string
+	Init           bool
+	Lint           bool
+	Help           bool
+	Version        bool
+	Verbose        bool
+	RT             bool
+	DagAscii       bool
+	DagMermaid     bool
+	validFlags     []string
+	ver            string
+	rev            string
+	outWriter      io.Writer
+	errWriter      io.Writer
+	mocking        bool
 }
 
 func newCmd() *Cmd {
@@ -113,12 +116,21 @@ func (c *Cmd) parseArgs(args []string) error {
 		}
 	}
 
-	// Set WorkflowPath from first non-flag argument
-	if len(nonFlagArgs) > 0 {
+	// Check if first non-flag argument is a subcommand
+	if len(nonFlagArgs) > 0 && isSubCommand(nonFlagArgs[0]) {
+		c.SubCommand = nonFlagArgs[0]
+		c.SubCommandArgs = nonFlagArgs[1:]
+	} else if len(nonFlagArgs) > 0 {
 		c.WorkflowPath = nonFlagArgs[0]
 	}
 
 	return nil
+}
+
+var subCommands = []string{"gen"}
+
+func isSubCommand(name string) bool {
+	return slices.Contains(subCommands, name)
 }
 
 func (c *Cmd) isValidFlag(flagName string) bool {
@@ -149,11 +161,15 @@ https://github.com/linyows/probe (ver: %s, rev: %s)
 
 	head := `
 Usage: probe [options] <workflow-file>
+       probe gen <openapi-file>
 
 Arguments:
-  workflow-file    Path to YAML workflow file(s). Multiple files can be 
+  workflow-file    Path to YAML workflow file(s). Multiple files can be
                    specified with comma-separated paths (e.g., "base.yml,override.yml")
                    to merge configurations.
+
+Subcommands:
+  gen <file>       Generate probe workflow YAML from OpenAPI specification
 
 Options:`
 
@@ -208,6 +224,9 @@ func (c *Cmd) start(args []string) int {
 		c.printVersion()
 		return 0
 
+	case c.SubCommand != "":
+		return c.runSubCommand()
+
 	case c.WorkflowPath == "":
 		_, _ = fmt.Fprintf(c.errWriter, "[ERROR] workflow is required\n")
 		return 1
@@ -230,6 +249,33 @@ func (c *Cmd) start(args []string) int {
 		}
 		return 0
 	}
+}
+
+func (c *Cmd) runSubCommand() int {
+	switch c.SubCommand {
+	case "gen":
+		return c.runGen()
+	default:
+		_, _ = fmt.Fprintf(c.errWriter, "[ERROR] unknown subcommand: %s\n", c.SubCommand)
+		return 1
+	}
+}
+
+func (c *Cmd) runGen() int {
+	if len(c.SubCommandArgs) == 0 {
+		_, _ = fmt.Fprintf(c.errWriter, "[ERROR] OpenAPI spec file is required\n")
+		_, _ = fmt.Fprintf(c.errWriter, "Usage: probe gen <openapi-file>\n")
+		return 1
+	}
+
+	output, err := oas.Generate(c.SubCommandArgs[0])
+	if err != nil {
+		_, _ = fmt.Fprintf(c.errWriter, "[ERROR] %v\n", err)
+		return 1
+	}
+
+	_, _ = fmt.Fprint(c.outWriter, output)
+	return 0
 }
 
 func (c *Cmd) runProbe() int {

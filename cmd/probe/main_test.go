@@ -101,7 +101,7 @@ func TestCmd_usage(t *testing.T) {
 }
 
 func TestCmd_start(t *testing.T) {
-	help := " __  __  __  __  __\n|  ||  ||  ||  || _|\n|  ||  /| |||  /|  |\n| | |  \\| |||  \\| _|\n|_| |_\\_|__||__||__|\n\nProbe - A YAML-based workflow automation tool.\nhttps://github.com/linyows/probe (ver: dev, rev: unknown)\n\nUsage: probe [options] <workflow-file>\n\nArguments:\n  workflow-file    Path to YAML workflow file(s). Multiple files can be \n                   specified with comma-separated paths (e.g., \"base.yml,override.yml\")\n                   to merge configurations.\n\nOptions:\n  -h, --help       Show command usage\n      --version    Show version information\n      --rt         Show response time\n  -v, --verbose    Show verbose log\n      --dag-ascii  Show job dependency graph as ASCII art\n      --dag-mermaid Show job dependency graph in Mermaid format\n"
+	help := " __  __  __  __  __\n|  ||  ||  ||  || _|\n|  ||  /| |||  /|  |\n| | |  \\| |||  \\| _|\n|_| |_\\_|__||__||__|\n\nProbe - A YAML-based workflow automation tool.\nhttps://github.com/linyows/probe (ver: dev, rev: unknown)\n\nUsage: probe [options] <workflow-file>\n       probe gen <openapi-file>\n\nArguments:\n  workflow-file    Path to YAML workflow file(s). Multiple files can be\n                   specified with comma-separated paths (e.g., \"base.yml,override.yml\")\n                   to merge configurations.\n\nSubcommands:\n  gen <file>       Generate probe workflow YAML from OpenAPI specification\n\nOptions:\n  -h, --help       Show command usage\n      --version    Show version information\n      --rt         Show response time\n  -v, --verbose    Show verbose log\n      --dag-ascii  Show job dependency graph as ASCII art\n      --dag-mermaid Show job dependency graph in Mermaid format\n"
 
 	tests := []struct {
 		name           string
@@ -290,6 +290,81 @@ func TestCmd_start(t *testing.T) {
 				t.Errorf("start(%v) validFlags length = %d, want %d", tt.args, len(c.validFlags), len(expectedFlags))
 			}
 		})
+	}
+}
+
+func TestCmd_gen(t *testing.T) {
+	tests := []struct {
+		name       string
+		args       []string
+		expectCode int
+		contains   []string
+		errContain string
+	}{
+		{
+			name:       "gen with petstore spec",
+			args:       []string{"probe", "gen", "../../testdata/petstore.yml"},
+			expectCode: 0,
+			contains: []string{
+				"Pet Store API Tests",
+				"id: pets",
+				"id: list-pets",
+				"uses: http",
+			},
+		},
+		{
+			name:       "gen without file argument",
+			args:       []string{"probe", "gen"},
+			expectCode: 1,
+			errContain: "OpenAPI spec file is required",
+		},
+		{
+			name:       "gen with nonexistent file",
+			args:       []string{"probe", "gen", "nonexistent.yml"},
+			expectCode: 1,
+			errContain: "failed to read OpenAPI spec",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c := newBufferCmd()
+			code := c.start(tt.args)
+			if code != tt.expectCode {
+				t.Errorf("start(%v) = %d, want %d", tt.args, code, tt.expectCode)
+			}
+			if len(tt.contains) > 0 {
+				output := fmt.Sprintf("%s", c.outWriter)
+				for _, s := range tt.contains {
+					if !strings.Contains(output, s) {
+						t.Errorf("output should contain %q, got: %s", s, output)
+					}
+				}
+			}
+			if tt.errContain != "" {
+				errOutput := fmt.Sprintf("%s", c.errWriter)
+				if !strings.Contains(errOutput, tt.errContain) {
+					t.Errorf("error output should contain %q, got: %s", tt.errContain, errOutput)
+				}
+			}
+		})
+	}
+}
+
+func TestCmd_parseArgs_gen(t *testing.T) {
+	c := newBufferCmd()
+	err := c.parseArgs([]string{"gen", "openapi.yml"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if c.SubCommand != "gen" {
+		t.Errorf("SubCommand = %q, want %q", c.SubCommand, "gen")
+	}
+	if len(c.SubCommandArgs) != 1 || c.SubCommandArgs[0] != "openapi.yml" {
+		t.Errorf("SubCommandArgs = %v, want [openapi.yml]", c.SubCommandArgs)
+	}
+	if c.WorkflowPath != "" {
+		t.Errorf("WorkflowPath = %q, want empty", c.WorkflowPath)
 	}
 }
 
