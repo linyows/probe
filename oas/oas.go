@@ -79,7 +79,7 @@ func buildWorkflow(model *libopenapi.DocumentModel[v3.Document]) workflowMap {
 	}
 
 	serverURL := defaultServerURL
-	if doc.Servers != nil && len(doc.Servers) > 0 && doc.Servers[0].URL != "" {
+	if len(doc.Servers) > 0 && doc.Servers[0].URL != "" {
 		serverURL = doc.Servers[0].URL
 	}
 
