@@ -5,7 +5,8 @@ This page provides complete documentation for the Probe command-line interface, 
 ## Basic Usage
 
 ```bash
-probe [workflow-file] [options]
+probe [options] <workflow-file>
+probe <subcommand> [options] <file>
 ```
 
 ## Command Syntax
@@ -99,15 +100,37 @@ Build: abc1234
 Go Version: go1.20.1
 ```
 
-### `dag` subcommand
+## Subcommands
 
-**Description:** Display job dependency graph without executing the workflow. By default, outputs ASCII art. Use `--mermaid` to output in Mermaid flowchart format.
+### `gen`
+
+Generate probe workflow YAML from an OpenAPI specification.
+
+**Usage:**
+```bash
+probe gen <openapi-file>
+```
+
+**Example:**
+```bash
+probe gen petstore.yml
+```
+
+### `dag`
+
+Display job dependency graph without executing the workflow. By default, outputs ASCII art. Use `--mermaid` to output in Mermaid flowchart format.
 
 **Usage:**
 ```bash
 probe dag <workflow-file>
 probe dag --mermaid <workflow-file>
 ```
+
+**Options:**
+
+| Option | Description |
+|--------|-------------|
+| `--mermaid` | Output in Mermaid flowchart format instead of ASCII art |
 
 **ASCII Output Example:**
 ```

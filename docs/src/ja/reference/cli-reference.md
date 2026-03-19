@@ -5,7 +5,8 @@
 ## 基本的な使用法
 
 ```bash
-probe [workflow-file] [options]
+probe [options] <workflow-file>
+probe <subcommand> [options] <file>
 ```
 
 ## コマンド構文
@@ -99,15 +100,37 @@ Build: abc1234
 Go Version: go1.20.1
 ```
 
-### `dag` サブコマンド
+## サブコマンド
 
-**説明:** ワークフローを実行せずにジョブ依存関係グラフを表示。デフォルトではASCIIアートで出力します。`--mermaid` を指定するとMermaidフローチャート形式で出力します。
+### `gen`
+
+OpenAPI仕様からprobeワークフローYAMLを生成します。
+
+**使い方:**
+```bash
+probe gen <openapi-file>
+```
+
+**例:**
+```bash
+probe gen petstore.yml
+```
+
+### `dag`
+
+ワークフローを実行せずにジョブ依存関係グラフを表示します。デフォルトではASCIIアートで出力します。`--mermaid` を指定するとMermaidフローチャート形式で出力します。
 
 **使い方:**
 ```bash
 probe dag <workflow-file>
 probe dag --mermaid <workflow-file>
 ```
+
+**オプション:**
+
+| オプション | 説明 |
+|--------|-------------|
+| `--mermaid` | ASCIIアートの代わりにMermaidフローチャート形式で出力 |
 
 **ASCII出力例:**
 ```
