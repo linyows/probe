@@ -353,12 +353,11 @@ func TestCmd_gen(t *testing.T) {
 
 func TestCmd_parseArgs_dag(t *testing.T) {
 	tests := []struct {
-		name              string
-		args              []string
-		expectSubCommand  string
-		expectSubArgs     []string
-		expectDagMermaid  bool
-		expectWorkflow    string
+		name             string
+		args             []string
+		expectSubCommand string
+		expectSubArgs    []string
+		expectDagMermaid bool
 	}{
 		{
 			name:             "dag with workflow file",
@@ -405,8 +404,8 @@ func TestCmd_parseArgs_dag(t *testing.T) {
 			if c.DagMermaid != tt.expectDagMermaid {
 				t.Errorf("DagMermaid = %v, want %v", c.DagMermaid, tt.expectDagMermaid)
 			}
-			if c.WorkflowPath != tt.expectWorkflow {
-				t.Errorf("WorkflowPath = %q, want %q", c.WorkflowPath, tt.expectWorkflow)
+			if c.WorkflowPath != "" {
+				t.Errorf("WorkflowPath = %q, want empty", c.WorkflowPath)
 			}
 		})
 	}
@@ -424,6 +423,18 @@ func TestCmd_dag(t *testing.T) {
 			args:       []string{"probe", "dag"},
 			expectCode: 1,
 			errContain: "workflow file is required",
+		},
+		{
+			name:       "mermaid flag without dag subcommand",
+			args:       []string{"probe", "--mermaid", "test.yml"},
+			expectCode: 1,
+			errContain: "--mermaid can only be used with the dag subcommand",
+		},
+		{
+			name:       "mermaid flag without dag subcommand and without file",
+			args:       []string{"probe", "--mermaid"},
+			expectCode: 1,
+			errContain: "--mermaid can only be used with the dag subcommand",
 		},
 	}
 

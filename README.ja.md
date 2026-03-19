@@ -92,19 +92,22 @@ probe ./workflow.yml --verbose
 probe ./workflow.yml --rt
 
 # ジョブ依存関係グラフをASCIIアートで表示
-probe ./workflow.yml --dag-ascii
+probe dag ./workflow.yml
 
 # ジョブ依存関係グラフをMermaid形式で表示
-probe ./workflow.yml --dag-mermaid
+probe dag --mermaid ./workflow.yml
 ```
 
 ### CLIオプション
 - `<workflow>`: YAMLワークフローファイルパスを指定
 - `--verbose`: 詳細出力を有効化
 - `--rt`: レスポンス時間を表示
-- `--dag-ascii`: ジョブ依存関係をASCIIアートで表示
-- `--dag-mermaid`: ジョブ依存関係をMermaid形式で表示
 - `--help`: ヘルプ情報を表示
+
+### サブコマンド
+- `probe gen <openapi-file>`: OpenAPI仕様からprobeワークフローYAMLを生成
+- `probe dag <workflow-file>`: ジョブ依存関係をASCIIアートで表示
+- `probe dag --mermaid <workflow-file>`: ジョブ依存関係をMermaid形式で表示
 
 ワークフロー構文
 ---------------

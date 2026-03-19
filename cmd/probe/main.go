@@ -225,6 +225,11 @@ func (c *Cmd) start(args []string) int {
 	case c.SubCommand != "":
 		return c.runSubCommand()
 
+	case c.DagMermaid:
+		_, _ = fmt.Fprintf(c.errWriter, "[ERROR] --mermaid can only be used with the dag subcommand\n")
+		_, _ = fmt.Fprintf(c.errWriter, "Usage: probe dag [--mermaid] <workflow-file>\n")
+		return 1
+
 	case c.WorkflowPath == "":
 		_, _ = fmt.Fprintf(c.errWriter, "[ERROR] workflow is required\n")
 		return 1

@@ -92,19 +92,22 @@ probe ./workflow.yml --verbose
 probe ./workflow.yml --rt
 
 # Show job dependency graph as ASCII art
-probe ./workflow.yml --dag-ascii
+probe dag ./workflow.yml
 
 # Show job dependency graph in Mermaid format
-probe ./workflow.yml --dag-mermaid
+probe dag --mermaid ./workflow.yml
 ```
 
 ### CLI Options
 - `<workflow>`: Specify YAML workflow file path
 - `--verbose`: Enable detailed output
 - `--rt`: Show response times
-- `--dag-ascii`: Display job dependency graph as ASCII art
-- `--dag-mermaid`: Display job dependency graph in Mermaid format
 - `--help`: Show help information
+
+### Subcommands
+- `probe gen <openapi-file>`: Generate probe workflow YAML from OpenAPI specification
+- `probe dag <workflow-file>`: Display job dependency graph as ASCII art
+- `probe dag --mermaid <workflow-file>`: Display job dependency graph in Mermaid format
 
 Workflow Syntax
 ---------------
