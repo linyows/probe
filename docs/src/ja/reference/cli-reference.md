@@ -5,7 +5,8 @@
 ## 基本的な使用法
 
 ```bash
-probe [workflow-file] [options]
+probe [options] <workflow-file>
+probe <subcommand> [options] <file>
 ```
 
 ## コマンド構文
@@ -99,18 +100,39 @@ Build: abc1234
 Go Version: go1.20.1
 ```
 
-### `--dag-ascii`
+## サブコマンド
 
-**型:** ブールフラグ
-**デフォルト:** `false`
-**説明:** ワークフローを実行せずにジョブ依存関係をASCIIアートで表示。ジョブとそのステップをボックス形式で表示します。
+### `gen`
+
+OpenAPI仕様からprobeワークフローYAMLを生成します。
+
+**使い方:**
+```bash
+probe gen <openapi-file>
+```
 
 **例:**
 ```bash
-probe --dag-ascii workflow.yml
+probe gen petstore.yml
 ```
 
-**出力例:**
+### `dag`
+
+ワークフローを実行せずにジョブ依存関係グラフを表示します。デフォルトではASCIIアートで出力します。`--mermaid` を指定するとMermaidフローチャート形式で出力します。
+
+**使い方:**
+```bash
+probe dag <workflow-file>
+probe dag --mermaid <workflow-file>
+```
+
+**オプション:**
+
+| オプション | 説明 |
+|--------|-------------|
+| `--mermaid` | ASCIIアートの代わりにMermaidフローチャート形式で出力 |
+
+**ASCII出力例:**
 ```
 ╭───────────────────────╮
 │         Setup         │
@@ -136,24 +158,7 @@ probe --dag-ascii workflow.yml
 ╰───────────────────────╯  ╰───────────────────────╯
 ```
 
-以下の用途に便利です：
-- 実行前にワークフロー構造を可視化
-- ジョブ依存関係とそのステップの理解
-- ジョブ依存関係の設定をデバッグ
-- ドキュメントやコミュニケーション
-
-### `--dag-mermaid`
-
-**型:** ブールフラグ
-**デフォルト:** `false`
-**説明:** ワークフローを実行せずにジョブ依存関係をMermaidフローチャート形式で表示。出力はGitHub、GitLab、Notionなどのマークダウンビューアで直接レンダリングできます。
-
-**例:**
-```bash
-probe --dag-mermaid workflow.yml
-```
-
-**出力例:**
+**Mermaid出力例 (`--mermaid`):**
 ```mermaid
 flowchart LR
     subgraph build["Build"]
@@ -176,10 +181,11 @@ flowchart LR
 ```
 
 以下の用途に便利です：
-- レンダリングされたダイアグラム付きドキュメントの生成
-- Wikiやドキュメントでのワークフロー構造の共有
-- 自動レンダリング用にMarkdownファイルへの埋め込み
-- プレゼンテーション用のビジュアル表現の作成
+- 実行前にワークフロー構造を可視化
+- ジョブ依存関係とそのステップの理解
+- ジョブ依存関係の設定をデバッグ
+- ドキュメントやダイアグラムの生成
+- Markdownファイルへの埋め込み
 
 ## 環境変数
 

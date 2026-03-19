@@ -5,7 +5,8 @@ This page provides complete documentation for the Probe command-line interface, 
 ## Basic Usage
 
 ```bash
-probe [workflow-file] [options]
+probe [options] <workflow-file>
+probe <subcommand> [options] <file>
 ```
 
 ## Command Syntax
@@ -99,18 +100,39 @@ Build: abc1234
 Go Version: go1.20.1
 ```
 
-### `--dag-ascii`
+## Subcommands
 
-**Type:** Boolean flag
-**Default:** `false`
-**Description:** Display job dependency graph as ASCII art without executing the workflow. Shows jobs with their steps in boxes.
+### `gen`
+
+Generate probe workflow YAML from an OpenAPI specification.
+
+**Usage:**
+```bash
+probe gen <openapi-file>
+```
 
 **Example:**
 ```bash
-probe --dag-ascii workflow.yml
+probe gen petstore.yml
 ```
 
-**Output Example:**
+### `dag`
+
+Display job dependency graph without executing the workflow. By default, outputs ASCII art. Use `--mermaid` to output in Mermaid flowchart format.
+
+**Usage:**
+```bash
+probe dag <workflow-file>
+probe dag --mermaid <workflow-file>
+```
+
+**Options:**
+
+| Option | Description |
+|--------|-------------|
+| `--mermaid` | Output in Mermaid flowchart format instead of ASCII art |
+
+**ASCII Output Example:**
 ```
 ╭───────────────────────╮
 │         Setup         │
@@ -136,24 +158,7 @@ probe --dag-ascii workflow.yml
 ╰───────────────────────╯  ╰───────────────────────╯
 ```
 
-This is useful for:
-- Visualizing workflow structure before execution
-- Understanding job dependencies and their steps
-- Debugging job dependency configurations
-- Documentation and communication
-
-### `--dag-mermaid`
-
-**Type:** Boolean flag
-**Default:** `false`
-**Description:** Display job dependency graph in Mermaid flowchart format without executing the workflow. The output can be directly rendered in GitHub, GitLab, Notion, and other Markdown viewers.
-
-**Example:**
-```bash
-probe --dag-mermaid workflow.yml
-```
-
-**Output Example:**
+**Mermaid Output Example (`--mermaid`):**
 ```mermaid
 flowchart LR
     subgraph build["Build"]
@@ -176,10 +181,11 @@ flowchart LR
 ```
 
 This is useful for:
+- Visualizing workflow structure before execution
+- Understanding job dependencies and their steps
+- Debugging job dependency configurations
 - Generating documentation with rendered diagrams
-- Sharing workflow structure in wikis and documentation
 - Embedding in Markdown files for automatic rendering
-- Creating visual representations for presentations
 
 ## Environment Variables
 
