@@ -42,20 +42,20 @@ func generateExample(schema *base.Schema, depth int) any {
 
 	// Handle allOf: merge properties from all schemas
 	if len(schema.AllOf) > 0 {
-		return generateAllOfExample(schema.AllOf, depth)
+		return generateAllOfExample(schema.AllOf, depth+1)
 	}
 
 	// Handle oneOf/anyOf: use first option
 	if len(schema.OneOf) > 0 {
 		s := schema.OneOf[0].Schema()
 		if s != nil {
-			return generateExample(s, depth)
+			return generateExample(s, depth+1)
 		}
 	}
 	if len(schema.AnyOf) > 0 {
 		s := schema.AnyOf[0].Schema()
 		if s != nil {
-			return generateExample(s, depth)
+			return generateExample(s, depth+1)
 		}
 	}
 

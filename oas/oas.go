@@ -5,6 +5,7 @@ import (
 	"os"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/goccy/go-yaml"
@@ -278,7 +279,7 @@ func groupOperationsIntoJobs(ops []operation, auth authKind, doc v3.Document) []
 
 func pathPrefix(path string) string {
 	parts := strings.Split(strings.TrimPrefix(path, "/"), "/")
-	if len(parts) > 0 {
+	if len(parts) > 0 && parts[0] != "" {
 		return parts[0]
 	}
 	return "api"
@@ -329,11 +330,22 @@ func buildDefaults(auth authKind, doc v3.Document) map[string]any {
 		}
 	}
 
+	httpDefaults := map[string]any{
+		"url":     "{{vars.base_url}}",
+		"headers": headers,
+	}
+
+	if auth == authAPIKeyQuery {
+		info := getAPIKeyInfo(doc)
+		if info != nil {
+			httpDefaults["query"] = map[string]any{
+				info.name: "{{vars.api_key}}",
+			}
+		}
+	}
+
 	return map[string]any{
-		"http": map[string]any{
-			"url":     "{{vars.base_url}}",
-			"headers": headers,
-		},
+		"http": httpDefaults,
 	}
 }
 
@@ -370,16 +382,16 @@ func buildStep(op operation, usedIDs map[string]int) stepMap {
 		vars[varName] = pathParamExample(p)
 	}
 
-	with[op.method] = pathStr
-
-	// Query parameters
+	// Append query parameters to path
 	if len(queryParams) > 0 {
-		params := make(map[string]any)
+		qparts := make([]string, 0, len(queryParams))
 		for _, p := range queryParams {
-			params[p.Name] = paramExample(p)
+			qparts = append(qparts, fmt.Sprintf("%s=%v", p.Name, paramExample(p)))
 		}
-		with["params"] = params
+		pathStr = pathStr + "?" + strings.Join(qparts, "&")
 	}
+
+	with[op.method] = pathStr
 
 	// Request body
 	if op.body != nil && op.body.Content != nil {
@@ -467,7 +479,7 @@ func pathParamExample(p *v3.Parameter) string {
 
 func paramExample(p *v3.Parameter) any {
 	if p.Example != nil {
-		return p.Example
+		return nodeToValue(p.Example)
 	}
 	if p.Schema != nil {
 		schema := p.Schema.Schema()
@@ -487,7 +499,9 @@ func buildTestExpression(responses *v3.Responses) string {
 	for pair := responses.Codes.First(); pair != nil; pair = pair.Next() {
 		code := pair.Key()
 		if len(code) == 3 && code[0] == '2' {
-			return fmt.Sprintf("res.code == %s", code)
+			if _, err := strconv.Atoi(code); err == nil {
+				return fmt.Sprintf("res.code == %s", code)
+			}
 		}
 	}
 

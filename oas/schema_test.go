@@ -143,6 +143,56 @@ func TestGenerateExample_Object(t *testing.T) {
 	assert.Equal(t, 0, m["age"])
 }
 
+func TestGenerateExample_OneOfDepthLimit(t *testing.T) {
+	// oneOf at max depth should return nil, not recurse infinitely
+	schema := &base.Schema{
+		OneOf: []*base.SchemaProxy{
+			base.CreateSchemaProxy(&base.Schema{
+				Type:       []string{"string"},
+				Extensions: newExtensions(),
+			}),
+		},
+		Extensions: newExtensions(),
+	}
+	result := generateExample(schema, maxSchemaDepth)
+	assert.Nil(t, result)
+}
+
+func TestGenerateExample_AnyOfDepthLimit(t *testing.T) {
+	schema := &base.Schema{
+		AnyOf: []*base.SchemaProxy{
+			base.CreateSchemaProxy(&base.Schema{
+				Type:       []string{"string"},
+				Extensions: newExtensions(),
+			}),
+		},
+		Extensions: newExtensions(),
+	}
+	result := generateExample(schema, maxSchemaDepth)
+	assert.Nil(t, result)
+}
+
+func TestGenerateExample_AllOfDepthLimit(t *testing.T) {
+	props := orderedmap.New[string, *base.SchemaProxy]()
+	props.Set("name", base.CreateSchemaProxy(&base.Schema{
+		Type:       []string{"string"},
+		Extensions: newExtensions(),
+	}))
+
+	schema := &base.Schema{
+		AllOf: []*base.SchemaProxy{
+			base.CreateSchemaProxy(&base.Schema{
+				Type:       []string{"object"},
+				Properties: props,
+				Extensions: newExtensions(),
+			}),
+		},
+		Extensions: newExtensions(),
+	}
+	result := generateExample(schema, maxSchemaDepth)
+	assert.Nil(t, result)
+}
+
 func TestGenerateExample_Array(t *testing.T) {
 	itemSchema := base.CreateSchemaProxy(&base.Schema{
 		Type:       []string{"string"},

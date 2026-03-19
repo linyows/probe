@@ -319,6 +319,106 @@ paths:
 	assert.False(t, strings.Contains(result, "body:"))
 }
 
+func TestGenerate_WildcardResponseCode(t *testing.T) {
+	spec := `
+openapi: "3.0.0"
+info:
+  title: Test API
+paths:
+  /data:
+    get:
+      summary: Get data
+      responses:
+        "2XX":
+          description: Success
+`
+	result, err := GenerateFromBytes([]byte(spec))
+	require.NoError(t, err)
+
+	// 2XX is a pattern, not a concrete code; should fall back to range check
+	assert.Contains(t, result, "res.code >= 200 && res.code < 300")
+	assert.NotContains(t, result, "res.code == 2XX")
+}
+
+func TestGenerate_RootPath(t *testing.T) {
+	spec := `
+openapi: "3.0.0"
+info:
+  title: Test API
+paths:
+  /:
+    get:
+      summary: Root endpoint
+      responses:
+        "200":
+          description: OK
+`
+	result, err := GenerateFromBytes([]byte(spec))
+	require.NoError(t, err)
+
+	// Should not produce empty job id/name
+	assert.Contains(t, result, "id: api")
+}
+
+func TestGenerate_QueryParams(t *testing.T) {
+	spec := `
+openapi: "3.0.0"
+info:
+  title: Test API
+paths:
+  /search:
+    get:
+      summary: Search
+      parameters:
+        - name: q
+          in: query
+          schema:
+            type: string
+        - name: page
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: OK
+`
+	result, err := GenerateFromBytes([]byte(spec))
+	require.NoError(t, err)
+
+	// Query params should be appended to the URL, not in a params field
+	assert.Contains(t, result, "q=example")
+	assert.Contains(t, result, "page=0")
+	assert.NotContains(t, result, "params:")
+}
+
+func TestGenerate_APIKeyQueryAuth(t *testing.T) {
+	spec := `
+openapi: "3.0.0"
+info:
+  title: API Key Query API
+servers:
+  - url: https://api.example.com
+components:
+  securitySchemes:
+    apiKeyAuth:
+      type: apiKey
+      in: query
+      name: api_key
+paths:
+  /data:
+    get:
+      summary: Get data
+      responses:
+        "200":
+          description: OK
+`
+	result, err := GenerateFromBytes([]byte(spec))
+	require.NoError(t, err)
+
+	assert.Contains(t, result, "api_key")
+	assert.Contains(t, result, "query:")
+}
+
 func TestGenerate_DuplicateOperationID(t *testing.T) {
 	spec := `
 openapi: "3.0.0"
