@@ -101,7 +101,7 @@ func TestCmd_usage(t *testing.T) {
 }
 
 func TestCmd_start(t *testing.T) {
-	help := " __  __  __  __  __\n|  ||  ||  ||  || _|\n|  ||  /| |||  /|  |\n| | |  \\| |||  \\| _|\n|_| |_\\_|__||__||__|\n\nProbe - A YAML-based workflow automation tool.\nhttps://github.com/linyows/probe (ver: dev, rev: unknown)\n\nUsage: probe [options] <workflow-file>\n       probe gen <openapi-file>\n\nArguments:\n  workflow-file    Path to YAML workflow file(s). Multiple files can be\n                   specified with comma-separated paths (e.g., \"base.yml,override.yml\")\n                   to merge configurations.\n\nSubcommands:\n  gen <file>       Generate probe workflow YAML from OpenAPI specification\n\nOptions:\n  -h, --help       Show command usage\n      --version    Show version information\n      --rt         Show response time\n  -v, --verbose    Show verbose log\n      --dag-ascii  Show job dependency graph as ASCII art\n      --dag-mermaid Show job dependency graph in Mermaid format\n"
+	help := " __  __  __  __  __\n|  ||  ||  ||  || _|\n|  ||  /| |||  /|  |\n| | |  \\| |||  \\| _|\n|_| |_\\_|__||__||__|\n\nProbe - A YAML-based workflow automation tool.\nhttps://github.com/linyows/probe (ver: dev, rev: unknown)\n\nUsage: probe [options] <workflow-file>\n       probe gen <openapi-file>\n       probe dag [--mermaid] <workflow-file>\n\nArguments:\n  workflow-file    Path to YAML workflow file(s). Multiple files can be\n                   specified with comma-separated paths (e.g., \"base.yml,override.yml\")\n                   to merge configurations.\n\nSubcommands:\n  gen <file>       Generate probe workflow YAML from OpenAPI specification\n  dag <file>       Show job dependency graph as ASCII art (default)\n                   Use --mermaid to output in Mermaid format\n\nOptions:\n  -h, --help       Show command usage\n      --version    Show version information\n      --rt         Show response time\n  -v, --verbose    Show verbose log\n"
 
 	tests := []struct {
 		name           string
@@ -285,7 +285,7 @@ func TestCmd_start(t *testing.T) {
 			}
 
 			// Check validFlags
-			expectedFlags := []string{"help", "h", "version", "rt", "verbose", "v", "dag-ascii", "dag-mermaid"}
+			expectedFlags := []string{"help", "h", "version", "rt", "verbose", "v", "mermaid"}
 			if len(c.validFlags) != len(expectedFlags) {
 				t.Errorf("start(%v) validFlags length = %d, want %d", tt.args, len(c.validFlags), len(expectedFlags))
 			}
@@ -340,6 +340,99 @@ func TestCmd_gen(t *testing.T) {
 						t.Errorf("output should contain %q, got: %s", s, output)
 					}
 				}
+			}
+			if tt.errContain != "" {
+				errOutput := fmt.Sprintf("%s", c.errWriter)
+				if !strings.Contains(errOutput, tt.errContain) {
+					t.Errorf("error output should contain %q, got: %s", tt.errContain, errOutput)
+				}
+			}
+		})
+	}
+}
+
+func TestCmd_parseArgs_dag(t *testing.T) {
+	tests := []struct {
+		name              string
+		args              []string
+		expectSubCommand  string
+		expectSubArgs     []string
+		expectDagMermaid  bool
+		expectWorkflow    string
+	}{
+		{
+			name:             "dag with workflow file",
+			args:             []string{"dag", "workflow.yml"},
+			expectSubCommand: "dag",
+			expectSubArgs:    []string{"workflow.yml"},
+			expectDagMermaid: false,
+		},
+		{
+			name:             "dag with --mermaid flag before file",
+			args:             []string{"dag", "--mermaid", "workflow.yml"},
+			expectSubCommand: "dag",
+			expectSubArgs:    []string{"workflow.yml"},
+			expectDagMermaid: true,
+		},
+		{
+			name:             "dag with --mermaid flag after file",
+			args:             []string{"dag", "workflow.yml", "--mermaid"},
+			expectSubCommand: "dag",
+			expectSubArgs:    []string{"workflow.yml"},
+			expectDagMermaid: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c := newBufferCmd()
+			err := c.parseArgs(tt.args)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if c.SubCommand != tt.expectSubCommand {
+				t.Errorf("SubCommand = %q, want %q", c.SubCommand, tt.expectSubCommand)
+			}
+			if len(c.SubCommandArgs) != len(tt.expectSubArgs) {
+				t.Errorf("SubCommandArgs = %v, want %v", c.SubCommandArgs, tt.expectSubArgs)
+			} else {
+				for i, arg := range tt.expectSubArgs {
+					if c.SubCommandArgs[i] != arg {
+						t.Errorf("SubCommandArgs[%d] = %q, want %q", i, c.SubCommandArgs[i], arg)
+					}
+				}
+			}
+			if c.DagMermaid != tt.expectDagMermaid {
+				t.Errorf("DagMermaid = %v, want %v", c.DagMermaid, tt.expectDagMermaid)
+			}
+			if c.WorkflowPath != tt.expectWorkflow {
+				t.Errorf("WorkflowPath = %q, want %q", c.WorkflowPath, tt.expectWorkflow)
+			}
+		})
+	}
+}
+
+func TestCmd_dag(t *testing.T) {
+	tests := []struct {
+		name       string
+		args       []string
+		expectCode int
+		errContain string
+	}{
+		{
+			name:       "dag without file argument",
+			args:       []string{"probe", "dag"},
+			expectCode: 1,
+			errContain: "workflow file is required",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c := newBufferCmd()
+			code := c.start(tt.args)
+			if code != tt.expectCode {
+				t.Errorf("start(%v) = %d, want %d", tt.args, code, tt.expectCode)
 			}
 			if tt.errContain != "" {
 				errOutput := fmt.Sprintf("%s", c.errWriter)

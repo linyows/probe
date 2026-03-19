@@ -46,7 +46,6 @@ type Cmd struct {
 	Version        bool
 	Verbose        bool
 	RT             bool
-	DagAscii       bool
 	DagMermaid     bool
 	validFlags     []string
 	ver            string
@@ -58,7 +57,7 @@ type Cmd struct {
 
 func newCmd() *Cmd {
 	return &Cmd{
-		validFlags: []string{"help", "h", "version", "rt", "verbose", "v", "dag-ascii", "dag-mermaid"},
+		validFlags: []string{"help", "h", "version", "rt", "verbose", "v", "mermaid"},
 		ver:        version,
 		rev:        commit,
 		outWriter:  os.Stdout,
@@ -105,9 +104,7 @@ func (c *Cmd) parseArgs(args []string) error {
 				c.RT = true
 			case "verbose", "v":
 				c.Verbose = true
-			case "dag-ascii":
-				c.DagAscii = true
-			case "dag-mermaid":
+			case "mermaid":
 				c.DagMermaid = true
 			}
 		} else {
@@ -127,7 +124,7 @@ func (c *Cmd) parseArgs(args []string) error {
 	return nil
 }
 
-var subCommands = []string{"gen"}
+var subCommands = []string{"gen", "dag"}
 
 func isSubCommand(name string) bool {
 	return slices.Contains(subCommands, name)
@@ -162,6 +159,7 @@ https://github.com/linyows/probe (ver: %s, rev: %s)
 	head := `
 Usage: probe [options] <workflow-file>
        probe gen <openapi-file>
+       probe dag [--mermaid] <workflow-file>
 
 Arguments:
   workflow-file    Path to YAML workflow file(s). Multiple files can be
@@ -170,6 +168,8 @@ Arguments:
 
 Subcommands:
   gen <file>       Generate probe workflow YAML from OpenAPI specification
+  dag <file>       Show job dependency graph as ASCII art (default)
+                   Use --mermaid to output in Mermaid format
 
 Options:`
 
@@ -190,8 +190,6 @@ func (c *Cmd) printOptions() {
 		{"", "--version", "Show version information"},
 		{"", "--rt", "Show response time"},
 		{"-v", "--verbose", "Show verbose log"},
-		{"", "--dag-ascii", "Show job dependency graph as ASCII art"},
-		{"", "--dag-mermaid", "Show job dependency graph in Mermaid format"},
 	}
 
 	for _, opt := range options {
@@ -231,18 +229,6 @@ func (c *Cmd) start(args []string) int {
 		_, _ = fmt.Fprintf(c.errWriter, "[ERROR] workflow is required\n")
 		return 1
 
-	case c.DagAscii:
-		if !c.mocking {
-			return c.runDagAscii()
-		}
-		return 0
-
-	case c.DagMermaid:
-		if !c.mocking {
-			return c.runDagMermaid()
-		}
-		return 0
-
 	default:
 		if !c.mocking {
 			return c.runProbe()
@@ -255,6 +241,8 @@ func (c *Cmd) runSubCommand() int {
 	switch c.SubCommand {
 	case "gen":
 		return c.runGen()
+	case "dag":
+		return c.runDag()
 	default:
 		_, _ = fmt.Fprintf(c.errWriter, "[ERROR] unknown subcommand: %s\n", c.SubCommand)
 		return 1
@@ -291,20 +279,25 @@ func (c *Cmd) runProbe() int {
 	return p.ExitStatus()
 }
 
-func (c *Cmd) runDagAscii() int {
-	p := probe.New(c.WorkflowPath, c.Verbose)
-	graph, err := p.DagAscii()
-	if err != nil {
-		_, _ = fmt.Fprintf(c.errWriter, "[ERROR] %v\n", err)
+func (c *Cmd) runDag() int {
+	if len(c.SubCommandArgs) == 0 {
+		_, _ = fmt.Fprintf(c.errWriter, "[ERROR] workflow file is required\n")
+		_, _ = fmt.Fprintf(c.errWriter, "Usage: probe dag [--mermaid] <workflow-file>\n")
 		return 1
 	}
-	_, _ = fmt.Fprint(c.outWriter, graph)
-	return 0
-}
 
-func (c *Cmd) runDagMermaid() int {
-	p := probe.New(c.WorkflowPath, c.Verbose)
-	graph, err := p.DagMermaid()
+	if c.mocking {
+		return 0
+	}
+
+	p := probe.New(c.SubCommandArgs[0], c.Verbose)
+	var graph string
+	var err error
+	if c.DagMermaid {
+		graph, err = p.DagMermaid()
+	} else {
+		graph, err = p.DagAscii()
+	}
 	if err != nil {
 		_, _ = fmt.Fprintf(c.errWriter, "[ERROR] %v\n", err)
 		return 1
