@@ -1,10 +1,12 @@
 package shell
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -752,5 +754,53 @@ func TestExecuteBackground(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestDoStdoutNotEmpty(t *testing.T) {
+	// Reproduces a race condition where cmd.Wait() closes the stdout pipe
+	// before the reading goroutine finishes, causing stdout to be empty.
+	// This is especially likely with fast commands like "grep -c | tr -d '\n'"
+	// on resource-constrained environments like GitHub Actions runners.
+	// Running concurrently increases goroutine scheduling pressure to
+	// make the race more likely to manifest.
+	const iterations = 100
+	const concurrency = 8
+
+	var wg sync.WaitGroup
+	errChan := make(chan string, iterations*concurrency)
+
+	for c := 0; c < concurrency; c++ {
+		wg.Add(1)
+		go func(workerID int) {
+			defer wg.Done()
+			for i := 0; i < iterations; i++ {
+				req := &Req{
+					Cmd:     "echo hello | grep -c hello | tr -d '\\n'",
+					Shell:   "/bin/sh",
+					Timeout: "5s",
+				}
+				result, err := req.Do()
+				if err != nil {
+					errChan <- fmt.Sprintf("worker %d, iteration %d: Do() error: %v", workerID, i, err)
+					return
+				}
+				if result.Res.Stdout == "" {
+					errChan <- fmt.Sprintf("worker %d, iteration %d: expected stdout '1', got empty string", workerID, i)
+					return
+				}
+				if result.Res.Stdout != "1" {
+					errChan <- fmt.Sprintf("worker %d, iteration %d: expected stdout '1', got %q", workerID, i, result.Res.Stdout)
+					return
+				}
+			}
+		}(c)
+	}
+
+	wg.Wait()
+	close(errChan)
+
+	for msg := range errChan {
+		t.Fatal(msg)
 	}
 }
