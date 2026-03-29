@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/md5"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -281,47 +282,28 @@ func (r *Req) Do() (*Result, error) {
 		return result, fmt.Errorf("failed to start command: %w", err)
 	}
 
-	// Read stdout
+	// Read stdout and stderr concurrently.
+	// All reads from pipes must complete before calling cmd.Wait(),
+	// because Wait() closes the pipe read ends which can cause data loss.
 	stdoutChan := make(chan []byte, 1)
 	go func() {
-		buf := make([]byte, 1024)
-		var output []byte
-		for {
-			n, err := stdout.Read(buf)
-			if n > 0 {
-				output = append(output, buf[:n]...)
-			}
-			if err != nil {
-				break
-			}
-		}
-		stdoutChan <- output
+		data, _ := io.ReadAll(stdout)
+		stdoutChan <- data
 	}()
 
-	// Read stderr
 	stderrChan := make(chan []byte, 1)
 	go func() {
-		buf := make([]byte, 1024)
-		var output []byte
-		for {
-			n, err := stderr.Read(buf)
-			if n > 0 {
-				output = append(output, buf[:n]...)
-			}
-			if err != nil {
-				break
-			}
-		}
-		stderrChan <- output
+		data, _ := io.ReadAll(stderr)
+		stderrChan <- data
 	}()
+
+	// Collect output before calling Wait()
+	stdoutBytes := <-stdoutChan
+	stderrBytes := <-stderrChan
 
 	// Wait for command completion (synchronous execution)
 	cmdErr := cmd.Wait()
 	result.RT = time.Since(start)
-
-	// Get output
-	stdoutBytes := <-stdoutChan
-	stderrBytes := <-stderrChan
 
 	// Get exit code
 	exitCode := 0
