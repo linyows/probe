@@ -8,7 +8,7 @@ require (
 	github.com/emersion/go-imap/v2 v2.0.0-beta.8
 	github.com/emersion/go-message v0.18.2
 	github.com/expr-lang/expr v1.17.8
-	github.com/fatih/color v1.18.0
+	github.com/fatih/color v1.19.0
 	github.com/go-playground/validator/v10 v10.30.1
 	github.com/go-sql-driver/mysql v1.9.3
 	github.com/goccy/go-yaml v1.19.2
@@ -45,7 +45,7 @@ require (
 	github.com/golang/protobuf v1.5.4 // indirect
 	github.com/hashicorp/yamux v0.1.2 // indirect
 	github.com/leodido/go-urn v1.4.0 // indirect
-	github.com/mattn/go-colorable v0.1.13 // indirect
+	github.com/mattn/go-colorable v0.1.14 // indirect
 	github.com/oklog/run v1.1.0 // indirect
 	github.com/pb33f/jsonpath v0.8.1 // indirect
 	github.com/pb33f/ordered-map/v2 v2.3.0 // indirect
