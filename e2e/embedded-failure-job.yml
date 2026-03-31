@@ -1,0 +1,8 @@
+name: Failure Test Job
+
+steps:
+- name: Test failure step
+  uses: shell
+  with:
+    cmd: echo "test output"
+  test: res.code == 99

@@ -215,7 +215,7 @@ jobs:
     uses: shell
     with:
       cmd: |
-        ./testdata/gen.sh
+        ./e2e/gen.sh
         go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
         go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
         cd grpc/testserver && \
@@ -239,8 +239,8 @@ jobs:
       background: true
       cmd: |
         go run grpc/testserver/*.go -tls -port=50052 \
-          -cert="./testdata/certs/server.crt" \
-          -key="./testdata/certs/server.key"
+          -cert="./e2e/certs/server.crt" \
+          -key="./e2e/certs/server.key"
     test: status == -1
     outputs:
       grpctls_pid: res.pid
@@ -400,11 +400,11 @@ jobs:
     uses: shell
     with:
       cmd: |
-        rm -rf ./testdata/ssh
-        mkdir -p ./testdata/ssh
-        ssh-keygen -t rsa -b 2048 -f ./testdata/ssh/test_key -N "" -C "probe-test"
-        chmod 600 ./testdata/ssh/test_key
-        chmod 644 ./testdata/ssh/test_key.pub
+        rm -rf ./e2e/ssh
+        mkdir -p ./e2e/ssh
+        ssh-keygen -t rsa -b 2048 -f ./e2e/ssh/test_key -N "" -C "probe-test"
+        chmod 600 ./e2e/ssh/test_key
+        chmod 644 ./e2e/ssh/test_key.pub
     test: res.code == 0
   - name: Start SSH container
     uses: shell
@@ -416,7 +416,7 @@ jobs:
           -e PGID=1000 \
           -e USER_NAME=probe \
           -e SUDO_ACCESS=true \
-          -e PUBLIC_KEY="$(cat ./testdata/ssh/test_key.pub)" \
+          -e PUBLIC_KEY="$(cat ./e2e/ssh/test_key.pub)" \
           linuxserver/openssh-server:version-10.2_p1-r0
     test: status == -1
     outputs:
@@ -429,7 +429,7 @@ jobs:
     uses: shell
     with:
       cmd: |
-        ssh -i ./testdata/ssh/test_key -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+        ssh -i ./e2e/ssh/test_key -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
           -p 2222 probe@127.0.0.1 "echo ready"
     retry:
       max_attempts: 30
@@ -446,7 +446,7 @@ jobs:
     with:
       cmd: |
         SSH_HOST=127.0.0.1 SSH_PORT=2222 SSH_USER=probe \
-          SSH_KEY_FILE=./testdata/ssh/test_key \
+          SSH_KEY_FILE=./e2e/ssh/test_key \
           ./probe examples/ssh.yml
     test: res.code == 0
     echo: "{{res.stdout}}"

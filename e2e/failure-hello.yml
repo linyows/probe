@@ -1,0 +1,10 @@
+name: Failure Workflow (Hello Action)
+description: Simple workflow that should fail using hello action
+jobs:
+- name: test-job
+  steps:
+  - name: Failure Step
+    uses: hello
+    with:
+      name: World
+    test: false

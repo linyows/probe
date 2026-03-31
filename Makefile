@@ -1,4 +1,4 @@
-CERT_DIR := testdata/certs
+CERT_DIR := e2e/certs
 
 default: build
 
@@ -25,8 +25,8 @@ http_server:
 
 http_server_tls:
 	go run github.com/mccutchen/go-httpbin/v2/cmd/go-httpbin@latest -host 127.0.0.1 -port 8080 \
-		-https-cert-file ./testdata/server.crt \
-		-https-key-file ./testdata/server.key
+		-https-cert-file ./e2e/certs/server.crt \
+		-https-key-file ./e2e/certs/server.key
 
 grpc_server:
 	go run grpc/testserver/*.go
@@ -34,12 +34,12 @@ grpc_server:
 grpc_server_tls:
 	go run grpc/testserver/*.go \
 		-tls \
-		-cert="./testdata/certs/server.crt" \
-		-key="./testdata/certs/server.key" \
+		-cert="./e2e/certs/server.crt" \
+		-key="./e2e/certs/server.key" \
 		-port=50052
 
 gen_server_keys:
-	testdata/gen.sh
+	e2e/gen.sh
 
 gen_grpc_server:
 	@cd grpc/testserver && \

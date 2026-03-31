@@ -40,6 +40,6 @@ jobs:
       - name: navigate
         url: https://www.google.com/
       - name: capture_screenshot
-        path: ./testdata/capture_screenshot.png
+        path: ./e2e/capture_screenshot.png
         quality: 80
     test: res.code == 0
