@@ -5,17 +5,17 @@ jobs:
 - name: Setup SQLite database file
   id: setup
   steps:
-  - name: rm -f testdata/sqlite.db
+  - name: rm -f e2e/sqlite.db
     uses: shell
     with:
-      cmd: rm -f testdata/sqlite.db
+      cmd: rm -f e2e/sqlite.db
     test: res.code == 0
 
 - name: SQLite Examples
   needs: [setup]
   defaults:
     db:
-      dsn: file:./testdata/sqlite.db
+      dsn: file:./e2e/sqlite.db
 
   steps:
   - name: Create SQLite table
