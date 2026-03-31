@@ -86,7 +86,7 @@ jobs:
     - name: Run probe
       uses: linyows/probe-action@0164e23555aacbaaea03169102262dafeb1ff631 # v1
       with:
-        path: testdata/e2e-test.yml
+        path: e2e/test.yml
         options: ${{ github.event.inputs.options }}
 
     - name: Comment on success
