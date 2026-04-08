@@ -138,9 +138,15 @@ func (st *Step) executeSingleAction(runner ActionRunner, expW map[string]any, jC
 	}
 }
 
-// executeActionWithRetry executes action with retry logic until status == 0
+// executeActionWithRetry executes action with retry logic based on test assertion results.
+// If no test is configured, retry is not performed and the action is executed once.
 func (st *Step) executeActionWithRetry(runner ActionRunner, expW map[string]any, jCtx *JobContext, name string) (map[string]any, error) {
 	retry := st.Retry
+
+	// If no test is configured, don't retry - execute once
+	if st.Test == "" {
+		return st.executeSingleAction(runner, expW, jCtx)
+	}
 
 	// Initial delay if specified
 	if retry.InitialDelay.Duration > 0 {
@@ -163,30 +169,33 @@ func (st *Step) executeActionWithRetry(runner ActionRunner, expW map[string]any,
 		lastResult = result
 		lastErr = err
 
-		// Check for success (status == 0)
-		if err == nil {
-			if status, ok := result["status"]; ok {
-				var statusInt int
-				var isInt bool
-				switch v := status.(type) {
-				case int:
-					statusInt, isInt = v, true
-				case int64:
-					statusInt, isInt = int(v), true
+		if err != nil {
+			// Action execution failed, retry
+			if attempt < retry.MaxAttempts {
+				if jCtx.Verbose {
+					jCtx.Printer.LogDebug("Action execution failed (attempt %d), retrying after %v", attempt, retry.Interval.Duration)
 				}
-				if isInt && statusInt == int(ExitStatusSuccess) {
-					if jCtx.Verbose {
-						jCtx.Printer.LogDebug("Action succeeded on attempt %d", attempt)
-					}
-					return result, nil
-				}
+				time.Sleep(retry.Interval.Duration)
 			}
+			continue
 		}
 
-		// If not the last attempt, wait for interval
+		// Process action result to set context for test evaluation
+		st.processActionResult(result, jCtx)
+
+		// Evaluate test to determine success
+		_, testOk := st.DoTest(jCtx.Printer)
+		if testOk {
+			if jCtx.Verbose {
+				jCtx.Printer.LogDebug("Action succeeded on attempt %d", attempt)
+			}
+			return result, nil
+		}
+
+		// Test failed, retry if not the last attempt
 		if attempt < retry.MaxAttempts {
 			if jCtx.Verbose {
-				jCtx.Printer.LogDebug("Action failed (attempt %d), retrying after %v", attempt, retry.Interval.Duration)
+				jCtx.Printer.LogDebug("Test failed (attempt %d), retrying after %v", attempt, retry.Interval.Duration)
 			}
 			time.Sleep(retry.Interval.Duration)
 		}

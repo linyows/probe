@@ -1398,6 +1398,7 @@ func TestStep_executeSingleAction_CompletesBeforeTimeout(t *testing.T) {
 func TestStep_executeActionWithRetry_Timeout(t *testing.T) {
 	step := &Step{
 		Uses:    "test-action",
+		Test:    "res.code == 200",
 		Timeout: Interval{Duration: 500 * time.Millisecond},
 		Retry: &StepRetry{
 			MaxAttempts: 3,
@@ -1438,6 +1439,139 @@ func TestStep_executeActionWithRetry_Timeout(t *testing.T) {
 	if result != nil {
 		t.Errorf("Expected nil result on timeout, got %v", result)
 	}
+}
+
+func TestStep_executeActionWithRetry_NoTest(t *testing.T) {
+	callCount := 0
+	mock := &CountingMockActionRunner{
+		result:    map[string]any{"status": 0},
+		callCount: &callCount,
+	}
+
+	step := &Step{
+		Uses: "test-action",
+		// No Test field - should execute once without retry
+		Retry: &StepRetry{
+			MaxAttempts: 3,
+			Interval:    Interval{Duration: 10 * time.Millisecond},
+		},
+		Expr: &Expr{},
+	}
+
+	jCtx := &JobContext{
+		Config:  Config{Verbose: false},
+		Printer: newBufferPrinter(),
+	}
+
+	result, err := step.executeActionWithRetry(mock, map[string]any{}, jCtx, "test")
+	if err != nil {
+		t.Errorf("Expected no error, got: %v", err)
+	}
+	if result == nil {
+		t.Error("Expected result, got nil")
+	}
+	if callCount != 1 {
+		t.Errorf("Expected action to be called once (no test = no retry), got %d calls", callCount)
+	}
+}
+
+func TestStep_executeActionWithRetry_TestFailThenPass(t *testing.T) {
+	callCount := 0
+	mock := &CountingMockActionRunner{
+		callCount: &callCount,
+		resultFunc: func(count int) map[string]any {
+			if count <= 2 {
+				// First two attempts return non-matching response
+				return map[string]any{
+					"status": 0,
+					"res":    map[string]any{"code": 200, "body": `{"messages":[{"id":"msg1"}]}`},
+				}
+			}
+			// Third attempt returns matching response
+			return map[string]any{
+				"status": 0,
+				"res":    map[string]any{"code": 200, "body": `{"messages":[]}`},
+			}
+		},
+	}
+
+	step := &Step{
+		Uses: "test-action",
+		Test: "res.code == 200 && res.body.messages == []",
+		Retry: &StepRetry{
+			MaxAttempts: 3,
+			Interval:    Interval{Duration: 10 * time.Millisecond},
+		},
+		Expr: &Expr{},
+	}
+
+	jCtx := &JobContext{
+		Config:  Config{Verbose: false},
+		Printer: newBufferPrinter(),
+	}
+
+	result, err := step.executeActionWithRetry(mock, map[string]any{}, jCtx, "test")
+	if err != nil {
+		t.Errorf("Expected no error, got: %v", err)
+	}
+	if result == nil {
+		t.Error("Expected result, got nil")
+	}
+	if callCount != 3 {
+		t.Errorf("Expected 3 attempts (2 test failures + 1 success), got %d", callCount)
+	}
+}
+
+func TestStep_executeActionWithRetry_TestFailAllAttempts(t *testing.T) {
+	callCount := 0
+	mock := &CountingMockActionRunner{
+		callCount: &callCount,
+		result: map[string]any{
+			"status": 0,
+			"res":    map[string]any{"code": 200, "body": `{"result":"not_empty"}`},
+		},
+	}
+
+	step := &Step{
+		Uses: "test-action",
+		Test: "res.code == 500",
+		Retry: &StepRetry{
+			MaxAttempts: 3,
+			Interval:    Interval{Duration: 10 * time.Millisecond},
+		},
+		Expr: &Expr{},
+	}
+
+	jCtx := &JobContext{
+		Config:  Config{Verbose: false},
+		Printer: newBufferPrinter(),
+	}
+
+	result, err := step.executeActionWithRetry(mock, map[string]any{}, jCtx, "test")
+	if err != nil {
+		t.Errorf("Expected no error (test failure is not an action error), got: %v", err)
+	}
+	if result == nil {
+		t.Error("Expected result (last attempt), got nil")
+	}
+	if callCount != 3 {
+		t.Errorf("Expected all 3 attempts to be tried, got %d", callCount)
+	}
+}
+
+// CountingMockActionRunner is a mock that counts calls and can return different results per call
+type CountingMockActionRunner struct {
+	result     map[string]any
+	resultFunc func(count int) map[string]any
+	callCount  *int
+}
+
+func (m *CountingMockActionRunner) RunActions(name string, args []string, with map[string]any, verbose bool) (map[string]any, error) {
+	*m.callCount++
+	if m.resultFunc != nil {
+		return m.resultFunc(*m.callCount), nil
+	}
+	return m.result, nil
 }
 
 func TestStep_DefaultStepTimeout_Value(t *testing.T) {
