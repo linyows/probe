@@ -31,6 +31,7 @@ type Step struct {
 	Timeout      Interval          `yaml:"timeout,omitempty"`
 	err          error
 	ctx          StepContext
+	retryAttempt int
 	Idx          int          `yaml:"-"`
 	Expr         *Expr        `yaml:"-"`
 	actionRunner ActionRunner `yaml:"-"`
@@ -189,6 +190,7 @@ func (st *Step) executeActionWithRetry(runner ActionRunner, expW map[string]any,
 			if jCtx.Verbose {
 				jCtx.Printer.LogDebug("Action succeeded on attempt %d", attempt)
 			}
+			st.retryAttempt = attempt
 			return result, nil
 		}
 
@@ -200,6 +202,8 @@ func (st *Step) executeActionWithRetry(runner ActionRunner, expW map[string]any,
 			time.Sleep(retry.Interval.Duration)
 		}
 	}
+
+	st.retryAttempt = retry.MaxAttempts
 
 	// All attempts failed
 	if jCtx.Verbose {
@@ -297,6 +301,11 @@ func (st *Step) createStepResult(name string, jCtx *JobContext, repeatCounter *S
 		RT:            "",
 		WaitTime:      st.getWaitTimeForDisplay(),
 		RepeatCounter: repeatCounter,
+	}
+
+	if st.Retry != nil && st.retryAttempt > 0 {
+		result.RetryAttempt = st.retryAttempt
+		result.RetryMax = st.Retry.MaxAttempts
 	}
 
 	if jCtx.RT && st.ctx.RT.Duration != "" {
