@@ -102,6 +102,7 @@ const (
 	IconCircle   = "⏺"
 	IconWait     = "🕐︎"
 	IconSkip     = "⏭ "
+	IconRetry    = "⟳"
 )
 
 // LogLevel defines different logging levels
@@ -423,7 +424,7 @@ func (p *Printer) generateJobResultsFromStepResults(stepResults []StepResult) st
 
 			// Add retry info if retry is configured
 			if stepResult.RetryAttempt > 0 {
-				ps += colorDim().Sprintf(" [retry %d/%d]", stepResult.RetryAttempt, stepResult.RetryMax)
+				ps += colorDim().Sprintf(" %s %d/%d", IconRetry, stepResult.RetryAttempt, stepResult.RetryMax)
 			}
 
 			switch stepResult.Status {
