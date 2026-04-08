@@ -416,15 +416,13 @@ func (p *Printer) generateJobResultsFromStepResults(stepResults []StepResult) st
 				waitPrefix = colorDim().Sprintf("%s%s → ", IconWait, stepResult.WaitTime)
 			}
 
-			// Add response time suffix if present
+			// Add suffix: retry info then response time
 			ps := ""
-			if stepResult.RT != "" {
-				ps = colorDim().Sprintf(" (%s)", stepResult.RT)
-			}
-
-			// Add retry info if retry is configured
 			if stepResult.RetryAttempt > 0 {
 				ps += colorDim().Sprintf(" %s %d/%d", IconRetry, stepResult.RetryAttempt, stepResult.RetryMax)
+			}
+			if stepResult.RT != "" {
+				ps += colorDim().Sprintf(" (%s)", stepResult.RT)
 			}
 
 			switch stepResult.Status {
