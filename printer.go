@@ -421,8 +421,8 @@ func (p *Printer) generateJobResultsFromStepResults(stepResults []StepResult) st
 				ps = colorDim().Sprintf(" (%s)", stepResult.RT)
 			}
 
-			// Add retry info if retried more than once
-			if stepResult.RetryAttempt > 1 {
+			// Add retry info if retry is configured
+			if stepResult.RetryAttempt > 0 {
 				ps += colorDim().Sprintf(" [retry %d/%d]", stepResult.RetryAttempt, stepResult.RetryMax)
 			}
 
