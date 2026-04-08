@@ -419,7 +419,11 @@ func (p *Printer) generateJobResultsFromStepResults(stepResults []StepResult) st
 			// Add suffix: retry info then response time
 			ps := ""
 			if stepResult.RetryAttempt > 0 {
-				ps += colorDim().Sprintf(" %s %d/%d", IconRetry, stepResult.RetryAttempt, stepResult.RetryMax)
+				retryColor := colorDim()
+				if stepResult.RetryAttempt > 1 {
+					retryColor = colorWarning()
+				}
+				ps += retryColor.Sprintf(" %s %d/%d", IconRetry, stepResult.RetryAttempt, stepResult.RetryMax)
 			}
 			if stepResult.RT != "" {
 				ps += colorDim().Sprintf(" (%s)", stepResult.RT)
