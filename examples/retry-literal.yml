@@ -113,7 +113,11 @@ jobs:
     retry:
       max_attempts: 5
       interval: "500ms"
-    test: res.code == 0 && contains(res.stdout, '"ready": true')
+    test: |
+      res.code == 0 && match_json(parse_json(res.stdout), vars.expected)
+    vars:
+      expected:
+        ready: true
 
 - name: Cleanup
   steps:
