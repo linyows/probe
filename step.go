@@ -143,6 +143,7 @@ func (st *Step) executeSingleAction(runner ActionRunner, expW map[string]any, jC
 // If no test is configured, retry is not performed and the action is executed once.
 func (st *Step) executeActionWithRetry(runner ActionRunner, expW map[string]any, jCtx *JobContext, name string) (map[string]any, error) {
 	retry := st.Retry
+	st.retryAttempt = 0
 
 	// If no test is configured, don't retry - execute once
 	if st.Test == "" {
@@ -184,8 +185,9 @@ func (st *Step) executeActionWithRetry(runner ActionRunner, expW map[string]any,
 		// Process action result to set context for test evaluation
 		st.processActionResult(result, jCtx)
 
-		// Evaluate test to determine success
-		_, testOk := st.DoTest(jCtx.Printer)
+		// Evaluate test expression to determine success
+		exprOut, err := st.evalTest()
+		testOk := err == nil && exprOut == true
 		if testOk {
 			if jCtx.Verbose {
 				jCtx.Printer.LogDebug("Action succeeded on attempt %d", attempt)
@@ -404,8 +406,14 @@ func (st *Step) handleRepeatExecution(jCtx *JobContext, name string, hasError bo
 	}
 }
 
+// evalTest evaluates the test expression and returns the raw result
+// without generating any formatted output.
+func (st *Step) evalTest() (any, error) {
+	return st.Expr.Eval(st.Test, st.ctx)
+}
+
 func (st *Step) DoTest(printer *Printer) (string, bool) {
-	exprOut, err := st.Expr.Eval(st.Test, st.ctx)
+	exprOut, err := st.evalTest()
 	if err != nil {
 		return printer.generateTestError(st.Test, err), false
 	}
@@ -736,6 +744,11 @@ func (st *Step) createFailedStepResult(name string, jCtx *JobContext, repeatCoun
 		WaitTime:      st.getWaitTimeForDisplay(),
 		HasTest:       st.Test != "",
 		RepeatCounter: repeatCounter,
+	}
+
+	if st.Retry != nil && st.retryAttempt > 0 {
+		result.RetryAttempt = st.retryAttempt
+		result.RetryMax = st.Retry.MaxAttempts
 	}
 
 	if jCtx.RT && st.ctx.RT.Duration != "" {

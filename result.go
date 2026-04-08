@@ -36,7 +36,7 @@ type StepResult struct {
 	EchoOutput    string
 	Report        string
 	HasTest       bool
-	RetryAttempt  int                // Number of attempts made (0 = no retry configured, 1 = succeeded first try)
+	RetryAttempt  int                // Number of attempts made (0 = retry not performed, 1 = succeeded first try)
 	RetryMax      int                // Maximum retry attempts configured
 	RepeatCounter *StepRepeatCounter // For repeat execution information
 }
