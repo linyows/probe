@@ -93,6 +93,32 @@ jobs:
       cmd: "echo 'File exists check result: {{outputs.file_check.file_exists}}'"
     test: res.code == 0
 
+- name: Retry on Test Assertion Failure
+  steps:
+  - name: Prepare counter file
+    uses: shell
+    with:
+      cmd: "echo 0 > /tmp/probe-retry-counter"
+    test: res.code == 0
+
+  - name: Retry until output matches expected value
+    uses: shell
+    with:
+      cmd: |
+        # Command always succeeds (exit 0), but output changes each attempt
+        count=$(cat /tmp/probe-retry-counter)
+        count=$((count + 1))
+        echo $count > /tmp/probe-retry-counter
+        echo "{\"ready\": $([ $count -ge 3 ] && echo 'true' || echo 'false')}"
+    retry:
+      max_attempts: 5
+      interval: "500ms"
+    test: |
+      res.code == 0 && match_json(parse_json(res.stdout), vars.expected)
+    vars:
+      expected:
+        ready: true
+
 - name: Cleanup
   steps:
   - name: Clean up test files
@@ -100,5 +126,5 @@ jobs:
     with:
       cmd: |
         # Clean up all test files
-        rm -f /tmp/ready.flag /tmp/probe-test-file /tmp/service_started
+        rm -f /tmp/ready.flag /tmp/probe-test-file /tmp/service_started /tmp/probe-retry-counter
     test: res.code == 0
