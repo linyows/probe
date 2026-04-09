@@ -40,8 +40,8 @@ func TestCmd_isValid(t *testing.T) {
 			expected: true,
 		},
 		{
-			name:     "valid rt flag",
-			flag:     "--rt",
+			name:     "valid timing flag",
+			flag:     "--timing",
 			expected: true,
 		},
 		{
@@ -101,7 +101,7 @@ func TestCmd_usage(t *testing.T) {
 }
 
 func TestCmd_start(t *testing.T) {
-	help := " __  __  __  __  __\n|  ||  ||  ||  || _|\n|  ||  /| |||  /|  |\n| | |  \\| |||  \\| _|\n|_| |_\\_|__||__||__|\n\nProbe - A YAML-based workflow automation tool.\nhttps://github.com/linyows/probe (ver: dev, rev: unknown)\n\nUsage: probe [options] <workflow-file>\n       probe gen <openapi-file>\n       probe dag [--mermaid] <workflow-file>\n\nArguments:\n  workflow-file    Path to YAML workflow file(s). Multiple files can be\n                   specified with comma-separated paths (e.g., \"base.yml,override.yml\")\n                   to merge configurations.\n\nSubcommands:\n  gen <file>       Generate probe workflow YAML from OpenAPI specification\n  dag <file>       Show job dependency graph as ASCII art (default)\n                   Use --mermaid to output in Mermaid format\n\nOptions:\n  -h, --help       Show command usage\n      --version    Show version information\n      --rt         Show response time\n  -v, --verbose    Show verbose log\n"
+	help := " __  __  __  __  __\n|  ||  ||  ||  || _|\n|  ||  /| |||  /|  |\n| | |  \\| |||  \\| _|\n|_| |_\\_|__||__||__|\n\nProbe - A YAML-based workflow automation tool.\nhttps://github.com/linyows/probe (ver: dev, rev: unknown)\n\nUsage: probe [options] <workflow-file>\n       probe gen <openapi-file>\n       probe dag [--mermaid] <workflow-file>\n\nArguments:\n  workflow-file    Path to YAML workflow file(s). Multiple files can be\n                   specified with comma-separated paths (e.g., \"base.yml,override.yml\")\n                   to merge configurations.\n\nSubcommands:\n  gen <file>       Generate probe workflow YAML from OpenAPI specification\n  dag <file>       Show job dependency graph as ASCII art (default)\n                   Use --mermaid to output in Mermaid format\n\nOptions:\n  -h, --help       Show command usage\n      --version    Show version information\n      --timing     Show timing (start time, response time)\n  -v, --verbose    Show verbose log\n"
 
 	tests := []struct {
 		name           string
@@ -109,7 +109,7 @@ func TestCmd_start(t *testing.T) {
 		expectCode     int
 		expectWorkflow string
 		expectVerbose  bool
-		expectRT       bool
+		expectTiming       bool
 		expectHelp     bool
 		expectOutput   string
 	}{
@@ -120,7 +120,7 @@ func TestCmd_start(t *testing.T) {
 			expectHelp:     true,
 			expectWorkflow: "",
 			expectVerbose:  false,
-			expectRT:       false,
+			expectTiming:       false,
 			expectOutput:   help,
 		},
 		{
@@ -130,7 +130,7 @@ func TestCmd_start(t *testing.T) {
 			expectHelp:     false,
 			expectWorkflow: "",
 			expectVerbose:  false,
-			expectRT:       false,
+			expectTiming:       false,
 			expectOutput:   "",
 		},
 		{
@@ -140,7 +140,7 @@ func TestCmd_start(t *testing.T) {
 			expectHelp:     false,
 			expectWorkflow: "",
 			expectVerbose:  false,
-			expectRT:       false,
+			expectTiming:       false,
 			expectOutput:   "[ERROR] workflow is required\n",
 		},
 		{
@@ -150,7 +150,7 @@ func TestCmd_start(t *testing.T) {
 			expectHelp:     false,
 			expectWorkflow: "test.yml",
 			expectVerbose:  false,
-			expectRT:       false,
+			expectTiming:       false,
 			expectOutput:   "",
 		},
 		{
@@ -160,27 +160,27 @@ func TestCmd_start(t *testing.T) {
 			expectHelp:     false,
 			expectWorkflow: "",
 			expectVerbose:  true,
-			expectRT:       false,
+			expectTiming:       false,
 			expectOutput:   "[ERROR] workflow is required\n",
 		},
 		{
-			name:           "rt flag without workflow",
-			args:           []string{"probe", "--rt"},
+			name:           "timing flag without workflow",
+			args:           []string{"probe", "--timing"},
 			expectCode:     1,
 			expectHelp:     false,
 			expectWorkflow: "",
 			expectVerbose:  false,
-			expectRT:       true,
+			expectTiming:       true,
 			expectOutput:   "[ERROR] workflow is required\n",
 		},
 		{
 			name:           "multiple flags with workflow argument",
-			args:           []string{"probe", "--verbose", "--rt", "test.yml"},
+			args:           []string{"probe", "--verbose", "--timing", "test.yml"},
 			expectCode:     0,
 			expectHelp:     false,
 			expectWorkflow: "test.yml",
 			expectVerbose:  true,
-			expectRT:       true,
+			expectTiming:       true,
 			expectOutput:   "",
 		},
 		{
@@ -190,7 +190,7 @@ func TestCmd_start(t *testing.T) {
 			expectHelp:     false,
 			expectWorkflow: "test.yml",
 			expectVerbose:  true,
-			expectRT:       false,
+			expectTiming:       false,
 			expectOutput:   "",
 		},
 		{
@@ -200,7 +200,7 @@ func TestCmd_start(t *testing.T) {
 			expectHelp:     true,
 			expectWorkflow: "",
 			expectVerbose:  false,
-			expectRT:       false,
+			expectTiming:       false,
 			expectOutput:   help,
 		},
 		{
@@ -210,27 +210,27 @@ func TestCmd_start(t *testing.T) {
 			expectHelp:     false,
 			expectWorkflow: "test.yml",
 			expectVerbose:  true,
-			expectRT:       false,
+			expectTiming:       false,
 			expectOutput:   "",
 		},
 		{
 			name:           "options after argument with multiple flags",
-			args:           []string{"probe", "test.yml", "--verbose", "--rt"},
+			args:           []string{"probe", "test.yml", "--verbose", "--timing"},
 			expectCode:     0,
 			expectHelp:     false,
 			expectWorkflow: "test.yml",
 			expectVerbose:  true,
-			expectRT:       true,
+			expectTiming:       true,
 			expectOutput:   "",
 		},
 		{
 			name:           "mixed options before and after argument",
-			args:           []string{"probe", "--verbose", "test.yml", "--rt"},
+			args:           []string{"probe", "--verbose", "test.yml", "--timing"},
 			expectCode:     0,
 			expectHelp:     false,
 			expectWorkflow: "test.yml",
 			expectVerbose:  true,
-			expectRT:       true,
+			expectTiming:       true,
 			expectOutput:   "",
 		},
 		{
@@ -240,7 +240,7 @@ func TestCmd_start(t *testing.T) {
 			expectHelp:     false,
 			expectWorkflow: "test.yml",
 			expectVerbose:  true,
-			expectRT:       false,
+			expectTiming:       false,
 			expectOutput:   "",
 		},
 	}
@@ -263,8 +263,8 @@ func TestCmd_start(t *testing.T) {
 				t.Errorf("start(%v).Verbose = %v, want %v", tt.args, c.Verbose, tt.expectVerbose)
 			}
 
-			if c.RT != tt.expectRT {
-				t.Errorf("start(%v).RT = %v, want %v", tt.args, c.RT, tt.expectRT)
+			if c.Timing != tt.expectTiming {
+				t.Errorf("start(%v).Timing = %v, want %v", tt.args, c.Timing, tt.expectTiming)
 			}
 
 			if c.Help != tt.expectHelp {
@@ -285,7 +285,7 @@ func TestCmd_start(t *testing.T) {
 			}
 
 			// Check validFlags
-			expectedFlags := []string{"help", "h", "version", "rt", "verbose", "v", "mermaid"}
+			expectedFlags := []string{"help", "h", "version", "timing", "verbose", "v", "mermaid"}
 			if len(c.validFlags) != len(expectedFlags) {
 				t.Errorf("start(%v) validFlags length = %d, want %d", tt.args, len(c.validFlags), len(expectedFlags))
 			}

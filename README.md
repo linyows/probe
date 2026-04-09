@@ -88,8 +88,8 @@ probe ./workflow.yml
 # Verbose output
 probe ./workflow.yml --verbose
 
-# Show response times
-probe ./workflow.yml --rt
+# Show timing (start time, response time)
+probe ./workflow.yml --timing
 
 # Show job dependency graph as ASCII art
 probe dag ./workflow.yml
@@ -101,7 +101,7 @@ probe dag --mermaid ./workflow.yml
 ### CLI Options
 - `<workflow>`: Specify YAML workflow file path
 - `--verbose`: Enable detailed output
-- `--rt`: Show response times
+- `--timing`: Show timing (start time, response time)
 - `--help`: Show help information
 
 ### Subcommands

@@ -68,12 +68,12 @@ $ probe workflow.yml --verbose
 [DEBUG] RT: 245ms
 ```
 
-### レスポンス時間表示
+### タイミング情報表示
 
-HTTPリクエストのレスポンス時間を表示：
+開始時刻とレスポンス時間を表示：
 
 ```bash
-$ probe workflow.yml --rt
+$ probe workflow.yml --timing
 ```
 
 これにより、`--verbose`の完全な詳細さなしにタイミング情報が出力に追加されます。
@@ -83,7 +83,7 @@ $ probe workflow.yml --rt
 複数のオプションを組み合わせることができます：
 
 ```bash
-$ probe -v --rt workflow.yml
+$ probe -v --timing workflow.yml
 ```
 
 ## 複数ファイルマージ

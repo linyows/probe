@@ -22,7 +22,7 @@ type Probe struct {
 type Config struct {
 	Log     io.Writer
 	Verbose bool
-	RT      bool
+	Timing  bool
 }
 
 func New(path string, v bool) *Probe {
@@ -36,7 +36,7 @@ func New(path string, v bool) *Probe {
 		Config: Config{
 			Log:     os.Stdout,
 			Verbose: v,
-			RT:      false,
+			Timing:  false,
 		},
 	}
 }

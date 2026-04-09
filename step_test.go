@@ -443,7 +443,7 @@ func TestStep_createStepResult_WithRepeatCounter(t *testing.T) {
 		},
 	}
 	jCtx := &JobContext{
-		Config:  Config{RT: true},
+		Config:  Config{Timing: true},
 		Printer: newBufferPrinter(),
 	}
 	name := "Test Step"
@@ -489,7 +489,7 @@ func TestStep_createFailedStepResult(t *testing.T) {
 		},
 	}
 	jCtx := &JobContext{
-		Config: Config{RT: true},
+		Config: Config{Timing: true},
 	}
 	name := "Failed Step"
 
@@ -542,7 +542,7 @@ func TestStep_createFailedStepResult_WithRepeatCounter(t *testing.T) {
 		},
 	}
 	jCtx := &JobContext{
-		Config: Config{RT: true},
+		Config: Config{Timing: true},
 	}
 	name := "Timeout Step"
 	counter := &StepRepeatCounter{

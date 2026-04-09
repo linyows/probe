@@ -29,6 +29,7 @@ type StepResult struct {
 	Index         int
 	Name          string
 	Status        StatusType
+	StartedAt     time.Time
 	RT            string
 	RTSec         float64
 	WaitTime      string
