@@ -74,12 +74,12 @@ Verbose mode shows:
 [DEBUG] RT: 245ms
 ```
 
-### Response Time Display
+### Timing Display
 
-Show response times for HTTP requests:
+Show timing information (start time and response time):
 
 ```bash
-probe --rt workflow.yml
+probe --timing workflow.yml
 ```
 
 This adds timing information to the output without the full verbosity of `--verbose`.
@@ -89,7 +89,7 @@ This adds timing information to the output without the full verbosity of `--verb
 You can combine multiple options:
 
 ```bash
-probe -v --rt workflow.yml
+probe -v --timing workflow.yml
 ```
 
 ## Multiple File Merging
@@ -248,7 +248,7 @@ probe -v api-tests.yml,local-config.yml
 
 ```bash
 # Run performance tests with timing
-probe --rt --verbose load-test.yml
+probe --timing --verbose load-test.yml
 ```
 
 ## Output Interpretation

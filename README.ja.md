@@ -88,8 +88,8 @@ probe ./workflow.yml
 # 詳細出力
 probe ./workflow.yml --verbose
 
-# レスポンス時間を表示
-probe ./workflow.yml --rt
+# タイミング情報を表示（開始時刻、レスポンス時間）
+probe ./workflow.yml --timing
 
 # ジョブ依存関係グラフをASCIIアートで表示
 probe dag ./workflow.yml
@@ -101,7 +101,7 @@ probe dag --mermaid ./workflow.yml
 ### CLIオプション
 - `<workflow>`: YAMLワークフローファイルパスを指定
 - `--verbose`: 詳細出力を有効化
-- `--rt`: レスポンス時間を表示
+- `--timing`: タイミング情報を表示（開始時刻、レスポンス時間）
 - `--help`: ヘルプ情報を表示
 
 ### サブコマンド
