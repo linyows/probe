@@ -16,7 +16,7 @@ func TestLoad(t *testing.T) {
 		Config: Config{
 			Log:     os.Stdout,
 			Verbose: true,
-			RT:      false,
+			Timing:  false,
 		},
 	}
 	err := p.Load()
@@ -49,7 +49,7 @@ func TestNew(t *testing.T) {
 				Config: Config{
 					Log:     os.Stdout,
 					Verbose: true,
-					RT:      false,
+					Timing:  false,
 				},
 			},
 		},
@@ -62,7 +62,7 @@ func TestNew(t *testing.T) {
 				Config: Config{
 					Log:     os.Stdout,
 					Verbose: false,
-					RT:      false,
+					Timing:  false,
 				},
 			},
 		},
@@ -77,8 +77,8 @@ func TestNew(t *testing.T) {
 			if got.Config.Verbose != tt.expected.Config.Verbose {
 				t.Errorf("Config.Verbose = %v, want %v", got.Config.Verbose, tt.expected.Config.Verbose)
 			}
-			if got.Config.RT != tt.expected.Config.RT {
-				t.Errorf("Config.RT = %v, want %v", got.Config.RT, tt.expected.Config.RT)
+			if got.Config.Timing != tt.expected.Config.Timing {
+				t.Errorf("Config.Timing = %v, want %v", got.Config.Timing, tt.expected.Config.Timing)
 			}
 		})
 	}
@@ -268,7 +268,7 @@ func TestLoadWithInvalidYaml(t *testing.T) {
 		Config: Config{
 			Log:     io.Discard,
 			Verbose: false,
-			RT:      false,
+			Timing:  false,
 		},
 	}
 
@@ -316,7 +316,7 @@ func TestDoWithInvalidPath(t *testing.T) {
 		Config: Config{
 			Log:     io.Discard,
 			Verbose: false,
-			RT:      false,
+			Timing:  false,
 		},
 	}
 

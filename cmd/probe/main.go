@@ -45,7 +45,7 @@ type Cmd struct {
 	Help           bool
 	Version        bool
 	Verbose        bool
-	RT             bool
+	Timing         bool
 	DagMermaid     bool
 	validFlags     []string
 	ver            string
@@ -57,7 +57,7 @@ type Cmd struct {
 
 func newCmd() *Cmd {
 	return &Cmd{
-		validFlags: []string{"help", "h", "version", "rt", "verbose", "v", "mermaid"},
+		validFlags: []string{"help", "h", "version", "timing", "verbose", "v", "mermaid"},
 		ver:        version,
 		rev:        commit,
 		outWriter:  os.Stdout,
@@ -100,8 +100,8 @@ func (c *Cmd) parseArgs(args []string) error {
 				c.Help = true
 			case "version":
 				c.Version = true
-			case "rt":
-				c.RT = true
+			case "timing":
+				c.Timing = true
 			case "verbose", "v":
 				c.Verbose = true
 			case "mermaid":
@@ -188,7 +188,7 @@ func (c *Cmd) printOptions() {
 	}{
 		{"-h", "--help", "Show command usage"},
 		{"", "--version", "Show version information"},
-		{"", "--rt", "Show response time"},
+		{"", "--timing", "Show timing (start time, response time)"},
 		{"-v", "--verbose", "Show verbose log"},
 	}
 
@@ -273,8 +273,8 @@ func (c *Cmd) runGen() int {
 
 func (c *Cmd) runProbe() int {
 	p := probe.New(c.WorkflowPath, c.Verbose)
-	if c.RT {
-		p.Config.RT = true
+	if c.Timing {
+		p.Config.Timing = true
 	}
 
 	if err := p.Do(); err != nil {

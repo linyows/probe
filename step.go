@@ -32,6 +32,7 @@ type Step struct {
 	err          error
 	ctx          StepContext
 	retryAttempt int
+	startedAt    time.Time
 	Idx          int          `yaml:"-"`
 	Expr         *Expr        `yaml:"-"`
 	actionRunner ActionRunner `yaml:"-"`
@@ -45,6 +46,7 @@ func (st *Step) Do(jCtx *JobContext) {
 	}
 
 	// 2. Action execution phase
+	st.startedAt = time.Now()
 	actionResult, err := st.executeAction(name, jCtx)
 	if err != nil {
 		st.handleActionError(err, name, jCtx)
@@ -310,9 +312,14 @@ func (st *Step) createStepResult(name string, jCtx *JobContext, repeatCounter *S
 		result.RetryMax = st.Retry.MaxAttempts
 	}
 
-	if jCtx.RT && st.ctx.RT.Duration != "" {
-		result.RT = st.ctx.RT.Duration
-		result.RTSec = st.ctx.RT.Sec
+	if jCtx.Timing {
+		if !st.startedAt.IsZero() {
+			result.StartedAt = st.startedAt
+		}
+		if st.ctx.RT.Duration != "" {
+			result.RT = st.ctx.RT.Duration
+			result.RTSec = st.ctx.RT.Sec
+		}
 	}
 	if v, ok := st.ctx.Res["report"]; ok {
 		if report, sok := v.(string); sok {
@@ -751,9 +758,14 @@ func (st *Step) createFailedStepResult(name string, jCtx *JobContext, repeatCoun
 		result.RetryMax = st.Retry.MaxAttempts
 	}
 
-	if jCtx.RT && st.ctx.RT.Duration != "" {
-		result.RT = st.ctx.RT.Duration
-		result.RTSec = st.ctx.RT.Sec
+	if jCtx.Timing {
+		if !st.startedAt.IsZero() {
+			result.StartedAt = st.startedAt
+		}
+		if st.ctx.RT.Duration != "" {
+			result.RT = st.ctx.RT.Duration
+			result.RTSec = st.ctx.RT.Sec
+		}
 	}
 	if v, ok := st.ctx.Res["report"]; ok {
 		if report, sok := v.(string); sok {
