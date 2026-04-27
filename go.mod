@@ -18,7 +18,7 @@ require (
 	github.com/lib/pq v1.12.3
 	github.com/mattn/go-isatty v0.0.20
 	github.com/mattn/go-sqlite3 v1.14.42
-	github.com/pb33f/libopenapi v0.35.1
+	github.com/pb33f/libopenapi v0.36.2
 	github.com/stretchr/testify v1.11.1
 	go.yaml.in/yaml/v4 v4.0.0-rc.4
 	golang.org/x/crypto v0.50.0
