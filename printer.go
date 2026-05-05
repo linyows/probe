@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/briandowns/spinner"
@@ -121,6 +122,7 @@ type Printer struct {
 	Buffer    map[string]*strings.Builder
 	BufferIDs []string // Order preservation
 	spinner   *spinner.Spinner
+	spinnerMu sync.Mutex // serializes writes to spinner.Suffix from concurrent steps (async repeat)
 	outWriter io.Writer
 	errWriter io.Writer
 }
@@ -153,25 +155,34 @@ func newBufferPrinter() *Printer {
 	pr := NewPrinter(false, []string{})
 	pr.outWriter = new(bytes.Buffer)
 	pr.errWriter = new(bytes.Buffer)
+	// Tests do not render a live spinner; nil here makes the spinner
+	// helpers no-op so that `go test -race` does not flag the
+	// reader-in-library / writer-in-probe contention on spinner.Suffix.
+	pr.spinner = nil
 	return pr
 }
 
 func (p *Printer) StartSpinner() {
-	if !p.verbose {
+	if !p.verbose && p.spinner != nil {
 		p.spinner.Start()
 	}
 }
 
 func (p *Printer) StopSpinner() {
-	if !p.verbose {
+	if !p.verbose && p.spinner != nil {
 		p.spinner.Stop()
 	}
 }
 
 func (p *Printer) AddSpinnerSuffix(txt string) {
-	if !p.verbose {
-		p.spinner.Suffix = fmt.Sprintf(" %s...", txt)
+	if p.verbose || p.spinner == nil {
+		return
 	}
+	// Async repeat fans out steps across goroutines; serialize writes to
+	// spinner.Suffix so that probe's own writers don't race each other.
+	p.spinnerMu.Lock()
+	p.spinner.Suffix = fmt.Sprintf(" %s...", txt)
+	p.spinnerMu.Unlock()
 }
 
 func (p *Printer) Fprint(w io.Writer, a ...any) {

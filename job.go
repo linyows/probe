@@ -61,14 +61,35 @@ func (j *Job) expandJobName(expr *Expr, ctx *JobContext) error {
 
 	j.Name = name
 
-	// Update the job name in the result as well
+	// Update the job name in the result as well. Async repeat shares the
+	// JobResult across iterations, so writers must take the mutex.
 	if ctx.Result != nil {
 		if jobResult, exists := ctx.Result.Jobs[j.ID]; exists {
+			jobResult.mutex.Lock()
 			jobResult.JobName = name
+			jobResult.mutex.Unlock()
 		}
 	}
 
 	return nil
+}
+
+// cloneForAsync returns a copy of the job with its own Steps slice so that
+// each iteration of an async repeat can mutate per-execution state
+// (Job.Name, Step.Expr, Step.ctx, Step.Idx, Step.startedAt, Step.err,
+// Step.retryAttempt) without racing with sibling iterations or the
+// originally configured Job. Pointer-indirected configuration fields
+// (Repeat, Outputs, Retry, Vars, With, Iteration, Defaults, actionRunner)
+// remain shared because they are read-only at execution time or already
+// guarded by their own synchronization.
+func (j *Job) cloneForAsync() *Job {
+	cloned := *j
+	cloned.Steps = make([]*Step, len(j.Steps))
+	for i, s := range j.Steps {
+		stepCopy := *s
+		cloned.Steps[i] = &stepCopy
+	}
+	return &cloned
 }
 
 // executeSteps runs all steps in the job, handling iterations appropriately
@@ -190,11 +211,15 @@ func (j *Job) handleSkip(ctx JobContext) {
 		ctx.Printer.PrintSeparator()
 	}
 
-	// Mark job as skipped in the result
+	// Mark job as skipped in the result. Async repeat shares the
+	// JobResult across iterations, so writers must take the mutex
+	// to stay race-free with sibling iterations and Executor.finalize.
 	if ctx.Result != nil {
 		if jobResult, exists := ctx.Result.Jobs[j.ID]; exists {
+			jobResult.mutex.Lock()
 			jobResult.Status = "skipped"
 			jobResult.Success = true // Skipped jobs are considered successful
+			jobResult.mutex.Unlock()
 		}
 	}
 }

@@ -160,3 +160,77 @@ func TestExecutor_AsyncRepeat(t *testing.T) {
 		}
 	})
 }
+
+// TestExecutor_AsyncRepeat_HandleSkipNoDataRace covers the handleSkip
+// path: when an async-repeat job evaluates skipif==true on every iteration,
+// each goroutine reaches Job.handleSkip and writes JobResult.Status /
+// JobResult.Success on the shared *JobResult. Without locking those
+// writes, `go test -race` flags a data race between sibling iterations.
+func TestExecutor_AsyncRepeat_HandleSkipNoDataRace(t *testing.T) {
+	workflow := &Workflow{
+		Name: "async-skip-race-test",
+		Jobs: []Job{
+			{
+				Name:   "always-skip",
+				ID:     "always-skip",
+				SkipIf: "true",
+				Steps:  []*Step{},
+				Repeat: &Repeat{
+					Count:    20,
+					Interval: Interval{Duration: 1 * time.Millisecond},
+					Async:    true,
+				},
+			},
+		},
+		printer: newBufferPrinter(),
+	}
+
+	config := Config{Verbose: false}
+	if err := workflow.Start(config); err != nil {
+		t.Fatalf("workflow failed: %v", err)
+	}
+}
+
+// TestExecutor_AsyncRepeat_NoDataRace exercises the executeJobRepeatLoopAsync
+// path end-to-end with a mocked ActionRunner so that, under `go test -race`,
+// any concurrent mutation of shared *Step / *Job state is reported as a race.
+//
+// Before the fix, every goroutine spawned by the async repeat loop called
+// e.job.Start on the same *Job, which in turn mutated j.Name (expandJobName)
+// and st.Expr / st.ctx / st.startedAt / st.err / st.retryAttempt on the same
+// *Step instances.
+func TestExecutor_AsyncRepeat_NoDataRace(t *testing.T) {
+	runner := NewMockActionRunner()
+	runner.SetResult("hello", map[string]any{"status": 0})
+
+	// Each Step instance has actionRunner pre-wired to the mock so that
+	// st.executeAction takes the mock path instead of spawning the
+	// real plugin process.
+	step := &Step{
+		Name:         "tick",
+		Uses:         "hello",
+		actionRunner: runner,
+	}
+
+	workflow := &Workflow{
+		Name: "async-race-test",
+		Jobs: []Job{
+			{
+				Name:  "racer",
+				ID:    "racer",
+				Steps: []*Step{step},
+				Repeat: &Repeat{
+					Count:    20,
+					Interval: Interval{Duration: 1 * time.Millisecond},
+					Async:    true,
+				},
+			},
+		},
+		printer: newBufferPrinter(),
+	}
+
+	config := Config{Verbose: false}
+	if err := workflow.Start(config); err != nil {
+		t.Fatalf("workflow failed: %v", err)
+	}
+}

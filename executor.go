@@ -114,8 +114,14 @@ func (e *Executor) executeJobRepeatLoopAsync(ctx JobContext) bool {
 	for ctx.JobScheduler.ShouldRepeatJob(jobID) {
 		current, _ := ctx.JobScheduler.GetRepeatInfo(jobID)
 
+		// Each iteration gets its own Job/Step copy so the per-execution
+		// fields mutated by Job.Start (Job.Name, Step.Expr, Step.ctx,
+		// Step.Idx, Step.startedAt, Step.err, Step.retryAttempt) don't
+		// race across goroutines.
+		jobCopy := e.job.cloneForAsync()
+
 		wg.Add(1)
-		go func(repeatIndex int) {
+		go func(repeatIndex int, j *Job) {
 			defer wg.Done()
 
 			// Create a copy of context for this goroutine
@@ -123,13 +129,13 @@ func (e *Executor) executeJobRepeatLoopAsync(ctx JobContext) bool {
 			execCtx.RepeatCurrent = repeatIndex
 
 			// Execute single run
-			err := e.job.Start(execCtx)
+			err := j.Start(execCtx)
 
 			if err != nil {
 				overallSuccess.Store(false)
 				e.workflow.SetExitStatus(true)
 			}
-		}(current)
+		}(current, jobCopy)
 
 		ctx.JobScheduler.IncrementRepeatCounter(jobID)
 
