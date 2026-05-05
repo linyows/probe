@@ -145,6 +145,29 @@ func TestJobScheduler_MarkJobsWithFailedDependencies(t *testing.T) {
 	})
 }
 
+func TestJobScheduler_CanRunJob_UnknownIDReturnsFalse(t *testing.T) {
+	// CanRunJob is exported, so callers may pass arbitrary IDs. Looking up
+	// a missing ID in js.jobs returns nil; without a guard, ranging over
+	// the nil *Job's Needs slice panics. The function must instead return
+	// false for unknown jobs.
+	scheduler := NewJobScheduler()
+
+	known := &Job{ID: "known", Name: "known"}
+	if err := scheduler.AddJob(known); err != nil {
+		t.Fatalf("AddJob: %v", err)
+	}
+
+	defer func() {
+		if r := recover(); r != nil {
+			t.Fatalf("CanRunJob panicked on unknown jobID: %v", r)
+		}
+	}()
+
+	if got := scheduler.CanRunJob("does-not-exist"); got {
+		t.Errorf("CanRunJob(unknown) = true, want false")
+	}
+}
+
 func TestJobScheduler_NoDeadlockOnConcurrentReadAndWrite(t *testing.T) {
 	// Regression test for the recursive RLock deadlock.
 	//

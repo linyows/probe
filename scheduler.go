@@ -148,7 +148,13 @@ func (js *JobScheduler) CanRunJob(jobID string) bool {
 // avoids re-entering RLock from GetRunnableJobs, which would deadlock when
 // a writer is waiting on the same mutex.
 func (js *JobScheduler) canRunJobLocked(jobID string) bool {
-	job := js.jobs[jobID]
+	job, ok := js.jobs[jobID]
+	if !ok {
+		// Unknown job: a missing key returns a nil *Job, and ranging
+		// over job.Needs below would panic. CanRunJob is exported, so
+		// guard external callers by reporting "not runnable" instead.
+		return false
+	}
 	if js.status[jobID] != JobPending {
 		return false
 	}
