@@ -97,7 +97,7 @@ func TestGenMessageID(t *testing.T) {
 		t.Errorf("idLeft random part length = %d, want 32", len(uidPart))
 	}
 	for _, c := range uidPart {
-		if !(c >= '0' && c <= '9' || c >= 'a' && c <= 'f') {
+		if (c < '0' || c > '9') && (c < 'a' || c > 'f') {
 			t.Errorf("idLeft random part is not lowercase hex: %q", uidPart)
 			break
 		}
