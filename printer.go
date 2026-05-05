@@ -406,6 +406,13 @@ func (p *Printer) generateJobResultsFromStepResults(stepResults []StepResult) st
 		if stepResult.RepeatCounter != nil {
 			p.printStepRepeatStart(stepResult.Index, stepResult.RepeatCounter.Name, stepResult.RepeatCounter.SuccessCount+stepResult.RepeatCounter.FailureCount, &output)
 			p.printStepRepeatResult(stepResult.RepeatCounter, stepResult.HasTest, &output)
+			for _, echo := range stepResult.RepeatCounter.EchoOutputs {
+				echo = strings.TrimRight(echo, " \n\t\r")
+				if echo == "" {
+					continue
+				}
+				output.WriteString(colorInfo().Sprint(echo) + "\n")
+			}
 		} else {
 			// Generate regular step output
 			num := colorDim().Sprintf("%2d.", stepResult.Index)

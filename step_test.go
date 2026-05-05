@@ -1581,6 +1581,60 @@ func TestStep_DefaultStepTimeout_Value(t *testing.T) {
 	}
 }
 
+func TestStep_handleRepeatExecution_AccumulatesEchoOutputs(t *testing.T) {
+	step := &Step{
+		Idx:  1,
+		Echo: "iteration {{vars.i}}",
+		Expr: &Expr{},
+	}
+
+	jCtx := &JobContext{
+		Printer:      newBufferPrinter(),
+		StepCounters: make(map[int]StepRepeatCounter),
+		countersMu:   &sync.Mutex{},
+		RepeatTotal:  3,
+		Result:       NewResult(),
+		CurrentJobID: "job-1",
+	}
+	jCtx.Result.Jobs["job-1"] = &JobResult{JobID: "job-1"}
+
+	for i := 1; i <= 3; i++ {
+		jCtx.RepeatCurrent = i
+		step.ctx = StepContext{
+			Vars: map[string]any{"i": i},
+		}
+		step.handleRepeatExecution(jCtx, "Repeat Step", false)
+	}
+
+	counter, ok := jCtx.StepCounters[step.Idx]
+	if !ok {
+		t.Fatal("StepCounters[1] missing")
+	}
+	if got := len(counter.EchoOutputs); got != 3 {
+		t.Fatalf("EchoOutputs length = %d, want 3", got)
+	}
+	for i, out := range counter.EchoOutputs {
+		want := fmt.Sprintf("iteration %d", i+1)
+		if !strings.Contains(out, want) {
+			t.Errorf("EchoOutputs[%d] = %q, want to contain %q", i, out, want)
+		}
+	}
+
+	stepResults := jCtx.Result.Jobs["job-1"].StepResults
+	if len(stepResults) != 1 {
+		t.Fatalf("StepResults length = %d, want 1", len(stepResults))
+	}
+	if stepResults[0].EchoOutput != "" {
+		t.Errorf("StepResult.EchoOutput should be empty for repeat steps, got %q", stepResults[0].EchoOutput)
+	}
+	if stepResults[0].RepeatCounter == nil {
+		t.Fatal("StepResult.RepeatCounter is nil")
+	}
+	if got := len(stepResults[0].RepeatCounter.EchoOutputs); got != 3 {
+		t.Errorf("StepResult.RepeatCounter.EchoOutputs length = %d, want 3", got)
+	}
+}
+
 func TestParseExitStatus(t *testing.T) {
 	tests := []struct {
 		name     string

@@ -1528,3 +1528,47 @@ func TestPrinter_generateJobResultsFromStepResults_ReportNewlineFormatting(t *te
 		})
 	}
 }
+
+func TestPrinter_generateJobResultsFromStepResults_RepeatEchoOutputs(t *testing.T) {
+	color.NoColor = true
+	defer func() { color.NoColor = false }()
+
+	printer := newBufferPrinter()
+
+	stepResult := StepResult{
+		Index:   1,
+		Name:    "Repeat Step",
+		Status:  StatusSuccess,
+		HasTest: false,
+		RepeatCounter: &StepRepeatCounter{
+			Name:         "Repeat Step",
+			SuccessCount: 3,
+			FailureCount: 0,
+			RepeatTotal:  3,
+			EchoOutputs: []string{
+				"       iteration 1\n",
+				"       iteration 2\n",
+				"       iteration 3\n",
+			},
+		},
+	}
+
+	got := printer.generateJobResultsFromStepResults([]StepResult{stepResult})
+
+	for i := 1; i <= 3; i++ {
+		want := fmt.Sprintf("iteration %d", i)
+		if !strings.Contains(got, want) {
+			t.Errorf("output should contain %q, got:\n%s", want, got)
+		}
+	}
+
+	idx1 := strings.Index(got, "iteration 1")
+	idx2 := strings.Index(got, "iteration 2")
+	idx3 := strings.Index(got, "iteration 3")
+	if idx1 >= idx2 || idx2 >= idx3 {
+		t.Errorf("echo outputs should appear in order, got positions %d, %d, %d", idx1, idx2, idx3)
+	}
+	if !strings.HasSuffix(got, "\n") {
+		t.Errorf("output should end with newline, got %q", got)
+	}
+}
