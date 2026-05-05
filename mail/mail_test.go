@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/smtp"
 	"os"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -79,44 +80,50 @@ func TestGetFQDN(t *testing.T) {
 	}
 }
 
-func TestGenMsgID(t *testing.T) {
-	tests := []struct {
-		name       string
-		id         string
-		wantPrefix string
-		wantSuffix string
-	}{
-		{
-			name:       "normal id",
-			id:         "test123",
-			wantPrefix: "<test123@",
-			wantSuffix: ">",
-		},
-		{
-			name:       "empty id",
-			id:         "",
-			wantPrefix: "<@",
-			wantSuffix: ">",
-		},
-		{
-			name:       "special characters",
-			id:         "abc-123_def",
-			wantPrefix: "<abc-123_def@",
-			wantSuffix: ">",
-		},
+func TestGenMessageID(t *testing.T) {
+	idLeft, full := genMessageID()
+
+	// idLeft must be "<ns>.<32-hex>"
+	dot := strings.IndexByte(idLeft, '.')
+	if dot <= 0 {
+		t.Fatalf("idLeft missing '.' separator: %q", idLeft)
+	}
+	nsPart := idLeft[:dot]
+	uidPart := idLeft[dot+1:]
+	if _, err := strconv.ParseInt(nsPart, 10, 64); err != nil {
+		t.Errorf("idLeft prefix is not numeric ns: %q", nsPart)
+	}
+	if len(uidPart) != 32 {
+		t.Errorf("idLeft random part length = %d, want 32", len(uidPart))
+	}
+	for _, c := range uidPart {
+		if !(c >= '0' && c <= '9' || c >= 'a' && c <= 'f') {
+			t.Errorf("idLeft random part is not lowercase hex: %q", uidPart)
+			break
+		}
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			msgID := genMsgID(tt.id)
+	// full must be "<idLeft@host>"
+	if !strings.HasPrefix(full, "<"+idLeft+"@") {
+		t.Errorf("full Message-ID prefix mismatch: got %q, want prefix <%s@", full, idLeft)
+	}
+	if !strings.HasSuffix(full, ">") {
+		t.Errorf("full Message-ID missing trailing '>': %q", full)
+	}
+	host := strings.TrimSuffix(strings.TrimPrefix(full, "<"+idLeft+"@"), ">")
+	if host == "" {
+		t.Errorf("full Message-ID has empty host part: %q", full)
+	}
 
-			if !strings.HasPrefix(msgID, tt.wantPrefix) {
-				t.Errorf("expected Message-ID to start with '%s', got %s", tt.wantPrefix, msgID)
-			}
-			if !strings.HasSuffix(msgID, tt.wantSuffix) {
-				t.Errorf("expected Message-ID to end with '%s', got %s", tt.wantSuffix, msgID)
-			}
-		})
+	// concurrent calls must produce distinct IDs
+	const n = 64
+	seen := make(map[string]struct{}, n)
+	for i := 0; i < n; i++ {
+		l, _ := genMessageID()
+		if _, dup := seen[l]; dup {
+			t.Fatalf("genMessageID produced duplicate idLeft: %s", l)
+		}
+		seen[l] = struct{}{}
 	}
 }
 
@@ -193,6 +200,38 @@ func TestMail_AppendIDtoSubject(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestMail_AppendSendTimestamp(t *testing.T) {
+	mail := &Mail{}
+	original := []byte("Subject: Test\nFrom: a@b\n\nBody")
+
+	before := time.Now().UnixNano()
+	result := mail.appendSendTimestamp(original)
+	after := time.Now().UnixNano()
+
+	lines := bytes.SplitN(result, []byte("\n"), 2)
+	if len(lines) != 2 {
+		t.Fatalf("expected at least one prepended line, got %q", result)
+	}
+
+	prefix := []byte("X-Send-Timestamp-Ns: ")
+	if !bytes.HasPrefix(lines[0], prefix) {
+		t.Fatalf("expected first line to start with %q, got %q", prefix, lines[0])
+	}
+
+	tsStr := string(bytes.TrimPrefix(lines[0], prefix))
+	ts, err := strconv.ParseInt(tsStr, 10, 64)
+	if err != nil {
+		t.Fatalf("expected numeric timestamp, got %q: %v", tsStr, err)
+	}
+	if ts < before || ts > after {
+		t.Errorf("timestamp %d not within [%d, %d]", ts, before, after)
+	}
+
+	if !bytes.Equal(lines[1], original) {
+		t.Errorf("original payload mutated: got %q, want %q", lines[1], original)
 	}
 }
 

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/smtp"
 	"os"
+	"time"
 )
 
 type Mail struct {
@@ -70,7 +71,7 @@ func (m *Mail) Send() error {
 			return fmt.Errorf("smtp data error: %w", err)
 		}
 
-		_, err = w.Write(m.appendIDtoSubject(m.Data))
+		_, err = w.Write(m.appendSendTimestamp(m.appendIDtoSubject(m.Data)))
 		if err != nil {
 			return fmt.Errorf("smtp data write error: %w", err)
 		}
@@ -89,27 +90,47 @@ func getFQDN() string {
 	}
 	hostname, err := os.Hostname()
 	if err != nil {
-		return "localhost"
+		// RFC 6761 reserves .invalid for cases where a real domain is unavailable.
+		return "localhost.invalid"
 	}
 	return hostname
 }
 
-func genMsgID(id string) string {
-	return fmt.Sprintf("<%s@%s>", id, getFQDN())
+// genMessageID returns the id-left component (ns + 128bit random) and the
+// fully bracketed Message-ID. The id-left is reused as the Subject tracking
+// suffix so each mail's Message-ID and Subject can be cross-referenced.
+func genMessageID() (idLeft, full string) {
+	ns := time.Now().UnixNano()
+	uid, err := OptimisticUID()
+	if err != nil {
+		idLeft = fmt.Sprintf("%d", ns)
+	} else {
+		idLeft = fmt.Sprintf("%d.%s", ns, uid)
+	}
+	full = fmt.Sprintf("<%s@%s>", idLeft, getFQDN())
+	return
+}
+
+// appendSendTimestamp prepends an X-Send-Timestamp-Ns header carrying the
+// current time in Unix nanoseconds, captured at the moment the message is
+// about to be written to the SMTP DATA stream.
+func (m *Mail) appendSendTimestamp(data []byte) []byte {
+	h := []byte(fmt.Sprintf("X-Send-Timestamp-Ns: %d\n", time.Now().UnixNano()))
+	return append(h, data...)
 }
 
 func (m *Mail) appendIDtoSubject(data []byte) []byte {
-	id := HashID()
+	idLeft, msgID := genMessageID()
 	lines := bytes.Split(data, []byte("\n"))
 
 	for i, line := range lines {
 		if bytes.HasPrefix(line, []byte("Subject:")) {
-			lines[i] = append(line, []byte(" - "+id)...)
+			lines[i] = append(line, []byte(" - "+idLeft)...)
 			break
 		}
 	}
 
-	mid := []byte("Message-ID: " + genMsgID(id))
+	mid := []byte("Message-ID: " + msgID)
 	lines = append([][]byte{mid}, lines...)
 
 	return bytes.Join(lines, []byte("\n"))
