@@ -211,11 +211,15 @@ func (j *Job) handleSkip(ctx JobContext) {
 		ctx.Printer.PrintSeparator()
 	}
 
-	// Mark job as skipped in the result
+	// Mark job as skipped in the result. Async repeat shares the
+	// JobResult across iterations, so writers must take the mutex
+	// to stay race-free with sibling iterations and Executor.finalize.
 	if ctx.Result != nil {
 		if jobResult, exists := ctx.Result.Jobs[j.ID]; exists {
+			jobResult.mutex.Lock()
 			jobResult.Status = "skipped"
 			jobResult.Success = true // Skipped jobs are considered successful
+			jobResult.mutex.Unlock()
 		}
 	}
 }
