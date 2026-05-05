@@ -340,7 +340,7 @@ func (st *Step) createStepResult(name string, jCtx *JobContext, repeatCounter *S
 		result.Status = StatusWarning
 	}
 
-	if st.Echo != "" {
+	if st.Echo != "" && repeatCounter == nil {
 		result.EchoOutput = st.getEchoOutput(jCtx.Printer)
 	}
 
@@ -369,6 +369,15 @@ func (st *Step) handleRepeatExecution(jCtx *JobContext, name string, hasError bo
 		}
 	}
 
+	// Evaluate echo before taking the lock so we can store the formatted
+	// output on the counter alongside the success/failure increment.
+	var echoRaw, echoFormatted string
+	var echoErr error
+	if st.Echo != "" {
+		echoRaw, echoErr = st.Expr.EvalTemplate(st.Echo, st.ctx)
+		echoFormatted = jCtx.Printer.generateEchoOutput(echoRaw, echoErr)
+	}
+
 	// Update counter atomically with lock held throughout
 	jCtx.countersMu.Lock()
 	counter, exists := jCtx.StepCounters[st.Idx]
@@ -386,6 +395,10 @@ func (st *Step) handleRepeatExecution(jCtx *JobContext, name string, hasError bo
 		counter.SuccessCount++
 	}
 	counter.LastResult = testResult
+
+	if st.Echo != "" {
+		counter.EchoOutputs = append(counter.EchoOutputs, echoFormatted)
+	}
 
 	// Store updated counter back to map
 	jCtx.StepCounters[st.Idx] = counter
@@ -407,9 +420,12 @@ func (st *Step) handleRepeatExecution(jCtx *JobContext, name string, hasError bo
 		}
 	}
 
-	// Handle echo output
 	if st.Echo != "" {
-		st.DoEcho(jCtx)
+		if echoErr != nil {
+			jCtx.Printer.LogError("Echo evaluation failed: %#v (input: %s)", echoErr, st.Echo)
+		} else {
+			jCtx.Printer.PrintEchoContent(echoRaw)
+		}
 	}
 }
 
@@ -439,15 +455,6 @@ func (st *Step) DoTest(printer *Printer) (string, bool) {
 	}
 
 	return "", true
-}
-
-func (st *Step) DoEcho(jCtx *JobContext) {
-	exprOut, err := st.Expr.EvalTemplate(st.Echo, st.ctx)
-	if err != nil {
-		jCtx.Printer.LogError("Echo evaluation failed: %#v (input: %s)", err, st.Echo)
-	} else {
-		jCtx.Printer.PrintEchoContent(exprOut)
-	}
 }
 
 func (st *Step) SetCtx(j JobContext, override map[string]any) {

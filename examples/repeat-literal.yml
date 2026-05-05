@@ -29,3 +29,9 @@ jobs:
       echo: |
         Calculated value: {{repeat_index * 10}}
       wait: 500ms
+
+    - name: Per-iteration echo recorded in report
+      uses: hello
+      echo: |
+        iteration {{repeat_index}}: token=tk-{{repeat_index * 7}}
+      wait: 200ms
