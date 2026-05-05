@@ -1,8 +1,11 @@
 package probe
 
 import (
+	"fmt"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 )
 
 func TestJobScheduler_MarkJobsWithFailedDependencies(t *testing.T) {
@@ -140,6 +143,63 @@ func TestJobScheduler_MarkJobsWithFailedDependencies(t *testing.T) {
 			t.Error("Expected job3 to be runnable")
 		}
 	})
+}
+
+func TestJobScheduler_NoDeadlockOnConcurrentReadAndWrite(t *testing.T) {
+	// Regression test for the recursive RLock deadlock.
+	//
+	// GetRunnableJobs holds RLock, then calls CanRunJob which tries to
+	// acquire RLock again. Per Go's sync.RWMutex contract, a blocked Lock
+	// call excludes new readers from acquiring the lock to avoid writer
+	// starvation; therefore, if any writer is waiting, the second RLock
+	// inside the same goroutine deadlocks.
+	//
+	// To reproduce reliably, we spam GetRunnableJobs from many goroutines
+	// while concurrently calling Lock-acquiring methods such as
+	// SetJobStatus and IncrementRepeatCounter. With the bug present, the
+	// scheduler hangs and the timeout below trips.
+	scheduler := NewJobScheduler()
+	const jobCount = 5
+	for i := 0; i < jobCount; i++ {
+		job := &Job{
+			Name:  fmt.Sprintf("job-%d", i),
+			ID:    fmt.Sprintf("id-%d", i),
+			Steps: []*Step{},
+		}
+		if err := scheduler.AddJob(job); err != nil {
+			t.Fatalf("AddJob: %v", err)
+		}
+	}
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		var wg sync.WaitGroup
+		const iterations = 500
+		for i := 0; i < iterations; i++ {
+			wg.Add(3)
+			go func() {
+				defer wg.Done()
+				_ = scheduler.GetRunnableJobs()
+			}()
+			go func(idx int) {
+				defer wg.Done()
+				scheduler.SetJobStatus(fmt.Sprintf("id-%d", idx%jobCount), JobRunning, false)
+			}(i)
+			go func(idx int) {
+				defer wg.Done()
+				scheduler.IncrementRepeatCounter(fmt.Sprintf("id-%d", idx%jobCount))
+			}(i)
+		}
+		wg.Wait()
+	}()
+
+	select {
+	case <-done:
+		// reached without deadlock
+	case <-time.After(5 * time.Second):
+		t.Fatal("deadlock: scheduler operations did not finish within 5s (recursive RLock)")
+	}
 }
 
 func TestJobScheduler_ValidateDependencies(t *testing.T) {

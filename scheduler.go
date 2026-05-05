@@ -140,6 +140,14 @@ func (js *JobScheduler) CanRunJob(jobID string) bool {
 	js.mutex.RLock()
 	defer js.mutex.RUnlock()
 
+	return js.canRunJobLocked(jobID)
+}
+
+// canRunJobLocked is the lock-free implementation of CanRunJob.
+// Callers must already hold js.mutex (read or write). Splitting this out
+// avoids re-entering RLock from GetRunnableJobs, which would deadlock when
+// a writer is waiting on the same mutex.
+func (js *JobScheduler) canRunJobLocked(jobID string) bool {
 	job := js.jobs[jobID]
 	if js.status[jobID] != JobPending {
 		return false
@@ -147,7 +155,7 @@ func (js *JobScheduler) CanRunJob(jobID string) bool {
 
 	// Check if all dependencies are fully completed (all repeats done)
 	for _, dep := range job.Needs {
-		if !js.isJobFullyCompleted(dep) {
+		if !js.isJobFullyCompletedLocked(dep) {
 			return false
 		}
 	}
@@ -155,8 +163,9 @@ func (js *JobScheduler) CanRunJob(jobID string) bool {
 	return true
 }
 
-// isJobFullyCompleted checks if a job has completed all its repeat executions
-func (js *JobScheduler) isJobFullyCompleted(jobID string) bool {
+// isJobFullyCompletedLocked is the lock-free check for whether a job has
+// finished all of its repeat executions. Callers must already hold js.mutex.
+func (js *JobScheduler) isJobFullyCompletedLocked(jobID string) bool {
 	if js.status[jobID] != JobCompleted {
 		return false
 	}
@@ -211,7 +220,7 @@ func (js *JobScheduler) GetRunnableJobs() []string {
 
 	var runnable []string
 	for jobID := range js.jobs {
-		if js.CanRunJob(jobID) {
+		if js.canRunJobLocked(jobID) {
 			runnable = append(runnable, jobID)
 		}
 	}
