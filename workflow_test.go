@@ -961,12 +961,17 @@ func TestWorkflowBuffer_ConcurrentAccess(t *testing.T) {
 		done <- true
 	}()
 
-	// Goroutine 2: Read job buffer
+	// Goroutine 2: Read job buffer.
+	// AddStepResult writes StepResults under JobResult.mutex, so readers
+	// must take the same lock — see printer.go where reports do exactly
+	// this. Reading without the lock races with the writer goroutine.
 	go func() {
 		for range 5 {
 			jobResult := wb.Jobs[jobID]
 			if jobResult != nil {
+				jobResult.mutex.Lock()
 				_ = len(jobResult.StepResults)
+				jobResult.mutex.Unlock()
 			}
 		}
 		done <- true
@@ -981,7 +986,10 @@ func TestWorkflowBuffer_ConcurrentAccess(t *testing.T) {
 	if !exists {
 		t.Fatal("Job buffer should exist after concurrent operations")
 	}
-	if len(jobResult.StepResults) != 10 {
-		t.Errorf("Expected 10 step results after concurrent operations, got %d", len(jobResult.StepResults))
+	jobResult.mutex.Lock()
+	stepCount := len(jobResult.StepResults)
+	jobResult.mutex.Unlock()
+	if stepCount != 10 {
+		t.Errorf("Expected 10 step results after concurrent operations, got %d", stepCount)
 	}
 }
