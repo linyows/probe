@@ -12,7 +12,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/hashicorp/go-hclog"
 	"github.com/linyows/probe"
 )
 
@@ -95,10 +94,6 @@ func (r *Req) Do() (*Result, error) {
 	if r.URL == "" {
 		return nil, errors.New("Req.URL is required")
 	}
-
-	// Debug: log the body content and content-type
-	log := hclog.Default()
-	log.Info("DEBUG: HTTP Request Body", "body", r.Body, "headers", r.Header)
 
 	req, err := hp.NewRequest(r.Method, r.URL, strings.NewReader(r.Body))
 	if err != nil {
@@ -310,10 +305,8 @@ func Request(data map[string]any, opts ...Option) (map[string]any, error) {
 	// Extract custom headers and merge with defaults before MapToStructByTags
 	var customHeaders map[string]string
 	if headersInterface, exists := m["headers"]; exists {
-		hclog.Default().Info("DEBUG: Processing headers", "headers", headersInterface, "type", fmt.Sprintf("%T", headersInterface))
 		if headers, ok := headersInterface.(map[string]string); ok {
 			customHeaders = headers
-			hclog.Default().Info("DEBUG: Headers matched map[string]string")
 		} else if headersInterfaceMap, ok := headersInterface.(map[string]any); ok {
 			// Convert map[string]interface{} to map[string]string
 			customHeaders = make(map[string]string)
@@ -322,20 +315,7 @@ func Request(data map[string]any, opts ...Option) (map[string]any, error) {
 					customHeaders[k] = strVal
 				}
 			}
-			hclog.Default().Info("DEBUG: Headers matched map[string]interface{}")
-		} else if headersAnyMap, ok := headersInterface.(map[string]any); ok {
-			// Convert map[string]any to map[string]string
-			customHeaders = make(map[string]string)
-			for k, v := range headersAnyMap {
-				if strVal, ok := v.(string); ok {
-					customHeaders[k] = strVal
-				}
-			}
-			hclog.Default().Info("DEBUG: Headers matched map[string]any")
-		} else {
-			hclog.Default().Info("DEBUG: Headers type not matched")
 		}
-		hclog.Default().Info("DEBUG: Extracted custom headers", "customHeaders", customHeaders)
 	}
 
 	// Create new request with merged headers
