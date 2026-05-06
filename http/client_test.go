@@ -1,6 +1,7 @@
 package http
 
 import (
+	"bytes"
 	"encoding/json"
 	"io"
 	hp "net/http"
@@ -8,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/hashicorp/go-hclog"
 	"github.com/jarcoal/httpmock"
 	"github.com/linyows/probe"
 )
@@ -607,5 +609,50 @@ func TestMergeHeaders(t *testing.T) {
 				t.Errorf("Found %d User-Agent headers, expected only 1. Headers: %v", userAgentCount, result)
 			}
 		})
+	}
+}
+
+// TestRequest_DoesNotLeakRequestDataToDefaultLogger guards against the
+// pre-existing "DEBUG: ..." hclog.Info calls in Req.Do and Request that
+// emitted request bodies and headers (including Authorization) to stderr
+// regardless of verbose mode. The test installs a recording logger via
+// hclog.SetDefault and asserts that no sentinel content from a request
+// reaches it.
+func TestRequest_DoesNotLeakRequestDataToDefaultLogger(t *testing.T) {
+	var buf bytes.Buffer
+	recorder := hclog.New(&hclog.LoggerOptions{
+		Name:   "http-test-recorder",
+		Output: &buf,
+		Level:  hclog.Trace,
+	})
+	old := hclog.SetDefault(recorder)
+	t.Cleanup(func() { hclog.SetDefault(old) })
+
+	httpmock.Activate()
+	defer httpmock.DeactivateAndReset()
+	httpmock.RegisterResponder("POST", "http://example.test/v1/auth",
+		httpmock.NewStringResponder(200, "ok"))
+
+	const (
+		sentinelBody = "secret-payload-must-not-leak"
+		sentinelAuth = "Bearer SUPER-SECRET-TOKEN"
+	)
+
+	if _, err := Request(map[string]any{
+		"url":    "http://example.test/v1/auth",
+		"method": "POST",
+		"body":   sentinelBody,
+		"headers": map[string]any{
+			"Authorization": sentinelAuth,
+		},
+	}); err != nil {
+		t.Fatalf("Request: %v", err)
+	}
+
+	out := buf.String()
+	for _, sentinel := range []string{"DEBUG:", sentinelBody, sentinelAuth} {
+		if strings.Contains(out, sentinel) {
+			t.Errorf("default logger leaked %q.\nlogger output:\n%s", sentinel, out)
+		}
 	}
 }
