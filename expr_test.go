@@ -584,6 +584,50 @@ func TestEvalTemplateMapTypePreservation(t *testing.T) {
 	}
 }
 
+// TestIsSafeEnvKey pins the blocklist contract of isSafeEnvKey so the
+// upcoming simplification (collapsing the redundant prefix / safeKeys /
+// testEnvVars / fallback branches into a single Contains-based blocklist)
+// can't silently change which environment keys reach expr templates.
+func TestIsSafeEnvKey(t *testing.T) {
+	expr := &Expr{}
+
+	blocked := []string{
+		// Shell / host metadata
+		"PATH", "HOME", "USER", "USERNAME", "SHELL", "PWD",
+		// Credentials and secret-bearing names
+		"SECRET", "SECRET_KEY", "DB_PASSWORD", "API_KEY",
+		"AWS_SECRET_ACCESS_KEY", "MY_CREDENTIAL",
+		"PRIVATE_KEY", "SSH_AUTH_SOCK", "TLS_CERT",
+		// Contains-match catches any substring hit
+		"USER_HOME", "RUNTIME_PATH", "HAS_TOKEN",
+	}
+	for _, key := range blocked {
+		t.Run("blocked/"+key, func(t *testing.T) {
+			if expr.isSafeEnvKey(key) {
+				t.Errorf("isSafeEnvKey(%q) = true, want false", key)
+			}
+		})
+	}
+
+	allowed := []string{
+		// Expression-result identifiers expected to be reachable
+		"res", "result", "data", "response", "body", "status",
+		"headers", "host", "name", "service", "authorization",
+		"url", "repeat_index",
+		// Common deployment metadata that doesn't carry a secret-marker
+		"HOST", "URL", "PORT",
+		// Arbitrary user-defined names without a blocklisted substring
+		"my_var", "FEATURE_FLAG", "ENVIRONMENT", "REGION",
+	}
+	for _, key := range allowed {
+		t.Run("allowed/"+key, func(t *testing.T) {
+			if !expr.isSafeEnvKey(key) {
+				t.Errorf("isSafeEnvKey(%q) = false, want true", key)
+			}
+		})
+	}
+}
+
 func TestSafeEnvironment(t *testing.T) {
 	expr := &Expr{}
 

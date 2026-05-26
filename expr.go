@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"math/rand/v2"
 	"regexp"
-	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -257,48 +256,35 @@ func (e *Expr) createSafeEnvironment(env any) any {
 	return safeEnv
 }
 
-// Security: Check if environment key is safe to expose
+// isSafeEnvKey reports whether the given environment variable name is
+// safe to expose to expression evaluation. probe uses a blocklist
+// model: any key whose upper-cased form *contains* one of the patterns
+// below is rejected, and every other key is allowed. The substring
+// match is intentional so compound names like "DB_PASSWORD" or
+// "MY_API_KEY" still get rejected, at the cost of also rejecting
+// unrelated keys that happen to embed one of these substrings (e.g.
+// anything containing "KEY"). That conservative bias is deliberate.
+//
+// Historical note: this used to layer prefix / safeKeys / testEnvVars /
+// fallback whitelists on top of the blocklist, but every one of those
+// branches collapsed back to "anything that survived the blocklist is
+// allowed" — none of them actually narrowed what was reachable. They
+// were removed so the contract here matches the code.
 func (e *Expr) isSafeEnvKey(key string) bool {
-	// Security: Block dangerous environment variables
-	dangerousKeys := []string{
+	upperKey := strings.ToUpper(key)
+	blocklist := []string{
+		// Shell and host metadata
 		"PATH", "HOME", "USER", "USERNAME", "SHELL", "PWD",
+		// Credential-bearing names
 		"SECRET", "KEY", "TOKEN", "PASSWORD", "CREDENTIAL",
 		"API_KEY", "PRIVATE", "CERT", "SSH",
 	}
-
-	upperKey := strings.ToUpper(key)
-	for _, dangerous := range dangerousKeys {
-		if strings.Contains(upperKey, dangerous) {
+	for _, pattern := range blocklist {
+		if strings.Contains(upperKey, pattern) {
 			return false
 		}
 	}
-
-	// Allow only result data and safe variables
-	allowedPrefixes := []string{"res.", "result.", "data.", "response."}
-	for _, prefix := range allowedPrefixes {
-		if strings.HasPrefix(strings.ToLower(key), prefix) {
-			return true
-		}
-	}
-
-	// Allow basic result variables
-	safeKeys := []string{"res", "result", "data", "response", "body", "status", "headers", "host", "name", "service", "authorization", "url", "repeat_index"}
-	if slices.Contains(safeKeys, strings.ToLower(key)) {
-		return true
-	}
-
-	// Allow test environment variables but block real secrets
-	testEnvVars := []string{"TOKEN", "HOST", "URL", "PORT"}
-	if slices.Contains(testEnvVars, upperKey) {
-		return true
-	}
-
-	// Allow environment variables that are commonly used in tests/configs (but not secrets)
-	if !strings.Contains(upperKey, "SECRET") && !strings.Contains(upperKey, "API_KEY") && !strings.Contains(upperKey, "PRIVATE") && !strings.Contains(upperKey, "PASSWORD") {
-		return true
-	}
-
-	return false
+	return true
 }
 
 // Security: Sanitize values to prevent injection
