@@ -9,7 +9,7 @@ require (
 	github.com/emersion/go-message v0.18.2
 	github.com/expr-lang/expr v1.17.8
 	github.com/fatih/color v1.19.0
-	github.com/go-playground/validator/v10 v10.30.2
+	github.com/go-playground/validator/v10 v10.30.3
 	github.com/go-sql-driver/mysql v1.10.0
 	github.com/goccy/go-yaml v1.19.2
 	github.com/hashicorp/go-hclog v1.6.3
@@ -17,12 +17,12 @@ require (
 	github.com/jarcoal/httpmock v1.4.1
 	github.com/lib/pq v1.12.3
 	github.com/mattn/go-isatty v0.0.22
-	github.com/mattn/go-sqlite3 v1.14.42
-	github.com/pb33f/libopenapi v0.36.3
+	github.com/mattn/go-sqlite3 v1.14.44
+	github.com/pb33f/libopenapi v0.37.2
 	github.com/stretchr/testify v1.11.1
 	go.yaml.in/yaml/v4 v4.0.0-rc.4
-	golang.org/x/crypto v0.50.0
-	google.golang.org/grpc v1.81.0
+	golang.org/x/crypto v0.52.0
+	google.golang.org/grpc v1.82.1
 	google.golang.org/protobuf v1.36.11
 	gopkg.in/go-playground/validator.v9 v9.31.0
 )
@@ -50,12 +50,12 @@ require (
 	github.com/pb33f/jsonpath v0.8.2 // indirect
 	github.com/pb33f/ordered-map/v2 v2.3.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
-	golang.org/x/net v0.52.0 // indirect
+	golang.org/x/net v0.55.0 // indirect
 	golang.org/x/sync v0.20.0 // indirect
-	golang.org/x/sys v0.43.0 // indirect
-	golang.org/x/term v0.42.0 // indirect
-	golang.org/x/text v0.36.0 // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20260226221140-a57be14db171 // indirect
+	golang.org/x/sys v0.45.0 // indirect
+	golang.org/x/term v0.43.0 // indirect
+	golang.org/x/text v0.37.0 // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20260414002931-afd174a4e478 // indirect
 	gopkg.in/go-playground/assert.v1 v1.2.1 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
