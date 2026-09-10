@@ -1,21 +1,15 @@
-package ssh
+package actions
 
 import (
 	"errors"
 	"fmt"
-	"os"
 
 	"github.com/hashicorp/go-hclog"
-	"github.com/hashicorp/go-plugin"
 	"github.com/linyows/probe"
 	"github.com/linyows/probe/ssh"
 )
 
-type Action struct {
-	log hclog.Logger
-}
-
-func (a *Action) Run(with map[string]any) (map[string]any, error) {
+func runSSH(log hclog.Logger, with map[string]any) (map[string]any, error) {
 	// Validate that required parameters are provided
 	if len(with) == 0 {
 		return map[string]any{}, errors.New("ssh action requires parameters in 'with' section. Please specify connection details like host, user, cmd")
@@ -48,10 +42,10 @@ func (a *Action) Run(with map[string]any) (map[string]any, error) {
 		}
 	}
 
-	a.log.Debug("received ssh request parameters", "params", logParams)
+	log.Debug("received ssh request parameters", "params", logParams)
 
 	before := ssh.WithBefore(func(host string, port int, user string, cmd string) {
-		a.log.Debug("ssh connection prepared", "host", host, "port", port, "user", user, "cmd", cmd)
+		log.Debug("ssh connection prepared", "host", host, "port", port, "user", user, "cmd", cmd)
 	})
 	after := ssh.WithAfter(func(result *ssh.Result) {
 		// Truncate result for logging to prevent log bloat
@@ -71,16 +65,16 @@ func (a *Action) Run(with map[string]any) (map[string]any, error) {
 		} else {
 			logResult["stderr"] = result.Res.Stderr
 		}
-		a.log.Debug("ssh command completed", "result", logResult)
+		log.Debug("ssh command completed", "result", logResult)
 	})
 	ret, err := ssh.Execute(with, before, after)
 
 	if err != nil {
-		a.log.Error("ssh command failed", "error", err)
+		log.Error("ssh command failed", "error", err)
 	} else {
 		// Truncate result for logging to prevent log bloat
 		truncatedResult := probe.TruncateMapStringAny(ret, truncateLength)
-		a.log.Debug("ssh command completed successfully", "result_keys", getMapKeys(truncatedResult))
+		log.Debug("ssh command completed successfully", "result_keys", getMapKeys(truncatedResult))
 	}
 
 	return ret, err
@@ -93,22 +87,4 @@ func getMapKeys(m map[string]any) []string {
 		keys = append(keys, k)
 	}
 	return keys
-}
-
-func Serve() {
-	log := hclog.New(&hclog.LoggerOptions{
-		Level:      hclog.Debug,
-		Output:     os.Stderr,
-		JSONFormat: true,
-	})
-
-	pl := &probe.ActionsPlugin{
-		Impl: &Action{log: log},
-	}
-
-	plugin.Serve(&plugin.ServeConfig{
-		HandshakeConfig: probe.Handshake,
-		Plugins:         map[string]plugin.Plugin{"actions": pl},
-		GRPCServer:      plugin.DefaultGRPCServer,
-	})
 }

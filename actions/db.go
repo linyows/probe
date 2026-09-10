@@ -1,23 +1,17 @@
-package db
+package actions
 
 import (
 	"fmt"
-	"os"
 
 	"github.com/hashicorp/go-hclog"
-	"github.com/hashicorp/go-plugin"
 	"github.com/linyows/probe"
 	cl "github.com/linyows/probe/db"
 )
 
-type Action struct {
-	log hclog.Logger
-}
-
-func (a *Action) Run(with map[string]any) (map[string]any, error) {
+func runDB(log hclog.Logger, with map[string]any) (map[string]any, error) {
 	truncateLength := probe.MaxLogStringLength
 	truncatedParams := probe.TruncateMapStringAny(with, truncateLength)
-	a.log.Debug("received db request parameters", "params", truncatedParams)
+	log.Debug("received db request parameters", "params", truncatedParams)
 
 	// Validate required parameters
 	dsnVal, exists := with["dsn"]
@@ -41,37 +35,19 @@ func (a *Action) Run(with map[string]any) (map[string]any, error) {
 	// Execute database query with logger callbacks
 	result, err := cl.ExecuteQuery(with,
 		cl.WithBefore(func(query string, params []any) {
-			a.log.Debug("executing database query", "query", query, "params", params)
+			log.Debug("executing database query", "query", query, "params", params)
 		}),
 		cl.WithAfter(func(result *cl.Result) {
-			a.log.Debug("database query completed", "rows_affected", result.Res.RowsAffected, "duration", result.RT)
+			log.Debug("database query completed", "rows_affected", result.Res.RowsAffected, "duration", result.RT)
 		}),
 	)
 	if err != nil {
-		a.log.Error("database query execution failed", "error", err)
+		log.Error("database query execution failed", "error", err)
 		return result, err
 	}
 
 	truncatedResult := probe.TruncateMapStringAny(result, truncateLength)
-	a.log.Debug("database query completed", "result", truncatedResult)
+	log.Debug("database query completed", "result", truncatedResult)
 
 	return result, nil
-}
-
-func Serve() {
-	log := hclog.New(&hclog.LoggerOptions{
-		Level:      hclog.Debug,
-		Output:     os.Stderr,
-		JSONFormat: true,
-	})
-
-	pl := &probe.ActionsPlugin{
-		Impl: &Action{log: log},
-	}
-
-	plugin.Serve(&plugin.ServeConfig{
-		HandshakeConfig: probe.Handshake,
-		Plugins:         map[string]plugin.Plugin{"actions": pl},
-		GRPCServer:      plugin.DefaultGRPCServer,
-	})
 }

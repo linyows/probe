@@ -1,4 +1,4 @@
-package maillatency
+package actions
 
 import (
 	"bytes"
@@ -7,16 +7,10 @@ import (
 	"time"
 
 	"github.com/hashicorp/go-hclog"
-	"github.com/hashicorp/go-plugin"
-	"github.com/linyows/probe"
 	"github.com/linyows/probe/mail"
 )
 
-type Action struct {
-	log hclog.Logger
-}
-
-func (a *Action) Run(with map[string]any) (map[string]any, error) {
+func runMailLatency(log hclog.Logger, with map[string]any) (map[string]any, error) {
 	// Validate that required parameters are provided
 	if len(with) == 0 {
 		return map[string]any{}, errors.New("mail-latency action requires parameters in 'with' section. Please specify 'mail_dir' and 'output_dir' parameters")
@@ -33,7 +27,7 @@ func (a *Action) Run(with map[string]any) (map[string]any, error) {
 		return map[string]any{}, errors.New("mail-latency action requires 'output_dir' parameter in 'with' section")
 	}
 
-	a.log.Debug("received mail-latency request", "mail_dir", mailDir, "output_dir", outputDir)
+	log.Debug("received mail-latency request", "mail_dir", mailDir, "output_dir", outputDir)
 
 	// Create a buffer to capture CSV output
 	var csvBuffer bytes.Buffer
@@ -42,7 +36,7 @@ func (a *Action) Run(with map[string]any) (map[string]any, error) {
 	start := time.Now()
 	// Get latencies and write to buffer
 	if err := mail.GetLatencies(mailDir, &csvBuffer); err != nil {
-		a.log.Error("mail-latency request failed", "error", err)
+		log.Error("mail-latency request failed", "error", err)
 		return map[string]any{}, err
 	}
 	rt := time.Since(start)
@@ -56,12 +50,12 @@ func (a *Action) Run(with map[string]any) (map[string]any, error) {
 
 	// Write to file
 	if err := os.WriteFile(outputFile, []byte(csvContent), 0644); err != nil {
-		a.log.Error("failed to write output file", "error", err, "file", outputFile)
+		log.Error("failed to write output file", "error", err, "file", outputFile)
 		return map[string]any{}, err
 	}
-	a.log.Debug("CSV written to file", "file", outputFile)
+	log.Debug("CSV written to file", "file", outputFile)
 
-	a.log.Debug("mail-latency request completed successfully", "rt", rt)
+	log.Debug("mail-latency request completed successfully", "rt", rt)
 
 	// Create response data
 	res := map[string]any{
@@ -78,22 +72,4 @@ func (a *Action) Run(with map[string]any) (map[string]any, error) {
 	}
 
 	return result, nil
-}
-
-func Serve() {
-	log := hclog.New(&hclog.LoggerOptions{
-		Level:      hclog.Debug,
-		Output:     os.Stderr,
-		JSONFormat: true,
-	})
-
-	pl := &probe.ActionsPlugin{
-		Impl: &Action{log: log},
-	}
-
-	plugin.Serve(&plugin.ServeConfig{
-		HandshakeConfig: probe.Handshake,
-		Plugins:         map[string]plugin.Plugin{"actions": pl},
-		GRPCServer:      plugin.DefaultGRPCServer,
-	})
 }
