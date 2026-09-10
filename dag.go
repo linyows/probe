@@ -8,11 +8,6 @@ import (
 	"github.com/goccy/go-yaml"
 )
 
-// DagRenderer is the interface for DAG rendering
-type DagRenderer interface {
-	Render() string
-}
-
 // DagRendererBase provides common functionality for DAG renderers
 type DagRendererBase struct {
 	workflow      *Workflow

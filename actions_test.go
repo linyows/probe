@@ -3,7 +3,6 @@ package probe
 import (
 	"context"
 	"errors"
-	"maps"
 	"testing"
 
 	"github.com/linyows/probe/pb"
@@ -13,35 +12,14 @@ import (
 
 // MockActions implements the Actions interface for testing
 type MockActions struct {
-	RunFunc func(args []string, with map[string]any) (map[string]any, error)
+	RunFunc func(with map[string]any) (map[string]any, error)
 }
 
-func (m *MockActions) Run(args []string, with map[string]any) (map[string]any, error) {
+func (m *MockActions) Run(with map[string]any) (map[string]any, error) {
 	if m.RunFunc != nil {
-		return m.RunFunc(args, with)
+		return m.RunFunc(with)
 	}
 	return map[string]any{"result": "success"}, nil
-}
-
-// MockActionsClient for testing ActionsClient without GRPC
-type MockActionsClient struct {
-}
-
-func (m *MockActionsClient) Run(args []string, with map[string]any) (map[string]any, error) {
-	// For unit testing, we can simulate the behavior without actual GRPC calls
-	if len(args) == 0 {
-		return nil, errors.New("no arguments provided")
-	}
-
-	result := map[string]any{
-		"action": args[0],
-		"status": "completed",
-	}
-
-	// Include parameters in result
-	maps.Copy(result, with)
-
-	return result, nil
 }
 
 func TestActionsTypes(t *testing.T) {
@@ -110,91 +88,23 @@ func TestActionsPlugin_GRPCClient(t *testing.T) {
 	}
 }
 
-func TestActionsClient_Run(t *testing.T) {
-	// Since we can't easily mock the GRPC client, we'll test the interface
-	// and create a mock implementation for testing
-	mockClient := &MockActionsClient{}
-
-	tests := []struct {
-		name        string
-		args        []string
-		with        map[string]any
-		expectError bool
-		expectKeys  []string
-	}{
-		{
-			name:        "successful run with args",
-			args:        []string{"test-action"},
-			with:        map[string]any{"param1": "value1"},
-			expectError: false,
-			expectKeys:  []string{"action", "status", "param1"},
-		},
-		{
-			name:        "successful run with multiple params",
-			args:        []string{"complex-action"},
-			with:        map[string]any{"url": "http://example.com", "method": "GET"},
-			expectError: false,
-			expectKeys:  []string{"action", "status", "url", "method"},
-		},
-		{
-			name:        "empty args should fail",
-			args:        []string{},
-			with:        map[string]any{},
-			expectError: true,
-			expectKeys:  nil,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result, err := mockClient.Run(tt.args, tt.with)
-
-			if tt.expectError {
-				if err == nil {
-					t.Error("expected error but got none")
-				}
-				return
-			}
-
-			if err != nil {
-				t.Errorf("unexpected error: %v", err)
-				return
-			}
-
-			// Check that expected keys are present
-			for _, key := range tt.expectKeys {
-				if _, exists := result[key]; !exists {
-					t.Errorf("expected key %q not found in result", key)
-				}
-			}
-
-			// Check specific values
-			if len(tt.args) > 0 && result["action"] != tt.args[0] {
-				t.Errorf("result[action] = %q, want %q", result["action"], tt.args[0])
-			}
-		})
-	}
-}
-
 func TestActionsServer_Run(t *testing.T) {
 	tests := []struct {
 		name        string
-		mockFunc    func(args []string, with map[string]any) (map[string]any, error)
-		args        []string
+		mockFunc    func(with map[string]any) (map[string]any, error)
 		with        map[string]any
 		expectError bool
 		expectedRes map[string]any
 	}{
 		{
 			name: "successful run",
-			mockFunc: func(args []string, with map[string]any) (map[string]any, error) {
+			mockFunc: func(with map[string]any) (map[string]any, error) {
 				return map[string]any{
 					"status": "success",
-					"action": args[0],
+					"action": with["action"],
 				}, nil
 			},
-			args:        []string{"test-action"},
-			with:        map[string]any{"param": "value"},
+			with:        map[string]any{"action": "test-action", "param": "value"},
 			expectError: false,
 			expectedRes: map[string]any{
 				"status": "success",
@@ -203,20 +113,18 @@ func TestActionsServer_Run(t *testing.T) {
 		},
 		{
 			name: "error case",
-			mockFunc: func(args []string, with map[string]any) (map[string]any, error) {
+			mockFunc: func(with map[string]any) (map[string]any, error) {
 				return nil, errors.New("mock error")
 			},
-			args:        []string{"failing-action"},
 			with:        map[string]any{},
 			expectError: true,
 			expectedRes: nil,
 		},
 		{
 			name: "empty result",
-			mockFunc: func(args []string, with map[string]any) (map[string]any, error) {
+			mockFunc: func(with map[string]any) (map[string]any, error) {
 				return map[string]any{}, nil
 			},
-			args:        []string{"empty-action"},
 			with:        map[string]any{},
 			expectError: false,
 			expectedRes: map[string]any{},
@@ -240,7 +148,6 @@ func TestActionsServer_Run(t *testing.T) {
 			}
 
 			req := &pb.RunRequest{
-				Args: tt.args,
 				With: withStruct,
 			}
 
@@ -285,7 +192,7 @@ func TestMockActions_Run(t *testing.T) {
 	t.Run("default behavior", func(t *testing.T) {
 		mock := &MockActions{}
 
-		result, err := mock.Run([]string{"test"}, map[string]any{"key": "value"})
+		result, err := mock.Run(map[string]any{"key": "value"})
 
 		if err != nil {
 			t.Errorf("unexpected error: %v", err)
@@ -303,15 +210,15 @@ func TestMockActions_Run(t *testing.T) {
 
 	t.Run("custom function", func(t *testing.T) {
 		mock := &MockActions{
-			RunFunc: func(args []string, with map[string]any) (map[string]any, error) {
+			RunFunc: func(with map[string]any) (map[string]any, error) {
 				return map[string]any{
-					"custom":     "response",
-					"args_count": len(args),
+					"custom":    "response",
+					"with_size": len(with),
 				}, nil
 			},
 		}
 
-		result, err := mock.Run([]string{"arg1", "arg2"}, map[string]any{})
+		result, err := mock.Run(map[string]any{"a": 1, "b": 2})
 
 		if err != nil {
 			t.Errorf("unexpected error: %v", err)
@@ -324,12 +231,12 @@ func TestMockActions_Run(t *testing.T) {
 
 	t.Run("error case", func(t *testing.T) {
 		mock := &MockActions{
-			RunFunc: func(args []string, with map[string]any) (map[string]any, error) {
+			RunFunc: func(with map[string]any) (map[string]any, error) {
 				return nil, errors.New("test error")
 			},
 		}
 
-		result, err := mock.Run([]string{}, map[string]any{})
+		result, err := mock.Run(map[string]any{})
 
 		if err == nil {
 			t.Error("expected error but got none")
@@ -365,7 +272,7 @@ func TestMockActionRunner(t *testing.T) {
 	mock := NewMockActionRunner()
 
 	// Test default behavior
-	result, err := mock.RunActions("test", []string{}, map[string]any{"key": "value"}, false)
+	result, err := mock.RunActions("test", map[string]any{"key": "value"}, false)
 	if err != nil {
 		t.Errorf("Expected no error, got %v", err)
 	}
@@ -383,7 +290,7 @@ func TestMockActionRunner(t *testing.T) {
 	}
 	mock.SetResult("http", customResult)
 
-	result, err = mock.RunActions("http", []string{}, map[string]any{}, false)
+	result, err = mock.RunActions("http", map[string]any{}, false)
 	if err != nil {
 		t.Errorf("Expected no error, got %v", err)
 	}
@@ -395,7 +302,7 @@ func TestMockActionRunner(t *testing.T) {
 	testErr := errors.New("test error")
 	mock.SetError("failing-action", testErr)
 
-	result, err = mock.RunActions("failing-action", []string{}, map[string]any{}, false)
+	result, err = mock.RunActions("failing-action", map[string]any{}, false)
 	if err != testErr {
 		t.Errorf("Expected test error, got %v", err)
 	}

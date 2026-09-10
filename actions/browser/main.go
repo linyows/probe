@@ -14,7 +14,7 @@ type Action struct {
 	log hclog.Logger
 }
 
-func (a *Action) Run(args []string, with map[string]any) (map[string]any, error) {
+func (a *Action) Run(with map[string]any) (map[string]any, error) {
 	truncateLength := probe.MaxLogStringLength
 	truncatedParams := probe.TruncateMapStringAny(with, truncateLength)
 	a.log.Debug("received browser action request", "params", truncatedParams)

@@ -15,7 +15,7 @@ type Action struct {
 	log hclog.Logger
 }
 
-func (a *Action) Run(args []string, with map[string]any) (map[string]any, error) {
+func (a *Action) Run(with map[string]any) (map[string]any, error) {
 	// Validate that required parameters are provided
 	if len(with) == 0 {
 		return map[string]any{}, errors.New("http action requires parameters in 'with' section. Please specify request details like url, method, or use method fields (get, post, etc.)")

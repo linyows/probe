@@ -128,7 +128,7 @@ func (st *Step) executeSingleAction(runner ActionRunner, expW map[string]any, jC
 	resultCh := make(chan result, 1)
 
 	go func() {
-		ret, err := runner.RunActions(st.Uses, []string{}, expW, jCtx.Verbose)
+		ret, err := runner.RunActions(st.Uses, expW, jCtx.Verbose)
 		resultCh <- result{ret: ret, err: err}
 	}()
 

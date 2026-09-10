@@ -7,8 +7,6 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
-
-	"google.golang.org/protobuf/types/known/structpb"
 )
 
 const (
@@ -83,14 +81,6 @@ func MergeMaps(base, over map[string]any) map[string]any {
 	}
 
 	return merged
-}
-
-func ToAnySlice[T any](s []T) []any {
-	res := make([]any, len(s))
-	for i, v := range s {
-		res[i] = v
-	}
-	return res
 }
 
 func FromAnySlice[T any](s []any) ([]T, error) {
@@ -622,22 +612,6 @@ func TitleCase(st string, char string) string {
 		}
 	}
 	return strings.Join(parts, char)
-}
-
-// StructToMap converts a protobuf Struct to a map[string]any
-func StructToMap(s *structpb.Struct) map[string]any {
-	if s == nil {
-		return nil
-	}
-	return s.AsMap()
-}
-
-// MapToStruct converts a map[string]any to a protobuf Struct
-func MapToStruct(m map[string]any) (*structpb.Struct, error) {
-	if m == nil {
-		return nil, nil
-	}
-	return structpb.NewStruct(m)
 }
 
 // ConvertNumericStrings provides backward compatibility for numeric conversion

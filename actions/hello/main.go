@@ -13,7 +13,7 @@ type Action struct {
 	log hclog.Logger
 }
 
-func (a *Action) Run(args []string, with map[string]any) (map[string]any, error) {
+func (a *Action) Run(with map[string]any) (map[string]any, error) {
 	a.log.Info("Hello!")
 
 	// Create response data

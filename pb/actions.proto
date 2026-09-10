@@ -5,13 +5,15 @@ option go_package = "./pb";
 import "google/protobuf/struct.proto";
 
 message RunRequest {
-    repeated string args = 1;
+    reserved 1;
+    reserved "args";
     google.protobuf.Struct with = 2;
 }
 
 message RunResponse {
+    reserved 2;
+    reserved "error";
     google.protobuf.Struct result = 1;
-    string error = 2;
 }
 
 service Actions {
