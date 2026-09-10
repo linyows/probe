@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+
+	"github.com/linyows/probe/mapping"
 )
 
 // MatchJSON compares two `map[string]any` objects strictly.
@@ -84,12 +86,12 @@ func deepMatch(src, target any, diffs *[]string, path string) bool {
 		return true
 
 	case int, int64, uint, uint64, float64:
-		targetStr, ok := AnyToString(target)
+		targetStr, ok := mapping.AnyToString(target)
 		if !ok {
 			*diffs = append(*diffs, fmt.Sprintf("Key '%s': Expected number, got %T", path, target))
 			return false
 		}
-		srcStr, ok := AnyToString(src)
+		srcStr, ok := mapping.AnyToString(src)
 		if !ok {
 			*diffs = append(*diffs, fmt.Sprintf("Key '%s': Expected %#v, got %#v", path, target, src))
 			return false
@@ -112,7 +114,7 @@ func deepMatch(src, target any, diffs *[]string, path string) bool {
 					return false
 				}
 			} else {
-				srcStr, ok := AnyToString(src)
+				srcStr, ok := mapping.AnyToString(src)
 				if !ok || !re.MatchString(srcStr) {
 					*diffs = append(*diffs, fmt.Sprintf("Key '%s': Regex mismatch (pattern: %s, value: %v)", path, pattern, srcStr))
 					return false

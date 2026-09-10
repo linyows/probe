@@ -13,7 +13,7 @@ import (
 	"github.com/emersion/go-imap/v2"
 	"github.com/emersion/go-imap/v2/imapclient"
 	"github.com/emersion/go-message/charset"
-	"github.com/linyows/probe"
+	"github.com/linyows/probe/mapping"
 )
 
 type Req struct {
@@ -189,7 +189,7 @@ func WithAfter(f func(res *Res)) Option {
 }
 
 func Request(data map[string]any, opts ...Option) (map[string]any, error) {
-	m := probe.HeaderToStringValue(data)
+	m := mapping.HeaderToStringValue(data)
 
 	// Manually handle type conversions BEFORE MapToStructByTags to prevent reflection panics
 	if portInput, exists := m["port"]; exists {
@@ -233,7 +233,7 @@ func Request(data map[string]any, opts ...Option) (map[string]any, error) {
 	}
 
 	r := NewReq()
-	if err := probe.MapToStructByTags(m, r); err != nil {
+	if err := mapping.MapToStructByTags(m, r); err != nil {
 		return map[string]any{}, fmt.Errorf("failed in map-to-struct-by-tags for data: %w", err)
 	}
 
@@ -242,7 +242,7 @@ func Request(data map[string]any, opts ...Option) (map[string]any, error) {
 		return map[string]any{}, fmt.Errorf("failed to Do(): %w", err)
 	}
 
-	mapRet, err := probe.StructToMapByTags(ret)
+	mapRet, err := mapping.StructToMapByTags(ret)
 	if err != nil {
 		return map[string]any{}, fmt.Errorf("failed in struct-to-map-by-tags for result: %w", err)
 	}

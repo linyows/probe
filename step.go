@@ -493,9 +493,9 @@ func (st *Step) SetCtx(j JobContext, override map[string]any) {
 	}
 
 	// Merge workflow vars with evaluated step vars
-	vers := MergeMaps(j.Vars, evaluatedStepVars)
+	vers := mergeMaps(j.Vars, evaluatedStepVars)
 	if override != nil {
-		vers = MergeMaps(vers, override)
+		vers = mergeMaps(vers, override)
 	}
 
 	st.ctx = StepContext{

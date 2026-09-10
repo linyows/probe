@@ -11,6 +11,7 @@ import (
 
 	"github.com/goccy/go-yaml"
 	"github.com/linyows/probe"
+	"github.com/linyows/probe/mapping"
 	"gopkg.in/go-playground/validator.v9"
 )
 
@@ -190,7 +191,7 @@ func Execute(data map[string]any, opts ...Option) (map[string]any, error) {
 	dataCopy := make(map[string]any)
 	maps.Copy(dataCopy, data)
 
-	m := probe.HeaderToStringValue(dataCopy)
+	m := mapping.HeaderToStringValue(dataCopy)
 
 	r := NewReq()
 
@@ -200,7 +201,7 @@ func Execute(data map[string]any, opts ...Option) (map[string]any, error) {
 	}
 	r.cb = cb
 
-	if err := probe.MapToStructByTags(m, r); err != nil {
+	if err := mapping.MapToStructByTags(m, r); err != nil {
 		return map[string]any{}, err
 	}
 
@@ -208,7 +209,7 @@ func Execute(data map[string]any, opts ...Option) (map[string]any, error) {
 	if err != nil {
 		// Even on error, try to return a structured result if we have one
 		if result != nil {
-			mapResult, mapErr := probe.StructToMapByTags(result)
+			mapResult, mapErr := mapping.StructToMapByTags(result)
 			if mapErr == nil {
 				return mapResult, err
 			}
@@ -216,7 +217,7 @@ func Execute(data map[string]any, opts ...Option) (map[string]any, error) {
 		return map[string]any{}, err
 	}
 
-	mapResult, err := probe.StructToMapByTags(result)
+	mapResult, err := mapping.StructToMapByTags(result)
 	if err != nil {
 		return map[string]any{}, err
 	}

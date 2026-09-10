@@ -4,7 +4,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/linyows/probe"
+	"github.com/linyows/probe/binary"
+	"github.com/linyows/probe/mapping"
 )
 
 type Req struct {
@@ -117,7 +118,7 @@ func (r *Req) Do() (*Result, error) {
 	mailData := bulk.MakeData()
 
 	// Process mail data (check if it's text or binary)
-	bodyString, filePath, err := probe.ProcessHttpBody(mailData, "text/plain")
+	bodyString, filePath, err := binary.ProcessHttpBody(mailData, "text/plain")
 	if err != nil {
 		return result, fmt.Errorf("failed to process mail data: %w", err)
 	}
@@ -162,7 +163,7 @@ func Send(data map[string]any, opts ...Option) (map[string]any, error) {
 	for k, v := range dataCopy {
 		dataCopyAny[k] = v
 	}
-	m := probe.HeaderToStringValue(dataCopyAny)
+	m := mapping.HeaderToStringValue(dataCopyAny)
 
 	r := NewReq()
 
@@ -172,13 +173,13 @@ func Send(data map[string]any, opts ...Option) (map[string]any, error) {
 	}
 	r.cb = cb
 
-	mapErr := probe.MapToStructByTags(m, r)
+	mapErr := mapping.MapToStructByTags(m, r)
 
 	result, err := r.Do()
 	if err != nil || mapErr != nil {
 		// Even on error, try to return a structured result if we have one
 		if result != nil {
-			mapResult, structErr := probe.StructToMapByTags(result)
+			mapResult, structErr := mapping.StructToMapByTags(result)
 			if structErr == nil {
 				// Return the original error (either mapErr or err)
 				if mapErr != nil {
@@ -194,7 +195,7 @@ func Send(data map[string]any, opts ...Option) (map[string]any, error) {
 		return map[string]any{}, err
 	}
 
-	mapResult, err := probe.StructToMapByTags(result)
+	mapResult, err := mapping.StructToMapByTags(result)
 	if err != nil {
 		return map[string]any{}, err
 	}

@@ -176,14 +176,14 @@ func (w *Workflow) SetExitStatus(isErr bool) {
 
 func (w *Workflow) Env() map[string]string {
 	if len(w.env) == 0 {
-		w.env = EnvMap()
+		w.env = envMap()
 	}
 	return w.env
 }
 
 // evalVars evaluates template variables in workflow vars using environment variables
 func (w *Workflow) evalVars() (map[string]any, error) {
-	env := StrmapToAnymap(w.Env())
+	env := strmapToAnymap(w.Env())
 	vars := make(map[string]any)
 
 	expr := &Expr{}

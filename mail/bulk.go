@@ -6,12 +6,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/linyows/probe"
+	"github.com/linyows/probe/mapping"
 )
 
-func NewBulk(p probe.ActionsParams) (*Bulk, error) {
+func NewBulk(p map[string]any) (*Bulk, error) {
 	var b Bulk
-	if err := probe.AssignStruct(p, &b); err != nil {
+	if err := mapping.AssignStruct(p, &b); err != nil {
 		return nil, err
 	}
 	return &b, nil

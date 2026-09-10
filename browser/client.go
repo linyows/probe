@@ -8,7 +8,8 @@ import (
 	"time"
 
 	"github.com/chromedp/chromedp"
-	"github.com/linyows/probe"
+	"github.com/linyows/probe/binary"
+	"github.com/linyows/probe/mapping"
 )
 
 const (
@@ -166,7 +167,7 @@ func (req *Req) parseData(data map[string]any, opts []Option) error {
 	}
 
 	// Use MapToStructByTags to parse all fields including actions
-	err := probe.MapToStructByTags(data, req)
+	err := mapping.MapToStructByTags(data, req)
 	if err != nil {
 		return fmt.Errorf("MapToStructByTags failed: %w", err)
 	}
@@ -339,7 +340,7 @@ func (req *Req) collectResults() (map[string]string, map[string]string, error) {
 		case "full_screenshot", "capture_screenshot", "screenshot":
 			if action.reBuf != nil && len(*action.reBuf) > 0 {
 				// Save screenshot to temporary file using our binary utility
-				filePath, err := probe.SaveBinaryToTempFile(*action.reBuf, "image/png")
+				filePath, err := binary.SaveBinaryToTempFile(*action.reBuf, "image/png")
 				if err != nil {
 					return nil, nil, fmt.Errorf("failed to save screenshot: %w", err)
 				}
@@ -426,7 +427,7 @@ func Request(data map[string]any, opts ...Option) (map[string]any, error) {
 		return createErrorResult(start, req, err)
 	}
 
-	mapRet, err := probe.StructToMapByTags(result)
+	mapRet, err := mapping.StructToMapByTags(result)
 	if err != nil {
 		return createErrorResult(start, req, err)
 	}
@@ -447,7 +448,7 @@ func createErrorResult(start time.Time, req *Req, err error) (map[string]any, er
 		Status: 1, // failure
 	}
 
-	mapResult, mapErr := probe.StructToMapByTags(result)
+	mapResult, mapErr := mapping.StructToMapByTags(result)
 	if mapErr != nil {
 		return map[string]any{}, mapErr
 	}

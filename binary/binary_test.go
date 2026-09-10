@@ -1,4 +1,4 @@
-package probe
+package binary
 
 import (
 	"os"
@@ -27,9 +27,9 @@ func TestIsTextualMimeType(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := IsTextualMimeType(tt.contentType)
+			result := isTextualMimeType(tt.contentType)
 			if result != tt.expected {
-				t.Errorf("IsTextualMimeType(%q) = %v, expected %v", tt.contentType, result, tt.expected)
+				t.Errorf("isTextualMimeType(%q) = %v, expected %v", tt.contentType, result, tt.expected)
 			}
 		})
 	}

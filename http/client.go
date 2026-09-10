@@ -12,7 +12,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/linyows/probe"
+	"github.com/linyows/probe/binary"
+	"github.com/linyows/probe/mapping"
 )
 
 type TransportOptions struct {
@@ -103,7 +104,7 @@ func (r *Req) Do() (*Result, error) {
 	for k, v := range r.Header {
 		// Clean header value by removing newlines and other invalid characters
 		cleanValue := strings.ReplaceAll(strings.ReplaceAll(v, "\n", ""), "\r", "")
-		req.Header.Set(probe.TitleCase(k, "-"), cleanValue)
+		req.Header.Set(mapping.TitleCase(k, "-"), cleanValue)
 	}
 
 	// callback
@@ -146,7 +147,7 @@ func (r *Req) Do() (*Result, error) {
 
 	// Process body based on Content-Type
 	contentType := res.Header.Get("Content-Type")
-	bodyString, filePath, err := probe.ProcessHttpBody(body, contentType)
+	bodyString, filePath, err := binary.ProcessHttpBody(body, contentType)
 	if err != nil {
 		return result, err
 	}
@@ -300,7 +301,7 @@ func Request(data map[string]any, opts ...Option) (map[string]any, error) {
 	// Handle body conversion for JSON content-type
 	MarshalBodyIfJSON(data, m)
 
-	m = probe.HeaderToStringValue(m)
+	m = mapping.HeaderToStringValue(m)
 
 	// Extract custom headers and merge with defaults before MapToStructByTags
 	var customHeaders map[string]string
@@ -331,7 +332,7 @@ func Request(data map[string]any, opts ...Option) (map[string]any, error) {
 	}
 	r.cb = cb
 
-	if err := probe.MapToStructByTags(m, r); err != nil {
+	if err := mapping.MapToStructByTags(m, r); err != nil {
 		return map[string]any{}, err
 	}
 
@@ -340,7 +341,7 @@ func Request(data map[string]any, opts ...Option) (map[string]any, error) {
 		return map[string]any{}, err
 	}
 
-	mapRet, err := probe.StructToMapByTags(ret)
+	mapRet, err := mapping.StructToMapByTags(ret)
 	if err != nil {
 		return map[string]any{}, err
 	}
