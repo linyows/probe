@@ -1,4 +1,0 @@
-[DB Error]   [Network]   [Timeout]
-     └───────────┼───────────┘
-                 ↓
-             [Fatal]

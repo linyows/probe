@@ -1,1 +1,0 @@
-Error: Cycle detected: [A] → [B] → [A] ⇄

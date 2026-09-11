@@ -1,7 +1,5 @@
-// Package dag provides generic DAG algorithms that work with any data structure.
+// Package dag provides generic graph algorithms that work with any data structure.
 package dag
-
-import "slices"
 
 // DetectCycleFn detects a cycle in a graph using a higher-order function.
 // Returns the cycle path if found, nil otherwise.
@@ -65,81 +63,4 @@ func DetectCycleFn[ID comparable](allIDs []ID, getDeps func(ID) []ID) []ID {
 	}
 
 	return nil
-}
-
-// HasCycleFn checks if a cycle exists in the graph.
-// This is faster than DetectCycleFn when you don't need the cycle path.
-func HasCycleFn[ID comparable](allIDs []ID, getDeps func(ID) []ID) bool {
-	visited := make(map[ID]bool)
-	recStack := make(map[ID]bool)
-
-	var dfs func(id ID) bool
-	dfs = func(id ID) bool {
-		if recStack[id] {
-			return true
-		}
-		if visited[id] {
-			return false
-		}
-
-		visited[id] = true
-		recStack[id] = true
-
-		if slices.ContainsFunc(getDeps(id), dfs) {
-			return true
-		}
-
-		recStack[id] = false
-		return false
-	}
-
-	return slices.ContainsFunc(allIDs, dfs)
-}
-
-// CycleDetectable is an interface for types that can be checked for cycles.
-type CycleDetectable[ID comparable] interface {
-	ID() ID
-	Dependencies() []ID
-}
-
-// DetectCycle detects a cycle in a collection of CycleDetectable items.
-func DetectCycle[ID comparable, T CycleDetectable[ID]](items []T) []ID {
-	// Build lookup map
-	itemMap := make(map[ID]T)
-	allIDs := make([]ID, len(items))
-	for i, item := range items {
-		id := item.ID()
-		itemMap[id] = item
-		allIDs[i] = id
-	}
-
-	getDeps := func(id ID) []ID {
-		if item, ok := itemMap[id]; ok {
-			return item.Dependencies()
-		}
-		return nil
-	}
-
-	return DetectCycleFn(allIDs, getDeps)
-}
-
-// HasCycle checks if a cycle exists in a collection of CycleDetectable items.
-func HasCycle[ID comparable, T CycleDetectable[ID]](items []T) bool {
-	// Build lookup map
-	itemMap := make(map[ID]T)
-	allIDs := make([]ID, len(items))
-	for i, item := range items {
-		id := item.ID()
-		itemMap[id] = item
-		allIDs[i] = id
-	}
-
-	getDeps := func(id ID) []ID {
-		if item, ok := itemMap[id]; ok {
-			return item.Dependencies()
-		}
-		return nil
-	}
-
-	return HasCycleFn(allIDs, getDeps)
 }
