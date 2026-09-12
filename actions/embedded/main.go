@@ -20,12 +20,7 @@ func (a *Action) Run(with map[string]any) (map[string]any, error) {
 		return map[string]any{}, errors.New("embedded action requires parameters in 'with' section. Please specify embedded job details like path")
 	}
 
-	// Use default truncate length, can be overridden by caller
-	truncateLength := probe.MaxLogStringLength
-
-	// Truncate long parameters for logging to prevent log bloat
-	truncatedParams := probe.TruncateMapStringAny(with, truncateLength)
-	a.log.Debug("received embedded request parameters", "params", truncatedParams)
+	probe.LogActionParams(a.log, "received embedded request parameters", with)
 
 	before := embedded.WithBefore(func(path string, vars map[string]any) {
 		a.log.Debug("embedded job prepared", "path", path, "vars", vars)
@@ -35,13 +30,7 @@ func (a *Action) Run(with map[string]any) (map[string]any, error) {
 	})
 	ret, err := embedded.Execute(with, before, after)
 
-	if err != nil {
-		a.log.Error("embedded job execution failed", "error", err)
-	} else {
-		// Truncate result for logging to prevent log bloat
-		truncatedResult := probe.TruncateMapStringAny(ret, truncateLength)
-		a.log.Debug("embedded job completed successfully", "result", truncatedResult)
-	}
+	probe.LogActionOutcome(a.log, "embedded job", ret, err)
 
 	return ret, err
 }

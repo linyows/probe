@@ -365,3 +365,21 @@ func (m *MockActionRunner) RunActions(name string, with map[string]any, verbose 
 		"results": map[string]any{},
 	}, nil
 }
+
+// LogActionParams records the parameters an action received, truncating long
+// values so that a large request body does not flood the log. Actions are
+// separate processes, so their log records reach the workflow runner as JSON
+// on stderr and are re-filtered there by the runner's own level.
+func LogActionParams(log hclog.Logger, msg string, with map[string]any) {
+	log.Debug(msg, "params", TruncateMapStringAny(with, MaxLogStringLength))
+}
+
+// LogActionOutcome records how an action finished. subject names what was
+// attempted, for example "http request", and is used to build the message.
+func LogActionOutcome(log hclog.Logger, subject string, ret map[string]any, err error) {
+	if err != nil {
+		log.Error(subject+" failed", "error", err)
+		return
+	}
+	log.Debug(subject+" completed successfully", "result", TruncateMapStringAny(ret, MaxLogStringLength))
+}
