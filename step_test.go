@@ -1291,7 +1291,7 @@ type SlowMockActionRunner struct {
 	delay time.Duration
 }
 
-func (m *SlowMockActionRunner) RunActions(name string, args []string, with map[string]any, verbose bool) (map[string]any, error) {
+func (m *SlowMockActionRunner) RunActions(name string, with map[string]any, verbose bool) (map[string]any, error) {
 	time.Sleep(m.delay)
 	return map[string]any{"status": 0}, nil
 }
@@ -1566,7 +1566,7 @@ type CountingMockActionRunner struct {
 	callCount  *int
 }
 
-func (m *CountingMockActionRunner) RunActions(name string, args []string, with map[string]any, verbose bool) (map[string]any, error) {
+func (m *CountingMockActionRunner) RunActions(name string, with map[string]any, verbose bool) (map[string]any, error) {
 	*m.callCount++
 	if m.resultFunc != nil {
 		return m.resultFunc(*m.callCount), nil

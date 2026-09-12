@@ -709,7 +709,7 @@ Custom actions must implement the Actions interface:
 
 ```go
 type Actions interface {
-    Run(args []string, with map[string]string) (map[string]string, error)
+    Run(with map[string]any) (map[string]any, error)
 }
 ```
 
@@ -726,9 +726,9 @@ import (
 
 type CustomAction struct{}
 
-func (c *CustomAction) Run(args []string, with map[string]string) (map[string]string, error) {
+func (c *CustomAction) Run(with map[string]any) (map[string]any, error) {
     // Custom action logic here
-    return map[string]string{
+    return map[string]any{
         "status": "success",
         "result": "custom action completed",
     }, nil

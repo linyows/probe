@@ -898,7 +898,7 @@ Probe には強力な組み込みアクションが付属していますが、�
 
 ```go
 type Actions interface {
-    Run(args []string, with map[string]string) (map[string]string, error)
+    Run(with map[string]any) (map[string]any, error)
 }
 ```
 
@@ -915,9 +915,9 @@ import (
 
 type CustomAction struct{}
 
-func (c *CustomAction) Run(args []string, with map[string]string) (map[string]string, error) {
+func (c *CustomAction) Run(with map[string]any) (map[string]any, error) {
     // ここにカスタムアクションロジック
-    return map[string]string{
+    return map[string]any{
         "status": "success",
         "result": "custom action completed",
     }, nil

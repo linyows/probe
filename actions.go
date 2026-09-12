@@ -26,7 +26,7 @@ type ActionsArgs []string
 type ActionsParams map[string]any
 
 type Actions interface {
-	Run(args []string, with map[string]any) (map[string]any, error)
+	Run(with map[string]any) (map[string]any, error)
 }
 
 type ActionsPlugin struct {
@@ -52,7 +52,7 @@ type ActionsClient struct {
 	client pb.ActionsClient
 }
 
-func (m *ActionsClient) Run(args []string, with map[string]any) (map[string]any, error) {
+func (m *ActionsClient) Run(with map[string]any) (map[string]any, error) {
 	// Convert map[string]any directly to protobuf.Struct
 	withStruct, err := structpb.NewStruct(with)
 	if err != nil {
@@ -60,7 +60,6 @@ func (m *ActionsClient) Run(args []string, with map[string]any) (map[string]any,
 	}
 
 	runRes, err := m.client.Run(context.Background(), &pb.RunRequest{
-		Args: args,
 		With: withStruct,
 	})
 
@@ -105,7 +104,7 @@ func (m *ActionsServer) Run(ctx context.Context, req *pb.RunRequest) (*pb.RunRes
 		withMap = make(map[string]any)
 	}
 
-	v, err := m.Impl.Run(req.Args, withMap)
+	v, err := m.Impl.Run(withMap)
 	if err != nil {
 		if m.log != nil {
 			m.log.Error("Action execution failed", "error", err)
@@ -276,14 +275,14 @@ func convertFloatToInt(value any) any {
 
 // ActionRunner defines the interface for running actions
 type ActionRunner interface {
-	RunActions(name string, args []string, with map[string]any, verbose bool) (map[string]any, error)
+	RunActions(name string, with map[string]any, verbose bool) (map[string]any, error)
 }
 
 // PluginActionRunner implements ActionRunner using the plugin system
 type PluginActionRunner struct{}
 
 // RunActions executes an action using the plugin system
-func (p *PluginActionRunner) RunActions(name string, args []string, with map[string]any, verbose bool) (map[string]any, error) {
+func (p *PluginActionRunner) RunActions(name string, with map[string]any, verbose bool) (map[string]any, error) {
 	loglevel := hclog.Warn
 	if verbose {
 		loglevel = hclog.Debug
@@ -316,7 +315,7 @@ func (p *PluginActionRunner) RunActions(name string, args []string, with map[str
 	}
 
 	actions := raw.(Actions)
-	result, err := actions.Run(args, with)
+	result, err := actions.Run(with)
 	if err != nil {
 		return nil, err
 	}
@@ -348,7 +347,7 @@ func (m *MockActionRunner) SetError(actionName string, err error) {
 }
 
 // RunActions returns the mocked result or error for the given action
-func (m *MockActionRunner) RunActions(name string, args []string, with map[string]any, verbose bool) (map[string]any, error) {
+func (m *MockActionRunner) RunActions(name string, with map[string]any, verbose bool) (map[string]any, error) {
 	if err, exists := m.Errors[name]; exists {
 		return nil, err
 	}

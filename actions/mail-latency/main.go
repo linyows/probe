@@ -16,7 +16,7 @@ type Action struct {
 	log hclog.Logger
 }
 
-func (a *Action) Run(args []string, with map[string]any) (map[string]any, error) {
+func (a *Action) Run(with map[string]any) (map[string]any, error) {
 	// Validate that required parameters are provided
 	if len(with) == 0 {
 		return map[string]any{}, errors.New("mail-latency action requires parameters in 'with' section. Please specify 'mail_dir' and 'output_dir' parameters")
