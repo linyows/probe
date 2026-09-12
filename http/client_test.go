@@ -11,7 +11,6 @@ import (
 
 	"github.com/hashicorp/go-hclog"
 	"github.com/jarcoal/httpmock"
-	"github.com/linyows/probe"
 )
 
 func TestNewReq(t *testing.T) {
@@ -56,93 +55,6 @@ func TestDo(t *testing.T) {
 	// Check that RT field is populated
 	if got.RT <= 0 {
 		t.Errorf("RT should be greater than 0, got: %v", got.RT)
-	}
-}
-
-func TestConvertNumericStrings(t *testing.T) {
-	tests := []struct {
-		name     string
-		input    map[string]any
-		expected map[string]any
-	}{
-		{
-			name: "convert integers",
-			input: map[string]any{
-				"age":   "25",
-				"count": "100",
-				"name":  "test",
-			},
-			expected: map[string]any{
-				"age":   25,
-				"count": 100,
-				"name":  "test",
-			},
-		},
-		{
-			name: "convert floats",
-			input: map[string]any{
-				"price":  "19.99",
-				"weight": "2.5",
-				"name":   "product",
-			},
-			expected: map[string]any{
-				"price":  19.99,
-				"weight": 2.5,
-				"name":   "product",
-			},
-		},
-		{
-			name: "nested structures",
-			input: map[string]any{
-				"user": map[string]any{
-					"age":  "30",
-					"name": "John",
-					"settings": map[string]any{
-						"timeout": "5000",
-						"enabled": "true",
-					},
-				},
-				"count": "42",
-			},
-			expected: map[string]any{
-				"user": map[string]any{
-					"age":  30,
-					"name": "John",
-					"settings": map[string]any{
-						"timeout": 5000,
-						"enabled": "true",
-					},
-				},
-				"count": 42,
-			},
-		},
-		{
-			name: "preserve non-numeric strings",
-			input: map[string]any{
-				"message": "hello123",
-				"code":    "abc123",
-				"mixed":   "123abc",
-			},
-			expected: map[string]any{
-				"message": "hello123",
-				"code":    "abc123",
-				"mixed":   "123abc",
-			},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := probe.ConvertNumericStrings(tt.input)
-
-			// Convert to JSON for easy comparison
-			expectedJSON, _ := json.Marshal(tt.expected)
-			actualJSON, _ := json.Marshal(result)
-
-			if string(expectedJSON) != string(actualJSON) {
-				t.Errorf("ConvertNumericStrings() = %v, want %v", result, tt.expected)
-			}
-		})
 	}
 }
 

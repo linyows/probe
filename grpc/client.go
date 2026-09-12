@@ -12,7 +12,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/linyows/probe"
+	"github.com/linyows/probe/mapping"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
@@ -348,7 +348,7 @@ func Request(data map[string]any, opts ...Option) (map[string]any, error) {
 		}
 	}
 
-	m = probe.HeaderToStringValue(m)
+	m = mapping.HeaderToStringValue(m)
 
 	// Create new request
 	r := NewReq()
@@ -359,7 +359,7 @@ func Request(data map[string]any, opts ...Option) (map[string]any, error) {
 	}
 	r.cb = cb
 
-	if err := probe.MapToStructByTags(m, r); err != nil {
+	if err := mapping.MapToStructByTags(m, r); err != nil {
 		return map[string]any{}, err
 	}
 
@@ -368,7 +368,7 @@ func Request(data map[string]any, opts ...Option) (map[string]any, error) {
 		return map[string]any{}, err
 	}
 
-	mapRet, err := probe.StructToMapByTags(ret)
+	mapRet, err := mapping.StructToMapByTags(ret)
 	if err != nil {
 		return map[string]any{}, err
 	}

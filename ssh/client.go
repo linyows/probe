@@ -15,7 +15,7 @@ import (
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/crypto/ssh/knownhosts"
 
-	"github.com/linyows/probe"
+	"github.com/linyows/probe/mapping"
 )
 
 // NOTE: SSH config file support is intentionally not implemented to maintain
@@ -487,7 +487,7 @@ func Execute(data map[string]any, opts ...Option) (map[string]any, error) {
 		return map[string]any{}, err
 	}
 
-	m := probe.HeaderToStringValue(dataCopy)
+	m := mapping.HeaderToStringValue(dataCopy)
 
 	// Manually handle type conversions BEFORE MapToStructByTags to prevent reflection panics
 	if portInput, exists := m["port"]; exists {
@@ -514,7 +514,7 @@ func Execute(data map[string]any, opts ...Option) (map[string]any, error) {
 	}
 	r.cb = cb
 
-	if err := probe.MapToStructByTags(m, r); err != nil {
+	if err := mapping.MapToStructByTags(m, r); err != nil {
 		return map[string]any{}, err
 	}
 
@@ -523,7 +523,7 @@ func Execute(data map[string]any, opts ...Option) (map[string]any, error) {
 		return map[string]any{}, err
 	}
 
-	mapResult, err := probe.StructToMapByTags(result)
+	mapResult, err := mapping.StructToMapByTags(result)
 	if err != nil {
 		return map[string]any{}, err
 	}

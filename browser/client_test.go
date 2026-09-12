@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/chromedp/chromedp"
-	"github.com/linyows/probe"
+	"github.com/linyows/probe/mapping"
 )
 
 func TestNewChromeDPAction(t *testing.T) {
@@ -286,7 +286,7 @@ func TestChromeDPAction_Mapping(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			action := NewChromeDPAction()
-			err := probe.MapToStructByTags(tc.input, action)
+			err := mapping.MapToStructByTags(tc.input, action)
 
 			if err != nil {
 				t.Errorf("MapToStructByTags failed: %v", err)
@@ -307,7 +307,7 @@ func TestGetAttributeActionMapping(t *testing.T) {
 		"attribute": []string{"href"},
 	}
 
-	err := probe.MapToStructByTags(testData, action)
+	err := mapping.MapToStructByTags(testData, action)
 	if err != nil {
 		t.Errorf("MapToStructByTags failed: %v", err)
 	}
@@ -333,7 +333,7 @@ func TestSelectActionMapping(t *testing.T) {
 		"value":    "option2",
 	}
 
-	err := probe.MapToStructByTags(testData, action)
+	err := mapping.MapToStructByTags(testData, action)
 	if err != nil {
 		t.Errorf("MapToStructByTags failed: %v", err)
 	}
@@ -355,7 +355,7 @@ func TestGetHtmlActionMapping(t *testing.T) {
 		"selector": ".content",
 	}
 
-	err := probe.MapToStructByTags(testData, action)
+	err := mapping.MapToStructByTags(testData, action)
 	if err != nil {
 		t.Errorf("MapToStructByTags failed: %v", err)
 	}
@@ -392,7 +392,7 @@ func TestMouseActionMapping(t *testing.T) {
 				"selector": tc.selector,
 			}
 
-			err := probe.MapToStructByTags(testData, action)
+			err := mapping.MapToStructByTags(testData, action)
 			if err != nil {
 				t.Errorf("MapToStructByTags failed: %v", err)
 			}

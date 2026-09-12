@@ -1,4 +1,6 @@
-package probe
+// Package binary turns raw response payloads into either printable text or a
+// file on disk, based on the declared MIME type.
+package binary
 
 import (
 	"crypto/rand"
@@ -9,8 +11,8 @@ import (
 	"strings"
 )
 
-// IsTextualMimeType determines if the given MIME type represents textual data
-func IsTextualMimeType(contentType string) bool {
+// isTextualMimeType determines if the given MIME type represents textual data
+func isTextualMimeType(contentType string) bool {
 	if contentType == "" {
 		return true // Default to text if no content type
 	}
@@ -130,7 +132,7 @@ func ProcessHttpBody(data []byte, contentType string) (string, string, error) {
 		return "", "", nil
 	}
 
-	if IsTextualMimeType(contentType) {
+	if isTextualMimeType(contentType) {
 		// Return as text body
 		return string(data), "", nil
 	} else {

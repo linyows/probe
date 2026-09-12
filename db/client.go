@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/linyows/probe"
+	"github.com/linyows/probe/mapping"
 
 	_ "github.com/go-sql-driver/mysql"
 	_ "github.com/lib/pq"
@@ -43,7 +43,7 @@ type Result struct {
 func ParseRequest(with map[string]any) (*Req, string, time.Duration, error) {
 	// Use MapToStructByTags to directly populate Req struct
 	req := &Req{}
-	err := probe.MapToStructByTags(with, req)
+	err := mapping.MapToStructByTags(with, req)
 	if err != nil {
 		return nil, "", 0, fmt.Errorf("failed to parse request: %w", err)
 	}
@@ -209,7 +209,7 @@ func (r *Req) Execute(driverDSN string, timeout time.Duration) (res map[string]a
 	}
 
 	// Convert to map[string]any using probe's mapping function
-	mapResult, err := probe.StructToMapByTags(result)
+	mapResult, err := mapping.StructToMapByTags(result)
 	if err != nil {
 		return r.createErrorResult(start, fmt.Errorf("failed to convert result to map: %w", err))
 	}
@@ -324,7 +324,7 @@ func (r *Req) createErrorResult(start time.Time, err error) (map[string]any, err
 	}
 
 	// Convert to map[string]any
-	mapResult, mapErr := probe.StructToMapByTags(result)
+	mapResult, mapErr := mapping.StructToMapByTags(result)
 	if mapErr != nil {
 		return map[string]any{}, fmt.Errorf("failed to convert error result to map: %w", mapErr)
 	}
