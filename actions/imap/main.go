@@ -20,12 +20,7 @@ func (a *Action) Run(with map[string]any) (map[string]any, error) {
 		return map[string]any{}, errors.New("imap action requires parameters in 'with' section. Please specify connection details like host, username, password")
 	}
 
-	// Use default truncate length, can be overridden by caller
-	truncateLength := probe.MaxLogStringLength
-
-	// Truncate long parameters for logging to prevent log bloat
-	truncatedParams := probe.TruncateMapStringAny(with, truncateLength)
-	a.log.Debug("received imap request parameters", "params", truncatedParams)
+	probe.LogActionParams(a.log, "received imap request parameters", with)
 
 	before := imap.WithBefore(func(req *imap.Req) {
 		a.log.Debug("imap request prepared", "request", req)
@@ -35,13 +30,7 @@ func (a *Action) Run(with map[string]any) (map[string]any, error) {
 	})
 	ret, err := imap.Request(with, before, after)
 
-	if err != nil {
-		a.log.Error("imap request failed", "error", err)
-	} else {
-		// Truncate result for logging to prevent log bloat
-		truncatedResult := probe.TruncateMapStringAny(ret, truncateLength)
-		a.log.Debug("imap request completed successfully", "result", truncatedResult)
-	}
+	probe.LogActionOutcome(a.log, "imap request", ret, err)
 
 	return ret, err
 }

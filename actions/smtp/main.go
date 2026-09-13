@@ -20,12 +20,7 @@ func (a *Action) Run(with map[string]any) (map[string]any, error) {
 		return map[string]any{}, errors.New("smtp action requires parameters in 'with' section. Please specify email details like addr, from, to")
 	}
 
-	// Use default truncate length, can be overridden by caller
-	truncateLength := probe.MaxLogStringLength
-
-	// Truncate long parameters for logging to prevent log bloat
-	truncatedParams := probe.TruncateMapStringAny(with, truncateLength)
-	a.log.Debug("received smtp request parameters", "params", truncatedParams)
+	probe.LogActionParams(a.log, "received smtp request parameters", with)
 
 	before := mail.WithBefore(func(from string, to string, subject string) {
 		a.log.Debug("email prepared", "from", from, "to", to, "subject", subject)
@@ -35,20 +30,14 @@ func (a *Action) Run(with map[string]any) (map[string]any, error) {
 	})
 	ret, err := mail.Send(with, before, after)
 
-	if err != nil {
-		a.log.Error("email delivery failed", "error", err)
-	} else {
-		// Truncate result for logging to prevent log bloat
-		truncatedResult := probe.TruncateMapStringAny(ret, truncateLength)
-		a.log.Debug("email delivery completed successfully", "result", truncatedResult)
-	}
+	probe.LogActionOutcome(a.log, "email delivery", ret, err)
 
 	return ret, err
 }
 
 func Serve() {
 	log := hclog.New(&hclog.LoggerOptions{
-		Level:      hclog.Info,
+		Level:      hclog.Debug,
 		Output:     os.Stderr,
 		JSONFormat: true,
 	})

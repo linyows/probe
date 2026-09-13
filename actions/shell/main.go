@@ -20,12 +20,7 @@ func (a *Action) Run(with map[string]any) (map[string]any, error) {
 		return map[string]any{}, errors.New("shell action requires parameters in 'with' section. Please specify command details like cmd")
 	}
 
-	// Use default truncate length, can be overridden by caller
-	truncateLength := probe.MaxLogStringLength
-
-	// Truncate long parameters for logging to prevent log bloat
-	truncatedParams := probe.TruncateMapStringAny(with, truncateLength)
-	a.log.Debug("received shell request parameters", "params", truncatedParams)
+	probe.LogActionParams(a.log, "received shell request parameters", with)
 
 	before := shell.WithBefore(func(cmd string, shell string, workdir string) {
 		a.log.Debug("shell command prepared", "cmd", cmd, "shell", shell, "workdir", workdir)
@@ -35,13 +30,7 @@ func (a *Action) Run(with map[string]any) (map[string]any, error) {
 	})
 	ret, err := shell.Execute(with, before, after)
 
-	if err != nil {
-		a.log.Error("shell command failed", "error", err)
-	} else {
-		// Truncate result for logging to prevent log bloat
-		truncatedResult := probe.TruncateMapStringAny(ret, truncateLength)
-		a.log.Debug("shell command completed successfully", "result", truncatedResult)
-	}
+	probe.LogActionOutcome(a.log, "shell command", ret, err)
 
 	return ret, err
 }

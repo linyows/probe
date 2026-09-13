@@ -15,9 +15,7 @@ type Action struct {
 }
 
 func (a *Action) Run(with map[string]any) (map[string]any, error) {
-	truncateLength := probe.MaxLogStringLength
-	truncatedParams := probe.TruncateMapStringAny(with, truncateLength)
-	a.log.Debug("received browser action request", "params", truncatedParams)
+	probe.LogActionParams(a.log, "received browser action request", with)
 
 	within := br.WithInBrowser(func(s string, i ...any) {
 		a.log.Debug("chromedp", "message", fmt.Sprintf(s, i...))
@@ -31,12 +29,7 @@ func (a *Action) Run(with map[string]any) (map[string]any, error) {
 
 	ret, err := br.Request(with, within, before, after)
 
-	if err != nil {
-		a.log.Error("browser request failed", "error", err)
-	} else {
-		truncatedResult := probe.TruncateMapStringAny(ret, truncateLength)
-		a.log.Debug("browser request completed successfully", "result", truncatedResult)
-	}
+	probe.LogActionOutcome(a.log, "browser request", ret, err)
 
 	return ret, err
 }

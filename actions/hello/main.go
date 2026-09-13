@@ -35,7 +35,7 @@ func (a *Action) Run(with map[string]any) (map[string]any, error) {
 
 func Serve() {
 	log := hclog.New(&hclog.LoggerOptions{
-		Level:      hclog.Info,
+		Level:      hclog.Debug,
 		Output:     os.Stderr,
 		JSONFormat: true,
 	})

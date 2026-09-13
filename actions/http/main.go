@@ -21,12 +21,7 @@ func (a *Action) Run(with map[string]any) (map[string]any, error) {
 		return map[string]any{}, errors.New("http action requires parameters in 'with' section. Please specify request details like url, method, or use method fields (get, post, etc.)")
 	}
 
-	// Use default truncate length, can be overridden by caller
-	truncateLength := probe.MaxLogStringLength
-
-	// Truncate long parameters for logging to prevent log bloat
-	truncatedParams := probe.TruncateMapStringAny(with, truncateLength)
-	a.log.Debug("received request parameters", "params", truncatedParams)
+	probe.LogActionParams(a.log, "received request parameters", with)
 
 	before := http.WithBefore(func(req *hp.Request) {
 		a.log.Debug("http request prepared", "request", req)
@@ -34,18 +29,9 @@ func (a *Action) Run(with map[string]any) (map[string]any, error) {
 	after := http.WithAfter(func(res *hp.Response) {
 		a.log.Debug("http response received", "response", res)
 	})
-	// Debug: log the request parameters before calling http.Request
-	a.log.Info("DEBUG: About to call http.Request", "with_params", with)
-
 	ret, err := http.Request(with, before, after)
 
-	if err != nil {
-		a.log.Error("http request failed", "error", err)
-	} else {
-		// Truncate result for logging to prevent log bloat
-		truncatedResult := probe.TruncateMapStringAny(ret, truncateLength)
-		a.log.Debug("http request completed successfully", "result", truncatedResult)
-	}
+	probe.LogActionOutcome(a.log, "http request", ret, err)
 
 	return ret, err
 }

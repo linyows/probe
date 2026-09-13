@@ -10,18 +10,8 @@ import (
 
 	"github.com/fatih/color"
 	"github.com/linyows/probe"
+	"github.com/linyows/probe/actions"
 	"github.com/linyows/probe/oas"
-	"github.com/linyows/probe/actions/browser"
-	"github.com/linyows/probe/actions/db"
-	"github.com/linyows/probe/actions/embedded"
-	grpcaction "github.com/linyows/probe/actions/grpc"
-	"github.com/linyows/probe/actions/hello"
-	http "github.com/linyows/probe/actions/http"
-	imapaction "github.com/linyows/probe/actions/imap"
-	maillatencyaction "github.com/linyows/probe/actions/mail-latency"
-	"github.com/linyows/probe/actions/shell"
-	"github.com/linyows/probe/actions/smtp"
-	sshaction "github.com/linyows/probe/actions/ssh"
 )
 
 var (
@@ -316,53 +306,13 @@ func (c *Cmd) printVersion() {
 }
 
 func (c *Cmd) runBuiltinActions(name string) {
-	switch name {
-	case "hello":
-		if !c.mocking {
-			hello.Serve()
-		}
-	case "http":
-		if !c.mocking {
-			http.Serve()
-		}
-	case "smtp":
-		if !c.mocking {
-			smtp.Serve()
-		}
-	case "db":
-		if !c.mocking {
-			db.Serve()
-		}
-	case "shell":
-		if !c.mocking {
-			shell.Serve()
-		}
-	case "browser":
-		if !c.mocking {
-			browser.Serve()
-		}
-	case "embedded":
-		if !c.mocking {
-			embedded.Serve()
-		}
-	case "grpc":
-		if !c.mocking {
-			grpcaction.Serve()
-		}
-	case "ssh":
-		if !c.mocking {
-			sshaction.Serve()
-		}
-	case "imap":
-		if !c.mocking {
-			imapaction.Serve()
-		}
-	case "mail-latency":
-		if !c.mocking {
-			maillatencyaction.Serve()
-		}
-
-	default:
+	serve, ok := actions.Lookup(name)
+	if !ok {
 		_, _ = fmt.Fprintf(c.errWriter, "[ERROR] not supported plugin: %s\n", name)
+		return
+	}
+
+	if !c.mocking {
+		serve()
 	}
 }
