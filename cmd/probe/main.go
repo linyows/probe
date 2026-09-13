@@ -9,9 +9,9 @@ import (
 	"strings"
 
 	"github.com/fatih/color"
-	"github.com/linyows/probe"
-	"github.com/linyows/probe/actions"
-	"github.com/linyows/probe/oas"
+	"github.com/linyows/probe/v2"
+	"github.com/linyows/probe/v2/actions"
+	"github.com/linyows/probe/v2/oas"
 )
 
 var (

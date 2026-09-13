@@ -5,7 +5,7 @@ Generic graph algorithms that work with any data structure.
 ## Installation
 
 ```go
-import "github.com/linyows/probe/dag"
+import "github.com/linyows/probe/v2/dag"
 ```
 
 ## Algorithms

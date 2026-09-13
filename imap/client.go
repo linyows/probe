@@ -13,7 +13,7 @@ import (
 	"github.com/emersion/go-imap/v2"
 	"github.com/emersion/go-imap/v2/imapclient"
 	"github.com/emersion/go-message/charset"
-	"github.com/linyows/probe/mapping"
+	"github.com/linyows/probe/v2/mapping"
 )
 
 type Req struct {

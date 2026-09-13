@@ -7,17 +7,17 @@
 package actions
 
 import (
-	"github.com/linyows/probe/actions/browser"
-	"github.com/linyows/probe/actions/db"
-	"github.com/linyows/probe/actions/embedded"
-	"github.com/linyows/probe/actions/grpc"
-	"github.com/linyows/probe/actions/hello"
-	"github.com/linyows/probe/actions/http"
-	"github.com/linyows/probe/actions/imap"
-	maillatency "github.com/linyows/probe/actions/mail-latency"
-	"github.com/linyows/probe/actions/shell"
-	"github.com/linyows/probe/actions/smtp"
-	"github.com/linyows/probe/actions/ssh"
+	"github.com/linyows/probe/v2/actions/browser"
+	"github.com/linyows/probe/v2/actions/db"
+	"github.com/linyows/probe/v2/actions/embedded"
+	"github.com/linyows/probe/v2/actions/grpc"
+	"github.com/linyows/probe/v2/actions/hello"
+	"github.com/linyows/probe/v2/actions/http"
+	"github.com/linyows/probe/v2/actions/imap"
+	maillatency "github.com/linyows/probe/v2/actions/mail-latency"
+	"github.com/linyows/probe/v2/actions/shell"
+	"github.com/linyows/probe/v2/actions/smtp"
+	"github.com/linyows/probe/v2/actions/ssh"
 )
 
 // builtin maps an action name to the function that serves it. Each value

@@ -15,7 +15,7 @@ import (
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/crypto/ssh/knownhosts"
 
-	"github.com/linyows/probe/mapping"
+	"github.com/linyows/probe/v2/mapping"
 )
 
 // NOTE: SSH config file support is intentionally not implemented to maintain

@@ -12,8 +12,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/linyows/probe/binary"
-	"github.com/linyows/probe/mapping"
+	"github.com/linyows/probe/v2/binary"
+	"github.com/linyows/probe/v2/mapping"
 )
 
 type TransportOptions struct {

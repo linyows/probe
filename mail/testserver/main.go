@@ -7,7 +7,7 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/linyows/probe/mail"
+	"github.com/linyows/probe/v2/mail"
 )
 
 func main() {

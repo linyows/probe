@@ -12,7 +12,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/linyows/probe/mapping"
+	"github.com/linyows/probe/v2/mapping"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"

@@ -8,8 +8,8 @@ import (
 	"time"
 
 	"github.com/chromedp/chromedp"
-	"github.com/linyows/probe/binary"
-	"github.com/linyows/probe/mapping"
+	"github.com/linyows/probe/v2/binary"
+	"github.com/linyows/probe/v2/mapping"
 )
 
 const (

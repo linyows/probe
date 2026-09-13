@@ -5,7 +5,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/linyows/probe/pb"
+	"github.com/linyows/probe/v2/pb"
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/types/known/structpb"
 )

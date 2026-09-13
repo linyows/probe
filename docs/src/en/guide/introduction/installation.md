@@ -43,7 +43,7 @@ The easiest way to install Probe is to download a pre-built binary from the GitH
 If you have Go 1.19 or later installed, you can install Probe directly:
 
 ```bash
-go install github.com/linyows/probe/cmd/probe@latest
+go install github.com/linyows/probe/v2/cmd/probe@latest
 ```
 
 This will install the `probe` binary to your `$GOPATH/bin` directory.

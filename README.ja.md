@@ -15,7 +15,7 @@
   <a href="https://github.com/linyows/probe/releases">
     <img src="http://img.shields.io/github/release/linyows/probe.svg?style=for-the-badge&labelColor=666666&color=DDDDDD" alt="GitHub Release">
   </a>
-  <a href="http://godoc.org/github.com/linyows/probe">
+  <a href="https://pkg.go.dev/github.com/linyows/probe/v2">
     <img src="http://img.shields.io/badge/go-docs-blue.svg?style=for-the-badge&labelColor=666666&color=DDDDDD" alt="Go Documentation">
   </a>
   <a href="https://deepwiki.com/linyows/probe">
@@ -67,7 +67,7 @@ probe health-check.yml
 
 ### Goを使用
 ```bash
-go install github.com/linyows/probe/cmd/probe@latest
+go install github.com/linyows/probe/v2/cmd/probe@latest
 ```
 
 ### ソースから

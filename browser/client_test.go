@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/chromedp/chromedp"
-	"github.com/linyows/probe/mapping"
+	"github.com/linyows/probe/v2/mapping"
 )
 
 func TestNewChromeDPAction(t *testing.T) {

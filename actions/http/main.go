@@ -7,8 +7,8 @@ import (
 
 	"github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/go-plugin"
-	"github.com/linyows/probe"
-	"github.com/linyows/probe/http"
+	"github.com/linyows/probe/v2"
+	"github.com/linyows/probe/v2/http"
 )
 
 type Action struct {

@@ -37,7 +37,7 @@ Probeをインストールする最も簡単な方法は、GitHubのリリース
 Go 1.19以降がインストールされている場合、Probeを直接インストールできます：
 
 ```bash
-go install github.com/linyows/probe/cmd/probe@latest
+go install github.com/linyows/probe/v2/cmd/probe@latest
 ```
 
 これにより、`probe`バイナリが`$GOPATH/bin`ディレクトリにインストールされます。

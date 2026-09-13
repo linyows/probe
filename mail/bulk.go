@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/linyows/probe/mapping"
+	"github.com/linyows/probe/v2/mapping"
 )
 
 func NewBulk(p map[string]any) (*Bulk, error) {

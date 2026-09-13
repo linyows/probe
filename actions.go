@@ -11,7 +11,7 @@ import (
 
 	"github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/go-plugin"
-	"github.com/linyows/probe/pb"
+	"github.com/linyows/probe/v2/pb"
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/types/known/structpb"
 )

@@ -1,4 +1,4 @@
-module github.com/linyows/probe
+module github.com/linyows/probe/v2
 
 go 1.26.6
 

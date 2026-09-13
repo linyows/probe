@@ -6,7 +6,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/linyows/probe/mapping"
+	"github.com/linyows/probe/v2/mapping"
 )
 
 // MatchJSON compares two `map[string]any` objects strictly.

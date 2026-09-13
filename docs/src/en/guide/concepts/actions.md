@@ -720,7 +720,7 @@ type Actions interface {
 package main
 
 import (
-    "github.com/linyows/probe"
+    "github.com/linyows/probe/v2"
     "github.com/hashicorp/go-plugin"
 )
 

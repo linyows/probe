@@ -10,8 +10,8 @@ import (
 	"time"
 
 	"github.com/goccy/go-yaml"
-	"github.com/linyows/probe"
-	"github.com/linyows/probe/mapping"
+	"github.com/linyows/probe/v2"
+	"github.com/linyows/probe/v2/mapping"
 	"gopkg.in/go-playground/validator.v9"
 )
 

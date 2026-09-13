@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/linyows/probe/mapping"
+	"github.com/linyows/probe/v2/mapping"
 
 	_ "github.com/go-sql-driver/mysql"
 	_ "github.com/lib/pq"
