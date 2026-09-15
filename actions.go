@@ -273,24 +273,45 @@ func convertFloatToInt(value any) any {
 	}
 }
 
+// RunOptions controls how a single action invocation is run and logged.
+type RunOptions struct {
+	// Verbose raises the action's log level to debug.
+	Verbose bool
+	// Quiet silences the action's own log records. It is set for a retry
+	// attempt that still has another attempt left: actions have no notion of
+	// being retried, so a failure there would otherwise be reported at error
+	// level even though the step goes on to succeed.
+	Quiet bool
+}
+
+// logLevel returns the level the action's log records are filtered at.
+func (o RunOptions) logLevel() hclog.Level {
+	switch {
+	case o.Verbose:
+		return hclog.Debug
+	case o.Quiet:
+		return hclog.Off
+	default:
+		return hclog.Warn
+	}
+}
+
 // ActionRunner defines the interface for running actions
 type ActionRunner interface {
-	RunActions(name string, with map[string]any, verbose bool) (map[string]any, error)
+	RunActions(name string, with map[string]any, opts RunOptions) (map[string]any, error)
 }
 
 // PluginActionRunner implements ActionRunner using the plugin system
 type PluginActionRunner struct{}
 
 // RunActions executes an action using the plugin system
-func (p *PluginActionRunner) RunActions(name string, with map[string]any, verbose bool) (map[string]any, error) {
-	loglevel := hclog.Warn
-	if verbose {
-		loglevel = hclog.Debug
-	}
+func (p *PluginActionRunner) RunActions(name string, with map[string]any, opts RunOptions) (map[string]any, error) {
+	// Actions are separate processes: they log to stderr as JSON and the
+	// records are re-filtered here, so this level decides what the user sees.
 	log := hclog.New(&hclog.LoggerOptions{
 		Name:   "actions",
 		Output: os.Stderr,
-		Level:  loglevel,
+		Level:  opts.logLevel(),
 	})
 	cl := plugin.NewClient(&plugin.ClientConfig{
 		HandshakeConfig:  Handshake,
@@ -347,7 +368,7 @@ func (m *MockActionRunner) SetError(actionName string, err error) {
 }
 
 // RunActions returns the mocked result or error for the given action
-func (m *MockActionRunner) RunActions(name string, with map[string]any, verbose bool) (map[string]any, error) {
+func (m *MockActionRunner) RunActions(name string, with map[string]any, opts RunOptions) (map[string]any, error) {
 	if err, exists := m.Errors[name]; exists {
 		return nil, err
 	}

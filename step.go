@@ -101,7 +101,7 @@ func (st *Step) executeAction(name string, jCtx *JobContext) (map[string]any, er
 
 	// If no retry configuration, execute once
 	if st.Retry == nil {
-		return st.executeSingleAction(runner, expW, jCtx)
+		return st.executeSingleAction(runner, expW, jCtx, false)
 	}
 
 	// Execute with retry logic
@@ -109,7 +109,9 @@ func (st *Step) executeAction(name string, jCtx *JobContext) (map[string]any, er
 }
 
 // executeSingleAction executes action once without retry
-func (st *Step) executeSingleAction(runner ActionRunner, expW map[string]any, jCtx *JobContext) (map[string]any, error) {
+// quiet marks an attempt whose failure will be retried, so that the action's
+// own error records stay out of the log.
+func (st *Step) executeSingleAction(runner ActionRunner, expW map[string]any, jCtx *JobContext, quiet bool) (map[string]any, error) {
 	// Determine timeout duration
 	timeout := DefaultStepTimeout
 	if st.Timeout.Duration > 0 {
@@ -128,7 +130,7 @@ func (st *Step) executeSingleAction(runner ActionRunner, expW map[string]any, jC
 	resultCh := make(chan result, 1)
 
 	go func() {
-		ret, err := runner.RunActions(st.Uses, expW, jCtx.Verbose)
+		ret, err := runner.RunActions(st.Uses, expW, RunOptions{Verbose: jCtx.Verbose, Quiet: quiet})
 		resultCh <- result{ret: ret, err: err}
 	}()
 
@@ -149,7 +151,7 @@ func (st *Step) executeActionWithRetry(runner ActionRunner, expW map[string]any,
 
 	// If no test is configured, don't retry - execute once
 	if st.Test == "" {
-		return st.executeSingleAction(runner, expW, jCtx)
+		return st.executeSingleAction(runner, expW, jCtx, false)
 	}
 
 	// Initial delay if specified
@@ -169,7 +171,9 @@ func (st *Step) executeActionWithRetry(runner ActionRunner, expW map[string]any,
 			jCtx.Printer.LogDebug("Executing action with retry: attempt %d/%d", attempt, retry.MaxAttempts)
 		}
 
-		result, err := st.executeSingleAction(runner, expW, jCtx)
+		// Only the final attempt reports a failure as such; before that the
+		// step still has a chance to succeed.
+		result, err := st.executeSingleAction(runner, expW, jCtx, attempt < retry.MaxAttempts)
 		lastResult = result
 		lastErr = err
 
