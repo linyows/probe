@@ -21,19 +21,32 @@ type Workflow struct {
 
 // Start executes the workflow with the given configuration
 func (w *Workflow) Start(c Config) error {
-	if w.printer == nil {
-		// Collect all job IDs for buffer initialization
-		jobIDs := make([]string, len(w.Jobs))
-		for i, job := range w.Jobs {
-			jobIDs[i] = job.ID
-		}
-		w.printer = NewPrinter(c.Verbose, jobIDs)
+	// Build the scheduler first: it assigns an ID to every job that omits one,
+	// and the result, the report order and the scheduler all index jobs by ID,
+	// so they have to agree before anything keys off them.
+	scheduler, err := w.initJobScheduler()
+	if err != nil {
+		return err
 	}
 
-	if w.printer.Reporter() == nil {
-		w.printer.SetReporter(newReporter(c.Output, w.printer))
+	// Collect all job IDs for buffer initialization
+	jobIDs := make([]string, len(w.Jobs))
+	for i, job := range w.Jobs {
+		jobIDs[i] = job.ID
 	}
-	reporter := w.printer.Reporter()
+
+	if w.printer == nil {
+		w.printer = NewPrinter(c.Verbose, jobIDs)
+	} else {
+		// A caller cannot know a generated ID in advance, so Start owns the
+		// order the report is rendered in.
+		w.printer.SetBufferIDs(jobIDs)
+	}
+
+	// A reporter tracks how far the report has been emitted, which is state
+	// for this run alone, so every run gets a fresh one.
+	reporter := newReporter(c.Output, w.printer)
+	w.printer.SetReporter(reporter)
 
 	reporter.Start(w.Name, w.Description)
 
@@ -47,13 +60,9 @@ func (w *Workflow) Start(c Config) error {
 		return err
 	}
 
-	ctx, err := w.newJobContext(c, vars)
-	if err != nil {
-		return err
-	}
+	ctx := w.newJobContext(c, vars, scheduler)
 
-	err = w.startJobsWithDependencies(ctx)
-	if err != nil {
+	if err := w.startJobsWithDependencies(ctx); err != nil {
 		return err
 	}
 
@@ -211,14 +220,9 @@ func (w *Workflow) evalVars() (map[string]any, error) {
 	return vars, nil
 }
 
-func (w *Workflow) newJobContext(c Config, vars map[string]any) (JobContext, error) {
+func (w *Workflow) newJobContext(c Config, vars map[string]any, scheduler *JobScheduler) JobContext {
 	rs := w.setupResult()
 	rs.SetReporter(w.printer.Reporter())
-
-	scheduler, err := w.initJobScheduler()
-	if err != nil {
-		return JobContext{}, err
-	}
 
 	return JobContext{
 		Vars:         vars,
@@ -228,7 +232,7 @@ func (w *Workflow) newJobContext(c Config, vars map[string]any) (JobContext, err
 		JobScheduler: scheduler,
 		Outputs:      w.outputs,
 		countersMu:   &sync.Mutex{},
-	}, nil
+	}
 }
 
 // RenderDagAscii renders the workflow job dependencies as ASCII art with steps

@@ -1,9 +1,12 @@
 package probe
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"reflect"
+	"regexp"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -993,3 +996,115 @@ func TestWorkflowBuffer_ConcurrentAccess(t *testing.T) {
 		t.Errorf("Expected 10 step results after concurrent operations, got %d", stepCount)
 	}
 }
+
+// newOrderTestWorkflow builds a workflow of independent jobs whose actions are
+// mocked, so that Start can be driven from a test. withIDs selects whether the
+// jobs declare an ID or leave it to the scheduler.
+func newOrderTestWorkflow(withIDs bool) *Workflow {
+	mk := func(id, name string) Job {
+		job := Job{
+			Name:  name,
+			Steps: []*Step{{Name: name + " step", Uses: "hello", actionRunner: NewMockActionRunner()}},
+		}
+		if withIDs {
+			job.ID = id
+		}
+		return job
+	}
+
+	return &Workflow{
+		Name: "Order",
+		Jobs: []Job{mk("a", "Alpha"), mk("b", "Bravo"), mk("c", "Charlie")},
+	}
+}
+
+// startCapturing runs the workflow with a printer writing into a buffer and
+// returns what reached stdout.
+func startCapturing(t *testing.T, w *Workflow, mode OutputMode) string {
+	t.Helper()
+
+	if w.printer == nil {
+		p := NewPrinter(false, nil)
+		p.spinner = nil
+		p.errWriter = new(bytes.Buffer)
+		w.printer = p
+	}
+
+	out := new(bytes.Buffer)
+	w.printer.outWriter = out
+
+	if err := w.Start(Config{Output: mode}); err != nil {
+		t.Fatalf("Start() error: %v", err)
+	}
+
+	return out.String()
+}
+
+// TestWorkflow_Start_ReportsJobsWithGeneratedIDs covers a workflow whose jobs
+// omit an ID. The scheduler generates one, and the report has to be keyed by
+// the same value or every block is dropped.
+func TestWorkflow_Start_ReportsJobsWithGeneratedIDs(t *testing.T) {
+	for _, mode := range []OutputMode{OutputModeSpinner, OutputModeStream} {
+		t.Run(mode.String(), func(t *testing.T) {
+			report := startCapturing(t, newOrderTestWorkflow(false), mode)
+
+			alphaAt := strings.Index(report, "Alpha")
+			bravoAt := strings.Index(report, "Bravo")
+			charlieAt := strings.Index(report, "Charlie")
+			if alphaAt < 0 || bravoAt < 0 || charlieAt < 0 {
+				t.Fatalf("every job should be reported, got:\n%s", report)
+			}
+			if alphaAt >= bravoAt || bravoAt >= charlieAt {
+				t.Errorf("jobs should keep the declared order, got:\n%s", report)
+			}
+			if !strings.Contains(report, "All jobs succeeded") {
+				t.Errorf("footer should count the jobs as succeeded, got:\n%s", report)
+			}
+		})
+	}
+}
+
+// TestWorkflow_Start_StreamAndSpinnerAgree pins the guarantee that streaming
+// changes when the report is written, not what it says.
+func TestWorkflow_Start_StreamAndSpinnerAgree(t *testing.T) {
+	for _, withIDs := range []bool{true, false} {
+		name := "declared ids"
+		if !withIDs {
+			name = "generated ids"
+		}
+
+		t.Run(name, func(t *testing.T) {
+			spinner := startCapturing(t, newOrderTestWorkflow(withIDs), OutputModeSpinner)
+			stream := startCapturing(t, newOrderTestWorkflow(withIDs), OutputModeStream)
+
+			if stripDurations(spinner) != stripDurations(stream) {
+				t.Errorf("reports differ\nspinner:\n%s\nstream:\n%s", spinner, stream)
+			}
+		})
+	}
+}
+
+// TestWorkflow_Start_TwiceReportsBothRuns guards against per-run reporter state
+// leaking into a second Start on the same workflow.
+func TestWorkflow_Start_TwiceReportsBothRuns(t *testing.T) {
+	for _, mode := range []OutputMode{OutputModeSpinner, OutputModeStream} {
+		t.Run(mode.String(), func(t *testing.T) {
+			w := newOrderTestWorkflow(true)
+
+			first := startCapturing(t, w, mode)
+			second := startCapturing(t, w, mode)
+
+			if stripDurations(first) != stripDurations(second) {
+				t.Errorf("a second run should report the same jobs\nfirst:\n%s\nsecond:\n%s", first, second)
+			}
+		})
+	}
+}
+
+// stripDurations removes the measured times so that two runs of the same
+// workflow can be compared.
+func stripDurations(report string) string {
+	return durationPattern.ReplaceAllString(report, "")
+}
+
+var durationPattern = regexp.MustCompile(`[0-9]+\.[0-9]+s`)

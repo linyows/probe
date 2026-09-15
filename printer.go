@@ -163,6 +163,18 @@ func newBufferPrinter() *Printer {
 	return pr
 }
 
+// SetBufferIDs records the job order the report is rendered in. Workflow.Start
+// sets it once job IDs are assigned, because a caller cannot know an ID that
+// the scheduler generates for a job that omitted one.
+func (p *Printer) SetBufferIDs(ids []string) {
+	p.BufferIDs = ids
+	for _, id := range ids {
+		if _, exists := p.Buffer[id]; !exists {
+			p.Buffer[id] = &strings.Builder{}
+		}
+	}
+}
+
 // SetReporter installs the output strategy used for this run.
 func (p *Printer) SetReporter(r Reporter) {
 	p.reporter = r
