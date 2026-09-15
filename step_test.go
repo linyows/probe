@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"github.com/fatih/color"
+
+	"github.com/hashicorp/go-hclog"
 )
 
 func TestStep_parseWaitDuration(t *testing.T) {
@@ -1291,7 +1293,7 @@ type SlowMockActionRunner struct {
 	delay time.Duration
 }
 
-func (m *SlowMockActionRunner) RunActions(name string, with map[string]any, verbose bool) (map[string]any, error) {
+func (m *SlowMockActionRunner) RunActions(name string, with map[string]any, opts RunOptions) (map[string]any, error) {
 	time.Sleep(m.delay)
 	return map[string]any{"status": 0}, nil
 }
@@ -1312,7 +1314,7 @@ func TestStep_executeSingleAction_DefaultTimeout(t *testing.T) {
 	}
 
 	start := time.Now()
-	result, err := step.executeSingleAction(mock, map[string]any{}, jCtx)
+	result, err := step.executeSingleAction(mock, map[string]any{}, jCtx, false)
 	duration := time.Since(start)
 
 	if err != nil {
@@ -1342,7 +1344,7 @@ func TestStep_executeSingleAction_CustomTimeout(t *testing.T) {
 	}
 
 	start := time.Now()
-	result, err := step.executeSingleAction(slowMock, map[string]any{}, jCtx)
+	result, err := step.executeSingleAction(slowMock, map[string]any{}, jCtx, false)
 	duration := time.Since(start)
 
 	// Should timeout
@@ -1376,7 +1378,7 @@ func TestStep_executeSingleAction_CompletesBeforeTimeout(t *testing.T) {
 	}
 
 	start := time.Now()
-	result, err := step.executeSingleAction(slowMock, map[string]any{}, jCtx)
+	result, err := step.executeSingleAction(slowMock, map[string]any{}, jCtx, false)
 	duration := time.Since(start)
 
 	// Should complete successfully
@@ -1566,7 +1568,7 @@ type CountingMockActionRunner struct {
 	callCount  *int
 }
 
-func (m *CountingMockActionRunner) RunActions(name string, with map[string]any, verbose bool) (map[string]any, error) {
+func (m *CountingMockActionRunner) RunActions(name string, with map[string]any, opts RunOptions) (map[string]any, error) {
 	*m.callCount++
 	if m.resultFunc != nil {
 		return m.resultFunc(*m.callCount), nil
@@ -1662,5 +1664,178 @@ func TestParseExitStatus(t *testing.T) {
 				t.Errorf("parseExitStatus(%v) = %d, want %d", tt.input, result, tt.expected)
 			}
 		})
+	}
+}
+
+// OptionsRecordingActionRunner records the RunOptions every call receives and
+// keeps failing until failUntil attempts have been made.
+type OptionsRecordingActionRunner struct {
+	mu        sync.Mutex
+	opts      []RunOptions
+	failUntil int
+}
+
+func (m *OptionsRecordingActionRunner) RunActions(name string, with map[string]any, opts RunOptions) (map[string]any, error) {
+	m.mu.Lock()
+	m.opts = append(m.opts, opts)
+	attempt := len(m.opts)
+	m.mu.Unlock()
+
+	if attempt <= m.failUntil {
+		return nil, fmt.Errorf("action failed on attempt %d", attempt)
+	}
+	return map[string]any{
+		"status": 0,
+		"res":    map[string]any{"code": 200},
+	}, nil
+}
+
+func (m *OptionsRecordingActionRunner) recorded() []RunOptions {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return append([]RunOptions(nil), m.opts...)
+}
+
+// TestStep_executeActionWithRetry_QuietsNonFinalAttempts pins the behaviour
+// that keeps a readiness wait from logging its retries as errors: an action
+// cannot tell that it is being retried, so the runner silences every attempt
+// that still has another one behind it.
+func TestStep_executeActionWithRetry_QuietsNonFinalAttempts(t *testing.T) {
+	mock := &OptionsRecordingActionRunner{failUntil: 2}
+
+	step := &Step{
+		Uses: "test-action",
+		Test: "res.code == 200",
+		Retry: &StepRetry{
+			MaxAttempts: 4,
+			Interval:    Interval{Duration: time.Millisecond},
+		},
+		Expr: &Expr{},
+	}
+
+	jCtx := &JobContext{
+		Config:  Config{Verbose: false},
+		Printer: newBufferPrinter(),
+	}
+
+	if _, err := step.executeActionWithRetry(mock, map[string]any{}, jCtx, "test"); err != nil {
+		t.Fatalf("expected the step to succeed once the action recovers, got: %v", err)
+	}
+
+	got := mock.recorded()
+	if len(got) != 3 {
+		t.Fatalf("attempts = %d, want 3 (2 failures + 1 success)", len(got))
+	}
+	for i, opts := range got {
+		// Attempts 1..3 all have attempt 4 behind them, so all are quiet.
+		if !opts.Quiet {
+			t.Errorf("attempt %d: Quiet = false, want true", i+1)
+		}
+		if opts.Verbose {
+			t.Errorf("attempt %d: Verbose = true, want false", i+1)
+		}
+	}
+}
+
+// TestStep_executeActionWithRetry_FinalAttemptIsNotQuiet makes sure a step
+// that really fails still reports the action's own error.
+func TestStep_executeActionWithRetry_FinalAttemptIsNotQuiet(t *testing.T) {
+	mock := &OptionsRecordingActionRunner{failUntil: 3}
+
+	step := &Step{
+		Uses: "test-action",
+		Test: "res.code == 200",
+		Retry: &StepRetry{
+			MaxAttempts: 3,
+			Interval:    Interval{Duration: time.Millisecond},
+		},
+		Expr: &Expr{},
+	}
+
+	jCtx := &JobContext{
+		Config:  Config{Verbose: false},
+		Printer: newBufferPrinter(),
+	}
+
+	if _, err := step.executeActionWithRetry(mock, map[string]any{}, jCtx, "test"); err == nil {
+		t.Fatal("expected an error once every attempt failed")
+	}
+
+	got := mock.recorded()
+	if len(got) != 3 {
+		t.Fatalf("attempts = %d, want 3", len(got))
+	}
+	for i, opts := range got[:2] {
+		if !opts.Quiet {
+			t.Errorf("attempt %d: Quiet = false, want true", i+1)
+		}
+	}
+	if got[2].Quiet {
+		t.Error("final attempt: Quiet = true, want false")
+	}
+}
+
+// TestStep_executeActionWithRetry_VerboseOverridesQuiet keeps --verbose able
+// to show what each retry attempt did.
+func TestStep_executeActionWithRetry_VerboseOverridesQuiet(t *testing.T) {
+	mock := &OptionsRecordingActionRunner{failUntil: 1}
+
+	step := &Step{
+		Uses: "test-action",
+		Test: "res.code == 200",
+		Retry: &StepRetry{
+			MaxAttempts: 3,
+			Interval:    Interval{Duration: time.Millisecond},
+		},
+		Expr: &Expr{},
+	}
+
+	jCtx := &JobContext{
+		Config:  Config{Verbose: true},
+		Printer: newBufferPrinter(),
+	}
+
+	if _, err := step.executeActionWithRetry(mock, map[string]any{}, jCtx, "test"); err != nil {
+		t.Fatalf("expected the step to succeed, got: %v", err)
+	}
+
+	for i, opts := range mock.recorded() {
+		if !opts.Verbose {
+			t.Errorf("attempt %d: Verbose = false, want true", i+1)
+		}
+		if opts.logLevel() != hclog.Debug {
+			t.Errorf("attempt %d: logLevel = %v, want debug", i+1, opts.logLevel())
+		}
+	}
+}
+
+// TestStep_executeSingleAction_WithoutRetryIsNotQuiet covers a step with no
+// retry: its only attempt must report failures.
+func TestStep_executeSingleAction_WithoutRetryIsNotQuiet(t *testing.T) {
+	mock := &OptionsRecordingActionRunner{}
+
+	step := &Step{
+		Uses: "test-action",
+		Expr: &Expr{},
+	}
+
+	jCtx := &JobContext{
+		Config:  Config{Verbose: false},
+		Printer: newBufferPrinter(),
+	}
+
+	if _, err := step.executeSingleAction(mock, map[string]any{}, jCtx, false); err != nil {
+		t.Fatalf("expected no error, got: %v", err)
+	}
+
+	recorded := mock.recorded()
+	if len(recorded) != 1 {
+		t.Fatalf("attempts = %d, want 1", len(recorded))
+	}
+	if recorded[0].Quiet {
+		t.Error("a step without retry should not be quiet")
+	}
+	if recorded[0].logLevel() != hclog.Warn {
+		t.Errorf("logLevel = %v, want warn", recorded[0].logLevel())
 	}
 }

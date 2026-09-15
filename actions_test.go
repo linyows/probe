@@ -8,6 +8,8 @@ import (
 	"github.com/linyows/probe/pb"
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/types/known/structpb"
+
+	"github.com/hashicorp/go-hclog"
 )
 
 // MockActions implements the Actions interface for testing
@@ -272,7 +274,7 @@ func TestMockActionRunner(t *testing.T) {
 	mock := NewMockActionRunner()
 
 	// Test default behavior
-	result, err := mock.RunActions("test", map[string]any{"key": "value"}, false)
+	result, err := mock.RunActions("test", map[string]any{"key": "value"}, RunOptions{})
 	if err != nil {
 		t.Errorf("Expected no error, got %v", err)
 	}
@@ -290,7 +292,7 @@ func TestMockActionRunner(t *testing.T) {
 	}
 	mock.SetResult("http", customResult)
 
-	result, err = mock.RunActions("http", map[string]any{}, false)
+	result, err = mock.RunActions("http", map[string]any{}, RunOptions{})
 	if err != nil {
 		t.Errorf("Expected no error, got %v", err)
 	}
@@ -302,7 +304,7 @@ func TestMockActionRunner(t *testing.T) {
 	testErr := errors.New("test error")
 	mock.SetError("failing-action", testErr)
 
-	result, err = mock.RunActions("failing-action", map[string]any{}, false)
+	result, err = mock.RunActions("failing-action", map[string]any{}, RunOptions{})
 	if err != testErr {
 		t.Errorf("Expected test error, got %v", err)
 	}
@@ -425,5 +427,42 @@ func TestConvertFloatToInt_Array(t *testing.T) {
 	}
 	if m["value"] != float64(0.091026392) {
 		t.Errorf("value = %v (%T), want float64(0.091026392)", m["value"], m["value"])
+	}
+}
+
+func TestRunOptions_logLevel(t *testing.T) {
+	tests := []struct {
+		name string
+		opts RunOptions
+		want hclog.Level
+	}{
+		{
+			name: "default filters an action's debug and info records",
+			opts: RunOptions{},
+			want: hclog.Warn,
+		},
+		{
+			name: "verbose lets everything through",
+			opts: RunOptions{Verbose: true},
+			want: hclog.Debug,
+		},
+		{
+			name: "quiet silences an attempt that will be retried",
+			opts: RunOptions{Quiet: true},
+			want: hclog.Off,
+		},
+		{
+			name: "verbose wins over quiet",
+			opts: RunOptions{Verbose: true, Quiet: true},
+			want: hclog.Debug,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.opts.logLevel(); got != tt.want {
+				t.Errorf("RunOptions%+v.logLevel() = %v, want %v", tt.opts, got, tt.want)
+			}
+		})
 	}
 }
