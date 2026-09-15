@@ -324,7 +324,7 @@ func TestStreamReporter_ConcurrentNotifications(t *testing.T) {
 	if firstAt < 0 || secondAt < 0 || thirdAt < 0 {
 		t.Fatalf("all jobs should be reported, got:\n%s", report)
 	}
-	if !(firstAt < secondAt && secondAt < thirdAt) {
+	if firstAt >= secondAt || secondAt >= thirdAt {
 		t.Errorf("jobs should keep the declared order, got:\n%s", report)
 	}
 }
