@@ -180,6 +180,9 @@ func (e *Executor) finalize(overallSuccess bool, ctx JobContext) {
 
 	// Mark job as completed
 	ctx.JobScheduler.SetJobStatus(jobID, JobCompleted, overallSuccess)
+
+	// The job's report block is final now, so it can be streamed out.
+	ctx.Result.notifyJobDone(jobID)
 }
 
 // appendRepeatStepResults appends the final results of repeat step executions to buffer

@@ -30,7 +30,12 @@ func (w *Workflow) Start(c Config) error {
 		w.printer = NewPrinter(c.Verbose, jobIDs)
 	}
 
-	w.printer.StartSpinner()
+	if w.printer.Reporter() == nil {
+		w.printer.SetReporter(newReporter(c.Output, w.printer))
+	}
+	reporter := w.printer.Reporter()
+
+	reporter.Start(w.Name, w.Description)
 
 	// Initialize shared outputs
 	if w.outputs == nil {
@@ -52,10 +57,7 @@ func (w *Workflow) Start(c Config) error {
 		return err
 	}
 
-	w.printer.StopSpinner()
-
-	w.printer.PrintHeader(w.Name, w.Description)
-	w.printer.PrintReport(ctx.Result)
+	reporter.Finish(ctx.Result)
 
 	return nil
 }
@@ -145,6 +147,10 @@ func (w *Workflow) updateSkippedJobsOutput(skippedJobs []string, rs *Result) {
 			jr.Status = "skipped"
 			jr.Success = true // Skipped jobs are considered successful (same as skipif)
 			jr.mutex.Unlock()
+
+			// These jobs never reach Executor.finalize, so announce them here
+			// or the streaming report would stall on them.
+			rs.notifyJobDone(jobID)
 		}
 	}
 }
@@ -207,6 +213,7 @@ func (w *Workflow) evalVars() (map[string]any, error) {
 
 func (w *Workflow) newJobContext(c Config, vars map[string]any) (JobContext, error) {
 	rs := w.setupResult()
+	rs.SetReporter(w.printer.Reporter())
 
 	scheduler, err := w.initJobScheduler()
 	if err != nil {

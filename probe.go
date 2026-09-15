@@ -23,6 +23,8 @@ type Config struct {
 	Log     io.Writer
 	Verbose bool
 	Timing  bool
+	// Output selects how the report is delivered while jobs run.
+	Output OutputMode
 }
 
 func New(path string, v bool) *Probe {
@@ -37,6 +39,7 @@ func New(path string, v bool) *Probe {
 			Log:     os.Stdout,
 			Verbose: v,
 			Timing:  false,
+			Output:  OutputModeAuto,
 		},
 	}
 }

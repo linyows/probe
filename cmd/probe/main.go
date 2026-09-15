@@ -37,6 +37,7 @@ type Cmd struct {
 	Verbose        bool
 	Timing         bool
 	DagMermaid     bool
+	Output         string
 	validFlags     []string
 	ver            string
 	rev            string
@@ -47,7 +48,7 @@ type Cmd struct {
 
 func newCmd() *Cmd {
 	return &Cmd{
-		validFlags: []string{"help", "h", "version", "timing", "verbose", "v", "mermaid"},
+		validFlags: []string{"help", "h", "version", "timing", "verbose", "v", "mermaid", "output"},
 		ver:        version,
 		rev:        commit,
 		outWriter:  os.Stdout,
@@ -67,8 +68,14 @@ func newBufferCmd() *Cmd {
 // parseArgs parses command line arguments manually to allow options after arguments
 func (c *Cmd) parseArgs(args []string) error {
 	var nonFlagArgs []string
+	skipNext := false
 
 	for i := range args {
+		if skipNext {
+			skipNext = false
+			continue
+		}
+
 		arg := args[i]
 
 		if strings.HasPrefix(arg, "-") {
@@ -76,7 +83,11 @@ func (c *Cmd) parseArgs(args []string) error {
 			flagName := strings.TrimLeft(arg, "-")
 
 			// Handle flags with "=" (e.g., --flag=value)
+			flagValue := ""
+			hasValue := false
 			if idx := strings.Index(flagName, "="); idx != -1 {
+				flagValue = flagName[idx+1:]
+				hasValue = true
 				flagName = flagName[:idx]
 			}
 
@@ -96,6 +107,19 @@ func (c *Cmd) parseArgs(args []string) error {
 				c.Verbose = true
 			case "mermaid":
 				c.DagMermaid = true
+			case "output":
+				// Accept both --output=stream and --output stream
+				if !hasValue {
+					if i+1 >= len(args) || strings.HasPrefix(args[i+1], "-") {
+						return fmt.Errorf("flag needs an argument: %s", arg)
+					}
+					flagValue = args[i+1]
+					skipNext = true
+				}
+				if _, err := probe.ParseOutputMode(flagValue); err != nil {
+					return err
+				}
+				c.Output = flagValue
 			}
 		} else {
 			// Non-flag arguments
@@ -180,6 +204,7 @@ func (c *Cmd) printOptions() {
 		{"", "--version", "Show version information"},
 		{"", "--timing", "Show timing (start time, response time)"},
 		{"-v", "--verbose", "Show verbose log"},
+		{"", "--output", "Report output: auto, spinner or stream (env: PROBE_OUTPUT)"},
 	}
 
 	for _, opt := range options {
@@ -266,6 +291,18 @@ func (c *Cmd) runProbe() int {
 	if c.Timing {
 		p.Config.Timing = true
 	}
+
+	// The flag wins over PROBE_OUTPUT, which in turn wins over auto detection.
+	outputMode := c.Output
+	if outputMode == "" {
+		outputMode = os.Getenv("PROBE_OUTPUT")
+	}
+	mode, err := probe.ParseOutputMode(outputMode)
+	if err != nil {
+		_, _ = fmt.Fprintf(c.errWriter, "[ERROR] %v\n", err)
+		return 1
+	}
+	p.Config.Output = mode
 
 	if err := p.Do(); err != nil {
 		_, _ = fmt.Fprintf(c.errWriter, "[ERROR] %v\n", err)

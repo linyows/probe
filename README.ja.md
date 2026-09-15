@@ -91,6 +91,9 @@ probe ./workflow.yml --verbose
 # タイミング情報を表示（開始時刻、レスポンス時間）
 probe ./workflow.yml --timing
 
+# レポートを逐次出力（CIなど非TTYではデフォルト）
+probe ./workflow.yml --output stream
+
 # ジョブ依存関係グラフをASCIIアートで表示
 probe dag ./workflow.yml
 
@@ -102,6 +105,7 @@ probe dag --mermaid ./workflow.yml
 - `<workflow>`: YAMLワークフローファイルパスを指定
 - `--verbose`: 詳細出力を有効化
 - `--timing`: タイミング情報を表示（開始時刻、レスポンス時間）
+- `--output`: レポート出力モード: `auto`（デフォルト）、`spinner`、`stream`（環境変数: `PROBE_OUTPUT`）
 - `--help`: ヘルプ情報を表示
 
 ### サブコマンド

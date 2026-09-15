@@ -125,6 +125,7 @@ type Printer struct {
 	spinnerMu sync.Mutex // serializes writes to spinner.Suffix from concurrent steps (async repeat)
 	outWriter io.Writer
 	errWriter io.Writer
+	reporter  Reporter
 }
 
 // NewPrinter creates a new console print writer
@@ -160,6 +161,26 @@ func newBufferPrinter() *Printer {
 	// reader-in-library / writer-in-probe contention on spinner.Suffix.
 	pr.spinner = nil
 	return pr
+}
+
+// SetReporter installs the output strategy used for this run.
+func (p *Printer) SetReporter(r Reporter) {
+	p.reporter = r
+}
+
+// Reporter returns the installed output strategy, or nil when none was set.
+func (p *Printer) Reporter() Reporter {
+	return p.reporter
+}
+
+// StepStart announces that a step began. The buffered reporter turns this into
+// the spinner suffix, the stream reporter into a stderr progress line.
+func (p *Printer) StepStart(jobID, stepName string) {
+	if p.reporter != nil {
+		p.reporter.StepStart(jobID, stepName)
+		return
+	}
+	p.AddSpinnerSuffix(stepName)
 }
 
 func (p *Printer) StartSpinner() {
@@ -317,6 +338,34 @@ func (p *Printer) generateJobStatus(jobID, jobName string, status StatusType, du
 	}
 }
 
+// generateJobReport renders a single job block: the status line followed by
+// its step results. It also reports whether the job counts as successful and
+// the time range it covered, so that both the buffered and the streaming
+// report can build the same footer.
+func (p *Printer) generateJobReport(jr *JobResult) (string, bool, time.Time, time.Time) {
+	jr.mutex.Lock()
+	defer jr.mutex.Unlock()
+
+	var output strings.Builder
+
+	duration := jr.EndTime.Sub(jr.StartTime)
+
+	status := StatusSuccess
+	succeeded := true
+	if jr.Status == "skipped" {
+		// Skipped jobs are considered successful.
+		status = StatusSkipped
+	} else if !jr.Success {
+		status = StatusError
+		succeeded = false
+	}
+
+	p.generateJobStatus(jr.JobID, jr.JobName, status, duration.Seconds(), &output)
+	p.generateJobResults(jr.JobID, p.generateJobResultsFromStepResults(jr.StepResults), &output)
+
+	return output.String(), succeeded, jr.StartTime, jr.EndTime
+}
+
 // GenerateReport generates a complete workflow report string using Result data
 func (p *Printer) GenerateReport(rs *Result) string {
 	if rs == nil {
@@ -330,37 +379,21 @@ func (p *Printer) GenerateReport(rs *Result) string {
 	// Generate step results and job summaries for each job in BufferIDs order
 	for _, jobID := range p.BufferIDs {
 		if jr, exists := rs.Jobs[jobID]; exists {
-			jr.mutex.Lock()
-
-			// Calculate job status and duration
-			duration := jr.EndTime.Sub(jr.StartTime)
+			block, succeeded, start, end := p.generateJobReport(jr)
 
 			// Track earliest start and latest end time for wall clock calculation
-			if earliestStart.IsZero() || jr.StartTime.Before(earliestStart) {
-				earliestStart = jr.StartTime
+			if earliestStart.IsZero() || start.Before(earliestStart) {
+				earliestStart = start
 			}
-			if latestEnd.IsZero() || jr.EndTime.After(latestEnd) {
-				latestEnd = jr.EndTime
+			if latestEnd.IsZero() || end.After(latestEnd) {
+				latestEnd = end
 			}
 
-			status := StatusSuccess
-			if jr.Status == "skipped" {
-				status = StatusSkipped
-				successCount++ // Skipped jobs are considered successful
-			} else if !jr.Success {
-				status = StatusError
-			} else {
+			if succeeded {
 				successCount++
 			}
 
-			// Generate job status output
-			p.generateJobStatus(jr.JobID, jr.JobName, status, duration.Seconds(), &output)
-
-			// Generate job results from StepResults
-			stepOutput := p.generateJobResultsFromStepResults(jr.StepResults)
-			p.generateJobResults(jr.JobID, stepOutput, &output)
-
-			jr.mutex.Unlock()
+			output.WriteString(block)
 		}
 	}
 
