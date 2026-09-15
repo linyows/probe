@@ -75,7 +75,7 @@ func (st *Step) prepare(jCtx *JobContext) (string, bool) {
 		return "", false
 	}
 
-	jCtx.Printer.AddSpinnerSuffix(name)
+	jCtx.Printer.StepStart(jCtx.CurrentJobID, name)
 
 	// Check if step should be skipped BEFORE waiting
 	if st.shouldSkip(jCtx) {

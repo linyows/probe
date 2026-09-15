@@ -84,6 +84,28 @@ probe --timing workflow.yml
 
 This adds timing information to the output without the full verbosity of `--verbose`.
 
+### Report Output Mode
+
+Control how the report reaches you while jobs are running:
+
+```bash
+probe --output stream workflow.yml
+```
+
+- `auto` (default): spinner on an interactive terminal, stream otherwise
+- `spinner`: show a spinner and print the whole report once the run finishes
+- `stream`: print each job block to stdout as soon as that job is final, and log
+  step progress to stderr while jobs are still running
+
+`stream` is what you want on CI, where the spinner is never rendered and the log
+would otherwise stay silent until the whole workflow finishes. Job blocks are
+held back until every job declared before them has been printed, so the report
+on stdout is identical to the one `spinner` produces. The step progress lines go
+to stderr, so redirecting stdout still gives you a clean report.
+
+The mode can also be set with the `PROBE_OUTPUT` environment variable; the flag
+takes precedence over it.
+
 ### Combining Options
 
 You can combine multiple options:

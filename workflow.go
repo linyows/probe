@@ -21,16 +21,34 @@ type Workflow struct {
 
 // Start executes the workflow with the given configuration
 func (w *Workflow) Start(c Config) error {
-	if w.printer == nil {
-		// Collect all job IDs for buffer initialization
-		jobIDs := make([]string, len(w.Jobs))
-		for i, job := range w.Jobs {
-			jobIDs[i] = job.ID
-		}
-		w.printer = NewPrinter(c.Verbose, jobIDs)
+	// Build the scheduler first: it assigns an ID to every job that omits one,
+	// and the result, the report order and the scheduler all index jobs by ID,
+	// so they have to agree before anything keys off them.
+	scheduler, err := w.initJobScheduler()
+	if err != nil {
+		return err
 	}
 
-	w.printer.StartSpinner()
+	// Collect all job IDs for buffer initialization
+	jobIDs := make([]string, len(w.Jobs))
+	for i, job := range w.Jobs {
+		jobIDs[i] = job.ID
+	}
+
+	if w.printer == nil {
+		w.printer = NewPrinter(c.Verbose, jobIDs)
+	} else {
+		// A caller cannot know a generated ID in advance, so Start owns the
+		// order the report is rendered in.
+		w.printer.SetBufferIDs(jobIDs)
+	}
+
+	// A reporter tracks how far the report has been emitted, which is state
+	// for this run alone, so every run gets a fresh one.
+	reporter := newReporter(c.Output, w.printer)
+	w.printer.SetReporter(reporter)
+
+	reporter.Start(w.Name, w.Description)
 
 	// Initialize shared outputs
 	if w.outputs == nil {
@@ -42,20 +60,13 @@ func (w *Workflow) Start(c Config) error {
 		return err
 	}
 
-	ctx, err := w.newJobContext(c, vars)
-	if err != nil {
+	ctx := w.newJobContext(c, vars, scheduler)
+
+	if err := w.startJobsWithDependencies(ctx); err != nil {
 		return err
 	}
 
-	err = w.startJobsWithDependencies(ctx)
-	if err != nil {
-		return err
-	}
-
-	w.printer.StopSpinner()
-
-	w.printer.PrintHeader(w.Name, w.Description)
-	w.printer.PrintReport(ctx.Result)
+	reporter.Finish(ctx.Result)
 
 	return nil
 }
@@ -145,6 +156,10 @@ func (w *Workflow) updateSkippedJobsOutput(skippedJobs []string, rs *Result) {
 			jr.Status = "skipped"
 			jr.Success = true // Skipped jobs are considered successful (same as skipif)
 			jr.mutex.Unlock()
+
+			// These jobs never reach Executor.finalize, so announce them here
+			// or the streaming report would stall on them.
+			rs.notifyJobDone(jobID)
 		}
 	}
 }
@@ -205,13 +220,9 @@ func (w *Workflow) evalVars() (map[string]any, error) {
 	return vars, nil
 }
 
-func (w *Workflow) newJobContext(c Config, vars map[string]any) (JobContext, error) {
+func (w *Workflow) newJobContext(c Config, vars map[string]any, scheduler *JobScheduler) JobContext {
 	rs := w.setupResult()
-
-	scheduler, err := w.initJobScheduler()
-	if err != nil {
-		return JobContext{}, err
-	}
+	rs.SetReporter(w.printer.Reporter())
 
 	return JobContext{
 		Vars:         vars,
@@ -221,7 +232,7 @@ func (w *Workflow) newJobContext(c Config, vars map[string]any) (JobContext, err
 		JobScheduler: scheduler,
 		Outputs:      w.outputs,
 		countersMu:   &sync.Mutex{},
-	}, nil
+	}
 }
 
 // RenderDagAscii renders the workflow job dependencies as ASCII art with steps

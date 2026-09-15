@@ -58,6 +58,24 @@ type JobResult struct {
 // Result manages execution results for multiple jobs
 type Result struct {
 	Jobs map[string]*JobResult
+	// reporter is notified as results become final so that the report can be
+	// emitted incrementally. It may be nil, in which case nothing is streamed.
+	reporter Reporter
+}
+
+// SetReporter installs the reporter notified when steps and jobs finish.
+func (rs *Result) SetReporter(r Reporter) {
+	rs.reporter = r
+}
+
+// notifyJobDone tells the reporter that a job's report block is final.
+func (rs *Result) notifyJobDone(jobID string) {
+	if rs.reporter == nil {
+		return
+	}
+	if jr, exists := rs.Jobs[jobID]; exists {
+		rs.reporter.JobDone(jobID, jr)
+	}
 }
 
 // NewResult creates a new Result instance
@@ -69,9 +87,18 @@ func NewResult() *Result {
 
 // AddStepResult adds a StepResult to the specified job result
 func (rs *Result) AddStepResult(jobID string, stepResult StepResult) {
-	if jr, exists := rs.Jobs[jobID]; exists {
-		jr.mutex.Lock()
-		defer jr.mutex.Unlock()
-		jr.StepResults = append(jr.StepResults, stepResult)
+	jr, exists := rs.Jobs[jobID]
+	if !exists {
+		return
+	}
+
+	jr.mutex.Lock()
+	jr.StepResults = append(jr.StepResults, stepResult)
+	jr.mutex.Unlock()
+
+	// Notify outside the job lock: the reporter takes its own lock and may
+	// render other jobs, so holding this one here would nest the two.
+	if rs.reporter != nil {
+		rs.reporter.StepDone(jobID, stepResult)
 	}
 }

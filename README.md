@@ -91,6 +91,9 @@ probe ./workflow.yml --verbose
 # Show timing (start time, response time)
 probe ./workflow.yml --timing
 
+# Stream the report incrementally (default on CI and other non-TTY output)
+probe ./workflow.yml --output stream
+
 # Show job dependency graph as ASCII art
 probe dag ./workflow.yml
 
@@ -102,6 +105,7 @@ probe dag --mermaid ./workflow.yml
 - `<workflow>`: Specify YAML workflow file path
 - `--verbose`: Enable detailed output
 - `--timing`: Show timing (start time, response time)
+- `--output`: Report output mode: `auto` (default), `spinner` or `stream` (env: `PROBE_OUTPUT`)
 - `--help`: Show help information
 
 ### Subcommands
