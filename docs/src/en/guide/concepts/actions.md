@@ -32,18 +32,19 @@ The `http` action is the most versatile and commonly used action for making HTTP
 
 ```yaml
 - name: Simple GET Request
-  action: http
+  uses: http
   with:
     url: https://api.example.com/users
     method: GET
-  test: res.status == 200
+  test: res.code == 200
 ```
 
 #### Complete HTTP Action Reference
 
 ```yaml
 - name: Comprehensive HTTP Request
-  action: http
+  uses: http
+  timeout: 30s                                  # Optional: Request timeout
   with:
     url: https://api.example.com/users/123        # Required: Target URL
     method: POST                                  # Optional: HTTP method (default: GET)
@@ -57,15 +58,11 @@ The `http` action is the most versatile and commonly used action for making HTTP
         "email": "john@example.com",
         "active": true
       }
-    timeout: 30s                                  # Optional: Request timeout
-    follow_redirects: true                        # Optional: Follow HTTP redirects
-    verify_ssl: true                             # Optional: Verify SSL certificates
-    max_redirects: 5                             # Optional: Maximum redirect count
-  test: res.status == 200 && res.json.success == true
+  test: res.code == 200 && res.body.success == true
   outputs:
-    user_id: res.json.user.id
-    created_at: res.json.user.created_at
-    response_time: res.time
+    user_id: res.body.user.id
+    created_at: res.body.user.created_at
+    response_time: (rt.sec * 1000)
 ```
 
 #### HTTP Response Object
@@ -75,12 +72,12 @@ The HTTP action provides a rich response object:
 ```yaml
 # Available response properties:
 test: |
-  res.status == 200 &&                    # HTTP status code
-  res.time < 1000 &&                      # Response time in milliseconds
+  res.code == 200 &&                    # HTTP status code
+  (rt.sec * 1000) < 1000 &&                      # Response time in milliseconds
   res.body_size < 10000 &&               # Response body size in bytes
-  res.headers["content-type"] == "application/json" &&  # Response headers
-  res.json.success == true &&            # Parsed JSON body (if applicable)
-  res.text.contains("success")           # Response body as text
+  res.headers["Content-Type"] == "application/json" &&  # Response headers
+  res.body.success == true &&            # Parsed JSON body (if applicable)
+  res.body contains "success"           # Response body as text
 ```
 
 #### Common HTTP Patterns
@@ -88,40 +85,41 @@ test: |
 **API Authentication:**
 ```yaml
 jobs:
-  api-test:
-    steps:
-      - name: Authenticate
-        id: auth
-        action: http
-        with:
-          url: "{{vars.api_base_url}}/auth/login"
-          method: POST
-          headers:
-            Content-Type: "application/json"
-          body: |
-            {
-              "username": "{{vars.api_username}}",
-              "password": "{{vars.api_password}}"
-            }
-        test: res.status == 200
-        outputs:
-          access_token: res.json.access_token
-          refresh_token: res.json.refresh_token
+- id: api-test
+  name: api-test
+  steps:
+    - name: Authenticate
+      id: auth
+      uses: http
+      with:
+        url: "{{vars.api_base_url}}/auth/login"
+        method: POST
+        headers:
+          Content-Type: "application/json"
+        body: |
+          {
+            "username": "{{vars.api_username}}",
+            "password": "{{vars.api_password}}"
+          }
+      test: res.code == 200
+      outputs:
+        access_token: res.body.access_token
+        refresh_token: res.body.refresh_token
 
-      - name: Make Authenticated Request
-        action: http
-        with:
-          url: "{{vars.api_base_url}}/protected/resource"
-          method: GET
-          headers:
-            Authorization: "Bearer {{outputs.auth.access_token}}"
-        test: res.status == 200
+    - name: Make Authenticated Request
+      uses: http
+      with:
+        url: "{{vars.api_base_url}}/protected/resource"
+        method: GET
+        headers:
+          Authorization: "Bearer {{outputs.auth.access_token}}"
+      test: res.code == 200
 ```
 
 **File Upload:**
 ```yaml
 - name: Upload File
-  action: http
+  uses: http
   with:
     url: "{{vars.api_url}}/upload"
     method: POST
@@ -134,13 +132,13 @@ jobs:
       
       This is test file content
       --boundary123--
-  test: res.status == 201
+  test: res.code == 201
 ```
 
 **GraphQL Queries:**
 ```yaml
 - name: GraphQL Query
-  action: http
+  uses: http
   with:
     url: "{{vars.graphql_endpoint}}"
     method: POST
@@ -152,10 +150,10 @@ jobs:
         "query": "query GetUser($id: ID!) { user(id: $id) { name email active } }",
         "variables": { "id": "{{vars.test_user_id}}" }
       }
-  test: res.status == 200 && res.json.data.user != null
+  test: res.code == 200 && res.body.data.user != null
   outputs:
-    user_name: res.json.data.user.name
-    user_email: res.json.data.user.email
+    user_name: res.body.data.user.name
+    user_email: res.body.data.user.email
 ```
 
 ### Shell Action
@@ -200,7 +198,7 @@ The `shell` action enables secure execution of shell commands and scripts within
 # Available response properties:
 test: |
   res.code == 0 &&                         # Exit code (0 = success)
-  res.stdout.contains("success") &&        # Standard output
+  res.stdout contains "success" &&        # Standard output
   res.stderr == "" &&                      # Standard error (empty = no errors)
   req.cmd == "npm run build" &&           # Original command
   req.shell == "/bin/bash"                # Shell used for execution
@@ -211,34 +209,35 @@ test: |
 **Build and Test Pipeline:**
 ```yaml
 jobs:
-  build-and-test:
-    steps:
-      - name: Install Dependencies
-        uses: shell
-        with:
-          cmd: "npm ci"
-          workdir: "/app"
-          timeout: "5m"
-        test: res.code == 0
+- id: build-and-test
+  name: build-and-test
+  steps:
+    - name: Install Dependencies
+      uses: shell
+      with:
+        cmd: "npm ci"
+        workdir: "/app"
+        timeout: "5m"
+      test: res.code == 0
 
-      - name: Run Tests
-        uses: shell
-        with:
-          cmd: "npm test"
-          workdir: "/app"
-          env:
-            NODE_ENV: "test"
-            CI: "true"
-        test: res.code == 0
+    - name: Run Tests
+      uses: shell
+      with:
+        cmd: "npm test"
+        workdir: "/app"
+        env:
+          NODE_ENV: "test"
+          CI: "true"
+      test: res.code == 0
 
-      - name: Build Application
-        uses: shell
-        with:
-          cmd: "npm run build"
-          workdir: "/app"
-          env:
-            NODE_ENV: "production"
-        test: res.code == 0
+    - name: Build Application
+      uses: shell
+      with:
+        cmd: "npm run build"
+        workdir: "/app"
+        env:
+          NODE_ENV: "production"
+      test: res.code == 0
 ```
 
 **System Health Monitoring:**
@@ -272,23 +271,19 @@ The `hello` action is primarily used for testing and demonstrations. It provides
 
 ```yaml
 - name: Test Hello Action
-  action: hello
+  id: hello
+  uses: hello
   with:
-    message: "Test message"           # Optional: Custom message
-    delay: 1s                        # Optional: Artificial delay
-  test: res.status == "success"
+    message: "Test message"           # Echoed back on res
+  echo: "{{res.message}}"
   outputs:
     greeting: res.message
-    timestamp: res.timestamp
 ```
 
-**Hello Action Response:**
+**Hello Action Response:** the action takes no parameters of its own. Every key given in `with` comes back on `res`, and `status` is always `0`.
+
 ```yaml
-# Available response properties:
-test: |
-  res.status == "success" &&         # Always "success"
-  res.message != null &&             # Greeting message
-  res.timestamp != null              # Execution timestamp
+test: status == 0 && res.message != null
 ```
 
 ### SMTP Action
@@ -297,28 +292,17 @@ The `smtp` action enables email sending capabilities for notifications and alert
 
 ```yaml
 - name: Send Email Notification
-  action: smtp
+  uses: smtp
   with:
-    host: smtp.gmail.com              # SMTP server host
-    port: 587                         # SMTP server port
-    username: "{{vars.smtp_username}}" # SMTP authentication username
-    password: "{{vars.smtp_password}}" # SMTP authentication password
+    addr: "smtp.gmail.com              # SMTP server host:587                         # SMTP server port"
     from: alerts@mycompany.com        # Sender email address
     to: ["admin@mycompany.com", "team@mycompany.com"]  # Recipients
-    cc: ["manager@mycompany.com"]     # CC recipients (optional)
-    bcc: ["audit@mycompany.com"]      # BCC recipients (optional)
     subject: "System Alert: {{vars.alert_type}}"       # Email subject
-    body: |                           # Email body (plain text or HTML)
-      System Alert Notification
-      
-      Alert Type: {{vars.alert_type}}
-      Time: {{unixtime()}}
-      Service: {{vars.service_name}}
-      
-      Please investigate immediately.
-    html: true                        # Optional: Send as HTML
-    tls: true                        # Optional: Use TLS encryption
-  test: res.status == "sent"
+    session: 1
+    message: 1
+    length: 500
+  echo: |                           # Email body (plain text or HTML)
+  test: res.code == "sent"
   outputs:
     message_id: res.message_id
     recipients_count: res.recipients_count
@@ -364,55 +348,52 @@ Implement robust error handling for action failures:
 
 ```yaml
 jobs:
-  resilient-http-check:
-    steps:
-      - name: Primary Endpoint Check
-        id: primary
-        action: http
-        with:
-          url: "{{vars.primary_url}}/health"
-          method: GET
-          timeout: 10s
-        test: res.status == 200
-        continue_on_error: true
-        outputs:
-          primary_healthy: res.status == 200
-          primary_response_time: res.time
+- id: resilient-http-check
+  name: resilient-http-check
+  steps:
+    - name: Primary Endpoint Check
+      id: primary
+      uses: http
+      timeout: 10s
+      with:
+        url: "{{vars.primary_url}}/health"
+        method: GET
+      test: res.code == 200
+      outputs:
+        primary_healthy: res.code == 200
+        primary_response_time: (rt.sec * 1000)
 
-      - name: Secondary Endpoint Check
-        if: "!outputs.primary.primary_healthy"
-        id: secondary
-        action: http
-        with:
-          url: "{{vars.secondary_url}}/health"
-          method: GET
-          timeout: 15s
-        test: res.status == 200
-        continue_on_error: true
-        outputs:
-          secondary_healthy: res.status == 200
-          secondary_response_time: res.time
+    - name: Secondary Endpoint Check
+      id: secondary
+      uses: http
+      timeout: 15s
+      with:
+        url: "{{vars.secondary_url}}/health"
+        method: GET
+      test: res.code == 200
+      outputs:
+        secondary_healthy: res.code == 200
+        secondary_response_time: (rt.sec * 1000)
 
-      - name: Alert on Total Failure
-        if: "!outputs.primary.primary_healthy && !outputs.secondary.secondary_healthy"
-        action: smtp
-        with:
-          host: "{{vars.smtp_host}}"
-          port: 587
-          username: "{{vars.smtp_user}}"
-          password: "{{vars.smtp_pass}}"
-          from: "alerts@company.com"
-          to: ["ops-team@company.com"]
-          subject: "CRITICAL: All endpoints down"
-          body: |
-            CRITICAL ALERT: All monitored endpoints are down
-            
-            Primary Endpoint: FAILED
-            Secondary Endpoint: FAILED
-            
-            Time: {{unixtime()}}
-            
-            Immediate investigation required!
+    - name: Alert on Total Failure
+      uses: smtp
+      with:
+        addr: "{{vars.smtp_host}}:587"
+        from: "alerts@company.com"
+        to: "ops-team@company.com"
+        subject: "CRITICAL: All endpoints down"
+        session: 1
+        message: 1
+        length: 500
+      echo: |
+        CRITICAL ALERT: All monitored endpoints are down
+          
+        Primary Endpoint: FAILED
+        Secondary Endpoint: FAILED
+          
+        Time: {{unixtime()}}
+          
+        Immediate investigation required!
 ```
 
 ### Action Composition Patterns
@@ -421,85 +402,85 @@ Combine actions to create complex workflows:
 
 ```yaml
 jobs:
-  comprehensive-api-test:
-    name: Comprehensive API Testing
-    steps:
-      # 1. Health check
-      - name: Verify API Health
-        id: health
-        action: http
-        with:
-          url: "{{vars.api_url}}/health"
-        test: res.status == 200
-        outputs:
-          api_version: res.json.version
-          database_connected: res.json.database.connected
+- id: comprehensive-api-test
+  name: Comprehensive API Testing
+  steps:
+    # 1. Health check
+    - name: Verify API Health
+      id: health
+      uses: http
+      with:
+        method: GET
+        url: "{{vars.api_url}}/health"
+      test: res.code == 200
+      outputs:
+        api_version: res.body.version
+        database_connected: res.body.database.connected
 
-      # 2. Authentication test
-      - name: Test Authentication
-        id: auth
-        action: http
-        with:
-          url: "{{vars.api_url}}/auth/token"
-          method: POST
-          headers:
-            Content-Type: "application/json"
-          body: |
-            {
-              "client_id": "{{vars.client_id}}",
-              "client_secret": "{{vars.client_secret}}",
-              "grant_type": "client_credentials"
-            }
-        test: res.status == 200
-        outputs:
-          access_token: res.json.access_token
-          token_expires: res.json.expires_in
+    # 2. Authentication test
+    - name: Test Authentication
+      id: auth
+      uses: http
+      with:
+        url: "{{vars.api_url}}/auth/token"
+        method: POST
+        headers:
+          Content-Type: "application/json"
+        body: |
+          {
+            "client_id": "{{vars.client_id}}",
+            "client_secret": "{{vars.client_secret}}",
+            "grant_type": "client_credentials"
+          }
+      test: res.code == 200
+      outputs:
+        access_token: res.body.access_token
+        token_expires: res.body.expires_in
 
-      # 3. Functional test
-      - name: Test Core Functionality
-        id: functional
-        action: http
-        with:
-          url: "{{vars.api_url}}/api/test"
-          method: GET
-          headers:
-            Authorization: "Bearer {{outputs.auth.access_token}}"
-        test: res.status == 200 && res.json.test_passed == true
-        outputs:
-          test_duration: res.time
-          test_results: res.json.results
+    # 3. Functional test
+    - name: Test Core Functionality
+      id: functional
+      uses: http
+      with:
+        url: "{{vars.api_url}}/api/test"
+        method: GET
+        headers:
+          Authorization: "Bearer {{outputs.auth.access_token}}"
+      test: res.code == 200 && res.body.test_passed == true
+      outputs:
+        test_duration: (rt.sec * 1000)
+        test_results: res.body.results
 
-      # 4. Performance validation
-      - name: Validate Performance
-        if: outputs.functional.test_duration > 2000
-        action: smtp
-        with:
-          host: "{{vars.smtp_host}}"
-          port: 587
-          username: "{{vars.smtp_user}}"
-          password: "{{vars.smtp_pass}}"
-          from: "performance@company.com"
-          to: ["dev-team@company.com"]
-          subject: "Performance Alert: Slow API Response"
-          body: |
-            Performance Alert
-            
-            API Version: {{outputs.health.api_version}}
-            Response Time: {{outputs.functional.test_duration}}ms
-            Expected: < 2000ms
-            
-            Please investigate performance degradation.
-
-      # 5. Success notification
-      - name: Success Report
-        if: outputs.functional.test_duration <= 2000
-        echo: |
-          ✅ API Test Suite Completed Successfully
+    # 4. Performance validation
+    - name: Validate Performance
+      uses: smtp
+      with:
+        addr: "{{vars.smtp_host}}:587"
+        from: "performance@company.com"
+        to: "dev-team@company.com"
+        subject: "Performance Alert: Slow API Response"
+        session: 1
+        message: 1
+        length: 500
+      echo: |
+        Performance Alert
           
-          Health Check: ✅ (v{{outputs.health.api_version}})
-          Authentication: ✅ (expires in {{outputs.auth.token_expires}}s)
-          Functionality: ✅ ({{outputs.functional.test_duration}}ms)
-          Performance: ✅ (within acceptable limits)
+        API Version: {{outputs.health.api_version}}
+        Response Time: {{outputs.functional.test_duration}}ms
+        Expected: < 2000ms
+          
+        Please investigate performance degradation.
+
+        uccess notification
+    - name: Success Report
+      uses: hello
+      echo: |
+        ✅ API Test Suite Completed Successfully
+          
+        Health Check: ✅ (v{{outputs.health.api_version}})
+        Authentication: ✅ (expires in {{outputs.auth.token_expires}}s)
+        Functionality: ✅ ({{outputs.functional.test_duration}}ms)
+        Performance: ✅ (within acceptable limits)
 ```
 
 ### Dynamic Action Configuration
@@ -508,51 +489,51 @@ Configure actions dynamically based on runtime conditions:
 
 ```yaml
 jobs:
-  adaptive-monitoring:
-    steps:
-      - name: Determine Environment
-        id: env
-        action: http
-        with:
-          url: "{{vars.config_service_url}}/environment"
-        test: res.status == 200
-        outputs:
-          environment: res.json.environment
-          notification_level: res.json.notifications.level
-          smtp_config: res.json.smtp
+- id: adaptive-monitoring
+  name: adaptive-monitoring
+  steps:
+    - name: Determine Environment
+      id: env
+      uses: http
+      with:
+        method: GET
+        url: "{{vars.config_service_url}}/environment"
+      test: res.code == 200
+      outputs:
+        environment: res.body.environment
+        notification_level: res.body.notifications.level
+        smtp_config: res.body.smtp
 
-      - name: Environment-Specific Health Check
-        id: health
-        action: http
-        with:
-          url: "{{vars.service_url}}/health"
-          timeout: "{{outputs.env.environment == 'production' ? '5s' : '30s'}}"
-        test: res.status == 200
-        outputs:
-          service_status: res.json.status
-          error_count: res.json.errors
+    - name: Environment-Specific Health Check
+      id: health
+      uses: http
+      timeout: "{{outputs.vars.environment == 'production' ? '5s' : '30s'}}"
+      with:
+        method: GET
+        url: "{{vars.service_url}}/health"
+      test: res.code == 200
+      outputs:
+        service_status: res.body.status
+        error_count: res.body.errors
 
-      - name: Conditional Alert
-        if: |
-          outputs.health.error_count > 0 && 
-          (outputs.env.environment == "production" || outputs.env.notification_level == "verbose")
-        action: smtp
-        with:
-          host: "{{outputs.env.smtp_config.host}}"
-          port: "{{outputs.env.smtp_config.port}}"
-          username: "{{outputs.env.smtp_config.username}}"
-          password: "{{vars.smtp_password}}"
-          from: "monitoring@company.com"
-          to: "{{outputs.env.environment == 'production' ? ['ops@company.com', 'management@company.com'] : ['dev@company.com']}}"
-          subject: "{{outputs.env.environment == 'production' ? 'PRODUCTION' : 'NON-PROD'}} Alert: Service Errors Detected"
-          body: |
-            Service Error Alert
-            
-            Environment: {{outputs.env.environment}}
-            Service Status: {{outputs.health.service_status}}
-            Error Count: {{outputs.health.error_count}}
-            
-            {{outputs.env.environment == "production" ? "IMMEDIATE ACTION REQUIRED" : "Please investigate when convenient"}}
+    - name: Conditional Alert
+      uses: smtp
+      with:
+        addr: "{{outputs.vars.smtp_config.host}}:{{outputs.vars.smtp_config.port}}"
+        from: "monitoring@company.com"
+        to: "{{outputs.vars.environment == 'production' ? ['ops@company.com', 'management@company.com'] : ['dev@company.com']}}"
+        subject: "{{outputs.vars.environment == 'production' ? 'PRODUCTION' : 'NON-PROD'}} Alert: Service Errors Detected"
+        session: 1
+        message: 1
+        length: 500
+      echo: |
+        Service Error Alert
+          
+        Environment: {{outputs.vars.environment}}
+        Service Status: {{outputs.health.service_status}}
+        Error Count: {{outputs.health.error_count}}
+          
+        {{outputs.vars.environment == "production" ? "IMMEDIATE ACTION REQUIRED" : "Please investigate when convenient"}}
 ```
 
 ## Plugin Architecture Deep Dive
@@ -597,16 +578,18 @@ Always set appropriate timeouts:
 ```yaml
 # Good: Specific timeouts based on expected response time
 - name: Quick Health Check
-  action: http
+  uses: http
+  timeout: 5s              # Quick ping should respond fast
   with:
+    method: GET
     url: "{{vars.api_url}}/ping"
-    timeout: 5s              # Quick ping should respond fast
 
 - name: Complex Query
-  action: http
+  uses: http
+  timeout: 60s             # Complex operations need more time
   with:
+    method: GET
     url: "{{vars.api_url}}/complex-report"
-    timeout: 60s             # Complex operations need more time
 ```
 
 ### 2. Error Handling Strategy
@@ -616,19 +599,19 @@ Implement appropriate error handling:
 ```yaml
 # Critical actions - fail fast
 - name: Database Connectivity Check
-  action: http
+  uses: http
   with:
+    method: GET
     url: "{{vars.db_url}}/ping"
-  test: res.status == 200
-  continue_on_error: false   # Default: stop on failure
+  test: res.code == 200
 
 # Non-critical actions - continue on error
 - name: Optional Analytics Update
-  action: http
+  uses: http
   with:
+    method: GET
     url: "{{vars.analytics_url}}/update"
-  test: res.status == 200
-  continue_on_error: true    # Continue even if this fails
+  test: res.code == 200
 ```
 
 ### 3. Secure Configuration
@@ -638,23 +621,25 @@ Handle sensitive data properly:
 ```yaml
 # Good: Use environment variables for secrets
 - name: Authenticated Request
-  action: http
+  uses: http
   with:
+    method: GET
     url: "{{vars.api_url}}/secure"
     headers:
       Authorization: "Bearer {{vars.api_token}}"  # From vars
 
 # Good: Use secure SMTP configuration
 - name: Send Alert
-  action: smtp
+  uses: smtp
   with:
-    host: "{{vars.smtp_host}}"
-    username: "{{vars.smtp_user}}"
-    password: "{{vars.smtp_pass}}"     # Never hardcode passwords
-
-# Avoid: Hardcoded secrets
+    addr: "{{vars.smtp_host}}:25"
+    from: "probe@example.com"
+    to: "ops@example.com"
+    session: 1
+    message: 1
+    length: 500
 - name: Bad Example
-  action: http
+  uses: http
   with:
     headers:
       Authorization: "Bearer secret-token-123"  # Never do this!
@@ -666,18 +651,19 @@ Validate action responses thoroughly:
 
 ```yaml
 - name: Comprehensive API Test
-  action: http
+  uses: http
   with:
+    method: GET
     url: "{{vars.api_url}}/users"
   test: |
-    res.status == 200 &&
-    res.headers["content-type"].contains("application/json") &&
-    res.json.users != null &&
-    res.json.users.length > 0 &&
-    res.time < 1000
+    res.code == 200 &&
+    res.headers["Content-Type"] contains "application/json" &&
+    res.body.users != null &&
+    len(res.body.users) > 0 &&
+    (rt.sec * 1000) < 1000
   outputs:
-    user_count: res.json.users.length
-    response_time: res.time
+    user_count: len(res.body.users)
+    response_time: (rt.sec * 1000)
 ```
 
 ### 5. Meaningful Outputs
@@ -686,17 +672,17 @@ Define useful outputs for other steps:
 
 ```yaml
 - name: User Creation Test
-  action: http
+  uses: http
   with:
     url: "{{vars.api_url}}/users"
     method: POST
     body: '{"name": "Test User", "email": "test@example.com"}'
-  test: res.status == 201
+  test: res.code == 201
   outputs:
-    created_user_id: res.json.user.id
-    created_user_email: res.json.user.email
-    creation_timestamp: res.json.user.created_at
-    response_time: res.time
+    created_user_id: res.body.user.id
+    created_user_email: res.body.user.email
+    creation_timestamp: res.body.user.created_at
+    response_time: (rt.sec * 1000)
 ```
 
 ## Custom Actions (Advanced)

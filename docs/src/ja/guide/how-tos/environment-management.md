@@ -22,7 +22,6 @@ jobs:
 - name: API Health Check
   defaults:
     http:
-      timeout: "{{vars.default_timeout}}"
       headers:
         User-Agent: "Probe Test Agent"
         Accept: "application/json"
@@ -30,26 +29,29 @@ jobs:
     - name: Health Endpoint Test
       uses: http
       with:
+        method: GET
         url: "{{vars.api_base_url}}/health"
       test: res.code == 200
       outputs:
         api_healthy: res.code == 200
-        response_time: res.time
-        api_version: res.body.json.version
+        response_time: (rt.sec * 1000)
+        api_version: res.body.version
 
     - name: Database Health Check
       uses: http
       with:
+        method: GET
         url: "{{vars.api_base_url}}/health/database"
       test: res.code == 200
       outputs:
         database_healthy: res.code == 200
-        db_response_time: res.time
+        db_response_time: (rt.sec * 1000)
 
 - name: Environment Report
   needs: [api-health-check]
   steps:
     - name: Environment Summary
+      uses: hello
       echo: |
         🌍 Environment Test Report
         =========================
@@ -58,9 +60,9 @@ jobs:
         API Base URL: {{vars.api_base_url}}
         
         Health Check Results:
-        API Health: {{outputs.api-health-check.api_healthy ? "✅ Healthy" : "❌ Down"}} ({{outputs.api-health-check.response_time}}ms)
-        Database: {{outputs.api-health-check.database_healthy ? "✅ Healthy" : "❌ Down"}} ({{outputs.api-health-check.db_response_time}}ms)
-        API Version: {{outputs.api-health-check.api_version}}
+        API Health: {{outputs['api-health-check'].api_healthy ? "✅ Healthy" : "❌ Down"}} ({{outputs['api-health-check'].response_time}}ms)
+        Database: {{outputs['api-health-check'].database_healthy ? "✅ Healthy" : "❌ Down"}} ({{outputs['api-health-check'].db_response_time}}ms)
+        API Version: {{outputs['api-health-check'].api_version}}
         
         Environment-Specific Notes:
         {{vars.environment == "development" ? "• Development environment - extended timeouts enabled" : ""}}
@@ -82,27 +84,27 @@ jobs:
   needs: [api-health-check]
   defaults:
     http:
-      timeout: 60s  # More lenient for development
   steps:
     - name: Hot Reload Check
       uses: http
       with:
+        method: GET
         url: "{{vars.API_BASE_URL}}/dev/hot-reload-status"
       test: res.code == 200
-      continue_on_error: true
       outputs:
-        hot_reload_enabled: res.body.json.enabled
+        hot_reload_enabled: res.body.enabled
 
     - name: Debug Endpoints Check
       uses: http
       with:
+        method: GET
         url: "{{vars.API_BASE_URL}}/debug/info"
       test: res.code == 200
-      continue_on_error: true
       outputs:
         debug_info_available: res.code == 200
 
     - name: Development Summary
+      uses: hello
       echo: |
         🛠️ Development Environment Status:
         Hot Reload: {{outputs.hot_reload_enabled ? "✅ Enabled" : "❌ Disabled"}}
@@ -123,37 +125,40 @@ jobs:
   needs: [api-health-check]
   defaults:
     http:
-      timeout: 30s
       headers:
         X-Environment: staging
   steps:
     - name: Load Balancer Check
       uses: http
       with:
+        method: GET
         url: "{{vars.API_BASE_URL}}/health/load-balancer"
       test: res.code == 200
       outputs:
         load_balancer_healthy: res.code == 200
-        backend_count: res.body.json.active_backends
+        backend_count: res.body.active_backends
 
     - name: Cache Layer Check
       uses: http
       with:
+        method: GET
         url: "{{vars.API_BASE_URL}}/health/cache"
       test: res.code == 200
       outputs:
         cache_healthy: res.code == 200
-        cache_hit_rate: res.body.json.hit_rate
+        cache_hit_rate: res.body.hit_rate
 
     - name: Integration Tests
       uses: http
       with:
+        method: GET
         url: "{{vars.API_BASE_URL}}/test/integration"
-      test: res.code == 200 && res.body.json.all_tests_passed == true
+      test: res.code == 200 && res.body.all_tests_passed == true
       outputs:
-        integration_tests_passed: res.body.json.all_tests_passed
+        integration_tests_passed: res.body.all_tests_passed
 
     - name: Staging Summary
+      uses: hello
       echo: |
         🧪 Staging Environment Status:
         Load Balancer: {{outputs.load_balancer_healthy ? "✅ Healthy" : "❌ Issues"}} ({{outputs.backend_count}} backends)
@@ -175,47 +180,50 @@ jobs:
   needs: [api-health-check]
   defaults:
     http:
-      timeout: 10s  # Strict timeouts for production
       headers:
         X-Environment: production
   steps:
     - name: SSL Certificate Check
       uses: http
       with:
+        method: GET
         url: "{{vars.API_BASE_URL}}/health/ssl"
       test: |
         res.code == 200 &&
-        res.body.json.certificate_valid == true &&
-        res.body.json.days_until_expiry > 30
+        res.body.certificate_valid == true &&
+        res.body.days_until_expiry > 30
       outputs:
-        ssl_valid: res.body.json.certificate_valid
-        ssl_days_remaining: res.body.json.days_until_expiry
+        ssl_valid: res.body.certificate_valid
+        ssl_days_remaining: res.body.days_until_expiry
 
     - name: Performance SLA Check
       uses: http
       with:
+        method: GET
         url: "{{vars.API_BASE_URL}}/health/performance"
       test: |
         res.code == 200 &&
-        res.body.json.avg_response_time < 500 &&
-        res.body.json.success_rate > 0.999
+        res.body.avg_response_time < 500 &&
+        res.body.success_rate > 0.999
       outputs:
-        sla_met: res.body.json.avg_response_time < 500 && res.body.json.success_rate > 0.999
-        avg_response_time: res.body.json.avg_response_time
-        success_rate: res.body.json.success_rate
+        sla_met: res.body.avg_response_time < 500 && res.body.success_rate > 0.999
+        avg_response_time: res.body.avg_response_time
+        success_rate: res.body.success_rate
 
     - name: Security Compliance Check
       uses: http
       with:
+        method: GET
         url: "{{vars.API_BASE_URL}}/health/security"
       test: |
         res.code == 200 &&
-        res.body.json.security_score >= 0.95
+        res.body.security_score >= 0.95
       outputs:
-        security_compliant: res.body.json.security_score >= 0.95
-        security_score: res.body.json.security_score
+        security_compliant: res.body.security_score >= 0.95
+        security_score: res.body.security_score
 
     - name: Production Summary
+      uses: hello
       echo: |
         🏭 Production Environment Status:
         SSL Certificate: {{outputs.ssl_valid ? "✅ Valid" : "❌ Invalid"}} ({{outputs.ssl_days_remaining}} days remaining)
@@ -263,18 +271,18 @@ jobs:
 - name: Core Feature Tests
   steps:
     - name: User Management Test
-      if: vars.feature_user_management == true
       uses: http
       with:
+        method: GET
         url: "{{vars.api_base_url}}/users"
       test: res.code == 200
       outputs:
         user_management_working: res.code == 200
 
     - name: Basic API Test
-      if: vars.feature_basic_api == true
       uses: http
       with:
+        method: GET
         url: "{{vars.api_base_url}}/api/basic"
       test: res.code == 200
       outputs:
@@ -283,31 +291,28 @@ jobs:
 - name: Beta Feature Tests
   steps:
     - name: Beta API Test
-      if: vars.feature_beta_api == true
       uses: http
       with:
+        method: GET
         url: "{{vars.api_base_url}}/api/beta"
       test: res.code == 200
-      continue_on_error: true
       outputs:
         beta_api_working: res.code == 200
 
 - name: Admin Feature Tests
   steps:
     - name: Admin Tools Test
-      if: vars.feature_admin_tools == true
       uses: http
       with:
+        method: GET
         url: "{{vars.api_base_url}}/admin/tools"
         headers:
           Authorization: "Bearer {{vars.admin_token}}"
       test: res.code == 200
-      continue_on_error: true
       outputs:
         admin_tools_working: res.code == 200
 
 - name: Performance Tests
-  if: vars.feature_performance_testing == true
   steps:
     - name: Load Test
       uses: http
@@ -321,43 +326,43 @@ jobs:
           }
       test: res.code == 200
       outputs:
-        load_test_passed: res.body.json.success
+        load_test_passed: res.body.success
 
 - name: Security Tests
-  if: vars.feature_security_scanning == true
   steps:
     - name: Security Scan
       uses: http
       with:
         url: "{{vars.api_base_url}}/security/scan"
         method: POST
-      test: res.code == 200 && res.body.json.vulnerabilities_found == 0
+      test: res.code == 200 && res.body.vulnerabilities_found == 0
       outputs:
-        security_scan_clean: res.body.json.vulnerabilities_found == 0
+        security_scan_clean: res.body.vulnerabilities_found == 0
 
 - name: Feature Test Summary
   needs: [core-feature-tests, beta-feature-tests, admin-feature-tests, performance-tests, security-tests]
   steps:
     - name: Environment Feature Report
+      uses: hello
       echo: |
         🚀 Feature Test Summary for {{vars.environment}}:
         ================================================
         
         CORE FEATURES:
-        {{vars.feature_user_management == true ? "User Management: " + (outputs.core-feature-tests.user_management_working ? "✅ Working" : "❌ Failed") : "User Management: ⏸️ Disabled"}}
-        {{vars.feature_basic_api == true ? "Basic API: " + (outputs.core-feature-tests.basic_api_working ? "✅ Working" : "❌ Failed") : "Basic API: ⏸️ Disabled"}}
+        {{vars.feature_user_management == true ? "User Management: " + (outputs['core-feature-tests'].user_management_working ? "✅ Working" : "❌ Failed") : "User Management: ⏸️ Disabled"}}
+        {{vars.feature_basic_api == true ? "Basic API: " + (outputs['core-feature-tests'].basic_api_working ? "✅ Working" : "❌ Failed") : "Basic API: ⏸️ Disabled"}}
         
         BETA FEATURES:
-        {{vars.feature_beta_api == true ? "Beta API: " + (outputs.beta-feature-tests.beta_api_working ? "✅ Working" : "❌ Failed") : "Beta API: ⏸️ Disabled"}}
+        {{vars.feature_beta_api == true ? "Beta API: " + (outputs['beta-feature-tests'].beta_api_working ? "✅ Working" : "❌ Failed") : "Beta API: ⏸️ Disabled"}}
         
         ADMIN FEATURES:
-        {{vars.feature_admin_tools == true ? "Admin Tools: " + (outputs.admin-feature-tests.admin_tools_working ? "✅ Working" : "❌ Failed") : "Admin Tools: ⏸️ Disabled"}}
+        {{vars.feature_admin_tools == true ? "Admin Tools: " + (outputs['admin-feature-tests'].admin_tools_working ? "✅ Working" : "❌ Failed") : "Admin Tools: ⏸️ Disabled"}}
         
         PERFORMANCE TESTING:
-        {{vars.feature_performance_testing == true ? "Load Testing: " + (outputs.performance-tests.load_test_passed ? "✅ Passed" : "❌ Failed") : "Performance Testing: ⏸️ Disabled"}}
+        {{vars.feature_performance_testing == true ? "Load Testing: " + (outputs['performance-tests'].load_test_passed ? "✅ Passed" : "❌ Failed") : "Performance Testing: ⏸️ Disabled"}}
         
         SECURITY TESTING:
-        {{vars.feature_security_scanning == true ? "Security Scan: " + (outputs.security-tests.security_scan_clean ? "✅ Clean" : "❌ Vulnerabilities Found") : "Security Testing: ⏸️ Disabled"}}
+        {{vars.feature_security_scanning == true ? "Security Scan: " + (outputs['security-tests'].security_scan_clean ? "✅ Clean" : "❌ Vulnerabilities Found") : "Security Testing: ⏸️ Disabled"}}
         
         Environment Configuration:
         Features enabled: {{
@@ -456,6 +461,7 @@ jobs:
 - name: Environment Configuration Validation
   steps:
     - name: Required Environment Variables Check
+      uses: hello
       echo: |
         🔍 Environment Variables Validation:
         
@@ -473,6 +479,7 @@ jobs:
         }}
 
     - name: Environment-Specific Validation
+      uses: hello
       echo: |
         📋 Environment-Specific Validation:
         
@@ -493,27 +500,30 @@ jobs:
 
     - name: Service Connectivity Pre-Check
       uses: http
+      timeout: 10s
       with:
+        method: GET
         url: "{{vars.api_base_url}}/health"
-        timeout: 10s
       test: res.code == 200
       outputs:
         connectivity_ok: res.code == 200
-        api_version: res.body.json.version
-        environment_confirmed: res.body.json.environment
+        api_version: res.body.version
+        environment_confirmed: res.body.environment
 
     - name: Authentication Pre-Check
       uses: http
       with:
+        method: GET
         url: "{{vars.api_base_url}}/auth/validate"
         headers:
           Authorization: "Bearer {{vars.api_token}}"
       test: res.code == 200
       outputs:
         auth_valid: res.code == 200
-        token_expires_in: res.body.json.expires_in
+        token_expires_in: res.body.expires_in
 
     - name: Validation Summary
+      uses: hello
       echo: |
         ✅ Environment Validation Results:
         
@@ -632,6 +642,7 @@ jobs:
     - name: Health Check
       uses: http
       with:
+        method: GET
         url: "{{vars.api_base_url}}/health"
       test: res.code == 200
       outputs:
@@ -640,6 +651,7 @@ jobs:
     - name: Authentication Check
       uses: http
       with:
+        method: GET
         url: "{{vars.api_base_url}}/auth/health"
       test: res.code == 200
       outputs:
@@ -648,6 +660,7 @@ jobs:
     - name: Database Check
       uses: http
       with:
+        method: GET
         url: "{{vars.api_base_url}}/health/database"
       test: res.code == 200
       outputs:
@@ -657,18 +670,19 @@ jobs:
   needs: [critical-endpoints-check]
   steps:
     - name: Production Health Summary
+      uses: hello
       echo: |
         🏭 Production Smoke Test Results:
         
         Critical Systems:
-        API: {{outputs.critical-endpoints-check.api_healthy ? "✅ Healthy" : "🚨 DOWN"}}
-        Authentication: {{outputs.critical-endpoints-check.auth_healthy ? "✅ Healthy" : "🚨 DOWN"}}
-        Database: {{outputs.critical-endpoints-check.db_healthy ? "✅ Healthy" : "🚨 DOWN"}}
+        API: {{outputs['critical-endpoints-check'].api_healthy ? "✅ Healthy" : "🚨 DOWN"}}
+        Authentication: {{outputs['critical-endpoints-check'].auth_healthy ? "✅ Healthy" : "🚨 DOWN"}}
+        Database: {{outputs['critical-endpoints-check'].db_healthy ? "✅ Healthy" : "🚨 DOWN"}}
         
         Overall Status: {{
-          outputs.critical-endpoints-check.api_healthy &&
-          outputs.critical-endpoints-check.auth_healthy &&
-          outputs.critical-endpoints-check.db_healthy
+          outputs['critical-endpoints-check'].api_healthy &&
+          outputs['critical-endpoints-check'].auth_healthy &&
+          outputs['critical-endpoints-check'].db_healthy
           ? "🟢 ALL SYSTEMS OPERATIONAL" : "🔴 CRITICAL ISSUES DETECTED"
         }}
 ```
@@ -687,18 +701,21 @@ jobs:
     - name: User Management API
       uses: http
       with:
+        method: GET
         url: "{{vars.api_base_url}}/users"
       test: res.code == 200
 
     - name: Order Management API
       uses: http
       with:
+        method: GET
         url: "{{vars.api_base_url}}/orders"
       test: res.code == 200
 
     - name: Product Catalog API
       uses: http
       with:
+        method: GET
         url: "{{vars.api_base_url}}/products"
       test: res.code == 200
 
@@ -708,14 +725,16 @@ jobs:
     - name: User-Order Integration
       uses: http
       with:
+        method: GET
         url: "{{vars.api_base_url}}/test/user-order-flow"
-      test: res.code == 200 && res.body.json.test_passed == true
+      test: res.code == 200 && res.body.test_passed == true
 
     - name: Payment Integration
       uses: http
       with:
+        method: GET
         url: "{{vars.api_base_url}}/test/payment-flow"
-      test: res.code == 200 && res.body.json.test_passed == true
+      test: res.code == 200 && res.body.test_passed == true
 
 - name: Performance Validation
   needs: [integration-tests]
@@ -730,7 +749,7 @@ jobs:
             "concurrent_users": 10,
             "duration_seconds": 60
           }
-      test: res.code == 200 && res.body.json.success_rate > 0.95
+      test: res.code == 200 && res.body.success_rate > 0.95
 ```
 
 ## 環境モニタリングとアラート
@@ -760,37 +779,38 @@ jobs:
       id: resources
       uses: http
       with:
+        method: GET
         url: "{{vars.api_base_url}}/health/resources"
       test: |
         res.code == 200 &&
-        res.body.json.cpu_usage < 80 &&
-        res.body.json.memory_usage < 80 &&
-        res.body.json.disk_usage < 90
-      continue_on_error: true
+        res.body.cpu_usage < 80 &&
+        res.body.memory_usage < 80 &&
+        res.body.disk_usage < 90
       outputs:
         resources_healthy: |
           res.code == 200 &&
-          res.body.json.cpu_usage < 80 &&
-          res.body.json.memory_usage < 80 &&
-          res.body.json.disk_usage < 90
-        cpu_usage: res.body.json.cpu_usage
-        memory_usage: res.body.json.memory_usage
-        disk_usage: res.body.json.disk_usage
+          res.body.cpu_usage < 80 &&
+          res.body.memory_usage < 80 &&
+          res.body.disk_usage < 90
+        cpu_usage: res.body.cpu_usage
+        memory_usage: res.body.memory_usage
+        disk_usage: res.body.disk_usage
 
     - name: Service Dependencies Check
       id: dependencies
       uses: http
       with:
+        method: GET
         url: "{{vars.api_base_url}}/health/dependencies"
       test: |
         res.code == 200 &&
-        res.body.json.all_dependencies_healthy == true
-      continue_on_error: true
+        res.body.all_dependencies_healthy == true
       outputs:
-        dependencies_healthy: res.body.json.all_dependencies_healthy
-        unhealthy_services: res.body.json.unhealthy_services
+        dependencies_healthy: res.body.all_dependencies_healthy
+        unhealthy_services: res.body.unhealthy_services
 
     - name: Environment-Specific Checks
+      uses: hello
       echo: |
         Environment-specific validation for {{vars.environment}}
       outputs:
@@ -801,51 +821,46 @@ jobs:
 
 - name: Environment Alerting
   needs: [environment-health-check]
-  if: |
-    !outputs.environment-health-check.resources_healthy ||
-    !outputs.environment-health-check.dependencies_healthy
   steps:
     - name: Environment Alert
       uses: smtp
       with:
-        host: "{{vars.smtp_host}}"
-        port: 587
-        username: "{{vars.smtp_username}}"
-        password: "{{vars.smtp_password}}"
+        addr: "{{vars.smtp_host}}:587"
         from: "environment-alerts@yourcompany.com"
-        to: ["devops@yourcompany.com"]
+        to: "devops@yourcompany.com"
         subject: "🚨 Environment Health Alert - {{vars.environment}}"
-        body: |
-          ENVIRONMENT HEALTH ALERT
-          ========================
+        session: 1
+        message: 1
+        length: 500
+      echo: |
+        ENVIRONMENT HEALTH ALERT
+        ========================
           
-          Environment: {{vars.environment}}
-          Time: {{unixtime()}}
+        Environment: {{vars.environment}}
+        Time: {{unixtime()}}
           
-          RESOURCE STATUS:
-          {{outputs.environment-health-check.resources_healthy ? "✅ Resources Healthy" : "❌ Resource Issues"}}
-          {{!outputs.environment-health-check.resources_healthy ? "CPU Usage: " + outputs.environment-health-check.cpu_usage + "%" : ""}}
-          {{!outputs.environment-health-check.resources_healthy ? "Memory Usage: " + outputs.environment-health-check.memory_usage + "%" : ""}}
-          {{!outputs.environment-health-check.resources_healthy ? "Disk Usage: " + outputs.environment-health-check.disk_usage + "%" : ""}}
+        RESOURCE STATUS:
+        {{outputs['environment-health-check'].resources_healthy ? "✅ Resources Healthy" : "❌ Resource Issues"}}
+        {{!outputs['environment-health-check'].resources_healthy ? "CPU Usage: " + outputs['environment-health-check'].cpu_usage + "%" : ""}}
+        {{!outputs['environment-health-check'].resources_healthy ? "Memory Usage: " + outputs['environment-health-check'].memory_usage + "%" : ""}}
+        {{!outputs['environment-health-check'].resources_healthy ? "Disk Usage: " + outputs['environment-health-check'].disk_usage + "%" : ""}}
           
-          DEPENDENCIES STATUS:
-          {{outputs.environment-health-check.dependencies_healthy ? "✅ All Dependencies Healthy" : "❌ Dependency Issues"}}
-          {{!outputs.environment-health-check.dependencies_healthy ? "Unhealthy Services: " + outputs.environment-health-check.unhealthy_services : ""}}
+        DEPENDENCIES STATUS:
+        {{outputs['environment-health-check'].dependencies_healthy ? "✅ All Dependencies Healthy" : "❌ Dependency Issues"}}
+        {{!outputs['environment-health-check'].dependencies_healthy ? "Unhealthy Services: " + outputs['environment-health-check'].unhealthy_services : ""}}
           
-          ACTION REQUIRED: Investigate {{vars.environment}} environment immediately
+        ACTION REQUIRED: Investigate {{vars.environment}} environment immediately
 
 - name: Health Summary
   needs: [environment-health-check]
-  if: |
-    outputs.environment-health-check.resources_healthy &&
-    outputs.environment-health-check.dependencies_healthy
   steps:
     - name: All Systems Healthy
+      uses: hello
       echo: |
         ✅ {{vars.environment}} Environment Health Check
         
         All systems operational:
-        • Resources: CPU {{outputs.environment-health-check.cpu_usage}}%, Memory {{outputs.environment-health-check.memory_usage}}%, Disk {{outputs.environment-health-check.disk_usage}}%
+        • Resources: CPU {{outputs['environment-health-check'].cpu_usage}}%, Memory {{outputs['environment-health-check'].memory_usage}}%, Disk {{outputs['environment-health-check'].disk_usage}}%
         • Dependencies: All healthy
         • Environment: {{vars.environment}}
         

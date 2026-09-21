@@ -130,27 +130,28 @@ probe base.yml,overrides.yml
 ```yaml
 name: API Health Check
 jobs:
-  health-check:
-    steps:
-      - name: Check API
-        action: http
-        with:
-          url: "{{env.API_URL}}"
-          method: GET
-        test: res.status == 200
+- id: health-check
+  name: health-check
+  steps:
+    - name: Check API
+      uses: http
+      with:
+        url: "{{vars.API_URL}}"
+        method: GET
+      test: res.code == 200
 ```
 
 **production.yml:**
 ```yaml
 # Production-specific settings
-env:
+vars:
   API_URL: https://api.production.example.com
 ```
 
 **staging.yml:**
 ```yaml
 # Staging-specific settings
-env:
+vars:
   API_URL: https://api.staging.example.com
 ```
 
@@ -167,20 +168,23 @@ probe base-workflow.yml,staging.yml
 
 **common-config.yml:**
 ```yaml
-# Shared HTTP settings
-defaults:
-  http:
-    timeout: 30s
-    headers:
-      User-Agent: "Probe Health Check v1.0"
+# Shared header block, referenced from the workflow by its anchor
+shared:
+  common_headers: &common_headers
+    User-Agent: "Probe Health Check v1.0"
 ```
 
 **api-check.yml:**
 ```yaml
 name: API Monitoring
-# Inherits common HTTP settings
 jobs:
-  # ... job definitions
+- name: API checks
+  defaults:
+    http:
+      headers:
+        <<: *common_headers
+  steps:
+    # ... step definitions
 ```
 
 ```bash
@@ -202,11 +206,12 @@ Probe can access environment variables in your workflows using the `env` object:
 ```yaml
 steps:
   - name: Connect to Database
-    action: http
+    uses: http
     with:
-      url: "{{env.DATABASE_URL}}"
+      method: GET
+      url: "{{vars.DATABASE_URL}}"
       headers:
-        Authorization: "Bearer {{env.API_TOKEN}}"
+        Authorization: "Bearer {{vars.API_TOKEN}}"
 ```
 
 Set environment variables before running:

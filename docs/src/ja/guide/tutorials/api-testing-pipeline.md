@@ -77,11 +77,9 @@ jobs:
 - name: default
   defaults:
     http:
-      timeout: "10s"
       headers:
         Content-Type: "application/json"
         User-Agent: "Probe API Test Suite v1.0"
-      verify_ssl: true
 ```
 
 **config/development.yml:**
@@ -96,8 +94,6 @@ jobs:
 - name: default
   defaults:
     http:
-      timeout: "30s"
-      verify_ssl: false  # 自己署名証明書を許可
 ```
 
 **config/staging.yml:**
@@ -147,13 +143,12 @@ jobs:
           }
       test: |
         res.code == 201 &&
-        res.body.json.user != null &&
-        res.body.json.user.email == vars.TEST_USER_EMAIL &&
-        res.body.json.token != null
+        res.body.user != null &&
+        res.body.user.email == vars.TEST_USER_EMAIL &&
+        res.body.token != null
       outputs:
-        user_id: res.body.json.user.id
-        auth_token: res.body.json.token
-      continue_on_error: true
+        user_id: res.body.user.id
+        auth_token: res.body.token
 
     - name: "Test User Login"
       id: login
@@ -168,13 +163,13 @@ jobs:
           }
       test: |
         res.code == 200 &&
-        res.body.json.token != null &&
-        res.body.json.user != null &&
-        res.body.json.token | length > 20
+        res.body.token != null &&
+        res.body.user != null &&
+        res.body.token | len > 20
       outputs:
-        auth_token: res.body.json.token
-        user_id: res.body.json.user.id
-        login_time: res.time
+        auth_token: res.body.token
+        user_id: res.body.user.id
+        login_time: (rt.sec * 1000)
 
     - name: "Test Invalid Login Credentials"
       uses: http
@@ -188,29 +183,31 @@ jobs:
           }
       test: |
         res.code == 401 &&
-        res.body.json.error != null
+        res.body.error != null
 
     - name: "Test Token Validation"
       id: token-validation
       uses: http
       with:
+        method: GET
         url: "{{vars.API_BASE_URL}}/api/{{vars.API_VERSION}}/auth/validate"
         headers:
           Authorization: "Bearer {{outputs.login.auth_token}}"
       test: |
         res.code == 200 &&
-        res.body.json.valid == true &&
-        res.body.json.user.id == outputs.login.user_id
+        res.body.valid == true &&
+        res.body.user.id == outputs.login.user_id
 
     - name: "Test Invalid Token"
       uses: http
       with:
+        method: GET
         url: "{{vars.API_BASE_URL}}/api/{{vars.API_VERSION}}/auth/validate"
         headers:
           Authorization: "Bearer invalid-token-12345"
       test: |
         res.code == 401 &&
-        res.body.json.error != null
+        res.body.error != null
 
     - name: "Test Token Refresh"
       id: refresh
@@ -222,10 +219,10 @@ jobs:
           Authorization: "Bearer {{outputs.login.auth_token}}"
       test: |
         res.code == 200 &&
-        res.body.json.token != null &&
-        res.body.json.token != outputs.login.auth_token
+        res.body.token != null &&
+        res.body.token != outputs.login.auth_token
       outputs:
-        new_token: res.body.json.token
+        new_token: res.body.token
 
     - name: "Test Logout"
       uses: http
@@ -240,12 +237,13 @@ jobs:
     - name: "Test Using Token After Logout"
       uses: http
       with:
+        method: GET
         url: "{{vars.API_BASE_URL}}/api/{{vars.API_VERSION}}/auth/validate"
         headers:
           Authorization: "Bearer {{outputs.refresh.new_token}}"
       test: |
         res.code == 401 &&
-        res.body.json.error != null
+        res.body.error != null
 ```
 
 ## ステップ3: CRUD操作テスト
@@ -273,7 +271,7 @@ jobs:
           }
       test: res.code == 200
       outputs:
-        token: res.body.json.token
+        token: res.body.token
 
     - name: "Create Product"
       id: create-product
@@ -295,73 +293,75 @@ jobs:
           }
       test: |
         res.code == 201 &&
-        res.body.json.id != null &&
-        res.body.json.price == 29.99 &&
-        res.body.json.stock == 100
+        res.body.id != null &&
+        res.body.price == 29.99 &&
+        res.body.stock == 100
       outputs:
-        product_id: res.body.json.id
-        product_name: res.body.json.name
-        product_sku: res.body.json.sku
-        creation_time: res.time
+        product_id: res.body.id
+        product_name: res.body.name
+        product_sku: res.body.sku
+        creation_time: (rt.sec * 1000)
 
     - name: "Read Product by ID"
       id: read-product
       uses: http
       with:
-        url: "{{vars.API_BASE_URL}}/api/{{vars.API_VERSION}}/products/{{outputs.create-product.product_id}}"
+        method: GET
+        url: "{{vars.API_BASE_URL}}/api/{{vars.API_VERSION}}/products/{{outputs['create-product'].product_id}}"
       test: |
         res.code == 200 &&
-        res.body.json.id == outputs.create-product.product_id &&
-        res.body.json.name == outputs.create-product.product_name &&
-        res.body.json.price == 29.99 &&
-        res.body.json.category == "Electronics" &&
-        res.body.json.tags | length == 3
+        res.body.id == outputs['create-product'].product_id &&
+        res.body.name == outputs['create-product'].product_name &&
+        res.body.price == 29.99 &&
+        res.body.category == "Electronics" &&
+        res.body.tags | len == 3
       outputs:
-        read_time: res.time
+        read_time: (rt.sec * 1000)
 
     - name: "Update Product"
       id: update-product
       uses: http
       with:
-        url: "{{vars.API_BASE_URL}}/api/{{vars.API_VERSION}}/products/{{outputs.create-product.product_id}}"
+        url: "{{vars.API_BASE_URL}}/api/{{vars.API_VERSION}}/products/{{outputs['create-product'].product_id}}"
         method: "PUT"
         headers:
           Authorization: "Bearer {{outputs.auth.token}}"
         body: |
           {
-            "name": "{{outputs.create-product.product_name}} - UPDATED",
+            "name": "{{outputs['create-product'].product_name}} - UPDATED",
             "description": "Updated test product",
             "price": 39.99,
             "category": "Electronics",
-            "sku": "{{outputs.create-product.product_sku}}",
+            "sku": "{{outputs['create-product'].product_sku}}",
             "stock": 75,
             "tags": ["test", "electronics", "api-test", "updated"]
           }
       test: |
         res.code == 200 &&
-        res.body.json.id == outputs.create-product.product_id &&
-        res.body.json.price == 39.99 &&
-        res.body.json.stock == 75 &&
-        res.body.json.tags | length == 4
+        res.body.id == outputs['create-product'].product_id &&
+        res.body.price == 39.99 &&
+        res.body.stock == 75 &&
+        res.body.tags | len == 4
       outputs:
-        updated_name: res.body.json.name
-        update_time: res.time
+        updated_name: res.body.name
+        update_time: (rt.sec * 1000)
 
     - name: "Verify Update Persistence"
       uses: http
       with:
-        url: "{{vars.API_BASE_URL}}/api/{{vars.API_VERSION}}/products/{{outputs.create-product.product_id}}"
+        method: GET
+        url: "{{vars.API_BASE_URL}}/api/{{vars.API_VERSION}}/products/{{outputs['create-product'].product_id}}"
       test: |
         res.code == 200 &&
-        res.body.json.name == outputs.update-product.updated_name &&
-        res.body.json.price == 39.99 &&
-        res.body.json.stock == 75
+        res.body.name == outputs['update-product'].updated_name &&
+        res.body.price == 39.99 &&
+        res.body.stock == 75
 
     - name: "Test Partial Update (PATCH)"
       id: patch-product
       uses: http
       with:
-        url: "{{vars.API_BASE_URL}}/api/{{vars.API_VERSION}}/products/{{outputs.create-product.product_id}}"
+        url: "{{vars.API_BASE_URL}}/api/{{vars.API_VERSION}}/products/{{outputs['create-product'].product_id}}"
         method: "PATCH"
         headers:
           Authorization: "Bearer {{outputs.auth.token}}"
@@ -372,28 +372,29 @@ jobs:
           }
       test: |
         res.code == 200 &&
-        res.body.json.stock == 50 &&
-        res.body.json.tags | length == 3 &&
-        res.body.json.name == outputs.update-product.updated_name
+        res.body.stock == 50 &&
+        res.body.tags | len == 3 &&
+        res.body.name == outputs['update-product'].updated_name
       outputs:
-        patch_time: res.time
+        patch_time: (rt.sec * 1000)
 
     - name: "Delete Product"
       id: delete-product
       uses: http
       with:
-        url: "{{vars.API_BASE_URL}}/api/{{vars.API_VERSION}}/products/{{outputs.create-product.product_id}}"
+        url: "{{vars.API_BASE_URL}}/api/{{vars.API_VERSION}}/products/{{outputs['create-product'].product_id}}"
         method: "DELETE"
         headers:
           Authorization: "Bearer {{outputs.auth.token}}"
       test: res.code == 204 || res.code == 200
       outputs:
-        delete_time: res.time
+        delete_time: (rt.sec * 1000)
 
     - name: "Verify Product Deletion"
       uses: http
       with:
-        url: "{{vars.API_BASE_URL}}/api/{{vars.API_VERSION}}/products/{{outputs.create-product.product_id}}"
+        method: GET
+        url: "{{vars.API_BASE_URL}}/api/{{vars.API_VERSION}}/products/{{outputs['create-product'].product_id}}"
       test: res.code == 404
 
 - name: "Product Search and Filtering"
@@ -432,55 +433,60 @@ jobs:
           }
       test: |
         res.code == 201 &&
-        res.body.json.products | length == 3
+        res.body.products | len == 3
       outputs:
-        created_products: res.body.json.products
+        created_products: res.body.products
 
     - name: "Test Product Search by Name"
       uses: http
       with:
+        method: GET
         url: "{{vars.API_BASE_URL}}/api/{{vars.API_VERSION}}/products/search?q=Search%20Test"
       test: |
         res.code == 200 &&
-        res.body.json.products | length >= 3
+        res.body.products | len >= 3
 
     - name: "Test Product Filter by Category"
       uses: http
       with:
+        method: GET
         url: "{{vars.API_BASE_URL}}/api/{{vars.API_VERSION}}/products?category=Books"
       test: |
         res.code == 200 &&
-        res.body.json.products | length >= 2
+        res.body.products | len >= 2
       outputs:
-        books_found: res.body.json.products | length
+        books_found: res.body.products | len
 
     - name: "Test Product Filter by Price Range"
       uses: http
       with:
+        method: GET
         url: "{{vars.API_BASE_URL}}/api/{{vars.API_VERSION}}/products?min_price=10&max_price=20"
       test: |
         res.code == 200 &&
-        res.body.json.products[0].price >= 10 &&
-        res.body.json.products[0].price <= 20
+        res.body.products[0].price >= 10 &&
+        res.body.products[0].price <= 20
 
     - name: "Test Product Sorting"
       uses: http
       with:
+        method: GET
         url: "{{vars.API_BASE_URL}}/api/{{vars.API_VERSION}}/products?sort=price&order=desc"
       test: |
         res.code == 200 &&
-        res.body.json.products | length > 1 &&
-        res.body.json.products[0].price >= res.body.json.products[1].price
+        res.body.products | len > 1 &&
+        res.body.products[0].price >= res.body.products[1].price
 
     - name: "Test Pagination"
       uses: http
       with:
+        method: GET
         url: "{{vars.API_BASE_URL}}/api/{{vars.API_VERSION}}/products?page=1&limit=2"
       test: |
         res.code == 200 &&
-        res.body.json.products | length <= 2 &&
-        res.body.json.pagination.page == 1 &&
-        res.body.json.pagination.total > 0
+        res.body.products | len <= 2 &&
+        res.body.pagination.page == 1 &&
+        res.body.pagination.total > 0
 ```
 
 ## ステップ4: パフォーマンステスト
@@ -494,66 +500,68 @@ description: "Validate API response times and performance characteristics"
 
 jobs:
 - name: "Response Time Validation"
-  if: vars.SKIP_PERFORMANCE_TESTS != "true"
   steps:
     - name: "Test Fast Endpoint Performance"
       id: health-perf
       uses: http
       with:
+        method: GET
         url: "{{vars.API_BASE_URL}}/health"
       test: |
         res.code == 200 &&
-        res.time < vars.FAST_RESPONSE_TIME
+        (rt.sec * 1000) < vars.FAST_RESPONSE_TIME
       outputs:
-        health_time: res.time
+        health_time: (rt.sec * 1000)
 
     - name: "Test API List Performance"
       id: list-perf
       uses: http
       with:
+        method: GET
         url: "{{vars.API_BASE_URL}}/api/{{vars.API_VERSION}}/products?limit=10"
       test: |
         res.code == 200 &&
-        res.time < vars.ACCEPTABLE_RESPONSE_TIME
+        (rt.sec * 1000) < vars.ACCEPTABLE_RESPONSE_TIME
       outputs:
-        list_time: res.time
+        list_time: (rt.sec * 1000)
 
     - name: "Test Search Performance"
       id: search-perf
       uses: http
       with:
+        method: GET
         url: "{{vars.API_BASE_URL}}/api/{{vars.API_VERSION}}/products/search?q=test"
       test: |
         res.code == 200 &&
-        res.time < vars.ACCEPTABLE_RESPONSE_TIME
+        (rt.sec * 1000) < vars.ACCEPTABLE_RESPONSE_TIME
       outputs:
-        search_time: res.time
+        search_time: (rt.sec * 1000)
 
     - name: "Performance Summary"
       uses: echo
       with:
         message: |
           === PERFORMANCE TEST RESULTS ===
-          Health Check: {{outputs.health-perf.health_time}}ms (threshold: {{vars.FAST_RESPONSE_TIME}}ms)
-          Product List: {{outputs.list-perf.list_time}}ms (threshold: {{vars.ACCEPTABLE_RESPONSE_TIME}}ms)
-          Search: {{outputs.search-perf.search_time}}ms (threshold: {{vars.ACCEPTABLE_RESPONSE_TIME}}ms)
+          Health Check: {{outputs['health-perf'].health_time}}ms (threshold: {{vars.FAST_RESPONSE_TIME}}ms)
+          Product List: {{outputs['list-perf'].list_time}}ms (threshold: {{vars.ACCEPTABLE_RESPONSE_TIME}}ms)
+          Search: {{outputs['search-perf'].search_time}}ms (threshold: {{vars.ACCEPTABLE_RESPONSE_TIME}}ms)
           
-          {{outputs.health-perf.health_time < vars.FAST_RESPONSE_TIME ? "✅" : "❌"}} Health: Fast
-          {{outputs.list-perf.list_time < vars.ACCEPTABLE_RESPONSE_TIME ? "✅" : "❌"}} List: Acceptable
-          {{outputs.search-perf.search_time < vars.ACCEPTABLE_RESPONSE_TIME ? "✅" : "❌"}} Search: Acceptable
+          {{outputs['health-perf'].health_time < vars.FAST_RESPONSE_TIME ? "✅" : "❌"}} Health: Fast
+          {{outputs['list-perf'].list_time < vars.ACCEPTABLE_RESPONSE_TIME ? "✅" : "❌"}} List: Acceptable
+          {{outputs['search-perf'].search_time < vars.ACCEPTABLE_RESPONSE_TIME ? "✅" : "❌"}} Search: Acceptable
 
 - name: "Concurrent Request Testing"
-  if: vars.SKIP_LOAD_TESTS != "true"
   needs: [response-time-validation]
   steps:
     - name: "Concurrent Health Checks"
       id: concurrent-health
       uses: http
       with:
+        method: GET
         url: "{{vars.API_BASE_URL}}/health"
       test: |
         res.code == 200 &&
-        res.time < (vars.ACCEPTABLE_RESPONSE_TIME * 2)
+        (rt.sec * 1000) < (vars.ACCEPTABLE_RESPONSE_TIME * 2)
 
     - name: "Stress Test Report"
       uses: echo
@@ -561,10 +569,10 @@ jobs:
         message: |
           === CONCURRENT LOAD TEST ===
           Concurrent requests: {{vars.PARALLEL_REQUESTS}}
-          Average response time: {{outputs.concurrent-health.time}}ms
+          Average response time: {{outputs['concurrent-health'].time}}ms
           Success rate: 100%
           
-          Status: {{outputs.concurrent-health.time < vars.ACCEPTABLE_RESPONSE_TIME ? "✅ PASSED" : "❌ FAILED"}}
+          Status: {{outputs['concurrent-health'].time < vars.ACCEPTABLE_RESPONSE_TIME ? "✅ PASSED" : "❌ FAILED"}}
 ```
 
 ## ステップ5: データ検証とスキーマテスト
@@ -583,19 +591,20 @@ jobs:
       id: product-schema
       uses: http
       with:
+        method: GET
         url: "{{vars.API_BASE_URL}}/api/{{vars.API_VERSION}}/products"
       test: |
         res.code == 200 &&
-        res.body.json.products != null &&
-        res.body.json.products | length > 0 &&
-        res.body.json.products[0].id != null &&
-        res.body.json.products[0].name != null &&
-        res.body.json.products[0].price != null &&
-        res.body.json.products[0].category != null &&
-        res.body.json.pagination != null &&
-        res.body.json.pagination.total != null &&
-        res.body.json.pagination.page != null &&
-        res.body.json.pagination.limit != null
+        res.body.products != null &&
+        res.body.products | len > 0 &&
+        res.body.products[0].id != null &&
+        res.body.products[0].name != null &&
+        res.body.products[0].price != null &&
+        res.body.products[0].category != null &&
+        res.body.pagination != null &&
+        res.body.pagination.total != null &&
+        res.body.pagination.page != null &&
+        res.body.pagination.limit != null
 
     - name: "Validate User Profile Schema"
       uses: http
@@ -609,25 +618,26 @@ jobs:
           }
       test: |
         res.code == 200 &&
-        res.body.json.user != null &&
-        res.body.json.user.id != null &&
-        res.body.json.user.email != null &&
-        res.body.json.user.firstName != null &&
-        res.body.json.user.lastName != null &&
-        res.body.json.user.createdAt != null &&
-        res.body.json.token != null &&
-        res.body.json.token | length > 20
+        res.body.user != null &&
+        res.body.user.id != null &&
+        res.body.user.email != null &&
+        res.body.user.firstName != null &&
+        res.body.user.lastName != null &&
+        res.body.user.createdAt != null &&
+        res.body.token != null &&
+        res.body.token | len > 20
 
     - name: "Validate Error Response Schema"
       uses: http
       with:
+        method: GET
         url: "{{vars.API_BASE_URL}}/api/{{vars.API_VERSION}}/products/nonexistent-id"
       test: |
         res.code == 404 &&
-        res.body.json.error != null &&
-        res.body.json.message != null &&
-        res.body.json.statusCode == 404 &&
-        res.body.json.timestamp != null
+        res.body.error != null &&
+        res.body.message != null &&
+        res.body.statusCode == 404 &&
+        res.body.timestamp != null
 
 - name: "Data Integrity Validation"
   steps:
@@ -646,7 +656,7 @@ jobs:
           }
       test: |
         res.code == 400 &&
-        res.body.json.error != null
+        res.body.error != null
 
     - name: "Test Required Field Validation"
       uses: http
@@ -661,7 +671,7 @@ jobs:
           }
       test: |
         res.code == 400 &&
-        res.body.json.error != null
+        res.body.error != null
 
     - name: "Test Email Format Validation"
       uses: http
@@ -675,7 +685,7 @@ jobs:
           }
       test: |
         res.code == 400 &&
-        res.body.json.error != null
+        res.body.error != null
 
     - name: "Test Numeric Range Validation"
       uses: http
@@ -692,7 +702,7 @@ jobs:
           }
       test: |
         res.code == 400 &&
-        res.body.json.error != null
+        res.body.error != null
 ```
 
 ## ステップ6: 統合テスト
@@ -722,22 +732,23 @@ jobs:
           }
       test: res.code == 201
       outputs:
-        user_id: res.body.json.user.id
-        auth_token: res.body.json.token
-        user_email: res.body.json.user.email
+        user_id: res.body.user.id
+        auth_token: res.body.token
+        user_email: res.body.user.email
 
     - name: "Browse Products"
       id: browse
       uses: http
       with:
+        method: GET
         url: "{{vars.API_BASE_URL}}/api/{{vars.API_VERSION}}/products?category=Electronics&limit=5"
       test: |
         res.code == 200 &&
-        res.body.json.products | length > 0
+        res.body.products | len > 0
       outputs:
-        available_products: res.body.json.products
-        first_product_id: res.body.json.products[0].id
-        first_product_price: res.body.json.products[0].price
+        available_products: res.body.products
+        first_product_id: res.body.products[0].id
+        first_product_price: res.body.products[0].price
 
     - name: "Add Product to Cart"
       id: add-to-cart
@@ -754,30 +765,31 @@ jobs:
           }
       test: |
         res.code == 201 &&
-        res.body.json.item.productId == outputs.browse.first_product_id &&
-        res.body.json.item.quantity == 2
+        res.body.item.productId == outputs.browse.first_product_id &&
+        res.body.item.quantity == 2
       outputs:
-        cart_item_id: res.body.json.item.id
-        cart_total: res.body.json.cart.total
+        cart_item_id: res.body.item.id
+        cart_total: res.body.cart.total
 
     - name: "View Cart"
       id: view-cart
       uses: http
       with:
+        method: GET
         url: "{{vars.API_BASE_URL}}/api/{{vars.API_VERSION}}/cart"
         headers:
           Authorization: "Bearer {{outputs.register.auth_token}}"
       test: |
         res.code == 200 &&
-        res.body.json.items | length == 1 &&
-        res.body.json.items[0].productId == outputs.browse.first_product_id &&
-        res.body.json.total == (outputs.browse.first_product_price * 2)
+        res.body.items | len == 1 &&
+        res.body.items[0].productId == outputs.browse.first_product_id &&
+        res.body.total == (outputs.browse.first_product_price * 2)
 
     - name: "Update Cart Quantity"
       id: update-cart
       uses: http
       with:
-        url: "{{vars.API_BASE_URL}}/api/{{vars.API_VERSION}}/cart/items/{{outputs.add-to-cart.cart_item_id}}"
+        url: "{{vars.API_BASE_URL}}/api/{{vars.API_VERSION}}/cart/items/{{outputs['add-to-cart'].cart_item_id}}"
         method: "PUT"
         headers:
           Authorization: "Bearer {{outputs.register.auth_token}}"
@@ -787,9 +799,9 @@ jobs:
           }
       test: |
         res.code == 200 &&
-        res.body.json.item.quantity == 3
+        res.body.item.quantity == 3
       outputs:
-        new_cart_total: res.body.json.cart.total
+        new_cart_total: res.body.cart.total
 
     - name: "Create Order"
       id: create-order
@@ -817,39 +829,41 @@ jobs:
           }
       test: |
         res.code == 201 &&
-        res.body.json.order.id != null &&
-        res.body.json.order.status == "pending" &&
-        res.body.json.order.total == outputs.update-cart.new_cart_total
+        res.body.order.id != null &&
+        res.body.order.status == "pending" &&
+        res.body.order.total == outputs['update-cart'].new_cart_total
       outputs:
-        order_id: res.body.json.order.id
-        order_status: res.body.json.order.status
+        order_id: res.body.order.id
+        order_status: res.body.order.status
 
     - name: "Verify Order Details"
       id: verify-order
       uses: http
       with:
-        url: "{{vars.API_BASE_URL}}/api/{{vars.API_VERSION}}/orders/{{outputs.create-order.order_id}}"
+        method: GET
+        url: "{{vars.API_BASE_URL}}/api/{{vars.API_VERSION}}/orders/{{outputs['create-order'].order_id}}"
         headers:
           Authorization: "Bearer {{outputs.register.auth_token}}"
       test: |
         res.code == 200 &&
-        res.body.json.id == outputs.create-order.order_id &&
-        res.body.json.items | length == 1 &&
-        res.body.json.items[0].productId == outputs.browse.first_product_id &&
-        res.body.json.items[0].quantity == 3
+        res.body.id == outputs['create-order'].order_id &&
+        res.body.items | len == 1 &&
+        res.body.items[0].productId == outputs.browse.first_product_id &&
+        res.body.items[0].quantity == 3
       outputs:
-        order_created_at: res.body.json.createdAt
+        order_created_at: res.body.createdAt
 
     - name: "View Order History"
       uses: http
       with:
+        method: GET
         url: "{{vars.API_BASE_URL}}/api/{{vars.API_VERSION}}/orders"
         headers:
           Authorization: "Bearer {{outputs.register.auth_token}}"
       test: |
         res.code == 200 &&
-        res.body.json.orders | length >= 1 &&
-        res.body.json.orders[0].id == outputs.create-order.order_id
+        res.body.orders | len >= 1 &&
+        res.body.orders[0].id == outputs['create-order'].order_id
 
     - name: "User Journey Report"
       uses: echo
@@ -858,14 +872,14 @@ jobs:
           === USER JOURNEY TEST COMPLETE ===
           
           ✅ User Registration: {{outputs.register.user_email}}
-          ✅ Product Browse: Found {{outputs.browse.available_products | length}} products
+          ✅ Product Browse: Found {{outputs.browse.available_products | len}} products
           ✅ Add to Cart: Product {{outputs.browse.first_product_id}}
           ✅ Update Cart: Quantity changed to 3
-          ✅ Order Creation: Order {{outputs.create-order.order_id}}
-          ✅ Order Verification: Status {{outputs.create-order.order_status}}
+          ✅ Order Creation: Order {{outputs['create-order'].order_id}}
+          ✅ Order Verification: Status {{outputs['create-order'].order_status}}
           ✅ Order History: Retrieved successfully
           
-          Total Order Value: ${{outputs.update-cart.new_cart_total}}
+          Total Order Value: ${{outputs['update-cart'].new_cart_total}}
           Journey Completion Time: {{unixtime() - outputs.register.timestamp}} seconds
 ```
 
@@ -885,13 +899,13 @@ jobs:
       id: api-check
       uses: http
       with:
+        method: GET
         url: "{{vars.API_BASE_URL}}/health"
       test: res.code == 200
       outputs:
         api_available: res.code == 200
 
     - name: "Setup Test Data"
-      if: outputs.api-check.api_available
       uses: echo
       with:
         message: |
@@ -931,7 +945,6 @@ jobs:
 
 - name: "Performance Test Suite"
   needs: [functional-test-suite]
-  if: vars.SKIP_PERFORMANCE_TESTS != "true"
   steps:
     - name: "Run Performance Tests"
       uses: echo
@@ -1049,10 +1062,11 @@ jobs:
       # OpenAPI仕様に対してレスポンスを検証
       uses: http
       with:
+        method: GET
         url: "{{vars.API_BASE_URL}}/api/{{vars.API_VERSION}}/products"
       test: |
         res.code == 200 &&
-        res.body.json.products != null
+        res.body.products != null
 ```
 
 ### セキュリティテスト
@@ -1070,12 +1084,13 @@ jobs:
     - name: "Check Security Headers"
       uses: http
       with:
+        method: GET
         url: "{{vars.API_BASE_URL}}/api/{{vars.API_VERSION}}/products"
       test: |
         res.code == 200 &&
         res.headers["X-Content-Type-Options"] != null &&
         res.headers["X-Frame-Options"] != null &&
-        res.headers["X-XSS-Protection"] != null
+        res.headers["X-Xss-Protection"] != null
 
 - name: "Authentication Security Tests"
   steps:
@@ -1090,7 +1105,7 @@ jobs:
           }
       test: |
         res.code == 400 ||
-        (res.code == 200 && res.body.json.error == null)
+        (res.code == 200 && res.body.error == null)
 ```
 
 ## トラブルシューティング
@@ -1101,9 +1116,9 @@ jobs:
 ```yaml
 # トークンリフレッシュロジックを追加
 - name: "Refresh Token If Needed"
-  if: res.code == 401
   uses: http
   with:
+    method: GET
     url: "{{vars.API_BASE_URL}}/api/{{vars.API_VERSION}}/auth/refresh"
   # ... トークンリフレッシュロジック
 ```
@@ -1113,7 +1128,6 @@ jobs:
 # クリーンアップジョブを追加
 cleanup:
   name: "Test Data Cleanup"
-  if: always()
   steps:
     - name: "Delete Test Products"
       # ... クリーンアップロジック

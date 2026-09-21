@@ -20,19 +20,20 @@ Template expressions use `{{}}` syntax to insert dynamic values into strings.
 ```yaml
 # Simple variable substitution
 - name: Greet User
-  echo: "Hello {{env.USERNAME}}!"
+  echo: "Hello {{vars.USERNAME}}!"
 
 # Accessing nested data
 - name: API Request
-  action: http
+  uses: http
   with:
-    url: "{{env.API_BASE_URL}}/users/{{outputs.auth.user_id}}"
+    method: GET
+    url: "{{vars.API_BASE_URL}}/users/{{outputs.auth.user_id}}"
     headers:
       Authorization: "Bearer {{outputs.auth.access_token}}"
 
 # Complex expressions
 - name: Dynamic Configuration
-  echo: "Environment: {{env.NODE_ENV || 'development'}}, Users: {{outputs.api.user_count || 0}}"
+  echo: "Environment: {{vars.NODE_ENV || 'development'}}, Users: {{outputs.api.user_count || 0}}"
 ```
 
 ### Template Expression Context
@@ -42,9 +43,9 @@ Template expressions have access to several data sources:
 #### Environment Variables (`env`)
 ```yaml
 variables:
-  api_url: "{{env.API_URL}}"                    # Environment variable
-  port: "{{env.PORT || '3000'}}"               # With default value
-  debug_mode: "{{env.DEBUG == 'true'}}"        # Boolean conversion
+  api_url: "{{vars.API_URL}}"                    # Environment variable
+  port: "{{vars.PORT || '3000'}}"               # With default value
+  debug_mode: "{{vars.DEBUG == 'true'}}"        # Boolean conversion
 ```
 
 #### Step Outputs (`outputs`)
@@ -52,39 +53,48 @@ variables:
 steps:
   - name: Get User Info
     id: user-info
-    action: http
+    uses: http
     with:
-      url: "{{env.API_URL}}/user/current"
+      method: GET
+      url: "{{vars.API_URL}}/user/current"
     outputs:
-      user_id: res.json.id
-      user_name: res.json.name
-      user_email: res.json.email
+      user_id: res.body.id
+      user_name: res.body.name
+      user_email: res.body.email
 
   - name: Send Welcome Email
-    action: smtp
+    uses: smtp
     with:
-      to: ["{{outputs.user-info.user_email}}"]
-      subject: "Welcome {{outputs.user-info.user_name}}!"
-      body: "Your user ID is: {{outputs.user-info.user_id}}"
+      addr: "{{vars.smtp_addr}}"
+      from: "probe@example.com"
+      to: "{{outputs['user-info'].user_email}}"
+      subject: "Welcome {{outputs['user-info'].user_name}}!"
+      session: 1
+      message: 1
+      length: 500
+    echo: "Your user ID is: {{outputs['user-info'].user_id}}"
 ```
 
 #### Job Outputs (Cross-job references)
 ```yaml
 jobs:
-  setup:
-    steps:
-      - name: Initialize
-        outputs:
-          session_id: "{{random_str(16)}}"
+- id: setup
+  name: setup
+  steps:
+    - name: Initialize
+      id: setup
+      outputs:
+        session_id: "{{random_str(16)}}"
 
-  main-test:
-    needs: [setup]
-    steps:
-      - name: Use Session
-        action: http
-        with:
-          headers:
-            X-Session-ID: "{{outputs.setup.session_id}}"
+- id: main-test
+  name: main-test
+  needs: [setup]
+  steps:
+    - name: Use Session
+      uses: http
+      with:
+        headers:
+          X-Session-ID: "{{outputs.setup.session_id}}"
 ```
 
 ### Advanced Template Patterns
@@ -93,22 +103,22 @@ jobs:
 ```yaml
 # Ternary operator
 - name: Environment-specific URL
-  echo: "URL: {{env.NODE_ENV == 'production' ? 'https://api.prod.com' : 'https://api.dev.com'}}"
+  echo: "URL: {{vars.NODE_ENV == 'production' ? 'https://api.prod.com' : 'https://api.dev.com'}}"
 
 # Null coalescing
 - name: Default Configuration
-  echo: "Timeout: {{env.TIMEOUT || '30s'}}"
+  echo: "Timeout: {{vars.TIMEOUT || '30s'}}"
 ```
 
 #### String Manipulation
 ```yaml
 # String concatenation
 - name: Build File Path
-  echo: "File: {{env.BASE_PATH}}/{{env.FILE_NAME}}.{{env.FILE_EXT}}"
+  echo: "File: {{vars.BASE_PATH}}/{{vars.FILE_NAME}}.{{vars.FILE_EXT}}"
 
 # String methods (limited support)
 - name: Format Output
-  echo: "User: {{outputs.user.name.upper()}} ({{outputs.user.email.lower()}})"
+  echo: "User: {{upper(outputs.user.name)}} ({{lower(outputs.user.email)}})"
 ```
 
 #### Arithmetic Operations
@@ -135,28 +145,30 @@ jobs:
 
 ## Test Expressions
 
-Test expressions are boolean conditions used in `test` and `if` statements.
+Test expressions are boolean conditions used in `test` and `skipif`.
 
 ### Basic Test Syntax
 
 ```yaml
 # Simple status check
 - name: Health Check
-  action: http
+  uses: http
   with:
-    url: "{{env.API_URL}}/health"
-  test: res.status == 200
+    method: GET
+    url: "{{vars.API_URL}}/health"
+  test: res.code == 200
 
 # Complex conditions
 - name: Comprehensive API Test
-  action: http
+  uses: http
   with:
-    url: "{{env.API_URL}}/api/data"
+    method: GET
+    url: "{{vars.API_URL}}/api/data"
   test: |
-    res.status == 200 &&
-    res.json.success == true &&
-    res.json.data != null &&
-    res.time < 1000
+    res.code == 200 &&
+    res.body.success == true &&
+    res.body.data != null &&
+    (rt.sec * 1000) < 1000
 ```
 
 ### HTTP Response Testing
@@ -165,31 +177,31 @@ The `res` object provides comprehensive response data:
 
 ```yaml
 # Status code testing
-test: res.status == 200
-test: res.status >= 200 && res.status < 300
+test: res.code == 200
+test: res.code >= 200 && res.code < 300
 test: res.status in [200, 201, 202]
 
 # Response time testing
-test: res.time < 1000                           # Less than 1 second
-test: res.time >= 100 && res.time <= 500      # Between 100-500ms
+test: (rt.sec * 1000) < 1000                           # Less than 1 second
+test: (rt.sec * 1000) >= 100 && (rt.sec * 1000) <= 500      # Between 100-500ms
 
 # Response size testing
 test: res.body_size > 0                        # Has content
 test: res.body_size < 1048576                  # Less than 1MB
 
 # Header testing
-test: res.headers["content-type"] == "application/json"
-test: res.headers["x-rate-limit-remaining"] > "10"
+test: res.headers["Content-Type"] == "application/json"
+test: res.headers["X-Rate-Limit-Remaining"] > "10"
 
 # JSON response testing
-test: res.json.status == "success"
-test: res.json.data.users.length > 0
-test: res.json.error == null
+test: res.body.status == "success"
+test: len(res.body.data.users) > 0
+test: res.body.error == null
 
 # Text response testing
-test: res.text.contains("Success")
-test: res.text.startsWith("<!DOCTYPE html>")
-test: res.text.length > 100
+test: res.body contains "Success"
+test: res.body startsWith "<!DOCTYPE html>"
+test: len(res.body) > 100
 ```
 
 ### Advanced Test Conditions
@@ -197,39 +209,39 @@ test: res.text.length > 100
 #### Regular Expressions
 ```yaml
 # Pattern matching in response text
-test: res.text.matches("user-\\d+@example\\.com")
+test: res.body matches "user-\\d+@example\\.com"
 
 # JSON field pattern validation
-test: res.json.user.email.matches("[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}")
+test: res.body.user.email matches "[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}"
 ```
 
 #### Array and Object Testing
 ```yaml
 # Array testing
-test: res.json.users.length == 5
-test: res.json.tags.contains("production")
-test: res.json.permissions.all(p -> p.active == true)
-test: res.json.items.any(item -> item.price > 100)
+test: len(res.body.users) == 5
+test: res.body.tags contains "production"
+test: all(res.body.permissions, #.active == true)
+test: any(res.body.items, #.price > 100)
 
 # Object property testing
-test: res.json.user.has("id") && res.json.user.has("email")
-test: res.json.config.database.host != null
+test: "id" in res.body.user && "email" in res.body.user
+test: res.body.config.database.host != null
 ```
 
 #### Complex Logical Conditions
 ```yaml
 # Multi-condition validation
 test: |
-  (res.status == 200 && res.json.success == true) ||
-  (res.status == 202 && res.json.processing == true)
+  (res.code == 200 && res.body.success == true) ||
+  (res.code == 202 && res.body.processing == true)
 
 # Nested condition validation
 test: |
-  res.status == 200 &&
-  res.json.data != null &&
+  res.code == 200 &&
+  res.body.data != null &&
   (
-    (res.json.data.type == "user" && res.json.data.user.active == true) ||
-    (res.json.data.type == "system" && res.json.data.system.healthy == true)
+    (res.body.data.type == "user" && res.body.data.user.active == true) ||
+    (res.body.data.type == "system" && res.body.data.system.healthy == true)
   )
 ```
 
@@ -245,9 +257,9 @@ Generate random integers:
 ```yaml
 # Generate random user ID
 - name: Create Test User
-  action: http
+  uses: http
   with:
-    url: "{{env.API_URL}}/users"
+    url: "{{vars.API_URL}}/users"
     method: POST
     body: |
       {
@@ -270,7 +282,7 @@ Generate random strings:
 
 # Generate test data
 - name: Create Test Record
-  action: http
+  uses: http
   with:
     body: |
       {
@@ -288,9 +300,9 @@ Get current Unix timestamp:
 ```yaml
 # Add timestamps to requests
 - name: Timestamped Request
-  action: http
+  uses: http
   with:
-    url: "{{env.API_URL}}/events"
+    url: "{{vars.API_URL}}/events"
     method: POST
     body: |
       {
@@ -301,10 +313,11 @@ Get current Unix timestamp:
 
 # Time-based testing
 - name: Check Timestamp
-  action: http
+  uses: http
   with:
-    url: "{{env.API_URL}}/status"
-  test: res.json.server_time >= {{unixtime() - 300}}  # Within last 5 minutes
+    method: GET
+    url: "{{vars.API_URL}}/status"
+  test: res.body.server_time >= {{unixtime() - 300}}  # Within last 5 minutes
 ```
 
 ### Custom Function Usage Patterns
@@ -312,164 +325,193 @@ Get current Unix timestamp:
 #### Unique Test Data Generation
 ```yaml
 jobs:
-  user-lifecycle-test:
-    steps:
-      - name: Create Unique User
-        id: create-user
-        action: http
-        with:
-          url: "{{env.API_URL}}/users"
-          method: POST
-          body: |
-            {
-              "username": "testuser_{{unixtime()}}_{{random_str(6)}}",
-              "email": "test_{{random_str(8)}}@example.com",
-              "password": "{{random_str(16)}}",
-              "user_id": {{random_int(1000000)}}
-            }
-        test: res.status == 201
-        outputs:
-          user_id: res.json.user.id
-          username: res.json.user.username
+- id: user-lifecycle-test
+  name: user-lifecycle-test
+  steps:
+    - name: Create Unique User
+      id: create-user
+      uses: http
+      with:
+        url: "{{vars.API_URL}}/users"
+        method: POST
+        body: |
+          {
+            "username": "testuser_{{unixtime()}}_{{random_str(6)}}",
+            "email": "test_{{random_str(8)}}@example.com",
+            "password": "{{random_str(16)}}",
+            "user_id": {{random_int(1000000)}}
+          }
+      test: res.code == 201
+      outputs:
+        user_id: res.body.user.id
+        username: res.body.user.username
 
-      - name: Verify User Creation
-        action: http
-        with:
-          url: "{{env.API_URL}}/users/{{outputs.create-user.user_id}}"
-        test: |
-          res.status == 200 &&
-          res.json.user.username == "{{outputs.create-user.username}}"
+    - name: Verify User Creation
+      uses: http
+      with:
+        method: GET
+        url: "{{vars.API_URL}}/users/{{outputs['create-user'].user_id}}"
+      test: |
+        res.code == 200 &&
+        res.body.user.username == "{{outputs['create-user'].username}}"
 
-      - name: Clean Up User
-        action: http
-        with:
-          url: "{{env.API_URL}}/users/{{outputs.create-user.user_id}}"
-          method: DELETE
-        test: res.status == 204
+    - name: Clean Up User
+      uses: http
+      with:
+        url: "{{vars.API_URL}}/users/{{outputs['create-user'].user_id}}"
+        method: DELETE
+      test: res.code == 204
 ```
 
 #### Session and Correlation IDs
 ```yaml
 jobs:
-  distributed-trace-test:
-    steps:
-      - name: Initialize Trace
-        id: trace
-        echo: "Starting distributed trace"
-        outputs:
-          trace_id: "trace_{{unixtime()}}_{{random_str(16)}}"
-          correlation_id: "corr_{{random_str(32)}}"
+- id: distributed-trace-test
+  name: distributed-trace-test
+  steps:
+    - name: Initialize Trace
+      uses: hello
+      id: trace
+      echo: "Starting distributed trace"
+      outputs:
+        trace_id: "trace_{{unixtime()}}_{{random_str(16)}}"
+        correlation_id: "corr_{{random_str(32)}}"
 
-      - name: Service A Call
-        action: http
-        with:
-          url: "{{env.SERVICE_A_URL}}/process"
-          headers:
-            X-Trace-ID: "{{outputs.trace.trace_id}}"
-            X-Correlation-ID: "{{outputs.trace.correlation_id}}"
-        test: res.status == 200
+    - name: Service A Call
+      uses: http
+      with:
+        method: GET
+        url: "{{vars.SERVICE_A_URL}}/process"
+        headers:
+          X-Trace-ID: "{{outputs.trace.trace_id}}"
+          X-Correlation-ID: "{{outputs.trace.correlation_id}}"
+      test: res.code == 200
 
-      - name: Service B Call
-        action: http
-        with:
-          url: "{{env.SERVICE_B_URL}}/process"
-          headers:
-            X-Trace-ID: "{{outputs.trace.trace_id}}"
-            X-Correlation-ID: "{{outputs.trace.correlation_id}}"
-        test: res.status == 200
+    - name: Service B Call
+      uses: http
+      with:
+        method: GET
+        url: "{{vars.SERVICE_B_URL}}/process"
+        headers:
+          X-Trace-ID: "{{outputs.trace.trace_id}}"
+          X-Correlation-ID: "{{outputs.trace.correlation_id}}"
+      test: res.code == 200
 
-      - name: Verify Trace Correlation
-        action: http
-        with:
-          url: "{{env.TRACING_URL}}/traces/{{outputs.trace.trace_id}}"
-        test: |
-          res.status == 200 &&
-          res.json.spans.length >= 2 &&
-          res.json.correlation_id == "{{outputs.trace.correlation_id}}"
+    - name: Verify Trace Correlation
+      uses: http
+      with:
+        method: GET
+        url: "{{vars.TRACING_URL}}/traces/{{outputs.trace.trace_id}}"
+      test: |
+        res.code == 200 &&
+        len(res.body.spans) >= 2 &&
+        res.body.correlation_id == "{{outputs.trace.correlation_id}}"
 ```
 
 ## Conditional Logic Patterns
 
 ### Step-level Conditions
 
+A step is skipped when `skipif` is true. Publish what the decision depends on as an output of an earlier step.
+
 ```yaml
 steps:
   - name: Check Primary Service
     id: primary
-    action: http
+    uses: http
     with:
-      url: "{{env.PRIMARY_URL}}/health"
-    test: res.status == 200
-    continue_on_error: true
+      method: GET
+      url: "{{vars.primary_url}}/health"
     outputs:
-      primary_healthy: res.status == 200
+      primary_healthy: res.code == 200
 
   - name: Check Secondary Service
-    if: "!outputs.primary.primary_healthy"
     id: secondary
-    action: http
+    uses: http
+    skipif: outputs.primary.primary_healthy
     with:
-      url: "{{env.SECONDARY_URL}}/health"
-    test: res.status == 200
+      method: GET
+      url: "{{vars.secondary_url}}/health"
     outputs:
-      secondary_healthy: res.status == 200
+      secondary_healthy: res.code == 200
 
   - name: Success Path
-    if: outputs.primary.primary_healthy || outputs.secondary.secondary_healthy
+    uses: hello
+    skipif: "!(outputs.primary_healthy || (outputs.secondary_healthy ?? false))"
     echo: "At least one service is healthy"
 
   - name: Failure Path
-    if: "!outputs.primary.primary_healthy && (!outputs.secondary || !outputs.secondary.secondary_healthy)"
+    uses: hello
+    skipif: outputs.primary_healthy || (outputs.secondary_healthy ?? false)
     echo: "All services are down!"
 ```
 
 ### Job-level Conditions
 
+A job's `skipif` reads `vars` and the outputs of the jobs it depends on.
+
 ```yaml
 jobs:
-  health-check:
-    steps:
-      - name: Basic Health Check
-        outputs:
-          healthy: res.status == 200
+- id: health-check
+  name: Health Check
+  steps:
+    - name: Basic Health Check
+      id: health
+      uses: http
+      with:
+        method: GET
+        url: "{{vars.api_url}}/health"
+      outputs:
+        healthy: res.code == 200
 
-  detailed-analysis:
-    if: jobs.health-check.failed
-    steps:
-      - name: Deep Diagnostic
-        action: http
-        with:
-          url: "{{env.API_URL}}/diagnostics"
+- name: Detailed Analysis
+  needs: [health-check]
+  skipif: outputs.health.healthy
+  steps:
+    - name: Deep Diagnostic
+      uses: http
+      with:
+        method: GET
+        url: "{{vars.api_url}}/diagnostics"
+      test: res.code == 200
 
-  performance-test:
-    if: jobs.health-check.success
-    steps:
-      - name: Load Test
-        action: http
-        with:
-          url: "{{env.API_URL}}/load-test"
+- name: Performance Test
+  needs: [health-check]
+  skipif: "!outputs.health.healthy"
+  steps:
+    - name: Load Test
+      uses: http
+      with:
+        method: GET
+        url: "{{vars.api_url}}/load-test"
+      test: res.code == 200
 ```
+
 
 ### Environment-based Conditions
 
 ```yaml
 steps:
   - name: Development Setup
-    if: env.NODE_ENV == "development"
+    uses: hello
+    skipif: vars.node_env != "development"
     echo: "Running in development mode"
 
   - name: Production Validation
-    if: env.NODE_ENV == "production"
-    action: http
+    uses: http
+    skipif: vars.node_env != "production"
     with:
-      url: "{{env.API_URL}}/production-check"
-    test: res.status == 200
+      method: GET
+      url: "{{vars.api_url}}/production-check"
+    test: res.code == 200
 
   - name: Feature Flag Check
-    if: env.FEATURE_FLAGS.contains("new-api")
-    action: http
+    uses: http
+    skipif: "!(vars.feature_flags contains \"new-api\")"
     with:
-      url: "{{env.API_URL}}/v2/endpoint"
+      method: GET
+      url: "{{vars.api_url}}/v2/endpoint"
+    test: res.code == 200
 ```
 
 ## Security Considerations
@@ -488,18 +530,18 @@ Probe implements several security measures:
 ```yaml
 # Good: Safe environment variable access
 - name: Safe Config
-  echo: "API URL: {{env.API_URL}}"
+  echo: "API URL: {{vars.API_URL}}"
 
 # Good: Bounded data access
 - name: Safe Data Access
-  test: res.json.users.length <= 1000
+  test: len(res.body.users) <= 1000
 
 # Avoid: Unbounded operations
-# test: res.json.data.some_huge_array.all(item -> expensive_operation(item))
+# test: all(res.body.data.some_huge_array, expensive_operation(#))
 
 # Good: Simple conditions
 - name: Simple Validation
-  test: res.status == 200 && res.json.success == true
+  test: res.code == 200 && res.body.success == true
 
 # Avoid: Complex nested expressions
 # test: deeply.nested.complex.expression.with.many.operations()
@@ -510,24 +552,24 @@ Probe implements several security measures:
 ```yaml
 # Good: Use environment variables for secrets
 - name: Authenticated Request
-  action: http
+  uses: http
   with:
     headers:
-      Authorization: "Bearer {{env.API_TOKEN}}"
+      Authorization: "Bearer {{vars.API_TOKEN}}"
 
 # Good: Avoid logging sensitive data
 - name: Login Test
-  action: http
+  uses: http
   with:
     body: |
       {
-        "username": "{{env.TEST_USERNAME}}",
-        "password": "{{env.TEST_PASSWORD}}"
+        "username": "{{vars.TEST_USERNAME}}",
+        "password": "{{vars.TEST_PASSWORD}}"
       }
   # Don't output sensitive response data
   outputs:
-    login_successful: res.status == 200
-    # NOT: auth_token: res.json.token (would expose in logs)
+    login_successful: res.code == 200
+    # NOT: auth_token: res.body.token (would expose in logs)
 ```
 
 ## Performance Optimization
@@ -536,18 +578,18 @@ Probe implements several security measures:
 
 ```yaml
 # Good: Simple, direct expressions
-test: res.status == 200
+test: res.code == 200
 
 # Good: Early termination with &&
-test: res.status == 200 && res.json.success == true
+test: res.code == 200 && res.body.success == true
 
 # Avoid: Complex computations in expressions
-# test: expensive_calculation(res.json.large_dataset) == expected_value
+# test: expensive_calculation(res.body.large_dataset) == expected_value
 
 # Good: Pre-compute complex values
 outputs:
-  user_count: res.json.users.length
-  active_users: res.json.users.filter(u -> u.active == true).length
+  user_count: len(res.body.users)
+  active_users: len(filter(res.body.users, #.active == true))
 ```
 
 ### Template Optimization
@@ -557,10 +599,10 @@ outputs:
 echo: "User {{outputs.user.name}} logged in"
 
 # Good: Minimal string operations
-url: "{{env.BASE_URL}}/users/{{outputs.user.id}}"
+url: "{{vars.BASE_URL}}/users/{{outputs.user.id}}"
 
 # Avoid: Complex template expressions
-# echo: "{{complex_calculation(outputs.data) + another_operation(env.CONFIG)}}"
+# echo: "{{complex_calculation(outputs.data) + another_operation(vars.CONFIG)}}"
 ```
 
 ## Debugging Expressions
@@ -592,21 +634,21 @@ probe -v workflow.yml
   echo: |
     Debug Information:
     Status: {{res.status}}
-    Response Time: {{res.time}}
-    JSON Success: {{res.json.success}}
+    Response Time: {{rt.duration}}
+    JSON Success: {{res.body.success}}
     Headers: {{res.headers}}
 ```
 
 #### Null Value Handling
 ```yaml
 # Good: Handle potential null values
-test: res.json.user != null && res.json.user.active == true
+test: res.body.user != null && res.body.user.active == true
 
 # Good: Use default values
 echo: "User count: {{outputs.api.user_count || 0}}"
 
 # Good: Check existence before access
-test: res.json.has("data") && res.json.data.has("users")
+test: "data" in res.body && "users" in res.body.data
 ```
 
 ## Best Practices
@@ -614,34 +656,34 @@ test: res.json.has("data") && res.json.data.has("users")
 ### 1. Keep Expressions Simple
 ```yaml
 # Good: Simple, readable expressions
-test: res.status == 200 && res.time < 1000
+test: res.code == 200 && (rt.sec * 1000) < 1000
 
 # Avoid: Overly complex expressions
-# test: (res.status >= 200 && res.status < 300) && (res.time < (env.MAX_TIME || 1000)) && (res.json.data.items.filter(i -> i.active && i.validated).length > 0)
+# test: (res.code >= 200 && res.code < 300) && ((rt.sec * 1000) < (vars.MAX_TIME || 1000)) && (len(filter(res.body.data.items, #.active && #.validated)) > 0)
 ```
 
 ### 2. Use Meaningful Variable Names
 ```yaml
 # Good: Descriptive output names
 outputs:
-  user_id: res.json.user.id
-  auth_token: res.json.access_token
-  expires_at: res.json.expires_in
+  user_id: res.body.user.id
+  auth_token: res.body.access_token
+  expires_at: res.body.expires_in
 
 # Avoid: Generic names
 outputs:
-  data1: res.json.user.id
-  value: res.json.access_token
+  data1: res.body.user.id
+  value: res.body.access_token
 ```
 
 ### 3. Handle Edge Cases
 ```yaml
 # Good: Defensive programming
 test: |
-  res.status == 200 &&
-  res.json != null &&
-  res.json.users != null &&
-  res.json.users.length > 0
+  res.code == 200 &&
+  res.body != null &&
+  res.body.users != null &&
+  len(res.body.users) > 0
 
 # Good: Provide defaults
 echo: "Processing {{outputs.api.item_count || 0}} items"
@@ -650,21 +692,22 @@ echo: "Processing {{outputs.api.item_count || 0}} items"
 ### 4. Document Complex Expressions
 ```yaml
 - name: Complex Business Logic Validation
-  action: http
+  uses: http
   with:
-    url: "{{env.API_URL}}/business-data"
+    method: GET
+    url: "{{vars.API_URL}}/business-data"
   # Test validates that:
   # 1. Response is successful (200)
   # 2. Processing time is acceptable (< 2s)
   # 3. Data integrity is maintained (required fields present)
   # 4. Business rules are satisfied (active users > 0, revenue > threshold)
   test: |
-    res.status == 200 &&
-    res.time < 2000 &&
-    res.json.users != null &&
-    res.json.revenue != null &&
-    res.json.users.filter(u -> u.active == true).length > 0 &&
-    res.json.revenue > 1000
+    res.code == 200 &&
+    (rt.sec * 1000) < 2000 &&
+    res.body.users != null &&
+    res.body.revenue != null &&
+    len(filter(res.body.users, #.active == true)) > 0 &&
+    res.body.revenue > 1000
 ```
 
 ## What's Next?

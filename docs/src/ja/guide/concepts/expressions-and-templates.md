@@ -26,6 +26,7 @@ Probe は2つのタイプの式を使用します：
 - name: API Request
   uses: http
   with:
+    method: GET
     url: "{{vars.API_BASE_URL}}/users/{{outputs.auth.user_id}}"
     headers:
       Authorization: "Bearer {{outputs.auth.access_token}}"
@@ -54,37 +55,46 @@ steps:
     id: user-info
     uses: http
     with:
+      method: GET
       url: "{{vars.API_URL}}/user/current"
     outputs:
-      user_id: res.body.json.id
-      user_name: res.body.json.name
-      user_email: res.body.json.email
+      user_id: res.body.id
+      user_name: res.body.name
+      user_email: res.body.email
 
   - name: Send Welcome Email
-    action: smtp
+    uses: smtp
     with:
-      to: ["{{outputs.user-info.user_email}}"]
-      subject: "Welcome {{outputs.user-info.user_name}}!"
-      body: "Your user ID is: {{outputs.user-info.user_id}}"
+      addr: "{{vars.smtp_addr}}"
+      from: "probe@example.com"
+      to: "{{outputs['user-info'].user_email}}"
+      subject: "Welcome {{outputs['user-info'].user_name}}!"
+      session: 1
+      message: 1
+      length: 500
+    echo: "Your user ID is: {{outputs['user-info'].user_id}}"
 ```
 
 #### ジョブ出力 (ジョブ間参照)
 ```yaml
 jobs:
-  setup:
-    steps:
-      - name: Initialize
-        outputs:
-          session_id: "{{random_str(16)}}"
+- id: setup
+  name: setup
+  steps:
+    - name: Initialize
+      id: setup
+      outputs:
+        session_id: "{{random_str(16)}}"
 
-  main-test:
-    needs: [setup]
-    steps:
-      - name: Use Session
-        uses: http
-        with:
-          headers:
-            X-Session-ID: "{{outputs.setup.session_id}}"
+- id: main-test
+  name: main-test
+  needs: [setup]
+  steps:
+    - name: Use Session
+      uses: http
+      with:
+        headers:
+          X-Session-ID: "{{outputs.setup.session_id}}"
 ```
 
 ### 高度なテンプレートパターン
@@ -108,7 +118,7 @@ jobs:
 
 # 文字列メソッド（限定サポート）
 - name: Format Output
-  echo: "User: {{outputs.user.name.upper()}} ({{outputs.user.email.lower()}})"
+  echo: "User: {{upper(outputs.user.name)}} ({{lower(outputs.user.email)}})"
 ```
 
 #### 算術演算
@@ -135,7 +145,7 @@ jobs:
 
 ## テスト式
 
-テスト式は `test` と `if` ステートメントで使用されるブール条件です。
+テスト式は `test` と `skipif` で使うブール式です。
 
 ### 基本テスト構文
 
@@ -144,6 +154,7 @@ jobs:
 - name: Health Check
   uses: http
   with:
+    method: GET
     url: "{{vars.API_URL}}/health"
   test: res.code == 200
 
@@ -151,12 +162,13 @@ jobs:
 - name: Comprehensive API Test
   uses: http
   with:
+    method: GET
     url: "{{vars.API_URL}}/api/data"
   test: |
     res.code == 200 &&
-    res.body.json.success == true &&
-    res.body.json.data != null &&
-    res.time < 1000
+    res.body.success == true &&
+    res.body.data != null &&
+    (rt.sec * 1000) < 1000
 ```
 
 ### HTTP レスポンステスト
@@ -170,26 +182,26 @@ test: res.code >= 200 && res.code < 300
 test: res.code in [200, 201, 202]
 
 # レスポンス時間テスト
-test: res.time < 1000                           # 1秒未満
-test: res.time >= 100 && res.time <= 500      # 100-500ms の間
+test: (rt.sec * 1000) < 1000                           # 1秒未満
+test: (rt.sec * 1000) >= 100 && (rt.sec * 1000) <= 500      # 100-500ms の間
 
 # レスポンスサイズテスト
 test: res.body_size > 0                        # コンテンツあり
 test: res.body_size < 1048576                  # 1MB 未満
 
 # ヘッダーテスト
-test: res.headers["content-type"] == "application/json"
-test: res.headers["x-rate-limit-remaining"] > "10"
+test: res.headers["Content-Type"] == "application/json"
+test: res.headers["X-Rate-Limit-Remaining"] > "10"
 
 # JSON レスポンステスト
-test: res.body.json.status == "success"
-test: res.body.json.data.users.length > 0
-test: res.body.json.error == null
+test: res.body.status == "success"
+test: len(res.body.data.users) > 0
+test: res.body.error == null
 
 # テキストレスポンステスト
-test: res.text.contains("Success")
-test: res.text.startsWith("<!DOCTYPE html>")
-test: res.text.length > 100
+test: res.body contains "Success"
+test: res.body startsWith "<!DOCTYPE html>"
+test: len(res.body) > 100
 ```
 
 ### 高度なテスト条件
@@ -197,39 +209,39 @@ test: res.text.length > 100
 #### 正規表現
 ```yaml
 # レスポンステキストのパターンマッチング
-test: res.text.matches("user-\\d+@example\\.com")
+test: res.body matches "user-\\d+@example\\.com"
 
 # JSON フィールドパターン検証
-test: res.body.json.user.email.matches("[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}")
+test: res.body.user.email matches "[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}"
 ```
 
 #### 配列とオブジェクトのテスト
 ```yaml
 # 配列テスト
-test: res.body.json.users.length == 5
-test: res.body.json.tags.contains("production")
-test: res.body.json.permissions.all(p -> p.active == true)
-test: res.body.json.items.any(item -> item.price > 100)
+test: len(res.body.users) == 5
+test: res.body.tags contains "production"
+test: all(res.body.permissions, #.active == true)
+test: any(res.body.items, #.price > 100)
 
 # オブジェクトプロパティテスト
-test: res.body.json.user.has("id") && res.body.json.user.has("email")
-test: res.body.json.config.database.host != null
+test: "id" in res.body.user && "email" in res.body.user
+test: res.body.config.database.host != null
 ```
 
 #### 複雑な論理条件
 ```yaml
 # 複数条件検証
 test: |
-  (res.code == 200 && res.body.json.success == true) ||
-  (res.code == 202 && res.body.json.processing == true)
+  (res.code == 200 && res.body.success == true) ||
+  (res.code == 202 && res.body.processing == true)
 
 # ネストした条件検証
 test: |
   res.code == 200 &&
-  res.body.json.data != null &&
+  res.body.data != null &&
   (
-    (res.body.json.data.type == "user" && res.body.json.data.user.active == true) ||
-    (res.body.json.data.type == "system" && res.body.json.data.system.healthy == true)
+    (res.body.data.type == "user" && res.body.data.user.active == true) ||
+    (res.body.data.type == "system" && res.body.data.system.healthy == true)
   )
 ```
 
@@ -303,8 +315,9 @@ Probe は一般的な操作のためのいくつかの組み込み関数を提�
 - name: Check Timestamp
   uses: http
   with:
+    method: GET
     url: "{{vars.API_URL}}/status"
-  test: res.body.json.server_time >= {{unixtime() - 300}}  # 過去5分以内
+  test: res.body.server_time >= {{unixtime() - 300}}  # 過去5分以内
 ```
 
 ### カスタム関数使用パターン
@@ -312,85 +325,94 @@ Probe は一般的な操作のためのいくつかの組み込み関数を提�
 #### ユニークテストデータ生成
 ```yaml
 jobs:
-  user-lifecycle-test:
-    steps:
-      - name: Create Unique User
-        id: create-user
-        uses: http
-        with:
-          url: "{{vars.API_URL}}/users"
-          method: POST
-          body: |
-            {
-              "username": "testuser_{{unixtime()}}_{{random_str(6)}}",
-              "email": "test_{{random_str(8)}}@example.com",
-              "password": "{{random_str(16)}}",
-              "user_id": {{random_int(1000000)}}
-            }
-        test: res.code == 201
-        outputs:
-          user_id: res.body.json.user.id
-          username: res.body.json.user.username
+- id: user-lifecycle-test
+  name: user-lifecycle-test
+  steps:
+    - name: Create Unique User
+      id: create-user
+      uses: http
+      with:
+        url: "{{vars.API_URL}}/users"
+        method: POST
+        body: |
+          {
+            "username": "testuser_{{unixtime()}}_{{random_str(6)}}",
+            "email": "test_{{random_str(8)}}@example.com",
+            "password": "{{random_str(16)}}",
+            "user_id": {{random_int(1000000)}}
+          }
+      test: res.code == 201
+      outputs:
+        user_id: res.body.user.id
+        username: res.body.user.username
 
-      - name: Verify User Creation
-        uses: http
-        with:
-          url: "{{vars.API_URL}}/users/{{outputs.create-user.user_id}}"
-        test: |
-          res.code == 200 &&
-          res.body.json.user.username == "{{outputs.create-user.username}}"
+    - name: Verify User Creation
+      uses: http
+      with:
+        method: GET
+        url: "{{vars.API_URL}}/users/{{outputs['create-user'].user_id}}"
+      test: |
+        res.code == 200 &&
+        res.body.user.username == "{{outputs['create-user'].username}}"
 
-      - name: Clean Up User
-        uses: http
-        with:
-          url: "{{vars.API_URL}}/users/{{outputs.create-user.user_id}}"
-          method: DELETE
-        test: res.code == 204
+    - name: Clean Up User
+      uses: http
+      with:
+        url: "{{vars.API_URL}}/users/{{outputs['create-user'].user_id}}"
+        method: DELETE
+      test: res.code == 204
 ```
 
 #### セッションと関連ID
 ```yaml
 jobs:
-  distributed-trace-test:
-    steps:
-      - name: Initialize Trace
-        id: trace
-        echo: "Starting distributed trace"
-        outputs:
-          trace_id: "trace_{{unixtime()}}_{{random_str(16)}}"
-          correlation_id: "corr_{{random_str(32)}}"
+- id: distributed-trace-test
+  name: distributed-trace-test
+  steps:
+    - name: Initialize Trace
+      uses: hello
+      id: trace
+      echo: "Starting distributed trace"
+      outputs:
+        trace_id: "trace_{{unixtime()}}_{{random_str(16)}}"
+        correlation_id: "corr_{{random_str(32)}}"
 
-      - name: Service A Call
-        uses: http
-        with:
-          url: "{{vars.SERVICE_A_URL}}/process"
-          headers:
-            X-Trace-ID: "{{outputs.trace.trace_id}}"
-            X-Correlation-ID: "{{outputs.trace.correlation_id}}"
-        test: res.code == 200
+    - name: Service A Call
+      uses: http
+      with:
+        method: GET
+        url: "{{vars.SERVICE_A_URL}}/process"
+        headers:
+          X-Trace-ID: "{{outputs.trace.trace_id}}"
+          X-Correlation-ID: "{{outputs.trace.correlation_id}}"
+      test: res.code == 200
 
-      - name: Service B Call
-        uses: http
-        with:
-          url: "{{vars.SERVICE_B_URL}}/process"
-          headers:
-            X-Trace-ID: "{{outputs.trace.trace_id}}"
-            X-Correlation-ID: "{{outputs.trace.correlation_id}}"
-        test: res.code == 200
+    - name: Service B Call
+      uses: http
+      with:
+        method: GET
+        url: "{{vars.SERVICE_B_URL}}/process"
+        headers:
+          X-Trace-ID: "{{outputs.trace.trace_id}}"
+          X-Correlation-ID: "{{outputs.trace.correlation_id}}"
+      test: res.code == 200
 
-      - name: Verify Trace Correlation
-        uses: http
-        with:
-          url: "{{vars.TRACING_URL}}/traces/{{outputs.trace.trace_id}}"
-        test: |
-          res.code == 200 &&
-          res.body.json.spans.length >= 2 &&
-          res.body.json.correlation_id == "{{outputs.trace.correlation_id}}"
+    - name: Verify Trace Correlation
+      uses: http
+      with:
+        method: GET
+        url: "{{vars.TRACING_URL}}/traces/{{outputs.trace.trace_id}}"
+      test: |
+        res.code == 200 &&
+        len(res.body.spans) >= 2 &&
+        res.body.correlation_id == "{{outputs.trace.correlation_id}}"
 ```
 
 ## 条件付きロジックパターン
 
 ### ステップレベル条件
+
+ステップは `skipif` が真のときスキップされます。判断材料は先行ステップの outputs として公開しておきます。
 
 ```yaml
 steps:
@@ -398,78 +420,98 @@ steps:
     id: primary
     uses: http
     with:
-      url: "{{vars.PRIMARY_URL}}/health"
-    test: res.code == 200
-    continue_on_error: true
+      method: GET
+      url: "{{vars.primary_url}}/health"
     outputs:
       primary_healthy: res.code == 200
 
   - name: Check Secondary Service
-    if: "!outputs.primary.primary_healthy"
     id: secondary
     uses: http
+    skipif: outputs.primary.primary_healthy
     with:
-      url: "{{vars.SECONDARY_URL}}/health"
-    test: res.code == 200
+      method: GET
+      url: "{{vars.secondary_url}}/health"
     outputs:
       secondary_healthy: res.code == 200
 
   - name: Success Path
-    if: outputs.primary.primary_healthy || outputs.secondary.secondary_healthy
+    uses: hello
+    skipif: "!(outputs.primary_healthy || (outputs.secondary_healthy ?? false))"
     echo: "At least one service is healthy"
 
   - name: Failure Path
-    if: "!outputs.primary.primary_healthy && (!outputs.secondary || !outputs.secondary.secondary_healthy)"
+    uses: hello
+    skipif: outputs.primary_healthy || (outputs.secondary_healthy ?? false)
     echo: "All services are down!"
 ```
 
 ### ジョブレベル条件
 
+ジョブの `skipif` からは `vars` と、依存しているジョブの outputs を参照できます。
+
 ```yaml
 jobs:
-  health-check:
-    steps:
-      - name: Basic Health Check
-        outputs:
-          healthy: res.code == 200
+- id: health-check
+  name: Health Check
+  steps:
+    - name: Basic Health Check
+      id: health
+      uses: http
+      with:
+        method: GET
+        url: "{{vars.api_url}}/health"
+      outputs:
+        healthy: res.code == 200
 
-  detailed-analysis:
-    if: jobs.health-check.failed
-    steps:
-      - name: Deep Diagnostic
-        uses: http
-        with:
-          url: "{{vars.API_URL}}/diagnostics"
+- name: Detailed Analysis
+  needs: [health-check]
+  skipif: outputs.health.healthy
+  steps:
+    - name: Deep Diagnostic
+      uses: http
+      with:
+        method: GET
+        url: "{{vars.api_url}}/diagnostics"
+      test: res.code == 200
 
-  performance-test:
-    if: jobs.health-check.success
-    steps:
-      - name: Load Test
-        uses: http
-        with:
-          url: "{{vars.API_URL}}/load-test"
+- name: Performance Test
+  needs: [health-check]
+  skipif: "!outputs.health.healthy"
+  steps:
+    - name: Load Test
+      uses: http
+      with:
+        method: GET
+        url: "{{vars.api_url}}/load-test"
+      test: res.code == 200
 ```
+
 
 ### 環境ベースの条件
 
 ```yaml
 steps:
   - name: Development Setup
-    if: vars.NODE_ENV == "development"
+    uses: hello
+    skipif: vars.node_env != "development"
     echo: "Running in development mode"
 
   - name: Production Validation
-    if: vars.NODE_ENV == "production"
     uses: http
+    skipif: vars.node_env != "production"
     with:
-      url: "{{vars.API_URL}}/production-check"
+      method: GET
+      url: "{{vars.api_url}}/production-check"
     test: res.code == 200
 
   - name: Feature Flag Check
-    if: vars.FEATURE_FLAGS.contains("new-api")
     uses: http
+    skipif: "!(vars.feature_flags contains \"new-api\")"
     with:
-      url: "{{vars.API_URL}}/v2/endpoint"
+      method: GET
+      url: "{{vars.api_url}}/v2/endpoint"
+    test: res.code == 200
 ```
 
 ## セキュリティ考慮事項
@@ -492,14 +534,14 @@ Probe はいくつかのセキュリティ対策を実装しています：
 
 # 良い例: 制限されたデータアクセス
 - name: Safe Data Access
-  test: res.body.json.users.length <= 1000
+  test: len(res.body.users) <= 1000
 
 # 避ける: 無制限の操作
-# test: res.body.json.data.some_huge_array.all(item -> expensive_operation(item))
+# test: all(res.body.data.some_huge_array, expensive_operation(#))
 
 # 良い例: シンプルな条件
 - name: Simple Validation
-  test: res.code == 200 && res.body.json.success == true
+  test: res.code == 200 && res.body.success == true
 
 # 避ける: 複雑なネスト式
 # test: deeply.nested.complex.expression.with.many.operations()
@@ -527,7 +569,7 @@ Probe はいくつかのセキュリティ対策を実装しています：
   # 機密レスポンスデータを出力しない
   outputs:
     login_successful: res.code == 200
-    # NG: auth_token: res.body.json.token (ログに露出する)
+    # NG: auth_token: res.body.token (ログに露出する)
 ```
 
 ## パフォーマンス最適化
@@ -539,15 +581,15 @@ Probe はいくつかのセキュリティ対策を実装しています：
 test: res.code == 200
 
 # 良い例: && による早期終了
-test: res.code == 200 && res.body.json.success == true
+test: res.code == 200 && res.body.success == true
 
 # 避ける: 式での複雑な計算
-# test: expensive_calculation(res.body.json.large_dataset) == expected_value
+# test: expensive_calculation(res.body.large_dataset) == expected_value
 
 # 良い例: 複雑な値を事前計算
 outputs:
-  user_count: res.body.json.users.length
-  active_users: res.body.json.users.filter(u -> u.active == true).length
+  user_count: len(res.body.users)
+  active_users: len(filter(res.body.users, #.active == true))
 ```
 
 ### テンプレート最適化
@@ -592,21 +634,21 @@ probe -v workflow.yml
   echo: |
     Debug Information:
     Status: {{res.code}}
-    Response Time: {{res.time}}
-    JSON Success: {{res.body.json.success}}
+    Response Time: {{rt.duration}}
+    JSON Success: {{res.body.success}}
     Headers: {{res.headers}}
 ```
 
 #### Null 値の処理
 ```yaml
 # 良い例: 潜在的な null 値を処理
-test: res.body.json.user != null && res.body.json.user.active == true
+test: res.body.user != null && res.body.user.active == true
 
 # 良い例: デフォルト値を使用
 echo: "User count: {{outputs.api.user_count || 0}}"
 
 # 良い例: アクセス前に存在をチェック
-test: res.body.json.has("data") && res.body.json.data.has("users")
+test: "data" in res.body && "users" in res.body.data
 ```
 
 ## ベストプラクティス
@@ -614,24 +656,24 @@ test: res.body.json.has("data") && res.body.json.data.has("users")
 ### 1. 式をシンプルに保つ
 ```yaml
 # 良い例: シンプルで読みやすい式
-test: res.code == 200 && res.time < 1000
+test: res.code == 200 && (rt.sec * 1000) < 1000
 
 # 避ける: 過度に複雑な式
-# test: (res.code >= 200 && res.code < 300) && (res.time < (vars.MAX_TIME || 1000)) && (res.body.json.data.items.filter(i -> i.active && i.validated).length > 0)
+# test: (res.code >= 200 && res.code < 300) && ((rt.sec * 1000) < (vars.MAX_TIME || 1000)) && (len(filter(res.body.data.items, #.active && #.validated)) > 0)
 ```
 
 ### 2. 意味のある変数名を使用
 ```yaml
 # 良い例: 説明的な出力名
 outputs:
-  user_id: res.body.json.user.id
-  auth_token: res.body.json.access_token
-  expires_at: res.body.json.expires_in
+  user_id: res.body.user.id
+  auth_token: res.body.access_token
+  expires_at: res.body.expires_in
 
 # 避ける: 汎用的な名前
 outputs:
-  data1: res.body.json.user.id
-  value: res.body.json.access_token
+  data1: res.body.user.id
+  value: res.body.access_token
 ```
 
 ### 3. エッジケースを処理
@@ -639,9 +681,9 @@ outputs:
 # 良い例: 防御的プログラミング
 test: |
   res.code == 200 &&
-  res.body.json != null &&
-  res.body.json.users != null &&
-  res.body.json.users.length > 0
+  res.body != null &&
+  res.body.users != null &&
+  len(res.body.users) > 0
 
 # 良い例: デフォルト値を提供
 echo: "Processing {{outputs.api.item_count || 0}} items"
@@ -652,6 +694,7 @@ echo: "Processing {{outputs.api.item_count || 0}} items"
 - name: Complex Business Logic Validation
   uses: http
   with:
+    method: GET
     url: "{{vars.API_URL}}/business-data"
   # テストは以下を検証:
   # 1. レスポンスが成功 (200)
@@ -660,11 +703,11 @@ echo: "Processing {{outputs.api.item_count || 0}} items"
   # 4. ビジネスルールが満たされる (アクティブユーザー > 0、売上 > 閾値)
   test: |
     res.code == 200 &&
-    res.time < 2000 &&
-    res.body.json.users != null &&
-    res.body.json.revenue != null &&
-    res.body.json.users.filter(u -> u.active == true).length > 0 &&
-    res.body.json.revenue > 1000
+    (rt.sec * 1000) < 2000 &&
+    res.body.users != null &&
+    res.body.revenue != null &&
+    len(filter(res.body.users, #.active == true)) > 0 &&
+    res.body.revenue > 1000
 ```
 
 ## 次のステップ

@@ -9,16 +9,12 @@ Every Probe workflow consists of several key components:
 ```yaml
 name: Workflow Name                    # Required: Human-readable name
 description: What this workflow does   # Optional: Detailed description
-env:                                   # Optional: Environment variables
+vars:                                   # Optional: Environment variables
   API_BASE_URL: https://api.example.com
-defaults:                             # Optional: Default settings
-  http:
-    timeout: 30s
-    headers:
-      User-Agent: "Probe Monitor"
 jobs:                                 # Required: One or more jobs
-  job-name:
-    # Job definition...
+- id: job-name
+  name: job-name
+  # Job definition...
 ```
 
 ### Required Components
@@ -55,24 +51,29 @@ description: |
 **Environment Variables**: Define environment-specific or sensitive configuration.
 
 ```yaml
-env:
+vars:
   API_BASE_URL: https://api.production.example.com
   TIMEOUT_SECONDS: 30
   MAX_RETRY_COUNT: 3
 ```
 
-**Defaults**: Set common configuration that applies to all jobs and steps.
+**Defaults**: Set common `with` values for the steps of a job, keyed by action name. `defaults` belongs to a job, not to the workflow.
 
 ```yaml
-defaults:
-  http:
-    timeout: 30s
-    headers:
-      Accept: "application/json"
-      User-Agent: "Probe Health Monitor v1.0"
-  retry:
-    count: 3
-    delay: 5s
+jobs:
+- name: Health Check
+  defaults:
+    http:
+      url: "{{vars.api_url}}"
+      headers:
+        Accept: "application/json"
+        User-Agent: "Probe Health Monitor v1.0"
+  steps:
+    - name: Ping
+      uses: http
+      with:
+        get: /health
+      test: res.code == 200
 ```
 
 ## Workflow Design Patterns
@@ -86,32 +87,33 @@ name: Database Migration
 description: Execute database schema changes in order
 
 jobs:
-  migration:
-    name: Run Migration Steps
-    steps:
-      - name: Backup Current Schema
-        action: http
-        with:
-          url: "{{env.DB_API}}/backup"
-          method: POST
-        test: res.status == 200
+- id: migration
+  name: Run Migration Steps
+  steps:
+    - name: Backup Current Schema
+      uses: http
+      with:
+        url: "{{vars.DB_API}}/backup"
+        method: POST
+      test: res.code == 200
 
-      - name: Apply Schema Changes
-        action: http
-        with:
-          url: "{{env.DB_API}}/migrate"
-          method: POST
-        test: res.status == 200
+    - name: Apply Schema Changes
+      uses: http
+      with:
+        url: "{{vars.DB_API}}/migrate"
+        method: POST
+      test: res.code == 200
 
-      - name: Verify Migration
-        action: http
-        with:
-          url: "{{env.DB_API}}/schema/version"
-          method: GET
-        test: res.json.version == "2.1.0"
+    - name: Verify Migration
+      uses: http
+      with:
+        url: "{{vars.DB_API}}/schema/version"
+        method: GET
+      test: res.body.version == "2.1.0"
 
-      - name: Update Documentation
-        echo: "Migration to v2.1.0 completed successfully"
+    - name: Update Documentation
+      uses: hello
+      echo: "Migration to v2.1.0 completed successfully"
 ```
 
 **Use cases:**
@@ -128,32 +130,35 @@ name: Multi-Service Health Check
 description: Check health of all microservices in parallel
 
 jobs:
-  user-service:
-    name: User Service Health
-    steps:
-      - name: Check User API
-        action: http
-        with:
-          url: "{{env.USER_SERVICE_URL}}/health"
-        test: res.status == 200
+- id: user-service
+  name: User Service Health
+  steps:
+    - name: Check User API
+      uses: http
+      with:
+        method: GET
+        url: "{{vars.USER_SERVICE_URL}}/health"
+      test: res.code == 200
 
-  payment-service:
-    name: Payment Service Health
-    steps:
-      - name: Check Payment API
-        action: http
-        with:
-          url: "{{env.PAYMENT_SERVICE_URL}}/health"
-        test: res.status == 200
+- id: payment-service
+  name: Payment Service Health
+  steps:
+    - name: Check Payment API
+      uses: http
+      with:
+        method: GET
+        url: "{{vars.PAYMENT_SERVICE_URL}}/health"
+      test: res.code == 200
 
-  notification-service:
-    name: Notification Service Health
-    steps:
-      - name: Check Notification API
-        action: http
-        with:
-          url: "{{env.NOTIFICATION_SERVICE_URL}}/health"
-        test: res.status == 200
+- id: notification-service
+  name: Notification Service Health
+  steps:
+    - name: Check Notification API
+      uses: http
+      with:
+        method: GET
+        url: "{{vars.NOTIFICATION_SERVICE_URL}}/health"
+      test: res.code == 200
 ```
 
 **Use cases:**
@@ -171,51 +176,54 @@ description: Validate deployment across multiple stages
 
 jobs:
   # Stage 1: Infrastructure checks (parallel)
-  database-check:
-    name: Database Connectivity
-    steps:
-      - name: Test Database Connection
-        action: http
-        with:
-          url: "{{env.DB_HEALTH_URL}}"
-        test: res.status == 200
+- id: database-check
+  name: Database Connectivity
+  steps:
+    - name: Test Database Connection
+      uses: http
+      with:
+        method: GET
+        url: "{{vars.DB_HEALTH_URL}}"
+      test: res.code == 200
 
-  cache-check:
-    name: Cache Service Check
-    steps:
-      - name: Test Redis Connection
-        action: http
-        with:
-          url: "{{env.REDIS_HEALTH_URL}}"
-        test: res.status == 200
+- id: cache-check
+  name: Cache Service Check
+  steps:
+    - name: Test Redis Connection
+      uses: http
+      with:
+        method: GET
+        url: "{{vars.REDIS_HEALTH_URL}}"
+      test: res.code == 200
 
-  # Stage 2: Application checks (depends on infrastructure)
-  api-validation:
-    name: API Service Validation
-    needs: [database-check, cache-check]
-    steps:
-      - name: Test Core API Endpoints
-        action: http
-        with:
-          url: "{{env.API_URL}}/health"
-        test: res.status == 200
+# Stage 2: Application checks (depends on infrastructure)
+- id: api-validation
+  name: API Service Validation
+  needs: [database-check, cache-check]
+  steps:
+    - name: Test Core API Endpoints
+      uses: http
+      with:
+        method: GET
+        url: "{{vars.API_URL}}/health"
+      test: res.code == 200
 
-  # Stage 3: End-to-end testing (depends on API)
-  e2e-tests:
-    name: End-to-End Tests
-    needs: [api-validation]
-    steps:
-      - name: Test User Registration Flow
-        action: http
-        with:
-          url: "{{env.API_URL}}/auth/register"
-          method: POST
-          body: |
-            {
-              "email": "test@example.com",
-              "password": "testpass123"
-            }
-        test: res.status == 201
+# Stage 3: End-to-end testing (depends on API)
+- id: e2e-tests
+  name: End-to-End Tests
+  needs: [api-validation]
+  steps:
+    - name: Test User Registration Flow
+      uses: http
+      with:
+        url: "{{vars.API_URL}}/auth/register"
+        method: POST
+        body: |
+          {
+            "email": "test@example.com",
+            "password": "testpass123"
+          }
+      test: res.code == 201
 ```
 
 **Use cases:**
@@ -233,63 +241,70 @@ description: Check services across multiple regions and aggregate results
 
 jobs:
   # Fan-out: Check each region in parallel
-  us-east-check:
-    name: US East Region Check
-    steps:
-      - name: Check US East API
-        action: http
-        with:
-          url: https://us-east.api.example.com/health
-        test: res.status == 200
-        outputs:
-          region: "us-east"
-          status: res.json.status
-          response_time: res.time
+- id: us-east-check
+  name: US East Region Check
+  steps:
+    - name: Check US East API
+      id: us-east-check
+      uses: http
+      with:
+        method: GET
+        url: https://us-east.api.example.com/health
+      test: res.code == 200
+      outputs:
+        region: "us-east"
+        status: res.body.status
+        response_time: (rt.sec * 1000)
 
-  us-west-check:
-    name: US West Region Check
-    steps:
-      - name: Check US West API
-        action: http
-        with:
-          url: https://us-west.api.example.com/health
-        test: res.status == 200
-        outputs:
-          region: "us-west"
-          status: res.json.status
-          response_time: res.time
+- id: us-west-check
+  name: US West Region Check
+  steps:
+    - name: Check US West API
+      id: us-west-check
+      uses: http
+      with:
+        method: GET
+        url: https://us-west.api.example.com/health
+      test: res.code == 200
+      outputs:
+        region: "us-west"
+        status: res.body.status
+        response_time: (rt.sec * 1000)
 
-  eu-check:
-    name: Europe Region Check
-    steps:
-      - name: Check EU API
-        action: http
-        with:
-          url: https://eu.api.example.com/health
-        test: res.status == 200
-        outputs:
-          region: "eu"
-          status: res.json.status
-          response_time: res.time
+- id: eu-check
+  name: Europe Region Check
+  steps:
+    - name: Check EU API
+      id: eu-check
+      uses: http
+      with:
+        method: GET
+        url: https://eu.api.example.com/health
+      test: res.code == 200
+      outputs:
+        region: "eu"
+        status: res.body.status
+        response_time: (rt.sec * 1000)
 
-  # Fan-in: Aggregate results
-  summary:
-    name: Regional Summary
-    needs: [us-east-check, us-west-check, eu-check]
-    steps:
-      - name: Generate Report
-        echo: |
-          Regional Health Check Results:
+# Fan-in: Aggregate results
+- id: summary
+  name: Regional Summary
+  needs: [us-east-check, us-west-check, eu-check]
+  steps:
+    - name: Generate Report
+      uses: hello
+      echo: |
+        Regional Health Check Results:
           
-          US East: {{outputs.us-east-check.status}} ({{outputs.us-east-check.response_time}}ms)
-          US West: {{outputs.us-west-check.status}} ({{outputs.us-west-check.response_time}}ms)
-          Europe: {{outputs.eu-check.status}} ({{outputs.eu-check.response_time}}ms)
+        US East: {{outputs['us-east-check'].status}} ({{outputs['us-east-check'].response_time}}ms)
+        US West: {{outputs['us-west-check'].status}} ({{outputs['us-west-check'].response_time}}ms)
+        Europe: {{outputs['eu-check'].status}} ({{outputs['eu-check'].response_time}}ms)
           
-          Total regions healthy: {{
-            (outputs.us-east-check.status == "healthy" ? 1 : 0) +
-            (outputs.us-west-check.status == "healthy" ? 1 : 0) +
-            (outputs.eu-check.status == "healthy" ? 1 : 0)
-          }}/3
+        Total regions healthy: {{
+          (outputs['us-east-check'].status == "healthy" ? 1 : 0) +
+          (outputs['us-west-check'].status == "healthy" ? 1 : 0) +
+          (outputs['eu-check'].status == "healthy" ? 1 : 0)
+        }}/3
 ```
 
 **Use cases:**
@@ -345,31 +360,27 @@ name: Service Monitoring
 description: Monitor critical services
 
 jobs:
-  api-check:
-    steps:
-      - name: Check API Health
-        action: http
-        with:
-          url: "{{env.API_BASE_URL}}/health"
-        test: res.status == 200
+- id: api-check
+  name: api-check
+  steps:
+    - name: Check API Health
+      uses: http
+      with:
+        method: GET
+        url: "{{vars.API_BASE_URL}}/health"
+      test: res.code == 200
 ```
 
 **production.yml:**
 ```yaml
-env:
+vars:
   API_BASE_URL: https://api.production.example.com
-defaults:
-  http:
-    timeout: 10s
 ```
 
 **staging.yml:**
 ```yaml
-env:
+vars:
   API_BASE_URL: https://api.staging.example.com
-defaults:
-  http:
-    timeout: 30s
 ```
 
 Usage:
@@ -385,39 +396,46 @@ probe base-monitoring.yml,staging.yml
 
 ### 1. Conditional Job Execution
 
-Execute jobs only when certain conditions are met.
+A job is skipped when its `skipif` expression is true. The expression reads `vars` and the `outputs` of the jobs it depends on.
 
 ```yaml
 jobs:
-  health-check:
-    name: Basic Health Check
-    steps:
-      - name: Check Service
-        id: service-check
-        action: http
-        with:
-          url: "{{env.SERVICE_URL}}/health"
-        test: res.status == 200
-        outputs:
-          service_healthy: res.status == 200
+- id: health-check
+  name: Basic Health Check
+  steps:
+    - name: Check Service
+      id: service-check
+      uses: http
+      with:
+        method: GET
+        url: "{{vars.service_url}}/health"
+      outputs:
+        service_healthy: res.code == 200
 
-  deep-diagnostic:
-    name: Deep Diagnostic
-    if: jobs.health-check.failed
-    steps:
-      - name: Run Diagnostics
-        action: http
-        with:
-          url: "{{env.SERVICE_URL}}/diagnostics"
-        test: res.status == 200
+- name: Deep Diagnostic
+  needs: [health-check]
+  skipif: outputs['service-check'].service_healthy
+  steps:
+    - name: Run Diagnostics
+      id: diagnostics
+      uses: http
+      with:
+        method: GET
+        url: "{{vars.service_url}}/diagnostics"
+      outputs:
+        diagnostics_ok: res.code == 200
 
-  alert:
-    name: Send Alert
-    if: jobs.deep-diagnostic.executed && jobs.deep-diagnostic.failed
-    steps:
-      - name: Critical Alert
-        echo: "CRITICAL: Service is down and diagnostics failed"
+- name: Send Alert
+  needs: [health-check]
+  skipif: outputs['service-check'].service_healthy
+  steps:
+    - name: Critical Alert
+      uses: hello
+      echo: "CRITICAL: {{vars.service_url}} is not healthy"
 ```
+
+Because a failing job skips everything downstream of it, the health check publishes its result as an output rather than asserting it with `test`.
+
 
 ### 2. Dynamic Configuration
 
@@ -425,27 +443,28 @@ Use expressions to make workflows adapt to runtime conditions.
 
 ```yaml
 jobs:
-  load-test:
-    name: Load Testing
-    steps:
-      - name: Determine Load Parameters
-        id: params
-        echo: "Load test configuration determined"
-        outputs:
-          concurrent_users: "{{env.LOAD_TEST_USERS || 10}}"
-          test_duration: "{{env.LOAD_TEST_DURATION || 60}}"
+- id: load-test
+  name: Load Testing
+  steps:
+    - name: Determine Load Parameters
+      uses: hello
+      id: params
+      echo: "Load test configuration determined"
+      outputs:
+        concurrent_users: "{{vars.LOAD_TEST_USERS || 10}}"
+        test_duration: "{{vars.LOAD_TEST_DURATION || 60}}"
 
-      - name: Execute Load Test
-        action: http
-        with:
-          url: "{{env.LOAD_TEST_URL}}"
-          method: POST
-          body: |
-            {
-              "concurrent_users": {{outputs.params.concurrent_users}},
-              "duration_seconds": {{outputs.params.test_duration}}
-            }
-        test: res.status == 200
+    - name: Execute Load Test
+      uses: http
+      with:
+        url: "{{vars.LOAD_TEST_URL}}"
+        method: POST
+        body: |
+          {
+            "concurrent_users": {{outputs.params.concurrent_users}},
+            "duration_seconds": {{outputs.params.test_duration}}
+          }
+      test: res.code == 200
 ```
 
 ### 3. Workflow Composition
@@ -455,14 +474,16 @@ Break complex workflows into reusable components.
 **common-setup.yml:**
 ```yaml
 jobs:
-  setup:
-    name: Common Setup
-    steps:
-      - name: Initialize Environment
-        echo: "Environment initialized"
-        outputs:
-          timestamp: "{{unixtime()}}"
-          session_id: "{{random_str(8)}}"
+- id: setup
+  name: Common Setup
+  steps:
+    - name: Initialize Environment
+      uses: hello
+      id: setup
+      echo: "Environment initialized"
+      outputs:
+        timestamp: "{{unixtime()}}"
+        session_id: "{{random_str(8)}}"
 ```
 
 **main-workflow.yml:**
@@ -472,17 +493,18 @@ description: Full system validation with common setup
 
 # This will be merged with common-setup.yml
 jobs:
-  api-tests:
-    name: API Tests
-    needs: [setup]
-    steps:
-      - name: Test API with Session
-        action: http
-        with:
-          url: "{{env.API_URL}}/test"
-          headers:
-            X-Session-ID: "{{outputs.setup.session_id}}"
-        test: res.status == 200
+- id: api-tests
+  name: API Tests
+  needs: [setup]
+  steps:
+    - name: Test API with Session
+      uses: http
+      with:
+        method: GET
+        url: "{{vars.API_URL}}/test"
+        headers:
+          X-Session-ID: "{{outputs.setup.session_id}}"
+      test: res.code == 200
 ```
 
 Usage:
@@ -502,11 +524,11 @@ name: Production API Health Check
 
 # Job names: Descriptive and specific
 jobs:
-  user-authentication-test:
-    name: User Authentication Test
+- id: user-authentication-test
+  name: User Authentication Test
   
-  database-connectivity-check:
-    name: Database Connectivity Check
+- id: database-connectivity-check
+  name: Database Connectivity Check
 
 # Step names: Action-oriented
 steps:
@@ -554,42 +576,42 @@ Plan for failure scenarios:
 
 ```yaml
 jobs:
-  primary-check:
-    name: Primary Service Check
-    steps:
-      - name: Check Primary Service
-        id: primary
-        action: http
-        with:
-          url: "{{env.PRIMARY_SERVICE_URL}}"
-        test: res.status == 200
-        continue_on_error: true
+- id: primary-check
+  name: Primary Service Check
+  steps:
+    - name: Check Primary Service
+      id: primary
+      uses: http
+      with:
+        method: GET
+        url: "{{vars.PRIMARY_SERVICE_URL}}"
+      test: res.code == 200
 
-  fallback-check:
-    name: Fallback Service Check
-    if: jobs.primary-check.failed
-    steps:
-      - name: Check Fallback Service
-        action: http
-        with:
-          url: "{{env.FALLBACK_SERVICE_URL}}"
-        test: res.status == 200
+- id: fallback-check
+  name: Fallback Service Check
+  steps:
+    - name: Check Fallback Service
+      uses: http
+      with:
+        method: GET
+        url: "{{vars.FALLBACK_SERVICE_URL}}"
+      test: res.code == 200
 
-  notification:
-    name: Send Notifications
-    needs: [primary-check, fallback-check]
-    steps:
-      - name: Success Notification
-        if: jobs.primary-check.success
-        echo: "✅ Primary service is healthy"
+- id: notification
+  name: Send Notifications
+  needs: [primary-check, fallback-check]
+  steps:
+    - name: Success Notification
+      uses: hello
+      echo: "✅ Primary service is healthy"
         
-      - name: Fallback Notification
-        if: jobs.primary-check.failed && jobs.fallback-check.success
-        echo: "⚠️ Primary service down, fallback operational"
+    - name: Fallback Notification
+      uses: hello
+      echo: "⚠️ Primary service down, fallback operational"
         
-      - name: Critical Alert
-        if: jobs.primary-check.failed && jobs.fallback-check.failed
-        echo: "🚨 CRITICAL: Both primary and fallback services are down"
+    - name: Critical Alert
+      uses: hello
+      echo: "🚨 CRITICAL: Both primary and fallback services are down"
 ```
 
 ### 4. Performance Considerations
@@ -605,17 +627,22 @@ jobs:
 
 # Good: Efficient job dependencies
 jobs:
-  infrastructure:    # Foundation checks first
-  application:       # Then application checks
-    needs: [infrastructure]
-  integration:       # Finally integration tests
-    needs: [application]
+- id: infrastructure
+  name: infrastructure
+- id: application
+  name: application
+  needs: [infrastructure]
+- id: integration
+  name: integration
+  needs: [application]
 
 # Avoid: Unnecessary sequential dependencies
 jobs:
-  check-a:
-  check-b:
-    needs: [check-a]  # Only if B actually depends on A
+- id: check-a
+  name: check-a
+- id: check-b
+  name: check-b
+  needs: [check-a]  # Only if B actually depends on A
 ```
 
 ## Common Anti-Patterns
@@ -626,15 +653,16 @@ jobs:
 ```yaml
 name: Everything Check
 jobs:
-  massive-job:
-    steps:
-      - name: Check API
-      - name: Check Database  
-      - name: Check Cache
-      - name: Check Email
-      - name: Check Files
-      - name: Check Logs
-      # ... 50 more steps
+- id: massive-job
+  name: massive-job
+  steps:
+    - name: Check API
+    - name: Check Database  
+    - name: Check Cache
+    - name: Check Email
+    - name: Check Files
+    - name: Check Logs
+    # ... 50 more steps
 ```
 
 **Instead:**
@@ -651,8 +679,9 @@ name: Infrastructure Health Check
 ```yaml
 # Hard-coded values throughout
 - name: Check Production API
-  action: http
+  uses: http
   with:
+    method: GET
     url: https://prod-api.company.com/health
 ```
 
@@ -660,9 +689,10 @@ name: Infrastructure Health Check
 ```yaml
 # Use configuration and environment variables
 - name: Check API
-  action: http
+  uses: http
   with:
-    url: "{{env.API_BASE_URL}}/health"
+    method: GET
+    url: "{{vars.API_BASE_URL}}/health"
 ```
 
 ### 3. Missing Error Handling
@@ -671,9 +701,10 @@ name: Infrastructure Health Check
 ```yaml
 steps:
   - name: Critical Operation
-    action: http
+    uses: http
     with:
-      url: "{{env.CRITICAL_SERVICE}}"
+      method: GET
+      url: "{{vars.CRITICAL_SERVICE}}"
     # No test condition or error handling
 ```
 
@@ -681,11 +712,11 @@ steps:
 ```yaml
 steps:
   - name: Critical Operation
-    action: http
+    uses: http
     with:
-      url: "{{env.CRITICAL_SERVICE}}"
-    test: res.status == 200
-    continue_on_error: false
+      method: GET
+      url: "{{vars.CRITICAL_SERVICE}}"
+    test: res.code == 200
 ```
 
 ## What's Next?

@@ -129,7 +129,7 @@ jobs:
       url: *endpoint
   steps:
   - name: Check API
-    action: http
+    uses: http
     with:
       get: /foo/bar
     test: res.code == 200
@@ -162,20 +162,23 @@ $ probe base-workflow.yml,staging.yml
 
 **common-config.yml:**
 ```yaml
-# 共有HTTP設定
-defaults:
-  http:
-    timeout: 30s
-    headers:
-      User-Agent: "Probe Health Check v1.0"
+# 共有するヘッダー。ワークフローからアンカーで参照する
+shared:
+  common_headers: &common_headers
+    User-Agent: "Probe Health Check v1.0"
 ```
 
 **api-check.yml:**
 ```yaml
 name: API Monitoring
-# 共通HTTP設定を継承
 jobs:
-  # ... ジョブ定義
+- name: API checks
+  defaults:
+    http:
+      headers:
+        <<: *common_headers
+  steps:
+    # ... ステップ定義
 ```
 
 ```bash

@@ -15,7 +15,6 @@ jobs:                                 # 必須: 一つ以上のジョブ
 - name: job-name                      # ジョブは配列形式
   defaults:                           # オプション: ジョブレベルのデフォルト設定
     http:
-      timeout: 30s
       headers:
         User-Agent: "Probe Monitor"
   # ジョブ定義...
@@ -68,7 +67,6 @@ jobs:
 - name: Example Job
   defaults:
     http:
-      timeout: 30s
       headers:
         Accept: "application/json"
         User-Agent: "Probe Health Monitor v1.0"
@@ -107,7 +105,7 @@ jobs:
     uses: http
     with:
       get: "/schema/version"
-    test: res.body.json.version == "2.1.0"
+    test: res.body.version == "2.1.0"
 
   - name: Update Documentation
     echo: "Migration to v2.1.0 completed successfully"
@@ -235,12 +233,13 @@ jobs:
   - name: Check US East API
     uses: http
     with:
+      method: GET
       url: https://us-east.api.example.com/health
     test: res.code == 200
     outputs:
       region: "us-east"
-      status: res.body.json.status
-      response_time: res.time
+      status: res.body.status
+      response_time: (rt.sec * 1000)
 
 - name: US West Region Check
   id: us-west-check
@@ -248,12 +247,13 @@ jobs:
   - name: Check US West API
     uses: http
     with:
+      method: GET
       url: https://us-west.api.example.com/health
     test: res.code == 200
     outputs:
       region: "us-west"
-      status: res.body.json.status
-      response_time: res.time
+      status: res.body.status
+      response_time: (rt.sec * 1000)
 
 - name: Europe Region Check
   id: eu-check
@@ -261,12 +261,13 @@ jobs:
   - name: Check EU API
     uses: http
     with:
+      method: GET
       url: https://eu.api.example.com/health
     test: res.code == 200
     outputs:
       region: "eu"
-      status: res.body.json.status
-      response_time: res.time
+      status: res.body.status
+      response_time: (rt.sec * 1000)
 
 # ファンイン: 結果を集約
 - name: Regional Summary
@@ -277,14 +278,14 @@ jobs:
     echo: |
       Regional Health Check Results:
       
-      US East: {{outputs.us-east-check.status}} ({{outputs.us-east-check.response_time}}ms)
-      US West: {{outputs.us-west-check.status}} ({{outputs.us-west-check.response_time}}ms)
-      Europe: {{outputs.eu-check.status}} ({{outputs.eu-check.response_time}}ms)
+      US East: {{outputs['us-east-check'].status}} ({{outputs['us-east-check'].response_time}}ms)
+      US West: {{outputs['us-west-check'].status}} ({{outputs['us-west-check'].response_time}}ms)
+      Europe: {{outputs['eu-check'].status}} ({{outputs['eu-check'].response_time}}ms)
       
       Total regions healthy: {{
-        (outputs.us-east-check.status == "healthy" ? 1 : 0) +
-        (outputs.us-west-check.status == "healthy" ? 1 : 0) +
-        (outputs.eu-check.status == "healthy" ? 1 : 0)
+        (outputs['us-east-check'].status == "healthy" ? 1 : 0) +
+        (outputs['us-west-check'].status == "healthy" ? 1 : 0) +
+        (outputs['eu-check'].status == "healthy" ? 1 : 0)
       }}/3
 ```
 
@@ -345,11 +346,11 @@ jobs:
   id: api-check
   defaults:
     http:
-      timeout: "{{vars.DEFAULT_TIMEOUT}}"
   steps:
   - name: Check API Health
     uses: http
     with:
+      method: GET
       url: "{{vars.API_BASE_URL}}/health"
     test: res.code == 200
 ```
@@ -381,39 +382,46 @@ probe base-monitoring.yml,staging.yml
 
 ### 1. 条件付きジョブ実行
 
-特定の条件が満たされた場合のみジョブを実行します。
+ジョブは `skipif` が真になったときにスキップされます。式からは `vars` と、依存しているジョブの `outputs` を参照できます。
 
 ```yaml
 jobs:
-- name: Basic Health Check
-  id: health-check
+- id: health-check
+  name: Basic Health Check
   steps:
-  - name: Check Service
-    id: service-check
-    uses: http
-    with:
-      url: "{{vars.SERVICE_URL}}/health"
-    test: res.code == 200
-    outputs:
-      service_healthy: res.status == 200
+    - name: Check Service
+      id: service-check
+      uses: http
+      with:
+        method: GET
+        url: "{{vars.service_url}}/health"
+      outputs:
+        service_healthy: res.code == 200
 
 - name: Deep Diagnostic
-  id: deep-diagnostic
-  if: jobs.health-check.failed
+  needs: [health-check]
+  skipif: outputs['service-check'].service_healthy
   steps:
-  - name: Run Diagnostics
-    uses: http
-    with:
-      url: "{{vars.SERVICE_URL}}/diagnostics"
-    test: res.code == 200
+    - name: Run Diagnostics
+      id: diagnostics
+      uses: http
+      with:
+        method: GET
+        url: "{{vars.service_url}}/diagnostics"
+      outputs:
+        diagnostics_ok: res.code == 200
 
 - name: Send Alert
-  id: alert
-  if: jobs.deep-diagnostic.executed && jobs.deep-diagnostic.failed
+  needs: [health-check]
+  skipif: outputs['service-check'].service_healthy
   steps:
-  - name: Critical Alert
-    echo: "CRITICAL: Service is down and diagnostics failed"
+    - name: Critical Alert
+      uses: hello
+      echo: "CRITICAL: {{vars.service_url}} is not healthy"
 ```
+
+ジョブが失敗すると後続がまとめてスキップされるため、ヘルスチェックは `test` で失敗させず、結果を outputs として公開しています。
+
 
 ### 2. 動的設定
 
@@ -475,6 +483,7 @@ jobs:
   - name: Test API with Session
     uses: http
     with:
+      method: GET
       url: "{{vars.API_URL}}/test"
       headers:
         X-Session-ID: "{{outputs.setup.session_id}}"
@@ -557,17 +566,17 @@ jobs:
     id: primary
     uses: http
     with:
+      method: GET
       url: "{{vars.PRIMARY_SERVICE_URL}}"
     test: res.code == 200
-    continue_on_error: true
 
 - name: Fallback Service Check
   id: fallback-check
-  if: jobs.primary-check.failed
   steps:
   - name: Check Fallback Service
     uses: http
     with:
+      method: GET
       url: "{{vars.FALLBACK_SERVICE_URL}}"
     test: res.code == 200
 
@@ -576,15 +585,12 @@ jobs:
   needs: [primary-check, fallback-check]
   steps:
   - name: Success Notification
-    if: jobs.primary-check.success
     echo: "Primary service is healthy"
     
   - name: Fallback Notification
-    if: jobs.primary-check.failed && jobs.fallback-check.success
     echo: "Primary service down, fallback operational"
     
   - name: Critical Alert
-    if: jobs.primary-check.failed && jobs.fallback-check.failed
     echo: "CRITICAL: Both primary and fallback services are down"
 ```
 
@@ -658,6 +664,7 @@ name: Infrastructure Health Check
 - name: Check Production API
   uses: http
   with:
+    method: GET
     url: https://prod-api.company.com/health
 ```
 
@@ -667,6 +674,7 @@ name: Infrastructure Health Check
 - name: Check API
   uses: http
   with:
+    method: GET
     url: "{{vars.API_BASE_URL}}/health"
 ```
 
@@ -678,6 +686,7 @@ steps:
   - name: Critical Operation
     uses: http
     with:
+      method: GET
       url: "{{vars.CRITICAL_SERVICE}}"
     # テスト条件やエラーハンドリングなし
 ```
@@ -688,9 +697,9 @@ steps:
   - name: Critical Operation
     uses: http
     with:
+      method: GET
       url: "{{vars.CRITICAL_SERVICE}}"
     test: res.code == 200
-    continue_on_error: false
 ```
 
 ## 次のステップ
