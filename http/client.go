@@ -9,6 +9,7 @@ import (
 	hp "net/http"
 	"net/url"
 	"path"
+	"strconv"
 	"strings"
 	"time"
 
@@ -16,18 +17,19 @@ import (
 	"github.com/linyows/probe/mapping"
 )
 
-type TransportOptions struct {
-	Timeout      int `map:"timeout"`
-	MaxIdleConns int `map:"max_idle_conns"`
-}
+// DefaultTimeout bounds a request when the step does not set `timeout`. The
+// zero value of http.Client means "wait forever", which lets a single
+// unresponsive endpoint hold a workflow open until the step timeout fires.
+const DefaultTimeout = 30 * time.Second
 
 type Req struct {
-	URL    string            `map:"url" validate:"required"`
-	Method string            `map:"method" validate:"required"`
-	Proto  string            `map:"ver"`
-	Header map[string]string `map:"headers"`
-	Body   string            `map:"body"` // Changed from []byte to string for text data
-	cb     *Callback
+	URL     string            `map:"url" validate:"required"`
+	Method  string            `map:"method" validate:"required"`
+	Proto   string            `map:"ver"`
+	Header  map[string]string `map:"headers"`
+	Body    string            `map:"body"` // Changed from []byte to string for text data
+	Timeout string            `map:"timeout"`
+	cb      *Callback
 }
 
 type Res struct {
@@ -53,7 +55,34 @@ func NewReq() *Req {
 			"Accept":     "*/*",
 			"User-Agent": "probe-http/1.0.0",
 		},
+		Timeout: DefaultTimeout.String(),
 	}
+}
+
+// parseTimeout turns the request's timeout field into a duration. It accepts a
+// Go duration string ("10s", "1m30s") and, like the workflow-level interval
+// fields, a bare number of seconds. An empty value falls back to
+// DefaultTimeout, and zero disables the limit.
+func parseTimeout(s string) (time.Duration, error) {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return DefaultTimeout, nil
+	}
+
+	d, err := time.ParseDuration(s)
+	if err != nil {
+		sec, ferr := strconv.ParseFloat(s, 64)
+		if ferr != nil {
+			return 0, fmt.Errorf("invalid timeout: %q", s)
+		}
+		d = time.Duration(sec * float64(time.Second))
+	}
+
+	if d < 0 {
+		return 0, fmt.Errorf("timeout must not be negative: %q", s)
+	}
+
+	return d, nil
 }
 
 // mergeHeaders merges custom headers with default headers, handling case-insensitive duplicates
@@ -96,6 +125,11 @@ func (r *Req) Do() (*Result, error) {
 		return nil, errors.New("Req.URL is required")
 	}
 
+	timeout, err := parseTimeout(r.Timeout)
+	if err != nil {
+		return nil, err
+	}
+
 	req, err := hp.NewRequest(r.Method, r.URL, strings.NewReader(r.Body))
 	if err != nil {
 		return nil, err
@@ -114,7 +148,7 @@ func (r *Req) Do() (*Result, error) {
 
 	result := &Result{Req: *r}
 
-	cl := &hp.Client{}
+	cl := &hp.Client{Timeout: timeout}
 	start := time.Now()
 	res, err := cl.Do(req)
 	result.RT = time.Since(start)

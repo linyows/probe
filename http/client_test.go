@@ -5,9 +5,11 @@ import (
 	"encoding/json"
 	"io"
 	hp "net/http"
+	"net/http/httptest"
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/hashicorp/go-hclog"
 	"github.com/jarcoal/httpmock"
@@ -24,6 +26,7 @@ func TestNewReq(t *testing.T) {
 			"Accept":     "*/*",
 			"User-Agent": "probe-http/1.0.0",
 		},
+		Timeout: "30s",
 	}
 
 	if !reflect.DeepEqual(got, expects) {
@@ -566,5 +569,165 @@ func TestRequest_DoesNotLeakRequestDataToDefaultLogger(t *testing.T) {
 		if strings.Contains(out, sentinel) {
 			t.Errorf("default logger leaked %q.\nlogger output:\n%s", sentinel, out)
 		}
+	}
+}
+
+func TestParseTimeout(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		expects time.Duration
+		wantErr bool
+	}{
+		{"empty falls back to the default", "", DefaultTimeout, false},
+		{"duration string", "10s", 10 * time.Second, false},
+		{"compound duration string", "1m30s", 90 * time.Second, false},
+		{"milliseconds", "250ms", 250 * time.Millisecond, false},
+		{"bare number is seconds", "30", 30 * time.Second, false},
+		{"fractional number is seconds", "0.5", 500 * time.Millisecond, false},
+		{"surrounding spaces are ignored", " 5s ", 5 * time.Second, false},
+		{"zero disables the limit", "0", 0, false},
+		{"zero duration disables the limit", "0s", 0, false},
+		{"negative duration is rejected", "-1s", 0, true},
+		{"negative number is rejected", "-1", 0, true},
+		{"unparsable value is rejected", "soon", 0, true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := parseTimeout(tt.input)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatalf("expected an error for %q, got %v", tt.input, got)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error for %q: %s", tt.input, err)
+			}
+			if got != tt.expects {
+				t.Errorf("expected %v, got %v", tt.expects, got)
+			}
+		})
+	}
+}
+
+func TestDoTimesOutSlowResponse(t *testing.T) {
+	blocked := make(chan struct{})
+	srv := httptest.NewServer(hp.HandlerFunc(func(w hp.ResponseWriter, r *hp.Request) {
+		<-blocked
+	}))
+	defer func() {
+		close(blocked)
+		srv.Close()
+	}()
+
+	req := NewReq()
+	req.URL = srv.URL
+	req.Timeout = "50ms"
+
+	start := time.Now()
+	_, err := req.Do()
+	elapsed := time.Since(start)
+
+	if err == nil {
+		t.Fatal("expected the request to time out")
+	}
+	if !strings.Contains(err.Error(), "Client.Timeout") && !strings.Contains(err.Error(), "context deadline exceeded") {
+		t.Errorf("expected a timeout error, got: %s", err)
+	}
+	if elapsed > 5*time.Second {
+		t.Errorf("expected the request to give up quickly, took %v", elapsed)
+	}
+}
+
+func TestDoCompletesWithinTimeout(t *testing.T) {
+	srv := httptest.NewServer(hp.HandlerFunc(func(w hp.ResponseWriter, r *hp.Request) {
+		_, _ = w.Write([]byte("ok"))
+	}))
+	defer srv.Close()
+
+	req := NewReq()
+	req.URL = srv.URL
+	req.Timeout = "5s"
+
+	got, err := req.Do()
+	if err != nil {
+		t.Fatalf("unexpected error: %s", err)
+	}
+	if got.Res.Code != 200 {
+		t.Errorf("expected 200, got %d", got.Res.Code)
+	}
+}
+
+func TestDoRejectsInvalidTimeout(t *testing.T) {
+	req := NewReq()
+	req.URL = "http://localhost:8080/"
+	req.Timeout = "soon"
+
+	if _, err := req.Do(); err == nil {
+		t.Fatal("expected an error for an invalid timeout")
+	}
+}
+
+func TestRequestPassesTimeoutFromParams(t *testing.T) {
+	srv := httptest.NewServer(hp.HandlerFunc(func(w hp.ResponseWriter, r *hp.Request) {
+		_, _ = w.Write([]byte("ok"))
+	}))
+	defer srv.Close()
+
+	got, err := Request(map[string]any{
+		"url":     srv.URL,
+		"method":  "GET",
+		"timeout": "7s",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %s", err)
+	}
+
+	req, ok := got["req"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected req in the result, got %#v", got["req"])
+	}
+	if req["timeout"] != "7s" {
+		t.Errorf("expected the timeout to be carried through, got %#v", req["timeout"])
+	}
+}
+
+func TestRequestUsesDefaultTimeoutWhenOmitted(t *testing.T) {
+	srv := httptest.NewServer(hp.HandlerFunc(func(w hp.ResponseWriter, r *hp.Request) {
+		_, _ = w.Write([]byte("ok"))
+	}))
+	defer srv.Close()
+
+	got, err := Request(map[string]any{
+		"url":    srv.URL,
+		"method": "GET",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %s", err)
+	}
+
+	req, ok := got["req"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected req in the result, got %#v", got["req"])
+	}
+	if req["timeout"] != DefaultTimeout.String() {
+		t.Errorf("expected the default timeout, got %#v", req["timeout"])
+	}
+}
+
+func TestRequestAcceptsNumericTimeout(t *testing.T) {
+	srv := httptest.NewServer(hp.HandlerFunc(func(w hp.ResponseWriter, r *hp.Request) {
+		_, _ = w.Write([]byte("ok"))
+	}))
+	defer srv.Close()
+
+	if _, err := Request(map[string]any{
+		"url":     srv.URL,
+		"method":  "GET",
+		"timeout": 5,
+	}); err != nil {
+		t.Fatalf("unexpected error: %s", err)
 	}
 }
