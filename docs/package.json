@@ -4,11 +4,11 @@
   "type": "module",
   "private": true,
   "devDependencies": {
-    "@types/bun": "latest",
-    "vitepress": "^1.6.3"
+    "@types/bun": "^1.4.2",
+    "vitepress": "^1.6.4"
   },
   "peerDependencies": {
-    "typescript": "^5"
+    "typescript": "^5.9.3"
   },
   "scripts": {
     "dev": "vitepress dev",
