@@ -160,7 +160,7 @@ with:
     headless: true
   test: res.code == 0
   outputs:
-    load_time: res.time_ms
+    load_time: rt.sec * 1000
 ```
 
 ### テキストコンテンツの抽出
@@ -427,7 +427,6 @@ steps:
     selector: "#may-not-exist"
     timeout: "5s"
   test: res.code == 0 || (res.success == "false" && res.error | contains("not found"))
-  continue_on_error: true
   outputs:
     click_success: res.code == 0
     error_type: |

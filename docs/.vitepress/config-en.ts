@@ -60,6 +60,7 @@ const reference = [
     items: [
       { text: 'CLI Reference', link: 'cli-reference' },
       { text: 'Actions Reference', link: 'actions-reference' },
+      { text: 'SSH Action', link: 'actions/ssh' },
       { text: 'Built-in Functions', link: 'built-in-functions' },
       { text: 'Environment Variables', link: 'environment-variables' },
       { text: 'YAML Configuration', link: 'yaml-configuration' }

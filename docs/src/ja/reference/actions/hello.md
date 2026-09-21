@@ -1,96 +1,42 @@
 # Helloアクション
 
-`hello`アクションは開発、デバッグ、ワークフロー検証に使用される簡単なテストアクションです。
+`hello` アクションは成功するだけで何もしないアクションです。プレースホルダーとして、`echo` だけを目的とするステップとして、あるいは式の動作確認に使います。
 
 ## 基本的な構文
 
 ```yaml
 steps:
-  - name: "Test Hello"
+  - name: Report
     uses: hello
-    with:
-      message: "Hello, World!"
+    echo: "Checked {{outputs.health.endpoint}}"
 ```
 
 ## パラメータ
 
-### `message` (オプション)
-
-**型:** String  
-**デフォルト:** `"Hello from Probe!"`  
-**説明:** 表示するメッセージ  
-**サポート:** テンプレート式
+このアクション固有のパラメータはありません。`with` に渡した内容はそのまま `res` に返るため、計算した値を outputs として公開したいときに便利です。
 
 ```yaml
-with:
-  message: "Hello, World!"
-  message: "Current time: {{unixtime()}}"
-vars:
-  user_name: "{{USER_NAME}}"
-
-  message: "Hello {{vars.user_name}}"
-```
-
-### `delay` (オプション)
-
-**型:** Duration  
-**デフォルト:** `0s`  
-**説明:** 完了前の人為的な遅延
-
-```yaml
-with:
-  message: "Delayed hello"
-  delay: "2s"
+steps:
+  - name: Build a summary
+    id: summary
+    uses: hello
+    with:
+      run_id: "{{vars.run_id}}"
+      checked_at: "{{now().Format('2006-01-02T15:04:05Z07:00')}}"
+    outputs:
+      run_id: res.run_id
+      checked_at: res.checked_at
 ```
 
 ## レスポンスオブジェクト
 
-helloアクションは次のプロパティを持つ`res`オブジェクトを提供します：
+| プロパティ | 型 | 説明 |
+|---|---|---|
+| `res.<key>` | 任意 | `with` に渡したキーがそのまま入ります |
+| `res.status` | Integer | 常に `0` |
+| `status` | Integer | 常に `0` |
 
- | プロパティ  | 型      | 説明                                     | 
- | ----------  | ------  | -------------                            | 
- | `message`   | String  | 表示されたメッセージ                     | 
- | `time`      | Integer | かかった時間（ミリ秒）（遅延を含む）     | 
- | `timestamp` | String  | アクション完了時のISO 8601タイムスタンプ | 
+## 関連項目
 
-## Hello例
-
-#### 基本テスト
-
-```yaml
-steps:
-  - name: "Simple Test"
-    uses: hello
-    test: res.message != ""
-    outputs:
-      test_time: res.time
-```
-
-### タイミングテスト
-
-```yaml
-steps:
-  - name: "Timing Test"
-    uses: hello
-    with:
-      message: "Testing timing"
-      delay: "1s"
-    test: res.time >= 1000 && res.time < 1100
-```
-
-### テンプレートテスト
-
-```yaml
-steps:
-  - name: "Template Test"
-    uses: hello
-    with:
-vars:
-  user: "{{USER}}"
-
-      message: "User: {{vars.user}}, Time: {{unixtime()}}"
-    test: res.message | contains(vars.user)
-    outputs:
-      rendered_message: res.message
-```
-
+- **[変数](./variables)** - ステップで使える変数
+- **[YAML設定](../yaml-configuration)** - ステップのプロパティ

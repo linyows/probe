@@ -1,111 +1,80 @@
 # アクションエラーハンドリング
 
-## 一般的なエラーシナリオ
+ステップは `test` が偽になったとき、またはアクション自体がエラーを返したときに失敗します。失敗しても同じジョブの残りのステップは実行され、ジョブは失敗扱いになります。そのジョブを `needs` に指定したジョブはスキップされ、ワークフローの終了ステータスは `1` になります。
 
-すべてのアクションはさまざまな理由で失敗する可能性があります。一般的な失敗モードを理解することで、堅牢なワークフローの作成に役立ちます。
-
-### HTTPアクションエラー
+失敗を無視するためのスイッチはありません。ワークフローを失敗させたくないチェックは、`test` で判定せず結果を outputs として記録します。
 
 ```yaml
 steps:
-  - name: "HTTP with Error Handling"
+  - name: Required check
     uses: http
     with:
-      url: "https://api.example.com/endpoint"
-    test: |
-      res.code >= 200 && res.code < 300
-    continue_on_error: false
-    outputs:
-      success: res.code >= 200 && res.code < 300
-      error_message: |
-        {{res.code >= 400 ? "Client error: " + res.code : 
-          res.code >= 500 ? "Server error: " + res.code : ""}}
-```
+      method: GET
+      url: "{{vars.api_url}}/health"
+    test: res.code == 200
 
-### SMTPアクションエラー
-
-```yaml
-vars:
-  smtp_user: "{{SMTP_USER}}"
-  smtp_pass: "{{SMTP_PASS}}"
-
-steps:
-  - name: "SMTP with Error Handling"
-    uses: smtp
+  - name: Optional check
+    id: optional
+    uses: http
     with:
-      host: "smtp.example.com"
-      username: "{{vars.smtp_user}}"
-      password: "{{vars.smtp_pass}}"
-      from: "test@example.com"
-      to: ["admin@example.com"]
-      subject: "Test"
-      body: "Test message"
-    test: res.success == true
-    continue_on_error: true
+      method: GET
+      url: "{{vars.api_url}}/experimental"
     outputs:
-      email_sent: res.success
-      send_time: res.time
+      available: res.code == 200
+      detail: res.code >= 400 ? res.status : ""
+
+  - name: Report
+    uses: hello
+    echo: "Experimental endpoint: {{outputs.optional.available ? 'available' : outputs.optional.detail}}"
 ```
 
-## パフォーマンスの考慮事項
+## 一時的な失敗とハング
 
-### HTTPアクションパフォーマンス
-
-- **コネクションプーリング:** HTTPアクションは可能な場合接続を再利用
-- **タイムアウト:** ハングを防ぐために適切なタイムアウトを設定
-- **レスポンスサイズ:** 大きなレスポンスはより多くのメモリを消費
-- **同時リクエスト:** 複数のHTTPアクションは並列実行可能
+一時的な失敗には `retry`、応答が返らないおそれのあるステップには `timeout` を使います。
 
 ```yaml
-# パフォーマンス最適化されたHTTP設定
-vars:
-  api_url: "{{API_URL}}"
+  - name: Flaky endpoint
+    uses: http
+    timeout: 10s
+    retry:
+      max_attempts: 3
+      interval: 2s
+    with:
+      method: GET
+      url: "{{vars.api_url}}/flaky"
+    test: res.code == 200
+```
 
+`retry` のパラメータは `max_attempts`（必須、1 以上）、`interval`、`initial_delay` です。`max_attempts` の上限は環境変数 `PROBE_MAX_ATTEMPTS`（既定 10000）で変更できます。
+
+## 後続の分岐
+
+他のジョブが失敗したかどうかで分岐する手段はありません。ジョブが失敗すると後続はスキップされるためです。結果に応じて処理を変えたい場合は、結果を outputs として公開し、後続のジョブが `skipif` で判断します。
+
+```yaml
 jobs:
-- name: performance-test
-  defaults:
-    http:
-      timeout: "10s"
-      follow_redirects: true
-      max_redirects: 3
+- id: health-check
+  name: Health Check
   steps:
-    - name: "Quick Health Check"
+    - name: Check
+      id: health
       uses: http
       with:
-        url: "{{vars.api_url}}/ping"
-        timeout: "2s"
-      test: res.code == 200 && res.time < 500
-```
+        method: GET
+        url: "{{vars.api_url}}/health"
+      outputs:
+        healthy: res.code == 200
 
-### SMTPアクションパフォーマンス
-
-- **接続再利用:** SMTP接続はアクションごとに確立
-- **バッチメール:** 接続を減らすために受信者をグループ化することを検討
-- **TLSオーバーヘッド:** TLSネゴシエーションは遅延を追加
-
-```yaml
-# 効率的なメール通知
-vars:
-  smtp_user: "{{SMTP_USER}}"
-  smtp_pass: "{{SMTP_PASS}}"
-
-steps:
-  - name: "Batch Notification"
-    uses: smtp
-    with:
-      host: "smtp.example.com"
-      username: "{{vars.smtp_user}}"
-      password: "{{vars.smtp_pass}}"
-      from: "alerts@example.com"
-      to: ["admin1@example.com", "admin2@example.com", "admin3@example.com"]
-      subject: "Batch Alert"
-      body: "Single email to multiple recipients"
+- name: Alert
+  needs: [health-check]
+  skipif: outputs.health.healthy
+  steps:
+    - name: Notify
+      uses: hello
+      echo: "{{vars.api_url}} is not healthy"
 ```
 
 ## 関連項目
 
-- **[YAML設定](../yaml-configuration/)** - 完全なYAML構文リファレンス
-- **[組み込み関数](../built-in-functions/)** - アクションで使用する式関数
-- **[概念: アクション](../../concepts/actions/)** - アクションシステムアーキテクチャ
-- **[ハウツー: APIテスト](../../how-tos/api-testing/)** - 実用的なHTTPアクション例
-- **[ハウツー: エラーハンドリング](../../how-tos/error-handling-strategies/)** - エラーハンドリングパターン
+- **[変数](./variables)** - ステップで使える変数
+- **[YAML設定](../yaml-configuration)** - `retry` と `timeout` のプロパティ

@@ -64,6 +64,11 @@ const reference = [
       { text: 'DB', link: 'db' },
       { text: 'SHELL', link: 'shell' },
       { text: 'BROWSER', link: 'browser' },
+      { text: 'IMAP', link: 'imap' },
+      { text: 'SSH', link: 'ssh' },
+      { text: 'GRPC', link: 'grpc' },
+      { text: 'MAIL-LATENCY', link: 'mail-latency' },
+      { text: 'HELLO', link: 'hello' },
       { text: 'EMBEDDED', link: 'embedded' },
     ]
   },
@@ -73,12 +78,12 @@ const reference = [
     collapsed: false,
     items: [
       { text: '利用可能なフィールドと構文', link: 'available-fields-and-syntax' },
+      { text: 'Probe固有関数', link: 'probe' },
       { text: '文字列関数', link: 'string' },
+      { text: '数値関数', link: 'mathematics' },
       { text: '日時関数', link: 'datetime' },
-      { text: 'エンコーディング関数', link: 'encoding' },
-      { text: '数学関数', link: 'mathematics' },
-      { text: 'ユーティリティ関数', link: 'utility' },
-      { text: 'JSON関数', link: 'json' },
+      { text: '配列・マップ関数', link: 'array' },
+      { text: 'JSON・エンコーディング関数', link: 'json' },
       { text: '高度な関数使用法', link: 'advanced-usage' },
     ]
   },

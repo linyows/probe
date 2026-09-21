@@ -1,298 +1,197 @@
 # HTTPアクション
 
-`http`アクションはHTTP/HTTPSリクエストを実行し、テストと検証のための詳細なレスポンス情報を提供します。
+`http` アクションは HTTP リクエストを実行し、レスポンスをアサーションや outputs から参照できるようにします。
 
 ## 基本的な構文
 
 ```yaml
 steps:
-- name: API Request
-  uses: http
-  with:
-    url: https://api.example.com
-    get: /endpoint
-  test: res.code == 200
+  - name: Check the API
+    uses: http
+    with:
+      url: "https://api.example.com/health"
+      method: GET
+    test: res.code == 200
 ```
 
 ## パラメータ
 
-### `url` (必須)
+| パラメータ | 型 | 必須 | デフォルト | 説明 |
+|---|---|---|---|---|
+| `url` | String | 必須 | - | リクエスト URL。メソッド省略記法でパスを渡す場合はベース URL |
+| `method` | String | 必須 | - | HTTP メソッド。メソッド省略記法を使う場合はそちらが設定します |
+| `headers` | Object | 任意 | - | リクエストヘッダー |
+| `body` | String または Object | 任意 | - | リクエストボディ。`content-type` が `application/json` のとき、オブジェクトは JSON にシリアライズされます |
+| `timeout` | Duration | 任意 | `30s` | レスポンスの読み取りまで含めた、リクエスト全体の制限時間 |
 
-**型:** String  
-**説明:** リクエストを送信するURL  
-**サポート:** テンプレート式
+リダイレクトと TLS 検証を指定するパラメータはありません。リダイレクトは既定で追跡します。
+
+### `timeout`
+
+`timeout` には `10s` や `1m30s` のような duration 文字列、または秒数の数値を指定します。`0` を指定すると制限しません。
 
 ```yaml
-vars:
-  api_base_url: "{{API_BASE_URL ?? 'https://api.example.com'}}"
-
-with:
-  url: "https://api.example.com/users"
-  url: "{{vars.api_base_url}}/v1/health"
-  url: "https://api.example.com/users/{{outputs.auth.user_id}}"
+  - name: Slow endpoint
+    uses: http
+    with:
+      url: "{{vars.api_url}}/report"
+      method: GET
+      timeout: 60s
+    test: res.code == 200
 ```
 
-### `method: path` (必須)
+制限時間を超えたリクエストは `Client.Timeout exceeded` のエラーになり、ステップは失敗します。
 
-**型:** String  
-**デフォルト:** `GET`  
-**フィールド名:** `get`, `post`, `put`, `patch`, `delete`, `head`, `options`
+ジョブの `defaults` でまとめて指定できます。
 
 ```yaml
-with:
-  url: https://api.example.com
-  post: /users
+jobs:
+  - name: API checks
+    defaults:
+      http:
+        timeout: 5s
+    steps:
+      - name: Health
+        uses: http
+        with:
+          get: /health
+        test: res.code == 200
 ```
 
-### `headers` (オプション)
+ステップの `timeout` はこれとは別の、アクション実行 1 回ごとの外側の制限です（既定 5 分）。`with.timeout` が HTTP リクエストそのものを、ステップの `timeout` がそれを包むアクション呼び出しを区切ります。応答を返さないまま固まったアクションを止めるのは後者です。
 
-**型:** Object  
-**説明:** リクエストに含めるHTTPヘッダー  
-**サポート:** 値でのテンプレート式
+### メソッド省略記法
 
-```yaml
-vars:
-  api_token: "{{API_TOKEN}}"
-
-with:
-  url: "https://api.example.com/users"
-  headers:
-    Authorization: "Bearer {{vars.api_token}}"
-    Content-Type: "application/json"
-    User-Agent: "Probe Monitor v1.0"
-    X-Request-ID: "{{unixtime()}}"
-```
-
-### `body` (オプション)
-
-**型:** String  
-**説明:** リクエストボディコンテンツ  
-**サポート:** テンプレート式と複数行文字列
+`get` `head` `post` `put` `patch` `delete` `connect` `options` `trace` は、メソッドとパスを 1 つのキーで指定します。値は完全な URL か、`url` からの相対パスです。ジョブの `defaults` と組み合わせると簡潔に書けます。
 
 ```yaml
-# JSONボディ
-vars:
-  user_name: "{{USER_NAME}}"
-  user_email: "{{USER_EMAIL}}"
+jobs:
+  - name: API checks
+    defaults:
+      http:
+        url: "{{vars.api_url}}"
+        headers:
+          accept: application/json
+    steps:
+      - name: List users
+        uses: http
+        with:
+          get: /users
+        test: res.code == 200
 
-with:
-  url: "https://api.example.com/users"
-  method: "POST"
-  headers:
-    Content-Type: "application/json"
-  body: |
-    {
-      "name": "{{vars.user_name}}",
-      "email": "{{vars.user_email}}",
-      "active": true
-    }
-
-# フォームデータ
-with:
-  url: "https://api.example.com/form"
-  method: "POST"
-  headers:
-    Content-Type: "application/x-www-form-urlencoded"
-  body: "name={{vars.user_name}}&email={{vars.user_email}}"
-
-# テンプレート式
-with:
-  url: "https://api.example.com/users"
-  method: "PUT"
-  body: "{{outputs.user-data.json | tojson}}"
-```
-
-### `timeout` (オプション)
-
-**型:** Duration  
-**デフォルト:** `defaults.http.timeout`を継承、または`30s`  
-**説明:** リクエストタイムアウト
-
-```yaml
-with:
-  url: "https://api.example.com/slow-endpoint"
-  timeout: "60s"
-```
-
-### `follow_redirects` (オプション)
-
-**型:** Boolean  
-**デフォルト:** `defaults.http.follow_redirects`を継承、または`true`  
-**説明:** HTTPリダイレクトに従うかどうか
-
-```yaml
-with:
-  url: "https://example.com/redirect"
-  follow_redirects: false
-```
-
-### `verify_ssl` (オプション)
-
-**型:** Boolean  
-**デフォルト:** `defaults.http.verify_ssl`を継承、または`true`  
-**説明:** SSL証明書を検証するかどうか
-
-```yaml
-with:
-  url: "https://self-signed.example.com/api"
-  verify_ssl: false
-```
-
-### `max_redirects` (オプション)
-
-**型:** Integer  
-**デフォルト:** `defaults.http.max_redirects`を継承、または`10`  
-**説明:** 従うリダイレクトの最大数
-
-```yaml
-with:
-  url: "https://example.com/many-redirects"
-  max_redirects: 3
+      - name: Create a user
+        uses: http
+        with:
+          post: /users
+          headers:
+            content-type: application/json
+          body:
+            name: "{{vars.user_name}}"
+        test: res.code == 201
 ```
 
 ## レスポンスオブジェクト
 
-HTTPアクションは次のプロパティを持つ`res`オブジェクトを提供します：
-
- | プロパティ  | 型      | 説明                                             |
- | ----------  | ------  | -------------                                    |
- | `code`      | Integer | HTTPステータスコード (200, 404, 500など)         |
- | `time`      | Integer | レスポンス時間（ミリ秒）                         |
- | `body_size` | Integer | レスポンスボディサイズ（バイト）                 |
- | `headers`   | Object  | レスポンスヘッダーのキー値ペア                   |
- | `body.json` | Object  | 解析されたJSONレスポンス（有効なJSONの場合のみ） |
- | `body.text` | String  | レスポンスボディのテキスト                       |
+| フィールド | 型 | 説明 |
+|---|---|---|
+| `res.code` | Integer | ステータスコード（例: `200`） |
+| `res.status` | String | ステータス行（例: `"200 OK"`） |
+| `res.headers` | Object | レスポンスヘッダー。キーは `Content-Type` のような正規形 |
+| `res.body` | Any | レスポンスボディ。JSON ならオブジェクトや配列に解析され、それ以外は文字列 |
+| `res.rawbody` | String | 解析前のボディ。JSON として解析したときに入ります |
+| `res.filepath` | String | バイナリレスポンスを保存したファイルのパス |
+| `rt.duration` | String | ラウンドトリップ時間（例: `"120ms"`） |
+| `rt.sec` | Float | ラウンドトリップ時間（秒） |
+| `status` | Integer | ステータスコードが 2xx なら `0`、それ以外は `1` |
 
 ## レスポンス例
 
+JSON レスポンスの値は `res.body` から直接読みます。
+
 ```yaml
-steps:
-  - name: "API Test"
-    id: api-test
-    uses: http
-    with:
-      url: "https://jsonplaceholder.typicode.com/users/1"
     test: |
       res.code == 200 &&
-      res.time < 2000 &&
-      res.body.json.id == 1 &&
-      res.body.json.name != ""
+      res.headers["Content-Type"] contains "application/json" &&
+      res.body.status == "ok" &&
+      len(res.body.items) > 0
     outputs:
-      user_id: res.body.json.id
-      user_name: res.body.json.name
-      response_time: res.time
-      content_type: res.headers["Content-Type"]
+      first_id: res.body.items[0].id
+      elapsed_ms: rt.sec * 1000
 ```
 
-## 一般的なHTTPパターン
+テキストや HTML のレスポンスでは、`res.body` は文字列そのものです。
+
+```yaml
+    test: |
+      res.code == 200 &&
+      res.body contains "<title>" &&
+      len(res.body) > 100
+```
+
+## 一般的なパターン
 
 ### 認証
 
 ```yaml
-vars:
-  api_url: "{{API_URL}}"
-  access_token: "{{ACCESS_TOKEN}}"
-  username: "{{USERNAME}}"
-  password: "{{PASSWORD}}"
-  api_key: "{{API_KEY}}"
-
-# Bearerトークン
-steps:
-  - name: "Authenticated Request"
+  - name: Log in
+    id: auth
     uses: http
     with:
-      url: "{{vars.api_url}}/protected"
+      url: "{{vars.api_url}}/login"
+      method: POST
       headers:
-        Authorization: "Bearer {{vars.access_token}}"
+        content-type: application/json
+      body:
+        user: "{{vars.user}}"
+        password: "{{vars.password}}"
+    test: res.code == 200
+    outputs:
+      token: res.body.access_token
 
-# Basic認証
-  - name: "Basic Auth Request"
+  - name: Call a protected endpoint
     uses: http
     with:
-      url: "{{vars.api_url}}/basic"
+      url: "{{vars.api_url}}/me"
+      method: GET
       headers:
-        Authorization: "Basic {{encode_base64(vars.username + ':' + vars.password)}}"
-
-# APIキー
-  - name: "API Key Request"
-    uses: http
-    with:
-      url: "{{vars.api_url}}/data"
-      headers:
-        X-API-Key: "{{vars.api_key}}"
+        authorization: "Bearer {{outputs.auth.token}}"
+    test: res.code == 200
 ```
 
-### コンテンツタイプ
+Basic 認証は `encode_base64` で組み立てます。
 
 ```yaml
-vars:
-  api_url: "{{API_URL}}"
-  graphql_url: "{{GRAPHQL_URL}}"
-  user_id: "{{USER_ID}}"
-
-# JSON API
-steps:
-  - name: "JSON Request"
-    uses: http
-    with:
-      url: "{{vars.api_url}}/json"
-      method: "POST"
       headers:
-        Content-Type: "application/json"
-      body: |
-        {
-          "key": "value",
-          "timestamp": "{{unixtime()}}"
-        }
-
-# XMLリクエスト
-  - name: "XML Request"
-    uses: http
-    with:
-      url: "{{vars.api_url}}/xml"
-      method: "POST"
-      headers:
-        Content-Type: "application/xml"
-      body: |
-        <?xml version="1.0"?>
-        <data>
-          <key>value</key>
-        </data>
-
-# GraphQLクエリ
-  - name: "GraphQL Query"
-    uses: http
-    with:
-      url: "{{vars.graphql_url}}"
-      method: "POST"
-      headers:
-        Content-Type: "application/json"
-      body: |
-        {
-          "query": "query { user(id: \"{{vars.user_id}}\") { name email } }"
-        }
+        authorization: "Basic {{encode_base64(vars.user + ':' + vars.password)}}"
 ```
 
-### ファイルアップロード
+### エラーレスポンスの検証
 
 ```yaml
-vars:
-  api_url: "{{API_URL}}"
-
-steps:
-  - name: "File Upload"
+  - name: Unknown id returns 404
     uses: http
     with:
-      url: "{{vars.api_url}}/upload"
-      method: "POST"
-      headers:
-        Content-Type: "multipart/form-data"
-      body: |
-        --boundary123
-        Content-Disposition: form-data; name="file"; filename="test.txt"
-        Content-Type: text/plain
-
-        File content here
-        --boundary123--
+      url: "{{vars.api_url}}/users/does-not-exist"
+      method: GET
+    test: res.code == 404 && res.body.error != null
 ```
 
+### 不安定なエンドポイントのリトライ
+
+```yaml
+  - name: Eventually consistent read
+    uses: http
+    retry:
+      max_attempts: 5
+      interval: 2s
+    with:
+      url: "{{vars.api_url}}/orders/{{outputs.create.order_id}}"
+      method: GET
+    test: res.code == 200
+```
+
+## 関連項目
+
+- **[変数](./variables)** - ステップで使える変数
+- **[YAML設定](../yaml-configuration)** - ステップのプロパティ
+- **[組み込み関数](../built-in-functions)** - 式で使える関数

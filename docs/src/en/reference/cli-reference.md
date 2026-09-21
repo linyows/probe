@@ -27,7 +27,7 @@ Execute workflows with configuration merging:
 probe base.yml,environment.yml,overrides.yml
 ```
 
-Multiple files are merged from left to right, with later files overriding earlier ones.
+The files are concatenated from left to right into a single YAML document. A top-level key defined in more than one file takes the value from the last file, and the whole key is replaced rather than merged entry by entry.
 
 ### Positional Arguments
 
@@ -95,9 +95,34 @@ probe --version
 
 **Output Format:**
 ```
-Probe Version 1.2.3
-Build: abc1234
-Go Version: go1.20.1
+Probe Version 1.2.3 (commit: abc1234)
+```
+
+### `--timing`
+
+**Type:** Boolean flag  
+**Default:** `false`  
+**Description:** Show timing information (start time and response time) for each step
+
+**Example:**
+```bash
+probe --timing workflow.yml
+```
+
+### `--output`
+
+**Type:** String  
+**Values:** `auto`, `spinner`, `stream`  
+**Default:** `auto`  
+**Description:** Select how the report is rendered. `auto` picks `spinner` on an interactive terminal and `stream` otherwise. `spinner` redraws progress in place, while `stream` writes each result as it completes, which suits CI logs and pipes.
+
+The value can also come from the `PROBE_OUTPUT` environment variable. The flag wins over the environment variable, which in turn wins over auto detection.
+
+**Example:**
+```bash
+probe --output stream workflow.yml
+probe --output=spinner workflow.yml
+PROBE_OUTPUT=stream probe workflow.yml
 ```
 
 ## Subcommands
@@ -191,62 +216,51 @@ This is useful for:
 
 The following environment variables affect Probe's behavior:
 
-### `PROBE_CONFIG`
+### `PROBE_OUTPUT`
 
 **Type:** String  
-**Description:** Path to default configuration file
-**Default:** None
+**Values:** `auto`, `spinner`, `stream`  
+**Default:** `auto`  
+**Description:** Report output mode, same as `--output`. The flag takes precedence.
 
 ```bash
-export PROBE_CONFIG=/etc/probe/default.yml
-probe workflow.yml  # Will merge with default config
+export PROBE_OUTPUT=stream
+probe workflow.yml
 ```
 
-### `PROBE_LOG_LEVEL`
+### `PROBE_MAX_REPEAT_COUNT`
+
+**Type:** Integer  
+**Default:** `10000`  
+**Description:** Upper limit for a step's `repeat.count`. A workflow that asks for more is rejected.
+
+```bash
+export PROBE_MAX_REPEAT_COUNT=50000
+probe load-test.yml
+```
+
+### `PROBE_MAX_ATTEMPTS`
+
+**Type:** Integer  
+**Default:** `10000`  
+**Description:** Upper limit for a step's retry `max_attempts`.
+
+```bash
+export PROBE_MAX_ATTEMPTS=100
+probe workflow.yml
+```
+
+### `FORCE_COLOR`
 
 **Type:** String  
-**Values:** `debug`, `info`, `warn`, `error`  
-**Default:** `info`  
-**Description:** Set logging level
+**Values:** `1`  
+**Description:** Force colored output even when standard output is not a terminal, such as in a CI log.
 
 ```bash
-export PROBE_LOG_LEVEL=debug
-probe workflow.yml
+FORCE_COLOR=1 probe workflow.yml
 ```
 
-### `PROBE_NO_COLOR`
-
-**Type:** Boolean  
-**Values:** `true`, `false`, `1`, `0`  
-**Default:** `false`  
-**Description:** Disable colored output
-
-```bash
-export PROBE_NO_COLOR=true
-probe workflow.yml
-```
-
-### `PROBE_TIMEOUT`
-
-**Type:** Duration  
-**Default:** `300s`  
-**Description:** Global timeout for workflow execution
-
-```bash
-export PROBE_TIMEOUT=600s
-probe workflow.yml
-```
-
-### `PROBE_PLUGIN_DIR`
-
-**Type:** String  
-**Default:** `~/.probe/plugins`  
-**Description:** Directory containing custom plugins
-
-```bash
-export PROBE_PLUGIN_DIR=/usr/local/lib/probe/plugins
-probe workflow.yml
-```
+Workflows read any other environment variable through `vars`, so `API_URL`, `ENVIRONMENT` and the like are yours to define. See [Environment Variables](/reference/environment-variables) for that side of things.
 
 ## Usage Examples
 
@@ -342,18 +356,12 @@ WantedBy=multi-user.target
 
 ## Exit Codes
 
-Probe uses standard exit codes to indicate execution results:
+Probe reports the outcome of a run with two exit codes:
 
 | Exit Code | Meaning | Description |
 |-----------|---------|-------------|
-| `0` | Success | All workflow jobs completed successfully |
-| `1` | General Error | Workflow failed due to test failures or action errors |
-| `2` | Configuration Error | Invalid YAML syntax or configuration |
-| `3` | File Not Found | Workflow file(s) could not be found |
-| `4` | Permission Error | Insufficient permissions to read files or execute |
-| `5` | Network Error | Network connectivity issues |
-| `6` | Timeout Error | Workflow execution exceeded timeout |
-| `7` | Plugin Error | Plugin loading or execution failed |
+| `0` | Success | Every job completed and every test passed |
+| `1` | Failure | A test failed, an action returned an error, or the workflow could not be loaded (missing file, invalid YAML, unknown flag) |
 
 ### Exit Code Examples
 
@@ -370,29 +378,6 @@ fi
 probe integration-tests.yml || exit 1
 ```
 
-## Configuration File Search Order
-
-Probe searches for configuration files in the following order:
-
-1. **Command line argument** (explicit file path)
-2. **Current directory** (`./probe.yml`, `./probe.yaml`)  
-3. **Home directory** (`~/.probe.yml`, `~/.probe.yaml`)
-4. **System directory** (`/etc/probe/probe.yml`)
-5. **Environment variable** (`$PROBE_CONFIG`)
-
-### Example Search
-
-```bash
-# Probe will search in this order:
-# 1. ./my-workflow.yml (command line)
-# 2. ./probe.yml (current directory)
-# 3. ~/.probe.yml (home directory)  
-# 4. /etc/probe/probe.yml (system)
-# 5. $PROBE_CONFIG (environment)
-
-probe my-workflow.yml
-```
-
 ## Performance and Resource Usage
 
 ### Memory Usage
@@ -407,8 +392,8 @@ probe my-workflow.yml
 # Time workflow execution
 time probe workflow.yml
 
-# Detailed timing with verbose mode
-probe -v workflow.yml 2>&1 | grep "Execution time"
+# Per-step timing
+probe --timing workflow.yml
 ```
 
 ### Concurrent Execution
@@ -427,14 +412,14 @@ probe -v parallel-workflow.yml
 ### Debug Information
 
 ```bash
-# Maximum debug output
-PROBE_LOG_LEVEL=debug probe -v workflow.yml
+# Maximum detail
+probe -v --timing workflow.yml
 
-# Check version and build info
+# Check version and commit
 probe --version
 
-# Validate workflow syntax without execution
-probe --dry-run workflow.yml  # (if supported)
+# Inspect the job dependency graph without running the workflow
+probe dag workflow.yml
 ```
 
 ### Common Issues
@@ -513,7 +498,7 @@ pipeline {
     
     environment {
         API_TOKEN = credentials('api-token')
-        PROBE_LOG_LEVEL = 'info'
+        PROBE_OUTPUT = 'stream'
     }
     
     stages {

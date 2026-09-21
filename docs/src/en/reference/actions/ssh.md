@@ -250,8 +250,8 @@ Password and private key information is automatically excluded from logs.
 Use environment variables for sensitive information:
 ```yaml
 vars:
-  ssh_password: "{{env.SSH_PASSWORD}}"
-  deploy_key: "{{env.DEPLOY_KEY_PATH}}"
+  ssh_password: "{{vars.SSH_PASSWORD}}"
+  deploy_key: "{{vars.DEPLOY_KEY_PATH}}"
 
 steps:
 - uses: ssh

@@ -250,8 +250,8 @@ test: |
 機密情報は環境変数を使用：
 ```yaml
 vars:
-  ssh_password: "{{env.SSH_PASSWORD}}"
-  deploy_key: "{{env.DEPLOY_KEY_PATH}}"
+  ssh_password: "{{vars.SSH_PASSWORD}}"
+  deploy_key: "{{vars.DEPLOY_KEY_PATH}}"
 
 steps:
 - uses: ssh

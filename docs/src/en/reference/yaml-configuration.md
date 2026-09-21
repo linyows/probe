@@ -1,724 +1,391 @@
 # YAML Configuration Reference
 
-This page provides complete documentation for Probe's YAML configuration syntax, including all available options, data types, and validation rules.
+This page documents every key Probe reads from a workflow file, the expression context each field is evaluated in, and the validation rules that apply.
 
 ## Workflow Structure
 
-The basic structure of a Probe workflow:
-
 ```yaml
-name: string                    # Required: Workflow name
-description: string             # Optional: Workflow description
-vars:                          # Optional: Variables (including environment variables)
-  KEY: "{{ENV_VAR ?? 'default'}}"
-defaults:                      # Optional: Default settings
-  http:
-    timeout: duration
-    headers:
-      KEY: value
-jobs:                          # Required: Job definitions
-  job-id:
-    # Job configuration
+name: string                  # Required: workflow name
+description: string           # Optional: what the workflow does
+vars:                         # Optional: workflow variables
+  key: value
+jobs:                         # Required: a list of jobs
+  - name: string              # Required: job name
+    id: string                # Optional: job id, used by needs
+    needs: [job-id, ...]      # Optional: job dependencies
+    skipif: expression        # Optional: skip the job when true
+    defaults:                 # Optional: default `with` values per action
+      http:
+        url: string
+    repeat:                   # Optional: run the job repeatedly
+      count: integer
+      interval: duration
+    steps:                    # Required: a list of steps
+      - name: string          # Optional: step name
+        id: string            # Optional: step id, required to publish outputs
+        uses: string          # Required: action name
+        with:                 # Optional: action parameters
+          key: value
+        test: expression      # Optional: assertion
+        echo: string          # Optional: text added to the report
+        vars:                 # Optional: step variables
+          key: value
+        outputs:              # Optional: values published for later steps
+          key: expression
+        skipif: expression    # Optional: skip the step when true
+        wait: duration        # Optional: wait before running the step
+        timeout: duration     # Optional: step timeout
+        iteration:            # Optional: run the step once per entry
+          - key: value
+        retry:                # Optional: retry on failure
+          max_attempts: integer
+          interval: duration
+          initial_delay: duration
 ```
+
+`jobs` is a **list**, not a mapping. A workflow that writes `jobs:` as a mapping of job ids fails to load.
+
+There is no top-level `env` key and no top-level `defaults` key. Environment variables are read through `vars`, and `defaults` belongs to a job.
 
 ## Top-Level Properties
 
 ### `name`
 
 **Type:** String (required)  
-**Description:** Human-readable name for the workflow  
-**Constraints:** Must be non-empty
+**Description:** Name of the workflow, shown at the top of the report.
 
 ```yaml
 name: "API Health Check"
-name: "Production Monitoring Workflow"
 ```
 
 ### `description`
 
 **Type:** String (optional)  
-**Description:** Detailed description of the workflow's purpose  
-**Supports:** Multi-line strings using YAML literal block syntax
+**Description:** Longer explanation of what the workflow does.
 
 ```yaml
-description: "Monitors the health of production APIs"
-
-# Multi-line description
 description: |
-  This workflow performs comprehensive health checks including:
-  - API endpoint validation
-  - Database connectivity testing
-  - Performance monitoring
+  Checks the production API:
+  - endpoint availability
+  - response times
 ```
 
-### `env`
+### `vars`
 
 **Type:** Object (optional)  
-**Description:** Environment variables available to all jobs and steps  
-**Key Format:** Valid environment variable names (alphanumeric + underscore)  
-**Value Types:** String, number, boolean
+**Description:** Variables available to every job and step as `vars.<name>`.
 
-```yaml
-env:
-  API_BASE_URL: "https://api.example.com"
-  TIMEOUT_SECONDS: 30
-  DEBUG_MODE: true
-  USER_AGENT: "Probe Monitor v1.0"
-```
+`vars` is the only place where environment variables are visible, and they are referenced by their bare name. Values are evaluated once, before the first job starts.
 
-**Environment Variable Resolution:**
 ```yaml
 vars:
-  # Static values
-  api_url: "https://api.example.com"
-  
-  # Reference external environment variables
-  db_password: "{{DATABASE_PASSWORD}}"
-  
-  # Default values
+  # Read an environment variable
+  api_url: "{{API_URL}}"
+
+  # With a fallback
   timeout: "{{REQUEST_TIMEOUT ?? '30s'}}"
-  
-  # Computed values
-  build_info: "Build {{BUILD_NUMBER ?? 'unknown'}} at {{unixtime()}}"
+
+  # Computed at load time
+  run_id: "{{random_str(8)}}"
+
+  # Nested values are supported
+  auth:
+    user: "{{API_USER}}"
 ```
 
-### `defaults`
+Expressions inside a step cannot read environment variables directly - there is no `env` in the expression context. Put the variable in `vars` and read `vars.<name>`.
 
-**Type:** Object (optional)  
-**Description:** Default settings that apply to all actions unless overridden
-
-#### `defaults.http`
-
-HTTP-specific default settings:
-
-```yaml
-defaults:
-  http:
-    timeout: "30s"                    # Default timeout for HTTP actions
-    follow_redirects: true            # Follow HTTP redirects
-    verify_ssl: true                  # Verify SSL certificates
-    max_redirects: 5                  # Maximum redirect count
-    headers:                          # Default headers for all HTTP requests
-      User-Agent: "Probe Monitor"
-      Accept: "application/json"
-      Authorization: "Bearer {{vars.api_token}}"
-```
-
-**Supported HTTP Defaults:**
-
-| Property | Type | Default | Description |
-|----------|------|---------|-------------|
-| `timeout` | Duration | `30s` | Request timeout |
-| `follow_redirects` | Boolean | `true` | Follow HTTP redirects |
-| `verify_ssl` | Boolean | `true` | Verify SSL certificates |
-| `max_redirects` | Integer | `10` | Maximum redirects to follow |
-| `headers` | Object | `{}` | Default headers |
-
-## Jobs Configuration
-
-### Job Structure
-
-```yaml
-jobs:
-  job-id:                           # Unique job identifier
-    name: string                    # Optional: Human-readable job name
-    needs: [job-id, ...]           # Optional: Job dependencies
-    if: expression                  # Optional: Conditional execution
-    continue_on_error: boolean      # Optional: Continue workflow on job failure
-    timeout: duration               # Optional: Job timeout
-    steps:                         # Required: Array of steps
-      - # Step configuration
-```
+## Jobs
 
 ### Job Properties
 
-#### `name`
+| Property | Type | Required | Description |
+|----------|------|----------|-------------|
+| `name` | String | Yes | Job name, shown in the report. Supports template expressions |
+| `id` | String | No | Identifier used by another job's `needs`. Generated automatically when omitted |
+| `needs` | Array | No | Ids of jobs that must finish first |
+| `steps` | Array | Yes | The steps to run |
+| `skipif` | Expression | No | Skip the whole job when the expression is true |
+| `defaults` | Object | No | Default `with` values, keyed by action name |
+| `repeat` | Object | No | Run the job repeatedly |
 
-**Type:** String (optional)  
-**Description:** Human-readable name for the job  
-**Default:** Uses job ID if not specified
-
-```yaml
-jobs:
-  api-test:
-    name: "API Health Check"
-```
+There is no `if`, `continue_on_error` or `timeout` at the job level.
 
 #### `needs`
 
-**Type:** Array of strings (optional)  
-**Description:** List of job IDs that must complete before this job runs  
-**Constraints:** Referenced jobs must exist
+Jobs without dependencies start in parallel. `needs` refers to job **ids**, so a job that others depend on needs an explicit `id`.
 
 ```yaml
 jobs:
-  setup:
-    # Setup job
-  
-  test:
-    needs: [setup]              # Single dependency
-  
-  cleanup:
-    needs: [setup, test]        # Multiple dependencies
+  - id: setup
+    name: Setup
+    steps:
+      - name: Prepare
+        uses: hello
+        echo: "ready"
+
+  - name: Test
+    needs: [setup]
+    steps:
+      - name: Run
+        uses: hello
+        echo: "testing"
 ```
 
-#### `if`
+#### `skipif`
 
-**Type:** Expression string (optional)  
-**Description:** Conditional expression determining if job should execute  
-**Context:** Access to environment variables and other job results
-
-```yaml
-vars:
-  environment: "{{ENVIRONMENT}}"
-
-jobs:
-  production-only:
-    if: vars.environment == "production"
-  
-  cleanup:
-    if: jobs.test.failed
-  
-  notification:
-    if: jobs.test.success || jobs.fallback.success
-```
-
-#### `continue_on_error`
-
-**Type:** Boolean (optional)  
-**Default:** `false`  
-**Description:** Whether workflow should continue if this job fails
+A boolean expression. The job is skipped when it evaluates to true.
 
 ```yaml
 jobs:
-  critical-test:
-    continue_on_error: false    # Stop workflow on failure (default)
-  
-  optional-check:
-    continue_on_error: true     # Continue workflow even if this fails
+  - name: Production only
+    skipif: vars.environment != "production"
+    steps:
+      - name: Check
+        uses: http
+        with:
+          method: GET
+          url: "{{vars.api_url}}/health"
 ```
 
-#### `timeout`
+#### `defaults`
 
-**Type:** Duration (optional)  
-**Description:** Maximum time this job can run  
-**Format:** Duration string (e.g., `30s`, `5m`, `1h`)
+Default parameters merged into the `with` of every step in the job that uses the matching action. A value set on the step wins.
 
 ```yaml
 jobs:
-  quick-check:
-    timeout: "30s"
-  
-  comprehensive-test:
-    timeout: "10m"
+  - name: API checks
+    defaults:
+      http:
+        url: "{{vars.api_url}}"
+        headers:
+          authorization: "Bearer {{vars.token}}"
+          accept: application/json
+    steps:
+      - name: Health
+        uses: http
+        with:
+          get: /health        # resolved against the default url
+        test: res.code == 200
 ```
 
-## Steps Configuration
-
-### Step Structure
+The `http` action requires a method. Either set `method` explicitly, or use the shorthand key `get` / `post` / `put` / `delete` / `patch`, whose value is a full URL or a path resolved against `url`.
 
 ```yaml
-steps:
-  - name: string                    # Required: Step name
-    id: string                      # Optional: Step identifier for referencing
-    action: string                  # Optional: Action to execute
-    with:                          # Optional: Action parameters
-      parameter: value
-    test: expression               # Optional: Test condition
-    outputs:                       # Optional: Output definitions
-      key: expression
-    echo: string                   # Optional: Message to display
-    if: expression                 # Optional: Conditional execution
-    continue_on_error: boolean     # Optional: Continue on step failure
-    timeout: duration              # Optional: Step timeout
+      - name: Explicit method
+        uses: http
+        with:
+          url: "{{vars.api_url}}/health"
+          method: GET
 ```
+
+#### `repeat`
+
+| Property | Type | Required | Description |
+|----------|------|----------|-------------|
+| `count` | Integer | Yes | Number of runs. Capped by `PROBE_MAX_REPEAT_COUNT` (default 10000) |
+| `interval` | Duration | No | Wait between runs |
+| `async` | Boolean | No | Run the repetitions concurrently |
+
+```yaml
+jobs:
+  - name: Poll until ready
+    repeat:
+      count: 10
+      interval: 5s
+    steps:
+      - name: Check
+        uses: http
+        with:
+          method: GET
+          url: "{{vars.api_url}}/status"
+        test: res.code == 200
+```
+
+## Steps
 
 ### Step Properties
 
-#### `name`
+| Property | Type | Required | Description |
+|----------|------|----------|-------------|
+| `uses` | String | Yes | Action to run, such as `http` or `shell` |
+| `name` | String | No | Step name, shown in the report |
+| `id` | String | No | Identifier that namespaces this step's `outputs` |
+| `with` | Object | No | Action parameters |
+| `test` | Expression | No | Assertion. The step fails when it is false |
+| `echo` | String | No | Text added to the report |
+| `vars` | Object | No | Variables local to the step |
+| `outputs` | Object | No | Values published for later steps and jobs |
+| `skipif` | Expression | No | Skip the step when true |
+| `wait` | Duration | No | Wait before running the step |
+| `timeout` | Duration | No | Step timeout (default 5m) |
+| `iteration` | Array | No | Run the step once per entry, exposed as `vars` |
+| `retry` | Object | No | Retry the step on failure |
 
-**Type:** String (required)  
-**Description:** Human-readable name for the step
-
-```yaml
-steps:
-  - name: "Check API Health"
-  - name: "Validate User Authentication"
-```
-
-#### `id`
-
-**Type:** String (optional)  
-**Description:** Unique identifier for referencing step outputs  
-**Constraints:** Must be unique within the job, alphanumeric + hyphens/underscores
-
-```yaml
-steps:
-  - name: "Get Auth Token"
-    id: auth
-    # ... step configuration
-  
-  - name: "Use Auth Token"
-    action: http
-    with:
-      headers:
-        Authorization: "Bearer {{outputs.auth.token}}"
-```
-
-#### `action`
-
-**Type:** String (optional)  
-**Description:** Action plugin to execute  
-**Built-in Actions:** `http`, `hello`, `smtp`
-
-```yaml
-steps:
-  - name: "HTTP Request"
-    action: http
-  
-  - name: "Send Email"
-    action: smtp
-  
-  - name: "Test Plugin"
-    action: hello
-```
-
-#### `with`
-
-**Type:** Object (optional)  
-**Description:** Parameters passed to the action  
-**Structure:** Varies by action type
-
-**HTTP Action Parameters:**
-```yaml
-steps:
-  - name: "API Request"
-    action: http
-    with:
-      url: "https://api.example.com/users"     # Required
-      method: "GET"                            # Optional, default: GET
-      headers:                                 # Optional
-        Authorization: "Bearer {{env.TOKEN}}"
-        Content-Type: "application/json"
-      body: |                                  # Optional
-        {
-          "name": "Test User"
-        }
-      timeout: "30s"                          # Optional
-      follow_redirects: true                   # Optional
-      verify_ssl: true                        # Optional
-      max_redirects: 5                        # Optional
-```
-
-**SMTP Action Parameters:**
-```yaml
-vars:
-  smtp_user: "{{SMTP_USER}}"
-  smtp_pass: "{{SMTP_PASS}}"
-  service_name: "{{SERVICE_NAME}}"
-
-steps:
-  - name: "Send Notification"
-    uses: smtp
-    with:
-      host: "smtp.gmail.com"                  # Required
-      port: 587                               # Optional, default: 587
-      username: "{{vars.smtp_user}}"          # Required
-      password: "{{vars.smtp_pass}}"          # Required
-      from: "alerts@example.com"              # Required
-      to: ["admin@example.com"]               # Required
-      cc: ["team@example.com"]                # Optional
-      bcc: ["audit@example.com"]              # Optional
-      subject: "Alert: {{vars.service_name}}" # Required
-      body: "Service alert message"           # Required
-      html: false                             # Optional, default: false
-      tls: true                              # Optional, default: true
-```
-
-**Hello Action Parameters:**
-```yaml
-steps:
-  - name: "Test Hello"
-    action: hello
-    with:
-      message: "Test message"                 # Optional
-      delay: "1s"                            # Optional
-```
-
-#### `test`
-
-**Type:** Expression string (optional)  
-**Description:** Boolean expression that determines step success/failure  
-**Context:** Access to action response via `res` object
-
-```yaml
-steps:
-  - name: "API Health Check"
-    action: http
-    with:
-      url: "{{env.API_URL}}/health"
-    test: res.status == 200
-  
-  - name: "Complex Validation"
-    action: http
-    with:
-      url: "{{env.API_URL}}/data"
-    test: |
-      res.status == 200 &&
-      res.json.success == true &&
-      res.json.data.length > 0 &&
-      res.time < 1000
-```
-
-**Response Object Properties:**
-
-For HTTP actions, the `res` object contains:
-
-| Property | Type | Description |
-|----------|------|-------------|
-| `status` | Integer | HTTP status code |
-| `time` | Integer | Response time in milliseconds |
-| `body_size` | Integer | Response body size in bytes |
-| `headers` | Object | Response headers |
-| `json` | Object | Parsed JSON response (if applicable) |
-| `text` | String | Response body as text |
+The key is `uses`, not `action`, and the conditional key is `skipif`, not `if`.
 
 #### `outputs`
 
-**Type:** Object (optional)  
-**Description:** Named values extracted from the step for use in later steps  
-**Key Format:** Valid identifier names  
-**Value Type:** Expression strings
+Values published for use by later steps and jobs. **A step only publishes outputs when it has an `id`** - without one the `outputs` block is discarded.
+
+Each value is an expression, not a template, so it is written without <span v-pre>`{{ }}`</span>.
 
 ```yaml
 steps:
-  - name: "Get User Data"
-    id: user-data
-    action: http
+  - name: Log in
+    id: auth
+    uses: http
     with:
-      url: "{{env.API_URL}}/users/1"
-    test: res.status == 200
+      url: "{{vars.api_url}}/login"
+      method: POST
+    test: res.code == 200
     outputs:
-      user_id: res.json.id
-      user_name: res.json.name
-      user_email: res.json.email
-      response_time: res.time
-      is_active: res.json.active == true
-      full_name: "{{res.json.first_name}} {{res.json.last_name}}"
+      token: res.body.access_token
+      user_id: res.body.user.id
 ```
 
-#### `echo`
+Later steps read them either namespaced by step id or by the output name alone:
 
-**Type:** String (optional)  
-**Description:** Message to display during step execution  
-**Supports:** Template expressions and multi-line strings
+```yaml
+      headers:
+        Authorization: "Bearer {{outputs.auth.token}}"
+        X-User: "{{outputs.user_id}}"
+```
+
+An id containing a hyphen is not a valid identifier in an expression, so it has to be read with brackets:
+
+```yaml
+    echo: "{{outputs['create-user'].user_id}}"
+```
+
+#### `retry`
+
+| Property | Type | Required | Description |
+|----------|------|----------|-------------|
+| `max_attempts` | Integer | Yes | Total attempts, at least 1. Capped by `PROBE_MAX_ATTEMPTS` (default 10000) |
+| `interval` | Duration | No | Wait between attempts |
+| `initial_delay` | Duration | No | Wait before the first attempt |
 
 ```yaml
 steps:
-  - name: "Display Status"
-    echo: "Current time: {{unixtime()}}"
-  
-  - name: "Multi-line Report"
-    echo: |
-      Test Results:
-      API Status: {{outputs.api-test.success ? "✅ Healthy" : "❌ Failed"}}
-      Response Time: {{outputs.api-test.response_time}}ms
-      User Count: {{outputs.api-test.user_count}}
+  - name: Flaky endpoint
+    uses: http
+    with:
+      method: GET
+      url: "{{vars.api_url}}/slow"
+    test: res.code == 200
+    retry:
+      max_attempts: 3
+      interval: 2s
 ```
 
-#### `if`
+#### `iteration`
 
-**Type:** Expression string (optional)  
-**Description:** Conditional expression determining if step should execute
+Runs the step once per entry. Each entry's keys are exposed through `vars`.
 
 ```yaml
 steps:
-  - name: "Production Only Step"
-    if: "{{env.ENVIRONMENT}}" == "production"
-    action: http
+  - name: Check {{vars.path}}
+    uses: http
+    iteration:
+      - path: /health
+      - path: /metrics
+      - path: /version
     with:
-      url: "{{env.PROD_API_URL}}/check"
-  
-  - name: "Retry on Failure"
-    if: steps.previous-step.failed
-    action: http
-    with:
-      url: "{{env.FALLBACK_URL}}/retry"
+      method: GET
+      url: "{{vars.api_url}}{{vars.path}}"
+    test: res.code == 200
 ```
 
-#### `continue_on_error`
+## The Expression Context
 
-**Type:** Boolean (optional)  
-**Default:** `false`  
-**Description:** Whether job should continue if this step fails
+Inside a step, an expression sees exactly these names:
+
+| Name | Type | Description |
+|------|------|-------------|
+| `vars` | Object | Workflow variables merged with the step's own `vars` |
+| `res` | Object | The action's response |
+| `req` | Object | The request as it was sent |
+| `rt` | Object | Response time: `rt.duration` (string) and `rt.sec` (float seconds) |
+| `status` | Integer | Action exit status, `0` on success |
+| `outputs` | Object | Outputs published by earlier steps |
+| `repeat_index` | Integer | Current index when the job repeats |
+
+There is no `env`, `jobs` or `steps` in this context.
+
+### The `res` Object for `http`
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `res.code` | Integer | Status code, such as `200` |
+| `res.status` | String | Status line, such as `"200 OK"` |
+| `res.headers` | Object | Response headers, keyed by canonical name such as `Content-Type` |
+| `res.body` | Any | Response body. Parsed into an object or array when the response is JSON, otherwise the raw string |
+| `res.rawbody` | String | The unparsed body, present when the body was parsed as JSON |
 
 ```yaml
-steps:
-  - name: "Critical Step"
-    action: http
-    with:
-      url: "{{env.CRITICAL_URL}}/check"
-    continue_on_error: false      # Stop job on failure (default)
-  
-  - name: "Optional Step"
-    action: http
-    with:
-      url: "{{env.OPTIONAL_URL}}/info"
-    continue_on_error: true       # Continue job even if this fails
+    test: |
+      res.code == 200 &&
+      res.headers["Content-Type"] contains "application/json" &&
+      res.body.status == "ok" &&
+      rt.sec < 1
 ```
 
-#### `timeout`
-
-**Type:** Duration (optional)  
-**Description:** Maximum time this step can run
-
-```yaml
-steps:
-  - name: "Quick Check"
-    timeout: "5s"
-    action: http
-    with:
-      url: "{{env.API_URL}}/ping"
-  
-  - name: "Long Running Process"
-    timeout: "5m"
-    action: http
-    with:
-      url: "{{env.API_URL}}/long-process"
-```
+Other actions publish their own `res` fields; see the [Actions Reference](/reference/actions-reference).
 
 ## Data Types
 
 ### Duration
 
-Duration strings specify time periods:
-
-**Format:** `<number><unit>`  
-**Units:** `ns`, `us`, `ms`, `s`, `m`, `h`
+A duration is either a Go duration string or a plain number of seconds.
 
 ```yaml
-# Examples
-timeout: "30s"          # 30 seconds
-timeout: "5m"           # 5 minutes
-timeout: "1h30m"        # 1 hour 30 minutes
-timeout: "500ms"        # 500 milliseconds
+timeout: "30s"
+timeout: "5m"
+interval: 10        # 10 seconds
 ```
 
-### Expression Strings
+### Expressions and Templates
 
-Expression strings use Go template syntax with custom functions:
-
-**Template Expressions:** `{{expression}}`  
-**Test Expressions:** Plain boolean expressions
+A **template expression** appears inside a string and is replaced by its value:
 
 ```yaml
-# Template expressions (for values)
-url: "{{env.BASE_URL}}/api/{{env.VERSION}}"
-message: "Hello {{outputs.user.name}}"
-
-# Test expressions (for conditions)
-test: res.status == 200 && res.time < 1000
-if: "{{env.ENVIRONMENT}}" == "production"
+url: "{{vars.api_url}}/users/{{outputs.auth.user_id}}"
 ```
 
-### Environment Variable References
-
-Reference environment variables in expressions:
+A **boolean expression** is written bare, without braces:
 
 ```yaml
-env:
-  API_URL: "{{env.EXTERNAL_API_URL}}"           # Reference external env var
-  TIMEOUT: "{{env.REQUEST_TIMEOUT || '30s'}}"   # With default value
-  DEBUG: "{{env.DEBUG_MODE == 'true'}}"         # Boolean conversion
+test: res.code == 200 && rt.sec < 2
+skipif: vars.environment == "local"
 ```
+
+`outputs` values are expressions too, so they take no braces.
+
+See [Built-in Functions](/reference/built-in-functions) for what can be called inside an expression.
 
 ## Validation Rules
 
-### Workflow Validation
+- `name` is required at the workflow level, and `jobs` must be a non-empty list.
+- Every job needs a `name` and at least one step.
+- Every step needs a `uses`.
+- A job's `needs` must refer to ids that exist, and the dependency graph must be acyclic.
+- `repeat.count` must be zero or greater, and `retry.max_attempts` at least 1.
+- A step must have an `id` for its `outputs` to be published.
 
-- `name` is required and non-empty
-- `jobs` is required and contains at least one job
-- Job IDs must be unique
-- Job IDs in `needs` must reference existing jobs
-- No circular dependencies in job `needs`
+## File Merging
 
-### Job Validation
+Several files can be combined by passing them comma-separated. They are concatenated in order, and a top-level key defined more than once takes the value from the last file:
 
-- Each job must have a `steps` array
-- Step names are required and should be descriptive
-- Step IDs must be unique within the job
-- Action names must be valid (built-in or available plugins)
-
-### Expression Validation
-
-- Template expressions must use valid Go template syntax
-- Test expressions must evaluate to boolean values
-- Referenced variables and outputs must exist
-- Function calls must use valid built-in functions
-
-## Common Patterns
-
-### Environment-Specific Configuration
-
-```yaml
-vars:
-  node_env: "{{NODE_ENV}}"
-  environment: "{{vars.node_env || 'development'}}"
-  api_url: |
-    {{vars.node_env == "production" ? 
-      "https://api.prod.com" : 
-      "https://api.dev.com"}}
-  timeout: |
-    {{vars.node_env == "production" ? "10s" : "30s"}}
+```bash
+probe base.yml,production.yml
 ```
 
-### Conditional Job Execution
-
-```yaml
-vars:
-  environment: "{{ENVIRONMENT}}"
-
-jobs:
-  setup:
-    # Always runs
-  
-  development-tests:
-    if: "{{vars.environment}}" == "development"
-    needs: [setup]
-  
-  production-checks:
-    if: "{{vars.environment}}" == "production"  
-    needs: [setup]
-  
-  cleanup:
-    needs: [development-tests, production-checks]
-    if: |
-      jobs.development-tests.executed || 
-      jobs.production-checks.executed
-```
-
-### Error Handling and Recovery
-
-```yaml
-jobs:
-  primary-test:
-    continue_on_error: true
-    steps:
-      - name: "Primary Service Test"
-        action: http
-        with:
-          url: "{{env.PRIMARY_URL}}/test"
-        continue_on_error: true
-  
-  fallback-test:
-    if: jobs.primary-test.failed
-    steps:
-      - name: "Fallback Service Test"
-        action: http
-        with:
-          url: "{{env.FALLBACK_URL}}/test"
-```
-
-### Data Flow Between Steps
-
-```yaml
-jobs:
-  data-processing:
-    steps:
-      - name: "Fetch Data"
-        id: fetch
-        action: http
-        with:
-          url: "{{env.API_URL}}/data"
-        outputs:
-          data_count: res.json.items.length
-          first_item_id: res.json.items[0].id
-      
-      - name: "Process Data"
-        action: http
-        with:
-          url: "{{env.API_URL}}/process/{{outputs.fetch.first_item_id}}"
-        test: res.status == 200
-      
-      - name: "Summary"
-        echo: "Processed {{outputs.fetch.data_count}} items"
-```
-
-## Best Practices
-
-### YAML Style
-
-```yaml
-# Good: Consistent indentation (2 spaces)
-jobs:
-  test:
-    name: "API Test"
-    steps:
-      - name: "Health Check"
-        action: http
-
-# Good: Quoted strings with special characters
-env:
-  MESSAGE: "Hello, World!"
-  PATTERN: "user-\\d+"
-
-# Good: Multi-line strings for readability
-description: |
-  This workflow performs comprehensive testing including:
-  - API endpoint validation
-  - Database connectivity
-  - Performance benchmarks
-```
-
-### Naming Conventions
-
-```yaml
-# Good: Descriptive names
-name: "Production API Health Check"
-
-jobs:
-  user-authentication-test:
-    name: "User Authentication Test"
-    
-  database-connectivity-check:
-    name: "Database Connectivity Check"
-
-steps:
-  - name: "Verify SSL Certificate Validity"
-  - name: "Test User Login Endpoint"
-  - name: "Validate Database Connection Pool"
-```
-
-### Configuration Organization
-
-```yaml
-# Good: Logical grouping
-env:
-  # API Configuration
-  API_BASE_URL: "https://api.example.com"
-  API_VERSION: "v1"
-  API_TIMEOUT: "30s"
-  
-  # Database Configuration  
-  DB_HOST: "localhost"
-  DB_PORT: 5432
-  
-  # Feature Flags
-  ENABLE_CACHING: true
-  ENABLE_METRICS: false
-
-defaults:
-  http:
-    timeout: "{{env.API_TIMEOUT}}"
-    headers:
-      User-Agent: "Probe Monitor"
-      Accept: "application/json"
-```
+See [File Merging](/guide/concepts/file-merging) for the merge rules.
 
 ## See Also
 
-- **[CLI Reference](../cli-reference/)** - Command-line options and usage
-- **[Actions Reference](../actions-reference/)** - Built-in actions and parameters
-- **[Built-in Functions](../built-in-functions/)** - Expression functions
-- **[Concepts: Workflows](../../concepts/workflows/)** - Workflow design patterns
-- **[Concepts: Expressions and Templates](../../concepts/expressions-and-templates/)** - Expression language guide
+- **[CLI Reference](/reference/cli-reference)** - Command-line options
+- **[Actions Reference](/reference/actions-reference)** - Action parameters and responses
+- **[Built-in Functions](/reference/built-in-functions)** - Expression functions
+- **[Environment Variables](/reference/environment-variables)** - Variables Probe reads

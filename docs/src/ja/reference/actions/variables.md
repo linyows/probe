@@ -71,6 +71,7 @@ test: status == 0 && res.code == 0
 - name: "Service Health Check with Retry"
   uses: http
   with:
+    method: GET
     url: "http://localhost:8080/health"
   retry:
     max_attempts: 10
