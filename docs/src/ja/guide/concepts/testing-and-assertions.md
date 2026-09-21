@@ -12,6 +12,7 @@ Probe のすべてのステップには、アクションの結果を検証す�
 - name: API Health Check
   uses: http
   with:
+    method: GET
     url: "{{vars.API_URL}}/health"
   test: res.code == 200
 ```
@@ -26,11 +27,11 @@ Probe のすべてのステップには、アクションの結果を検証す�
 # HTTP レスポンステストコンテキスト
 test: |
   res.code == 200 &&           # HTTP ステータスコード
-  res.time < 1000 &&             # レスポンス時間（ミリ秒）
+  (rt.sec * 1000) < 1000 &&             # レスポンス時間（ミリ秒）
   res.body_size > 0 &&           # レスポンスボディサイズ（バイト）
-  res.headers["content-type"] == "application/json" &&  # レスポンスヘッダー
-  res.body.json.status == "healthy" && # 解析された JSON レスポンス
-  res.body.contains("success")   # テキストとしてのレスポンスボディ
+  res.headers["Content-Type"] == "application/json" &&  # レスポンスヘッダー
+  res.body.status == "healthy" && # 解析された JSON レスポンス
+  res.body contains "success"   # テキストとしてのレスポンスボディ
 ```
 
 ## HTTP レスポンステスト
@@ -57,16 +58,16 @@ test: res.code >= 500  # サーバーエラー
 
 ```yaml
 # パフォーマンス検証
-test: res.time < 1000                    # 1秒以内にレスポンス必要
-test: res.time >= 100 && res.time <= 500  # レスポンス時間範囲
-test: res.time < {{vars.MAX_RESPONSE_TIME || 2000}}  # 設定可能な閾値
+test: (rt.sec * 1000) < 1000                    # 1秒以内にレスポンス必要
+test: (rt.sec * 1000) >= 100 && (rt.sec * 1000) <= 500  # レスポンス時間範囲
+test: (rt.sec * 1000) < {{vars.MAX_RESPONSE_TIME || 2000}}  # 設定可能な閾値
 
 # パフォーマンスカテゴリ
 test: |
   res.code == 200 && (
-    res.time < 200 ? "excellent" :
-    res.time < 500 ? "good" :
-    res.time < 1000 ? "acceptable" : "poor"
+    (rt.sec * 1000) < 200 ? "excellent" :
+    (rt.sec * 1000) < 500 ? "good" :
+    (rt.sec * 1000) < 1000 ? "acceptable" : "poor"
   ) != "poor"
 ```
 
@@ -89,26 +90,26 @@ test: |
 
 ```yaml
 # コンテンツタイプチェック
-test: res.headers["content-type"] == "application/json"
-test: res.headers["content-type"].startsWith("text/")
-test: res.headers["content-type"].contains("charset=utf-8")
+test: res.headers["Content-Type"] == "application/json"
+test: res.headers["Content-Type"] startsWith "text/"
+test: res.headers["Content-Type"] contains "charset=utf-8"
 
 # セキュリティヘッダー
 test: |
-  res.headers.has("x-frame-options") &&
-  res.headers.has("x-content-type-options") &&
-  res.headers["x-frame-options"] == "DENY"
+  "X-Frame-Options" in res.headers &&
+  "X-Content-Type-Options" in res.headers &&
+  res.headers["X-Frame-Options"] == "DENY"
 
 # キャッシュ制御
-test: res.headers["cache-control"].contains("no-cache")
+test: res.headers["Cache-Control"] contains "no-cache"
 
 # レート制限
-test: res.headers["x-rate-limit-remaining"] > "10"
+test: res.headers["X-Rate-Limit-Remaining"] > "10"
 
 # カスタムヘッダー
 test: |
-  res.headers.has("x-request-id") &&
-  res.headers["x-request-id"].length == 36  # UUID形式
+  "X-Request-Id" in res.headers &&
+  len(res.headers["X-Request-Id"]) == 36  # UUID形式
 ```
 
 ## JSON レスポンステスト
@@ -119,16 +120,16 @@ test: |
 # JSON 構造検証
 test: |
   res.code == 200 &&
-  res.body.json != null &&
-  res.body.json.status == "success" &&
-  res.body.json.data != null
+  res.body != null &&
+  res.body.status == "success" &&
+  res.body.data != null
 
 # 必須フィールド存在
 test: |
-  res.body.json.has("id") &&
-  res.body.json.has("name") &&
-  res.body.json.has("email") &&
-  res.body.json.has("created_at")
+  "id" in res.body &&
+  "name" in res.body &&
+  "email" in res.body &&
+  "created_at" in res.body
 ```
 
 ### データタイプ検証
@@ -136,17 +137,17 @@ test: |
 ```yaml
 # タイプチェック
 test: |
-  typeof(res.body.json.id) == "number" &&
-  typeof(res.body.json.name) == "string" &&
-  typeof(res.body.json.active) == "boolean" &&
-  typeof(res.body.json.tags) == "array" &&
-  typeof(res.body.json.metadata) == "object"
+  typeof(res.body.id) == "number" &&
+  typeof(res.body.name) == "string" &&
+  typeof(res.body.active) == "boolean" &&
+  typeof(res.body.tags) == "array" &&
+  typeof(res.body.metadata) == "object"
 
 # 値制約
 test: |
-  res.body.json.id > 0 &&
-  res.body.json.name.length >= 2 &&
-  res.body.json.score >= 0 && res.body.json.score <= 100
+  res.body.id > 0 &&
+  len(res.body.name) >= 2 &&
+  res.body.score >= 0 && res.body.score <= 100
 ```
 
 ### 配列とコレクションテスト
@@ -154,25 +155,23 @@ test: |
 ```yaml
 # 配列検証
 test: |
-  res.body.json.users != null &&
-  res.body.json.users.length > 0 &&
-  res.body.json.users.length <= 100
+  res.body.users != null &&
+  len(res.body.users) > 0 &&
+  len(res.body.users) <= 100
 
 # 配列コンテンツ検証
 test: |
-  res.body.json.users.all(user -> 
-    user.id != null && 
-    user.email != null
-  )
+  all(res.body.users, #.id != null && 
+    #.email != null)
 
 # 特定要素チェック
 test: |
-  res.body.json.users.any(user -> user.role == "admin") &&
-  res.body.json.users.filter(user -> user.active == true).length > 0
+  any(res.body.users, #.role == "admin") &&
+  len(filter(res.body.users, #.active == true)) > 0
 
 # 配列ユニーク性
 test: |
-  res.body.json.user_ids.length == res.body.json.user_ids.unique().length
+  len(res.body.user_ids) == len(uniq(res.body.user_ids))
 ```
 
 ### ネストしたデータ検証
@@ -180,23 +179,19 @@ test: |
 ```yaml
 # 深いオブジェクト検証
 test: |
-  res.body.json.user != null &&
-  res.body.json.user.profile != null &&
-  res.body.json.user.profile.preferences != null &&
-  res.body.json.user.profile.preferences.notifications == true
+  res.body.user != null &&
+  res.body.user.profile != null &&
+  res.body.user.profile.preferences != null &&
+  res.body.user.profile.preferences.notifications == true
 
 # 複雑なネスト構造
 test: |
-  res.body.json.data.orders.all(order ->
-    order.id != null &&
-    order.items.length > 0 &&
-    order.items.all(item -> 
-      item.product_id != null && 
-      item.quantity > 0 && 
-      item.price > 0
-    ) &&
-    order.total == order.items.map(item -> item.quantity * item.price).sum()
-  )
+  all(res.body.data.orders, #.id != null &&
+    len(#.items) > 0 &&
+    #all(.items, #.product_id != null && 
+      #.quantity > 0 && 
+      #.price > 0) &&
+    #.total == sum(map(#.items, #.quantity * #.price)))
 ```
 
 ## テキストレスポンステスト
@@ -205,36 +200,36 @@ test: |
 
 ```yaml
 # シンプルなテキストマッチング
-test: res.body.contains("success")
-test: res.body.startsWith("<!DOCTYPE html>")
-test: res.body.endsWith("</html>")
+test: res.body contains "success"
+test: res.body startsWith "<!DOCTYPE html>"
+test: res.body endsWith "</html>"
 
 # 大文字小文字を区別しないマッチング
-test: res.body.lower().contains("error")
+test: lower(res.body) contains "error"
 
 # 複数パターン
 test: |
-  res.body.contains("status") &&
-  res.body.contains("healthy") &&
-  !res.body.contains("error")
+  res.body contains "status" &&
+  res.body contains "healthy" &&
+  !res.body contains "error"
 ```
 
 ### 正規表現テスト
 
 ```yaml
 # レスポンス内のメール検証
-test: res.body.matches("user-\\d+@example\\.com")
+test: res.body matches "user-\\d+@example\\.com"
 
 # URL パターン検証
-test: res.body.matches("https://[a-zA-Z0-9.-]+/api/v\\d+/")
+test: res.body matches "https://[a-zA-Z0-9.-]+/api/v\\d+/"
 
 # データフォーマット検証
 test: |
-  res.body.matches("\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z")  # ISO タイムスタンプ
+  res.body matches "\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z"  # ISO タイムスタンプ
 
 # データ抽出と検証
 test: |
-  res.body.matches("Version: v\\d+\\.\\d+\\.\\d+") &&
+  res.body matches "Version: v\\d+\\.\\d+\\.\\d+" &&
   res.body.extract("v(\\d+)\\.(\\d+)\\.(\\d+)")[1] >= "2"  # メジャーバージョン >= 2
 ```
 
@@ -243,14 +238,14 @@ test: |
 ```yaml
 # コンテンツ長検証
 test: |
-  res.body.length > 100 &&
-  res.body.length < 10000
+  len(res.body) > 100 &&
+  len(res.body) < 10000
 
 # コンテンツ品質チェック
 test: |
-  res.body.split("\\n").length > 5 &&           # 複数行コンテンツ
-  !res.body.contains("Lorem ipsum") &&          # プレースホルダーテキストでない
-  res.body.split(" ").length > 20               # 実質的なコンテンツ
+  len(split(res.body, "\\n")) > 5 &&           # 複数行コンテンツ
+  !res.body contains "Lorem ipsum" &&          # プレースホルダーテキストでない
+  len(split(res.body, " ")) > 20               # 実質的なコンテンツ
 ```
 
 ## 高度なテストパターン
@@ -262,16 +257,16 @@ test: |
 test: |
   res.code == 200 &&
   (vars.NODE_ENV == "development" ? 
-    res.time < 5000 :           # 開発環境では緩い設定
-    res.time < 1000             # プロダクション用は厳格
+    (rt.sec * 1000) < 5000 :           # 開発環境では緩い設定
+    (rt.sec * 1000) < 1000             # プロダクション用は厳格
   )
 
 # 機能フラグテスト
 test: |
   res.code == 200 &&
-  (res.body.json.features.beta_enabled == true ?
-    res.body.json.beta_data != null :    # ベータ機能にはデータが必要
-    res.body.json.beta_data == null      # ベータ機能は存在しないべき
+  (res.body.features.beta_enabled == true ?
+    res.body.beta_data != null :    # ベータ機能にはデータが必要
+    res.body.beta_data == null      # ベータ機能は存在しないべき
   )
 ```
 
@@ -279,36 +274,40 @@ test: |
 
 ```yaml
 jobs:
-  data-consistency-test:
-    steps:
-      - name: Get User Count
-        id: user-count
-        uses: http
-        with:
-          url: "{{vars.API_URL}}/users/count"
-        test: res.code == 200
-        outputs:
-          total_users: res.body.json.count
+- id: data-consistency-test
+  name: data-consistency-test
+  steps:
+    - name: Get User Count
+      id: user-count
+      uses: http
+      with:
+        method: GET
+        url: "{{vars.API_URL}}/users/count"
+      test: res.code == 200
+      outputs:
+        total_users: res.body.count
 
-      - name: Get User List
-        id: user-list
-        uses: http
-        with:
-          url: "{{vars.API_URL}}/users"
-        test: |
-          res.code == 200 &&
-          res.body.json.users.length == outputs.user-count.total_users  # 整合性チェック
-        outputs:
-          user_list: res.body.json.users
+    - name: Get User List
+      id: user-list
+      uses: http
+      with:
+        method: GET
+        url: "{{vars.API_URL}}/users"
+      test: |
+        res.code == 200 &&
+        len(res.body.users) == outputs['user-count'].total_users  # 整合性チェック
+      outputs:
+        user_list: res.body.users
 
-      - name: Validate User Data Integrity
-        uses: http
-        with:
-          url: "{{vars.API_URL}}/users/{{outputs.user-list.user_list[0].id}}"
-        test: |
-          res.code == 200 &&
-          res.body.json.user.id == outputs.user-list.user_list[0].id &&
-          res.body.json.user.email == outputs.user-list.user_list[0].email
+    - name: Validate User Data Integrity
+      uses: http
+      with:
+        method: GET
+        url: "{{vars.API_URL}}/users/{{outputs['user-list'].user_list[0].id}}"
+      test: |
+        res.code == 200 &&
+        res.body.user.id == outputs['user-list'].user_list[0].id &&
+        res.body.user.email == outputs['user-list'].user_list[0].email
 ```
 
 ### ビジネスロジックテスト
@@ -317,28 +316,29 @@ jobs:
 - name: E-commerce Business Logic Test
   uses: http
   with:
+    method: GET
     url: "{{vars.API_URL}}/orders/{{vars.TEST_ORDER_ID}}"
   test: |
     res.code == 200 &&
-    res.body.json.order != null &&
+    res.body.order != null &&
     
     # 注文合計が品目の合計と等しい
-    res.body.json.order.total == 
-      res.body.json.order.line_items.map(item -> item.quantity * item.price).sum() &&
+    res.body.order.total == 
+      sum(map(res.body.order.line_items, #.quantity * #.price)) &&
     
     # 税計算が正しい（8%税率を想定）
-    res.body.json.order.tax_amount == 
-      Math.round(res.body.json.order.subtotal * 0.08 * 100) / 100 &&
+    res.body.order.tax_amount == 
+      round(Math) / 100 &&
     
     # 送料が正しく適用される
-    (res.body.json.order.subtotal >= 100 ? 
-      res.body.json.order.shipping_cost == 0 :     # $100以上は送料無料
-      res.body.json.order.shipping_cost == 9.99    # 標準送料
+    (res.body.order.subtotal >= 100 ? 
+      res.body.order.shipping_cost == 0 :     # $100以上は送料無料
+      res.body.order.shipping_cost == 9.99    # 標準送料
     ) &&
     
     # 最終合計計算
-    res.body.json.order.total == 
-      res.body.json.order.subtotal + res.body.json.order.tax_amount + res.body.json.order.shipping_cost
+    res.body.order.total == 
+      res.body.order.subtotal + res.body.order.tax_amount + res.body.order.shipping_cost
 ```
 
 ## エラーテストと負のケース
@@ -349,24 +349,26 @@ jobs:
 - name: Test Invalid Authentication
   uses: http
   with:
+    method: GET
     url: "{{vars.API_URL}}/protected"
     headers:
       Authorization: "Bearer invalid-token"
   test: |
     res.code == 401 &&
-    res.body.json.error == "invalid_token" &&
-    res.body.json.message.contains("authentication")
+    res.body.error == "invalid_token" &&
+    res.body.message contains "authentication"
 
 - name: Test Rate Limiting
   uses: http
   with:
+    method: GET
     url: "{{vars.API_URL}}/rate-limited-endpoint"
   test: |
     res.code in [200, 429] &&  # 成功またはレート制限
     (res.code == 429 ? 
-      res.headers.has("retry-after") && 
-      res.body.json.error == "rate_limit_exceeded" :
-      res.body.json.status == "success"
+      "Retry-After" in res.headers && 
+      res.body.error == "rate_limit_exceeded" :
+      res.body.status == "success"
     )
 
 - name: Test Malformed Request
@@ -377,8 +379,8 @@ jobs:
     body: '{"invalid": json}'  # 意図的に不正なフォーマット
   test: |
     res.code == 400 &&
-    res.body.json.error.contains("json") &&
-    res.body.json.details != null
+    res.body.error contains "json" &&
+    res.body.details != null
 ```
 
 ### 境界値テスト
@@ -398,8 +400,8 @@ jobs:
   test: |
     res.code in [201, 400] &&  # 作成成功またはバリデーションエラー
     (res.code == 400 ? 
-      res.body.json.validation_errors != null :
-      res.body.json.user.id != null
+      res.body.validation_errors != null :
+      res.body.user.id != null
     )
 ```
 
@@ -409,149 +411,154 @@ jobs:
 
 ```yaml
 jobs:
-  smoke-tests:
-    name: Smoke Tests
-    steps:
-      - name: Basic Connectivity
-        uses: http
-        with:
-          url: "{{vars.API_URL}}/ping"
-        test: res.code == 200
+- id: smoke-tests
+  name: Smoke Tests
+  steps:
+    - name: Basic Connectivity
+      uses: http
+      with:
+        method: GET
+        url: "{{vars.API_URL}}/ping"
+      test: res.code == 200
 
-  functional-tests:
-    name: Functional Tests
-    needs: [smoke-tests]
-    steps:
-      - name: User Management
-        uses: http
-        with:
-          url: "{{vars.API_URL}}/users"
-        test: |
-          res.code == 200 &&
-          res.body.json.users != null &&
-          res.body.json.pagination != null
+- id: functional-tests
+  name: Functional Tests
+  needs: [smoke-tests]
+  steps:
+    - name: User Management
+      uses: http
+      with:
+        method: GET
+        url: "{{vars.API_URL}}/users"
+      test: |
+        res.code == 200 &&
+        res.body.users != null &&
+        res.body.pagination != null
 
-  integration-tests:
-    name: Integration Tests
-    needs: [functional-tests]
-    steps:
-      - name: Cross-Service Integration
-        uses: http
-        with:
-          url: "{{vars.API_URL}}/integration/full-flow"
-        test: |
-          res.code == 200 &&
-          res.body.json.all_services_connected == true &&
-          res.body.json.data_consistency_check == true
+- id: integration-tests
+  name: Integration Tests
+  needs: [functional-tests]
+  steps:
+    - name: Cross-Service Integration
+      uses: http
+      with:
+        method: GET
+        url: "{{vars.API_URL}}/integration/full-flow"
+      test: |
+        res.code == 200 &&
+        res.body.all_services_connected == true &&
+        res.body.data_consistency_check == true
 ```
 
 ### 包括的テストスイート
 
 ```yaml
 jobs:
-  api-test-suite:
-    name: Comprehensive API Test Suite
-    steps:
-      # 認証テスト
-      - name: Valid Login
-        id: login
-        uses: http
-        with:
-          url: "{{vars.API_URL}}/auth/login"
-          method: POST
-          body: |
-            {
-              "username": "{{vars.TEST_USERNAME}}",
-              "password": "{{vars.TEST_PASSWORD}}"
-            }
-        test: |
-          res.code == 200 &&
-          res.body.json.access_token != null &&
-          res.body.json.refresh_token != null &&
-          res.body.json.expires_in > 0
-        outputs:
-          access_token: res.body.json.access_token
+- id: api-test-suite
+  name: Comprehensive API Test Suite
+  steps:
+    # 認証テスト
+    - name: Valid Login
+      id: login
+      uses: http
+      with:
+        url: "{{vars.API_URL}}/auth/login"
+        method: POST
+        body: |
+          {
+            "username": "{{vars.TEST_USERNAME}}",
+            "password": "{{vars.TEST_PASSWORD}}"
+          }
+      test: |
+        res.code == 200 &&
+        res.body.access_token != null &&
+        res.body.refresh_token != null &&
+        res.body.expires_in > 0
+      outputs:
+        access_token: res.body.access_token
 
-      - name: Invalid Login
-        uses: http
-        with:
-          url: "{{vars.API_URL}}/auth/login"
-          method: POST
-          body: |
-            {
-              "username": "invalid",
-              "password": "wrong"
-            }
-        test: |
-          res.code == 401 &&
-          res.body.json.error == "invalid_credentials"
+    - name: Invalid Login
+      uses: http
+      with:
+        url: "{{vars.API_URL}}/auth/login"
+        method: POST
+        body: |
+          {
+            "username": "invalid",
+            "password": "wrong"
+          }
+      test: |
+        res.code == 401 &&
+        res.body.error == "invalid_credentials"
 
-      # CRUD 操作テスト
-      - name: Create User
-        id: create-user
-        uses: http
-        with:
-          url: "{{vars.API_URL}}/users"
-          method: POST
-          headers:
-            Authorization: "Bearer {{outputs.login.access_token}}"
-          body: |
-            {
-              "name": "Test User {{random_str(6)}}",
-              "email": "test{{random_str(8)}}@example.com",
-              "role": "user"
-            }
-        test: |
-          res.code == 201 &&
-          res.body.json.user.id != null &&
-          res.body.json.user.name != null &&
-          res.body.json.user.email != null
-        outputs:
-          user_id: res.body.json.user.id
-          user_email: res.body.json.user.email
+    # CRUD 操作テスト
+    - name: Create User
+      id: create-user
+      uses: http
+      with:
+        url: "{{vars.API_URL}}/users"
+        method: POST
+        headers:
+          Authorization: "Bearer {{outputs.login.access_token}}"
+        body: |
+          {
+            "name": "Test User {{random_str(6)}}",
+            "email": "test{{random_str(8)}}@example.com",
+            "role": "user"
+          }
+      test: |
+        res.code == 201 &&
+        res.body.user.id != null &&
+        res.body.user.name != null &&
+        res.body.user.email != null
+      outputs:
+        user_id: res.body.user.id
+        user_email: res.body.user.email
 
-      - name: Read User
-        uses: http
-        with:
-          url: "{{vars.API_URL}}/users/{{outputs.create-user.user_id}}"
-          headers:
-            Authorization: "Bearer {{outputs.login.access_token}}"
-        test: |
-          res.code == 200 &&
-          res.body.json.user.id == outputs.create-user.user_id &&
-          res.body.json.user.email == "{{outputs.create-user.user_email}}"
+    - name: Read User
+      uses: http
+      with:
+        method: GET
+        url: "{{vars.API_URL}}/users/{{outputs['create-user'].user_id}}"
+        headers:
+          Authorization: "Bearer {{outputs.login.access_token}}"
+      test: |
+        res.code == 200 &&
+        res.body.user.id == outputs['create-user'].user_id &&
+        res.body.user.email == "{{outputs['create-user'].user_email}}"
 
-      - name: Update User
-        uses: http
-        with:
-          url: "{{vars.API_URL}}/users/{{outputs.create-user.user_id}}"
-          method: PUT
-          headers:
-            Authorization: "Bearer {{outputs.login.access_token}}"
-          body: |
-            {
-              "name": "Updated Test User"
-            }
-        test: |
-          res.code == 200 &&
-          res.body.json.user.name == "Updated Test User"
+    - name: Update User
+      uses: http
+      with:
+        url: "{{vars.API_URL}}/users/{{outputs['create-user'].user_id}}"
+        method: PUT
+        headers:
+          Authorization: "Bearer {{outputs.login.access_token}}"
+        body: |
+          {
+            "name": "Updated Test User"
+          }
+      test: |
+        res.code == 200 &&
+        res.body.user.name == "Updated Test User"
 
-      - name: Delete User
-        uses: http
-        with:
-          url: "{{vars.API_URL}}/users/{{outputs.create-user.user_id}}"
-          method: DELETE
-          headers:
-            Authorization: "Bearer {{outputs.login.access_token}}"
-        test: res.code == 204
+    - name: Delete User
+      uses: http
+      with:
+        url: "{{vars.API_URL}}/users/{{outputs['create-user'].user_id}}"
+        method: DELETE
+        headers:
+          Authorization: "Bearer {{outputs.login.access_token}}"
+      test: res.code == 204
 
-      - name: Verify Deletion
-        uses: http
-        with:
-          url: "{{vars.API_URL}}/users/{{outputs.create-user.user_id}}"
-          headers:
-            Authorization: "Bearer {{outputs.login.access_token}}"
-        test: res.code == 404
+    - name: Verify Deletion
+      uses: http
+      with:
+        method: GET
+        url: "{{vars.API_URL}}/users/{{outputs['create-user'].user_id}}"
+        headers:
+          Authorization: "Bearer {{outputs.login.access_token}}"
+      test: res.code == 404
 ```
 
 ## パフォーマンステスト
@@ -562,23 +569,24 @@ jobs:
 - name: Performance Benchmark Test
   uses: http
   with:
+    method: GET
     url: "{{vars.API_URL}}/performance-test"
   test: |
     res.code == 200 &&
     
     # 段階的パフォーマンス期待値
     (vars.NODE_ENV == "production" ? 
-      res.time < 500 :              # プロダクション: < 500ms
-      res.time < 2000               # 非プロダクション: < 2s
+      (rt.sec * 1000) < 500 :              # プロダクション: < 500ms
+      (rt.sec * 1000) < 2000               # 非プロダクション: < 2s
     ) &&
     
     # 追加パフォーマンスメトリクス
-    res.body.json.query_time < 100 &&    # データベースクエリ時間
-    res.body.json.render_time < 50       # テンプレートレンダー時間
+    res.body.query_time < 100 &&    # データベースクエリ時間
+    res.body.render_time < 50       # テンプレートレンダー時間
   outputs:
-    response_time: res.time
-    query_time: res.body.json.query_time
-    render_time: res.body.json.render_time
+    response_time: (rt.sec * 1000)
+    query_time: res.body.query_time
+    render_time: res.body.render_time
 ```
 
 ### 負荷テスト検証
@@ -587,24 +595,25 @@ jobs:
 - name: Load Test Results Validation
   uses: http
   with:
+    method: GET
     url: "{{vars.LOAD_TEST_URL}}/results"
   test: |
     res.code == 200 &&
-    res.body.json.test_completed == true &&
+    res.body.test_completed == true &&
     
     # 成功率要件
-    res.body.json.success_rate >= 0.95 &&
+    res.body.success_rate >= 0.95 &&
     
     # パフォーマンスパーセンタイル
-    res.body.json.percentiles.p50 < 1000 &&
-    res.body.json.percentiles.p95 < 2000 &&
-    res.body.json.percentiles.p99 < 5000 &&
+    res.body.percentiles.p50 < 1000 &&
+    res.body.percentiles.p95 < 2000 &&
+    res.body.percentiles.p99 < 5000 &&
     
     # エラー率制限
-    res.body.json.error_rate < 0.05 &&
+    res.body.error_rate < 0.05 &&
     
     # 重大なエラーがない
-    res.body.json.critical_errors == 0
+    res.body.critical_errors == 0
 ```
 
 ## セキュリティテスト
@@ -615,30 +624,33 @@ jobs:
 - name: Test Unauthorized Access
   uses: http
   with:
+    method: GET
     url: "{{vars.API_URL}}/admin/users"
   test: |
     res.code == 401 &&
-    res.body.json.error == "authentication_required"
+    res.body.error == "authentication_required"
 
 - name: Test Insufficient Permissions
   uses: http
   with:
+    method: GET
     url: "{{vars.API_URL}}/admin/users"
     headers:
       Authorization: "Bearer {{vars.USER_TOKEN}}"  # 通常ユーザートークン
   test: |
     res.code == 403 &&
-    res.body.json.error == "insufficient_permissions"
+    res.body.error == "insufficient_permissions"
 
 - name: Test Token Expiration
   uses: http
   with:
+    method: GET
     url: "{{vars.API_URL}}/protected"
     headers:
       Authorization: "Bearer {{vars.EXPIRED_TOKEN}}"
   test: |
     res.code == 401 &&
-    res.body.json.error == "token_expired"
+    res.body.error == "token_expired"
 ```
 
 ### 入力検証セキュリティ
@@ -647,12 +659,13 @@ jobs:
 - name: Test SQL Injection Protection
   uses: http
   with:
+    method: GET
     url: "{{vars.API_URL}}/users?search='; DROP TABLE users; --"
   test: |
     res.code in [200, 400] &&  # フィルタされるか拒否される
-    !res.body.contains("sql") && # SQL エラーメッセージなし
-    !res.body.contains("syntax") &&
-    res.body.json.error != "internal_server_error"  # サーバーエラーを起こさない
+    !res.body contains "sql" && # SQL エラーメッセージなし
+    !res.body contains "syntax" &&
+    res.body.error != "internal_server_error"  # サーバーエラーを起こさない
 
 - name: Test XSS Protection
   uses: http
@@ -666,8 +679,8 @@ jobs:
   test: |
     res.code in [201, 400] &&
     (res.code == 201 ? 
-      !res.body.json.comment.content.contains("<script>") :  # サニタイズされるべき
-      res.body.json.validation_errors != null               # または拒否される
+      !res.body.comment.content contains "<script>" :  # サニタイズされるべき
+      res.body.validation_errors != null               # または拒否される
     )
 ```
 
@@ -690,50 +703,45 @@ jobs:
   # 明確な検証ポイント付き包括的テスト
   test: |
     res.code == 201 &&                                    # 1. 作成成功
-    res.body.json.user.id != null &&                            # 2. ユーザーID割り当て
-    res.body.json.user.email != null &&                         # 3. メール保存
-    res.body.json.user.password == null &&                      # 4. パスワード未返却
-    res.body.json.user.created_at != null &&                    # 5. タイムスタンプ記録
-    res.body.json.user.email_verified == false &&               # 6. 初期未認証メール
-    res.body.json.verification_email_sent == true &&            # 7. 認証トリガー
-    res.headers.has("location") &&                         # 8. Location ヘッダー存在
-    res.headers["location"].contains("/users/")             # 9. 正しいリダイレクトパス
+    res.body.user.id != null &&                            # 2. ユーザーID割り当て
+    res.body.user.email != null &&                         # 3. メール保存
+    res.body.user.password == null &&                      # 4. パスワード未返却
+    res.body.user.created_at != null &&                    # 5. タイムスタンプ記録
+    res.body.user.email_verified == false &&               # 6. 初期未認証メール
+    res.body.verification_email_sent == true &&            # 7. 認証トリガー
+    "Location" in res.headers &&                         # 8. Location ヘッダー存在
+    res.headers["Location"] contains "/users/"             # 9. 正しいリダイレクトパス
   outputs:
-    user_id: res.body.json.user.id
-    user_email: res.body.json.user.email
+    user_id: res.body.user.id
+    user_email: res.body.user.email
     test_summary: |
       Registration test completed:
-      - User ID: {{res.body.json.user.id}}
-      - Email: {{res.body.json.user.email}}
-      - Verification: {{res.body.json.verification_email_sent ? "Sent" : "Failed"}}
-      - Response time: {{res.time}}ms
+      - User ID: {{res.body.user.id}}
+      - Email: {{res.body.user.email}}
+      - Verification: {{res.body.verification_email_sent ? "Sent" : "Failed"}}
+      - Response time: {{rt.duration}}
 ```
 
 ### テスト結果集約
 
 ```yaml
 jobs:
-  test-summary:
-    name: Test Results Summary
-    needs: [smoke-tests, functional-tests, security-tests]
-    steps:
-      - name: Generate Test Report
-        echo: |
-          Test Execution Summary
-          =====================
+- id: test-summary
+  name: Test Results Summary
+  needs: [smoke-tests, functional-tests, security-tests]
+  steps:
+    - name: Generate Test Report
+      uses: hello
+      echo: |
+        Test Execution Summary
+        =====================
           
-          Smoke Tests: {{jobs.smoke-tests.success ? "✅ PASSED" : "❌ FAILED"}}
-          Functional Tests: {{jobs.functional-tests.success ? "✅ PASSED" : "❌ FAILED"}}
-          Security Tests: {{jobs.security-tests.success ? "✅ PASSED" : "❌ FAILED"}}
           
-          Overall Result: {{
-            jobs.smoke-tests.success && 
-            jobs.functional-tests.success && 
-            jobs.security-tests.success ? "✅ ALL TESTS PASSED" : "❌ SOME TESTS FAILED"
-          }}
+        Overall Result: {{
+        }}
           
-          Execution Time: {{unixtime()}}
-          Test Environment: {{vars.NODE_ENV || "development"}}
+        Execution Time: {{unixtime()}}
+        Test Environment: {{vars.NODE_ENV || "development"}}
 ```
 
 ## ベストプラクティス
@@ -744,8 +752,8 @@ jobs:
 # 良い例: 具体的でテスト可能な条件
 test: |
   res.code == 200 &&
-  res.body.json.users.length >= 1 &&
-  res.body.json.users[0].id != null
+  len(res.body.users) >= 1 &&
+  res.body.users[0].id != null
 
 # 避ける: 曖昧または不完全なテスト
 test: res.code == 200  # レスポンス内容はどうなのか？
@@ -756,10 +764,10 @@ test: res.code == 200  # レスポンス内容はどうなのか？
 ```yaml
 # 良い例: 成功と失敗の両方のパスをテスト
 - name: Valid Request Test
-  test: res.code == 200 && res.body.json.success == true
+  test: res.code == 200 && res.body.success == true
 
 - name: Invalid Request Test  
-  test: res.code == 400 && res.body.json.error != null
+  test: res.code == 400 && res.body.error != null
 ```
 
 ### 3. パフォーマンスを意識したテスト
@@ -768,13 +776,13 @@ test: res.code == 200  # レスポンス内容はどうなのか？
 # 良い例: パフォーマンス検証を含む
 test: |
   res.code == 200 &&
-  res.time < 1000 &&
-  res.body.json.data != null
+  (rt.sec * 1000) < 1000 &&
+  res.body.data != null
 
 # 良い例: 環境固有のパフォーマンス閾値
 test: |
   res.code == 200 &&
-  res.time < {{vars.MAX_RESPONSE_TIME || 2000}}
+  (rt.sec * 1000) < {{vars.MAX_RESPONSE_TIME || 2000}}
 ```
 
 ### 4. 保守しやすいテスト式
@@ -783,12 +791,12 @@ test: |
 # 良い例: 読みやすく、よく構造化されたテスト
 test: |
   res.code == 200 &&
-  res.body.json.user != null &&
-  res.body.json.user.id > 0 &&
-  res.body.json.user.email.contains("@")
+  res.body.user != null &&
+  res.body.user.id > 0 &&
+  res.body.user.email contains "@"
 
 # 避ける: 複雑で読みにくいテスト
-test: res.code == 200 && res.body.json.user != null && res.body.json.user.id > 0 && res.body.json.user.email.contains("@") && res.body.json.user.active == true && res.time < 1000
+test: res.code == 200 && res.body.user != null && res.body.user.id > 0 && res.body.user.email contains "@" && res.body.user.active == true && (rt.sec * 1000) < 1000
 ```
 
 ## 次のステップ

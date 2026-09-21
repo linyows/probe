@@ -210,10 +210,12 @@ func TestSecurityValidation(t *testing.T) {
 			errorMsg:    "expression exceeds maximum length",
 		},
 		{
-			name:        "dangerous env access",
+			// There is no `env` namespace in the evaluation context, so this
+			// fails on the missing name rather than on a pattern in the text.
+			name:        "env namespace does not exist",
 			input:       "env.SECRET_KEY",
 			shouldError: true,
-			errorMsg:    "dangerous environment variable",
+			errorMsg:    "cannot fetch SECRET_KEY",
 		},
 		{
 			name:        "safe expression",
@@ -584,135 +586,106 @@ func TestEvalTemplateMapTypePreservation(t *testing.T) {
 	}
 }
 
-// TestIsSafeEnvKey pins the blocklist contract of isSafeEnvKey so the
-// upcoming simplification (collapsing the redundant prefix / safeKeys /
-// testEnvVars / fallback branches into a single Contains-based blocklist)
-// can't silently change which environment keys reach expr templates.
-func TestIsSafeEnvKey(t *testing.T) {
+// TestExpressionContextIsNotFiltered pins the contract that replaced the
+// environment blocklist: every name the caller puts in the environment reaches
+// the expression. probe's own examples read credentials that way
+// ("{{TOKEN}}", "{{SSH_PASS}}"), so a name-based filter here would break the
+// documented way of getting a secret into `vars`.
+func TestExpressionContextIsNotFiltered(t *testing.T) {
 	expr := &Expr{}
-
-	blocked := []string{
-		// Shell / host metadata
-		"PATH", "HOME", "USER", "USERNAME", "SHELL", "PWD",
-		// Credentials and secret-bearing names
-		"SECRET", "SECRET_KEY", "DB_PASSWORD", "API_KEY",
-		"AWS_SECRET_ACCESS_KEY", "MY_CREDENTIAL",
-		"PRIVATE_KEY", "SSH_AUTH_SOCK", "TLS_CERT",
-		// Contains-match catches any substring hit
-		"USER_HOME", "RUNTIME_PATH", "HAS_TOKEN",
+	env := map[string]any{
+		"API_TOKEN":    "tok",
+		"DB_PASSWORD":  "pw",
+		"SSH_KEY_FILE": "/home/probe/id_rsa",
+		"BASE_URL":     "http://example.com",
 	}
-	for _, key := range blocked {
-		t.Run("blocked/"+key, func(t *testing.T) {
-			if expr.isSafeEnvKey(key) {
-				t.Errorf("isSafeEnvKey(%q) = true, want false", key)
+
+	for key, want := range map[string]string{
+		"API_TOKEN":    "tok",
+		"DB_PASSWORD":  "pw",
+		"SSH_KEY_FILE": "/home/probe/id_rsa",
+		"BASE_URL":     "http://example.com",
+	} {
+		t.Run(key, func(t *testing.T) {
+			got, err := expr.Eval(key, env)
+			if err != nil {
+				t.Fatalf("unexpected error: %s", err)
 			}
-		})
-	}
-
-	allowed := []string{
-		// Expression-result identifiers expected to be reachable
-		"res", "result", "data", "response", "body", "status",
-		"headers", "host", "name", "service", "authorization",
-		"url", "repeat_index",
-		// Common deployment metadata that doesn't carry a secret-marker
-		"HOST", "URL", "PORT",
-		// Arbitrary user-defined names without a blocklisted substring
-		"my_var", "FEATURE_FLAG", "ENVIRONMENT", "REGION",
-	}
-	for _, key := range allowed {
-		t.Run("allowed/"+key, func(t *testing.T) {
-			if !expr.isSafeEnvKey(key) {
-				t.Errorf("isSafeEnvKey(%q) = false, want true", key)
+			if got != want {
+				t.Errorf("expected %q, got %v", want, got)
 			}
 		})
 	}
 }
 
-func TestSafeEnvironment(t *testing.T) {
+// TestValidateExpressionAllowsEnvLikeText pins the fix for a guard that used to
+// reject any expression whose text contained "env.path", "env.secret" and
+// friends. The evaluation context has no `env` namespace, so the guard only
+// ever rejected ordinary strings that happened to contain the pattern.
+func TestValidateExpressionAllowsEnvLikeText(t *testing.T) {
 	expr := &Expr{}
 
-	t.Run("blocks dangerous environment variables", func(t *testing.T) {
-		dangerousEnv := map[string]any{
-			"SECRET_KEY": "secret123",
-			"PASSWORD":   "pass123",
-			"PATH":       "/usr/bin",
-			"safe_var":   "allowed",
-		}
+	inputs := []string{
+		`"https://env.pathfinder.example.com"`,
+		`"/opt/env.home/bin"`,
+		`"dev.env.secret-manager.internal"`,
+		`"env.password-rotation.example.com"`,
+	}
 
-		safeEnv := expr.createSafeEnvironment(dangerousEnv)
-		envMap := safeEnv.(map[string]any)
-
-		if _, exists := envMap["SECRET_KEY"]; exists {
-			t.Errorf("SECRET_KEY should be blocked")
-		}
-		if _, exists := envMap["PASSWORD"]; exists {
-			t.Errorf("PASSWORD should be blocked")
-		}
-		if _, exists := envMap["PATH"]; exists {
-			t.Errorf("PATH should be blocked")
-		}
-		if _, exists := envMap["safe_var"]; !exists {
-			t.Errorf("safe_var should be allowed")
-		}
-	})
-
-	t.Run("allows safe environment variables", func(t *testing.T) {
-		safeEnv := map[string]any{
-			"res":      map[string]any{"status": 200},
-			"result":   "success",
-			"data":     map[string]any{"id": 1},
-			"response": "ok",
-			"HOST":     "localhost",
-			"URL":      "http://example.com",
-		}
-
-		result := expr.createSafeEnvironment(safeEnv)
-		envMap := result.(map[string]any)
-
-		for key := range safeEnv {
-			if _, exists := envMap[key]; !exists {
-				t.Errorf("%s should be allowed", key)
+	for _, in := range inputs {
+		t.Run(in, func(t *testing.T) {
+			got, err := expr.Eval(in, map[string]any{})
+			if err != nil {
+				t.Fatalf("unexpected error: %s", err)
 			}
-		}
-	})
+			want := strings.Trim(in, `"`)
+			if got != want {
+				t.Errorf("expected %q, got %v", want, got)
+			}
+		})
+	}
 }
 
-func TestValueSanitization(t *testing.T) {
+// TestValidateExpressionRejectsOverlongInput keeps the one limit that
+// validateExpression still enforces.
+func TestValidateExpressionRejectsOverlongInput(t *testing.T) {
 	expr := &Expr{}
 
-	t.Run("truncates long strings", func(t *testing.T) {
-		longString := strings.Repeat("a", 1000001)
-		result := expr.sanitizeValue(longString)
-		resultStr := result.(string)
+	if err := expr.validateExpression(strings.Repeat("a", maxExpressionLength+1)); err == nil {
+		t.Error("expected an error for an expression over the length limit")
+	}
+	if err := expr.validateExpression(strings.Repeat("a", 10)); err != nil {
+		t.Errorf("unexpected error for a short expression: %s", err)
+	}
+}
 
-		// The actual truncation includes truncation message suffix which adds extra chars
-		if len(resultStr) <= 1000000 {
-			t.Errorf("string appears not to be long enough to test truncation, got %d chars", len(resultStr))
-		}
-		if !strings.Contains(resultStr, "⚠︎ probe truncated") {
-			t.Errorf("truncated string should contain truncation marker")
-		}
-		// Check that the original long part was truncated to maxStringLength
-		truncationMsg := GetTruncationMessage()
-		originalContent := strings.Replace(resultStr, truncationMsg, "", 1)
-		if len(originalContent) > 1000000 {
-			t.Errorf("string content should be truncated to %d chars, got %d", 1000000, len(originalContent))
-		}
-	})
+// TestPredicateBuiltinsAreAvailable pins that expr's predicate builtins work.
+// probe used to call ex.DisableBuiltin on six of them, which expr's parser
+// ignores, so they have always been reachable and the docs describe them.
+func TestPredicateBuiltinsAreAvailable(t *testing.T) {
+	expr := &Expr{}
+	env := map[string]any{"arr": []any{1, 2, 3}}
 
-	t.Run("limits array size", func(t *testing.T) {
-		largeArray := make([]any, 1001)
-		for i := range largeArray {
-			largeArray[i] = i
-		}
+	tests := map[string]any{
+		`all(arr, # > 0)`:      true,
+		`any(arr, # > 2)`:      true,
+		`one(arr, # == 2)`:     true,
+		`count(arr, # > 1)`:    2,
+		`filter(arr, # > 1)`:   []any{2, 3},
+		`len(map(arr, # * 2))`: 3,
+	}
 
-		result := expr.sanitizeValue(largeArray)
-		resultArray := result.([]any)
-
-		if len(resultArray) > 1000 {
-			t.Errorf("large array should be truncated to 1000 elements")
-		}
-	})
+	for in, want := range tests {
+		t.Run(in, func(t *testing.T) {
+			got, err := expr.Eval(in, env)
+			if err != nil {
+				t.Fatalf("unexpected error: %s", err)
+			}
+			if !reflect.DeepEqual(got, want) {
+				t.Errorf("expected %v, got %v", want, got)
+			}
+		})
+	}
 }
 
 func TestErrorHandling(t *testing.T) {

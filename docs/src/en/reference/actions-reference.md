@@ -14,192 +14,140 @@ Actions are the building blocks of Probe workflows. They perform specific tasks 
 - **[shell](#shell-action)** - Execute shell commands and scripts securely
 - **[smtp](#smtp-action)** - Send email notifications and alerts
 - **[imap](#imap-action)** - Connect to IMAP servers and manage email operations
+- **[ssh](/reference/actions/ssh)** - Run commands on a remote host over SSH
+- **[grpc](#grpc-action)** - Call gRPC services by reflection
+- **[embedded](#embedded-action)** - Run another workflow as a step
+- **[mail-latency](#mail-latency-action)** - Measure delivery latency from a Maildir
 - **[hello](#hello-action)** - Simple test action for development and debugging
 
 ## HTTP Action
 
-The `http` action performs HTTP/HTTPS requests and provides detailed response information for testing and validation.
+The `http` action performs an HTTP request and exposes the response for assertions and outputs.
 
 ### Basic Syntax
 
 ```yaml
 steps:
-  - name: "API Request"
-    action: http
+  - name: Check the API
+    uses: http
     with:
-      url: "https://api.example.com/endpoint"
-      method: "GET"
-    test: res.status == 200
+      url: "https://api.example.com/health"
+      method: GET
+    test: res.code == 200
 ```
 
 ### Parameters
 
-#### `url` (required)
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `url` | String | Yes | - | Request URL, or the base URL when a method shorthand carries a path |
+| `method` | String | Yes | - | HTTP method. Supplied by a method shorthand when one is used |
+| `headers` | Object | No | - | Request headers |
+| `body` | String or Object | No | - | Request body. An object is serialized as JSON when `content-type` is `application/json` |
+| `timeout` | Duration | No | `30s` | Time limit for the whole request, including reading the response |
 
-**Type:** String  
-**Description:** The URL to make the request to  
-**Supports:** Template expressions
+There are no parameters for redirects or TLS verification. Redirects are followed by default.
+
+#### `timeout`
+
+`timeout` accepts a duration string such as `10s` or `1m30s`, or a plain number of seconds. `0` removes the limit.
 
 ```yaml
-vars:
-  api_base_url: "{{API_BASE_URL ?? 'https://api.example.com'}}"
-
-with:
-  url: "https://api.example.com/users"
-  url: "{{vars.api_base_url}}/v1/health"
-  url: "https://api.example.com/users/{{outputs.auth.user_id}}"
+  - name: Slow endpoint
+    uses: http
+    with:
+      url: "{{vars.api_url}}/report"
+      method: GET
+      timeout: 60s
+    test: res.code == 200
 ```
 
-#### `method` (optional)
+A request that runs out of time fails the step with a `Client.Timeout exceeded` error.
 
-**Type:** String  
-**Default:** `GET`  
-**Values:** `GET`, `POST`, `PUT`, `PATCH`, `DELETE`, `HEAD`, `OPTIONS`
+Set it once for a job through `defaults`:
 
 ```yaml
-with:
-  url: "https://api.example.com/users"
-  method: "POST"
+jobs:
+  - name: API checks
+    defaults:
+      http:
+        timeout: 5s
+    steps:
+      - name: Health
+        uses: http
+        with:
+          get: /health
+        test: res.code == 200
 ```
 
-#### `headers` (optional)
+The step's own `timeout` is a separate, outer limit on each attempt of the action, defaulting to 5m. `with.timeout` bounds the HTTP request; the step `timeout` bounds the action call that wraps it, and is what stops an action that hangs without returning.
 
-**Type:** Object  
-**Description:** HTTP headers to include with the request  
-**Supports:** Template expressions in values
+#### Method Shorthands
 
-```yaml
-vars:
-  api_token: "{{API_TOKEN}}"
-
-with:
-  url: "https://api.example.com/users"
-  headers:
-    Authorization: "Bearer {{vars.api_token}}"
-    Content-Type: "application/json"
-    User-Agent: "Probe Monitor v1.0"
-    X-Request-ID: "{{unixtime()}}"
-```
-
-#### `body` (optional)
-
-**Type:** String  
-**Description:** Request body content  
-**Supports:** Template expressions and multi-line strings
+`get`, `head`, `post`, `put`, `patch`, `delete`, `connect`, `options` and `trace` set the method and the path in one key. The value is either a full URL or a path resolved against `url`, which makes it convenient with a job's `defaults`.
 
 ```yaml
-# JSON body
-vars:
-  user_name: "{{USER_NAME}}"
-  user_email: "{{USER_EMAIL}}"
+jobs:
+  - name: API checks
+    defaults:
+      http:
+        url: "{{vars.api_url}}"
+        headers:
+          accept: application/json
+    steps:
+      - name: List users
+        uses: http
+        with:
+          get: /users
+        test: res.code == 200
 
-with:
-  url: "https://api.example.com/users"
-  method: "POST"
-  headers:
-    Content-Type: "application/json"
-  body: |
-    {
-      "name": "{{vars.user_name}}",
-      "email": "{{vars.user_email}}",
-      "active": true
-    }
-
-# Form data
-with:
-  url: "https://api.example.com/form"
-  method: "POST"
-  headers:
-    Content-Type: "application/x-www-form-urlencoded"
-  body: "name={{vars.user_name}}&email={{vars.user_email}}"
-
-# Template expression
-with:
-  url: "https://api.example.com/users"
-  method: "PUT"
-  body: "{{outputs.user-data.json | tojson}}"
-```
-
-#### `timeout` (optional)
-
-**Type:** Duration  
-**Default:** Inherits from `defaults.http.timeout` or `30s`  
-**Description:** Request timeout
-
-```yaml
-with:
-  url: "https://api.example.com/slow-endpoint"
-  timeout: "60s"
-```
-
-#### `follow_redirects` (optional)
-
-**Type:** Boolean  
-**Default:** Inherits from `defaults.http.follow_redirects` or `true`  
-**Description:** Whether to follow HTTP redirects
-
-```yaml
-with:
-  url: "https://example.com/redirect"
-  follow_redirects: false
-```
-
-#### `verify_ssl` (optional)
-
-**Type:** Boolean  
-**Default:** Inherits from `defaults.http.verify_ssl` or `true`  
-**Description:** Whether to verify SSL certificates
-
-```yaml
-with:
-  url: "https://self-signed.example.com/api"
-  verify_ssl: false
-```
-
-#### `max_redirects` (optional)
-
-**Type:** Integer  
-**Default:** Inherits from `defaults.http.max_redirects` or `10`  
-**Description:** Maximum number of redirects to follow
-
-```yaml
-with:
-  url: "https://example.com/many-redirects"
-  max_redirects: 3
+      - name: Create a user
+        uses: http
+        with:
+          post: /users
+          headers:
+            content-type: application/json
+          body:
+            name: "{{vars.user_name}}"
+        test: res.code == 201
 ```
 
 ### Response Object
 
-The HTTP action provides a `res` object with the following properties:
-
-| Property | Type | Description |
-|----------|------|-------------|
-| `status` | Integer | HTTP status code (200, 404, 500, etc.) |
-| `time` | Integer | Response time in milliseconds |
-| `body_size` | Integer | Response body size in bytes |
-| `headers` | Object | Response headers as key-value pairs |
-| `json` | Object | Parsed JSON response (only if valid JSON) |
-| `text` | String | Response body as text |
+| Field | Type | Description |
+|-------|------|-------------|
+| `res.code` | Integer | Status code, such as `200` |
+| `res.status` | String | Status line, such as `"200 OK"` |
+| `res.headers` | Object | Response headers, keyed by canonical name such as `Content-Type` |
+| `res.body` | Any | Response body. Parsed into an object or array when the response is JSON, otherwise the raw string |
+| `res.rawbody` | String | The unparsed body, present when the body was parsed as JSON |
+| `res.filepath` | String | Path to the saved file when the response is binary |
+| `rt.duration` | String | Round-trip time, such as `"120ms"` |
+| `rt.sec` | Float | Round-trip time in seconds |
+| `status` | Integer | `0` when the status code is 2xx, `1` otherwise |
 
 ### Response Examples
 
+For a JSON response, the fields are read straight off `res.body`:
+
 ```yaml
-steps:
-  - name: "API Test"
-    id: api-test
-    action: http
-    with:
-      url: "https://jsonplaceholder.typicode.com/users/1"
     test: |
-      res.status == 200 &&
-      res.time < 2000 &&
-      res.json.id == 1 &&
-      res.json.name != ""
+      res.code == 200 &&
+      res.headers["Content-Type"] contains "application/json" &&
+      res.body.status == "ok" &&
+      len(res.body.items) > 0
     outputs:
-      user_id: res.json.id
-      user_name: res.json.name
-      response_time: res.time
-      content_type: res.headers["Content-Type"]
+      first_id: res.body.items[0].id
+      elapsed_ms: rt.sec * 1000
+```
+
+For a text or HTML response, `res.body` is the string itself:
+
+```yaml
+    test: |
+      res.code == 200 &&
+      res.body contains "<title>" &&
+      len(res.body) > 100
 ```
 
 ### Common HTTP Patterns
@@ -207,111 +155,54 @@ steps:
 #### Authentication
 
 ```yaml
-vars:
-  api_url: "{{API_URL}}"
-  access_token: "{{ACCESS_TOKEN}}"
-  username: "{{USERNAME}}"
-  password: "{{PASSWORD}}"
-  api_key: "{{API_KEY}}"
-
-# Bearer token
-steps:
-  - name: "Authenticated Request"
+  - name: Log in
+    id: auth
     uses: http
     with:
-      url: "{{vars.api_url}}/protected"
+      url: "{{vars.api_url}}/login"
+      method: POST
       headers:
-        Authorization: "Bearer {{vars.access_token}}"
+        content-type: application/json
+      body:
+        user: "{{vars.user}}"
+        password: "{{vars.password}}"
+    test: res.code == 200
+    outputs:
+      token: res.body.access_token
 
-# Basic auth
-  - name: "Basic Auth Request"
+  - name: Call a protected endpoint
     uses: http
     with:
-      url: "{{vars.api_url}}/basic"
+      url: "{{vars.api_url}}/me"
+      method: GET
       headers:
-        Authorization: "Basic {{encode_base64(vars.username + ':' + vars.password)}}"
-
-# API key
-  - name: "API Key Request"
-    uses: http
-    with:
-      url: "{{vars.api_url}}/data"
-      headers:
-        X-API-Key: "{{vars.api_key}}"
+        authorization: "Bearer {{outputs.auth.token}}"
+    test: res.code == 200
 ```
 
-#### Content Types
+#### Checking an Error Response
 
 ```yaml
-vars:
-  api_url: "{{API_URL}}"
-  graphql_url: "{{GRAPHQL_URL}}"
-  user_id: "{{USER_ID}}"
-
-# JSON API
-steps:
-  - name: "JSON Request"
-    action: http
+  - name: Unknown id returns 404
+    uses: http
     with:
-      url: "{{vars.api_url}}/json"
-      method: "POST"
-      headers:
-        Content-Type: "application/json"
-      body: |
-        {
-          "key": "value",
-          "timestamp": "{{iso8601()}}"
-        }
-
-# XML Request
-  - name: "XML Request"
-    action: http
-    with:
-      url: "{{vars.api_url}}/xml"
-      method: "POST"
-      headers:
-        Content-Type: "application/xml"
-      body: |
-        <?xml version="1.0"?>
-        <data>
-          <key>value</key>
-        </data>
-
-# GraphQL Query
-  - name: "GraphQL Query"
-    action: http
-    with:
-      url: "{{vars.graphql_url}}"
-      method: "POST"
-      headers:
-        Content-Type: "application/json"
-      body: |
-        {
-          "query": "query { user(id: \"{{vars.user_id}}\") { name email } }"
-        }
+      url: "{{vars.api_url}}/users/does-not-exist"
+      method: GET
+    test: res.code == 404 && res.body.error != null
 ```
 
-#### File Upload
+#### Retrying a Flaky Endpoint
 
 ```yaml
-vars:
-  api_url: "{{API_URL}}"
-
-steps:
-  - name: "File Upload"
-    action: http
+  - name: Eventually consistent read
+    uses: http
+    retry:
+      max_attempts: 5
+      interval: 2s
     with:
-      url: "{{vars.api_url}}/upload"
-      method: "POST"
-      headers:
-        Content-Type: "multipart/form-data"
-      body: |
-        --boundary123
-        Content-Disposition: form-data; name="file"; filename="test.txt"
-        Content-Type: text/plain
-        
-        File content here
-        --boundary123--
+      url: "{{vars.api_url}}/orders/{{outputs.create.order_id}}"
+      method: GET
+    test: res.code == 200
 ```
 
 ## Database Action
@@ -810,7 +701,7 @@ The browser action provides a `res` object with action-specific properties:
     headless: true
   test: res.code == 0
   outputs:
-    load_time: res.time_ms
+    load_time: rt.sec * 1000
 ```
 
 #### Extract Text Content
@@ -1077,7 +968,6 @@ steps:
     selector: "#may-not-exist"
     timeout: "5s"
   test: res.code == 0 || (res.success == "false" && res.error | contains("not found"))
-  continue_on_error: true
   outputs:
     click_success: res.code == 0
     error_type: |
@@ -1316,315 +1206,85 @@ Common exit codes and their meanings:
 
 ## SMTP Action
 
-The `smtp` action sends email notifications and alerts through SMTP servers.
+The `smtp` action delivers mail to an SMTP server. It is built for measuring and exercising delivery rather than for sending hand-written notifications: the message body is generated, and its size is set with `length`.
 
 ### Basic Syntax
 
 ```yaml
-vars:
-  smtp_user: "{{SMTP_USER}}"
-  smtp_pass: "{{SMTP_PASS}}"
-
 steps:
-  - name: "Send Alert"
-    action: smtp
+  - name: Send a probe mail
+    uses: smtp
     with:
-      host: "smtp.gmail.com"
-      username: "{{vars.smtp_user}}"
-      password: "{{vars.smtp_pass}}"
-      from: "alerts@example.com"
-      to: ["admin@example.com"]
-      subject: "Service Alert"
-      body: "Service is down"
+      addr: "localhost:2525"
+      from: "sender@example.com"
+      to: "recipient@example.com"
+      subject: "Delivery probe"
+      session: 1
+      message: 1
+      length: 500
+    test: res.code == 0 && res.sent > 0
 ```
 
 ### Parameters
 
-#### `host` (required)
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `addr` | String | Yes | - | SMTP server as `host:port` |
+| `from` | String | Yes | - | Envelope sender |
+| `to` | String | Yes | - | Envelope recipient |
+| `subject` | String | No | `""` | Subject line |
+| `myhostname` | String | No | - | Hostname used in the `HELO` / `EHLO` command |
+| `session` | Integer | No | `1` | Number of SMTP sessions to open |
+| `message` | Integer | No | `1` | Messages to send per session |
+| `length` | Integer | No | `0` | Size of the generated message body in bytes |
 
-**Type:** String  
-**Description:** SMTP server hostname or IP address
-
-```yaml
-with:
-  host: "smtp.gmail.com"
-  host: "mail.example.com"
-  host: "127.0.0.1"
-```
-
-#### `port` (optional)
-
-**Type:** Integer  
-**Default:** `587`  
-**Description:** SMTP server port
-
-```yaml
-with:
-  host: "smtp.gmail.com"
-  port: 587    # TLS/STARTTLS
-  port: 465    # SSL
-  port: 25     # Plain
-```
-
-#### `username` (required)
-
-**Type:** String  
-**Description:** SMTP authentication username  
-**Supports:** Template expressions
-
-```yaml
-vars:
-  smtp_username: "{{SMTP_USERNAME}}"
-
-with:
-  username: "{{vars.smtp_username}}"
-  username: "alerts@example.com"
-```
-
-#### `password` (required)
-
-**Type:** String  
-**Description:** SMTP authentication password  
-**Supports:** Template expressions
-
-```yaml
-vars:
-  smtp_password: "{{SMTP_PASSWORD}}"
-  email_app_password: "{{EMAIL_APP_PASSWORD}}"
-
-with:
-  password: "{{vars.smtp_password}}"
-  password: "{{vars.email_app_password}}"
-```
-
-#### `from` (required)
-
-**Type:** String  
-**Description:** Sender email address  
-**Supports:** Template expressions
-
-```yaml
-vars:
-  from_email: "{{FROM_EMAIL}}"
-
-with:
-  from: "alerts@example.com"
-  from: "{{vars.from_email}}"
-  from: "Probe Monitor <probe@example.com>"
-```
-
-#### `to` (required)
-
-**Type:** Array of strings  
-**Description:** Recipient email addresses  
-**Supports:** Template expressions
-
-```yaml
-vars:
-  alert_email: "{{ALERT_EMAIL}}"
-
-with:
-  to: ["admin@example.com"]
-  to: ["user1@example.com", "user2@example.com"]
-  to: ["{{vars.alert_email}}"]"
-```
-
-#### `cc` (optional)
-
-**Type:** Array of strings  
-**Description:** Carbon copy recipients
-
-```yaml
-with:
-  to: ["admin@example.com"]
-  cc: ["team@example.com", "manager@example.com"]
-```
-
-#### `bcc` (optional)
-
-**Type:** Array of strings  
-**Description:** Blind carbon copy recipients
-
-```yaml
-with:
-  to: ["admin@example.com"]
-  bcc: ["audit@example.com"]
-```
-
-#### `subject` (required)
-
-**Type:** String  
-**Description:** Email subject line  
-**Supports:** Template expressions
-
-```yaml
-vars:
-  service_name: "{{SERVICE_NAME}}"
-
-with:
-  subject: "Alert: Service Down"
-  subject: "{{vars.service_name}} Status: {{outputs.health-check.status}}"
-  subject: "Daily Report - {{date('2006-01-02')}}"
-```
-
-#### `body` (required)
-
-**Type:** String  
-**Description:** Email body content  
-**Supports:** Template expressions and multi-line strings
-
-```yaml
-with:
-  body: "Simple text message"
-  
-  # Multi-line text
-  body: |
-    Service Alert Report
-    
-    Status: {{outputs.check.status}}
-    Timestamp: {{iso8601()}}
-    Response Time: {{outputs.check.time}}ms
-    
-    Please investigate immediately.
-
-  # HTML email (set html: true)
-  body: |
-    <html>
-    <body>
-      <h1>Service Alert</h1>
-      <p>Status: <strong>{{outputs.check.status}}</strong></p>
-      <p>Time: {{iso8601()}}</p>
-    </body>
-    </html>
-```
-
-#### `html` (optional)
-
-**Type:** Boolean  
-**Default:** `false`  
-**Description:** Whether the body contains HTML content
-
-```yaml
-with:
-  subject: "HTML Alert"
-  body: "<h1>Alert</h1><p>Service is <strong>down</strong></p>"
-  html: true
-```
-
-#### `tls` (optional)
-
-**Type:** Boolean  
-**Default:** `true`  
-**Description:** Whether to use TLS/STARTTLS encryption
-
-```yaml
-with:
-  host: "smtp.example.com"
-  port: 587
-  tls: true     # Use STARTTLS
-  
-with:
-  host: "smtp.example.com"
-  port: 465
-  tls: false    # Use SSL (port 465 typically uses implicit SSL)
-```
+There are no parameters for authentication, TLS, CC/BCC, a custom body or HTML. To include a report in the run output, use the step's `echo`.
 
 ### Response Object
 
-The SMTP action provides a `res` object with the following properties:
-
-| Property | Type | Description |
-|----------|------|-------------|
-| `success` | Boolean | Whether the email was sent successfully |
-| `message_id` | String | Unique message identifier (if provided by server) |
-| `time` | Integer | Time taken to send email in milliseconds |
+| Field | Type | Description |
+|-------|------|-------------|
+| `res.code` | Integer | `0` when every message was delivered |
+| `res.sent` | Integer | Messages delivered |
+| `res.failed` | Integer | Messages that failed |
+| `res.total` | Integer | Messages attempted |
+| `res.error` | String | Error message, when delivery failed |
+| `res.maildata` | String | The generated message, when it is text |
+| `res.filepath` | String | Path to the generated message, when it is binary |
 
 ### SMTP Examples
 
-#### Gmail Configuration
+#### Several Sessions and Messages
 
 ```yaml
-vars:
-  gmail_username: "{{GMAIL_USERNAME}}"
-  gmail_app_password: "{{GMAIL_APP_PASSWORD}}"
-
 steps:
-  - name: "Send Gmail Alert"
-    action: smtp
+  - name: Deliver 3 messages over 2 sessions
+    id: bulk
+    uses: smtp
     with:
-      host: "smtp.gmail.com"
-      port: 587
-      username: "{{vars.gmail_username}}"
-      password: "{{vars.gmail_app_password}}"  # Use app password, not account password
-      from: "{{vars.gmail_username}}"
-      to: ["admin@example.com"]
-      subject: "Probe Alert - {{date('15:04')}}"
-      body: |
-        Alert from Probe workflow.
-        
-        Details:
-        - Workflow: {{workflow.name}}
-        - Time: {{iso8601()}}
-        - Status: Failed
+      addr: "{{vars.smtp_addr}}"
+      from: "{{vars.from_addr}}"
+      to: "{{vars.to_addr}}"
+      subject: "Bulk delivery test"
+      myhostname: probe-client.local
+      session: 2
+      message: 3
+      length: 750
+    test: res.code == 0 && res.sent == 6
+    outputs:
+      sent: res.sent
 ```
 
-#### Office 365 Configuration
+#### Reporting the Result
 
 ```yaml
-vars:
-  o365_username: "{{O365_USERNAME}}"
-  o365_password: "{{O365_PASSWORD}}"
-
-steps:
-  - name: "Send Office 365 Alert"
-    action: smtp
-    with:
-      host: "smtp.office365.com"
-      port: 587
-      username: "{{vars.o365_username}}"
-      password: "{{vars.o365_password}}"
-      from: "{{vars.o365_username}}"
-      to: ["team@company.com"]
-      subject: "System Alert"
-      body: "Alert message content"
-      tls: true
+  - name: Delivery summary
+    uses: hello
+    echo: |
+      Sent: {{outputs.bulk.sent}}
+      Round trip: {{rt.duration}}
 ```
 
-#### HTML Email with Multiple Recipients
-
-```yaml
-vars:
-  smtp_host: "{{SMTP_HOST}}"
-  smtp_user: "{{SMTP_USER}}"
-  smtp_pass: "{{SMTP_PASS}}"
-
-steps:
-  - name: "HTML Status Report"
-    action: smtp
-    with:
-      host: "{{vars.smtp_host}}"
-      port: 587
-      username: "{{vars.smtp_user}}"
-      password: "{{vars.smtp_pass}}"
-      from: "reports@example.com"
-      to: ["admin@example.com", "ops@example.com"]
-      cc: ["manager@example.com"]
-      subject: "Daily Health Report - {{date('2006-01-02')}}"
-      html: true
-      body: |
-        <html>
-        <head><title>Health Report</title></head>
-        <body>
-          <h1>Daily Health Report</h1>
-          <table border="1">
-            <tr><th>Service</th><th>Status</th><th>Response Time</th></tr>
-            <tr><td>API</td><td style="color: {{outputs.api.success ? 'green' : 'red'}}">{{outputs.api.status}}</td><td>{{outputs.api.time}}ms</td></tr>
-            <tr><td>Database</td><td style="color: {{outputs.db.success ? 'green' : 'red'}}">{{outputs.db.status}}</td><td>{{outputs.db.time}}ms</td></tr>
-          </table>
-          <p>Generated at {{iso8601()}}</p>
-        </body>
-        </html>
-```
 
 ## IMAP Action
 
@@ -1873,209 +1533,259 @@ steps:
 
 ## Hello Action
 
-The `hello` action is a simple test action used for development, debugging, and workflow validation.
+The `hello` action does nothing but succeed. It is useful as a placeholder, for a step whose only job is an `echo`, and for trying out expressions.
 
 ### Basic Syntax
 
 ```yaml
 steps:
-  - name: "Test Hello"
-    action: hello
-    with:
-      message: "Hello, World!"
+  - name: Report
+    uses: hello
+    echo: "Checked {{outputs.health.endpoint}}"
 ```
 
 ### Parameters
 
-#### `message` (optional)
-
-**Type:** String  
-**Default:** `"Hello from Probe!"`  
-**Description:** Message to display  
-**Supports:** Template expressions
+The action takes no parameters of its own. Whatever is given in `with` is echoed back on `res`, which makes it a convenient way to publish computed values.
 
 ```yaml
-with:
-  message: "Hello, World!"
-  message: "Current time: {{iso8601()}}"
-vars:
-  user_name: "{{USER_NAME}}"
-
-  message: "Hello {{vars.user_name}}"
-```
-
-#### `delay` (optional)
-
-**Type:** Duration  
-**Default:** `0s`  
-**Description:** Artificial delay before completing
-
-```yaml
-with:
-  message: "Delayed hello"
-  delay: "2s"
+steps:
+  - name: Build a summary
+    id: summary
+    uses: hello
+    with:
+      run_id: "{{vars.run_id}}"
+      checked_at: "{{now().Format('2006-01-02T15:04:05Z07:00')}}"
+    outputs:
+      run_id: res.run_id
+      checked_at: res.checked_at
 ```
 
 ### Response Object
 
-The hello action provides a `res` object with the following properties:
-
 | Property | Type | Description |
 |----------|------|-------------|
-| `message` | String | The message that was displayed |
-| `time` | Integer | Time taken in milliseconds (including delay) |
-| `timestamp` | String | ISO 8601 timestamp when action completed |
+| `res.<key>` | Any | Every key passed in `with` |
+| `res.status` | Integer | Always `0` |
+| `status` | Integer | Always `0` |
 
-### Hello Examples
+## gRPC Action
 
-#### Basic Test
+The `grpc` action calls a gRPC method. The service definition is resolved through server reflection, so no `.proto` file is needed at run time.
+
+### Basic Syntax
 
 ```yaml
-steps:
-  - name: "Simple Test"
-    action: hello
-    test: res.message != ""
-    outputs:
-      test_time: res.time
+- name: Get a user
+  uses: grpc
+  with:
+    addr: "grpc.example.com:443"
+    service: "user.v1.UserService"
+    method: "GetUser"
+    tls: true
+    body: |
+      {"id": "123"}
+  test: res.status_code == "OK"
 ```
 
-#### Timing Test
+### Parameters
 
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `addr` | String | Yes | - | Host and port of the gRPC server |
+| `service` | String | Yes | - | Fully qualified service name |
+| `method` | String | Yes | - | Method name |
+| `body` | String | No | `""` | Request message as JSON |
+| `metadata` | Object | No | `{}` | Request metadata (the gRPC equivalent of headers) |
+| `timeout` | String | No | - | Request timeout, such as `"10s"` |
+| `tls` | Boolean | No | `false` | Use TLS |
+| `insecure` | Boolean | No | `false` | Skip certificate verification |
+| `cert_file` | String | No | - | Client certificate for mutual TLS |
+| `key_file` | String | No | - | Client key for mutual TLS |
+| `ca_file` | String | No | - | CA certificate used to verify the server |
+
+### Response Object
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `res.body` | String | Response message as JSON |
+| `res.status_code` | String | gRPC status code, such as `OK` or `NOT_FOUND` |
+| `res.status_message` | String | Status message |
+| `res.metadata` | Object | Response metadata |
+| `rt` | String | Round-trip time |
+| `req` | Object | The request as it was sent |
+
+## Embedded Action
+
+The `embedded` action runs a **job file** as a single step, which lets shared setup or checks live in their own file and be reused from several workflows.
+
+The file is a job, not a workflow: it holds `name`, `steps` and optionally `defaults` - there is no `jobs` key in it.
+
+### Basic Syntax
+
+**auth.yml:**
 ```yaml
+name: Authentication
 steps:
-  - name: "Timing Test"
-    action: hello
+  - name: Get token
+    id: get_token
+    uses: shell
     with:
-      message: "Testing timing"
-      delay: "1s"
-    test: res.time >= 1000 && res.time < 1100
+      cmd: echo "0123456789"
+    test: res.code == 0
+    outputs:
+      mytoken: replace(res.stdout, '\n', '')
 ```
 
-#### Template Testing
+**workflow.yml:**
+```yaml
+jobs:
+- name: Main
+  steps:
+    - name: Authenticate
+      id: auth
+      uses: embedded
+      with:
+        path: "./auth.yml"
+        vars:
+          environment: "{{vars.environment}}"
+      test: res.code == 0
+      outputs:
+        token: res.outputs.mytoken
+
+    - name: Call the API
+      uses: http
+      with:
+        method: GET
+        url: "{{vars.api_url}}/me"
+        headers:
+          authorization: "Bearer {{outputs.auth.token}}"
+      test: res.code == 200
+```
+
+### Parameters
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `path` | String | Yes | - | Path to the job file. Resolved against the current working directory, not the workflow file |
+| `vars` | Object | No | `{}` | Variables passed to the embedded job, read there as `vars.<name>` |
+
+### Response Object
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `res.code` | Integer | `0` when every step of the embedded job passed |
+| `res.outputs` | Object | The outputs published by the embedded job's steps, keyed by output name |
+| `res.report` | String | The embedded job's report, which is also nested into the parent report |
+| `res.error` | String | Error message, when the embedded job failed |
+| `rt` | Object | Time spent running the embedded job |
+
+`res.outputs` is keyed by output name, so a value published as `mytoken` is read as `res.outputs.mytoken`.
+
+
+## Mail Latency Action
+
+The `mail-latency` action reads messages from a Maildir, computes the delivery latency of each one from its `Received` headers, and writes the result as a CSV file.
+
+### Basic Syntax
 
 ```yaml
-steps:
-  - name: "Template Test"
-    action: hello
-    with:
-vars:
-  user: "{{USER}}"
-
-      message: "User: {{vars.user}}, Time: {{unixtime()}}"
-    test: res.message | contains(vars.user)
-    outputs:
-      rendered_message: res.message
+- name: Measure delivery latency
+  uses: mail-latency
+  with:
+    mail_dir: "/var/mail/probe/new"
+    output_dir: "./reports"
+  test: res.code == 0
 ```
+
+### Parameters
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `mail_dir` | String | Yes | Directory holding the messages to measure |
+| `output_dir` | String | Yes | Directory the CSV file is written to |
+
+### Response Object
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `res.output_file` | String | Path of the written CSV file, named `mail-latency.<timestamp>.csv` |
+| `res.status` | Integer | `0` on success |
+| `rt` | String | Time spent measuring |
 
 ## Action Error Handling
 
-### Common Error Scenarios
+A step fails when its `test` is false or when the action itself returns an error. The remaining steps of the job still run, the job is marked failed, and jobs that list it in `needs` are skipped.
 
-All actions can fail for various reasons. Understanding common failure modes helps with writing robust workflows.
-
-#### HTTP Action Errors
+There is no switch to ignore a failure. When a check should not fail the workflow, record its result as an output instead of asserting it.
 
 ```yaml
 steps:
-  - name: "HTTP with Error Handling"
-    action: http
+  - name: Required check
+    uses: http
     with:
-      url: "https://api.example.com/endpoint"
-    test: |
-      res.status >= 200 && res.status < 300
-    continue_on_error: false
+      method: GET
+      url: "{{vars.api_url}}/health"
+    test: res.code == 200
+
+  - name: Optional check
+    id: optional
+    uses: http
+    with:
+      method: GET
+      url: "{{vars.api_url}}/experimental"
     outputs:
-      success: res.status >= 200 && res.status < 300
-      error_message: |
-        {{res.status >= 400 ? "Client error: " + res.status : 
-          res.status >= 500 ? "Server error: " + res.status : ""}}
+      available: res.code == 200
+      detail: res.code >= 400 ? res.status : ""
+
+  - name: Report
+    uses: hello
+    echo: "Experimental endpoint: {{outputs.optional.available ? \"available\" : outputs.optional.detail}}"
 ```
 
-#### SMTP Action Errors
-
-vars:
-  smtp_user: "{{SMTP_USER}}"
-  smtp_pass: "{{SMTP_PASS}}"
+Use `retry` for a transient failure and `timeout` for a step that may hang:
 
 ```yaml
-steps:
-  - name: "SMTP with Error Handling"
-    action: smtp
+  - name: Flaky endpoint
+    uses: http
+    timeout: 10s
+    retry:
+      max_attempts: 3
+      interval: 2s
     with:
-      host: "smtp.example.com"
-      username: "{{vars.smtp_user}}"
-      password: "{{vars.smtp_pass}}"
-      from: "test@example.com"
-      to: ["admin@example.com"]
-      subject: "Test"
-      body: "Test message"
-    test: res.success == true
-    continue_on_error: true
-    outputs:
-      email_sent: res.success
-      send_time: res.time
+      method: GET
+      url: "{{vars.api_url}}/flaky"
+    test: res.code == 200
 ```
+
 
 ## Performance Considerations
 
-### HTTP Action Performance
-
-- **Connection pooling:** HTTP actions reuse connections when possible
-- **Timeouts:** Set appropriate timeouts to prevent hanging
-- **Response size:** Large responses consume more memory
-- **Concurrent requests:** Multiple HTTP actions can run in parallel
+- Jobs without a `needs` relation run in parallel, so independent checks do not queue behind each other.
+- `rt.sec` and `rt.duration` measure the action's round trip, not the whole step.
+- A large response body is held in memory; a binary body is written to a file and reported as `res.filepath`.
+- `repeat` with `async: true` runs the repetitions of a job concurrently, which is the way to generate load.
 
 ```yaml
-# Performance-optimized HTTP configuration
-vars:
-  api_url: "{{API_URL}}"
-
-defaults:
-  http:
-    timeout: "10s"
-    follow_redirects: true
-    max_redirects: 3
-
 jobs:
-  performance-test:
+  - name: Load test
+    repeat:
+      count: 50
+      async: true
     steps:
-      - name: "Quick Health Check"
-        action: http
+      - name: Ping
+        uses: http
+        timeout: 2s
         with:
+          method: GET
           url: "{{vars.api_url}}/ping"
-          timeout: "2s"
-        test: res.status == 200 && res.time < 500
-```
-
-### SMTP Action Performance
-
-- **Connection reuse:** SMTP connections are established per action
-- **Batch emails:** Consider grouping recipients to reduce connections
-- **TLS overhead:** TLS negotiation adds latency
-
-```yaml
-# Efficient email notification
-vars:
-  smtp_user: "{{SMTP_USER}}"
-  smtp_pass: "{{SMTP_PASS}}"
-
-steps:
-  - name: "Batch Notification"
-    action: smtp
-    with:
-      host: "smtp.example.com"
-      username: "{{vars.smtp_user}}"
-      password: "{{vars.smtp_pass}}"
-      from: "alerts@example.com"
-      to: ["admin1@example.com", "admin2@example.com", "admin3@example.com"]
-      subject: "Batch Alert"
-      body: "Single email to multiple recipients"
+        test: res.code == 200 && rt.sec < 0.5
 ```
 
 ## See Also
 
-- **[YAML Configuration](../yaml-configuration/)** - Complete YAML syntax reference
-- **[Built-in Functions](../built-in-functions/)** - Expression functions for use with actions
-- **[Concepts: Actions](../../concepts/actions/)** - Action system architecture
-- **[How-tos: API Testing](../../how-tos/api-testing/)** - Practical HTTP action examples
-- **[How-tos: Error Handling](../../how-tos/error-handling-strategies/)** - Error handling patterns
+- **[YAML Configuration](/reference/yaml-configuration)** - Complete YAML syntax reference
+- **[Built-in Functions](/reference/built-in-functions)** - Expression functions for use with actions
+- **[SSH Action](/reference/actions/ssh)** - Running commands on a remote host
+- **[Concepts: Actions](/guide/concepts/actions)** - Action system architecture
+- **[How-tos: API Testing](/guide/how-tos/api-testing)** - Practical HTTP action examples

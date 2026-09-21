@@ -26,25 +26,26 @@ name: My First Website Check
 description: Check if my website is responding correctly
 
 jobs:
-  health-check:
-    name: Website Health Check
-    steps:
-      - name: Check Homepage
-        action: http
-        with:
-          url: https://httpbin.org/status/200
-          method: GET
-        test: res.status == 200
+- id: health-check
+  name: Website Health Check
+  steps:
+    - name: Check Homepage
+      uses: http
+      with:
+        url: https://httpbin.org/status/200
+        method: GET
+      test: res.code == 200
         
-      - name: Check API Endpoint
-        action: http
-        with:
-          url: https://httpbin.org/json
-          method: GET
-        test: res.status == 200 && res.json.slideshow != null
+    - name: Check API Endpoint
+      uses: http
+      with:
+        url: https://httpbin.org/json
+        method: GET
+      test: res.code == 200 && res.body.slideshow != null
         
-      - name: Success Message
-        echo: "✅ All checks passed! Website is healthy."
+    - name: Success Message
+      uses: hello
+      echo: "✅ All checks passed! Website is healthy."
 ```
 
 ### 2. Run Your Workflow
@@ -109,25 +110,25 @@ name: Multi-Environment Health Check
 description: Check health across multiple environments
 
 jobs:
-  production-check:
-    name: Production Health Check
-    steps:
-      - name: Check Production API
-        action: http
-        with:
-          url: https://api.myapp.com/health
-          method: GET
-        test: res.status == 200
+- id: production-check
+  name: Production Health Check
+  steps:
+    - name: Check Production API
+      uses: http
+      with:
+        url: https://api.myapp.com/health
+        method: GET
+      test: res.code == 200
 
-  staging-check:
-    name: Staging Health Check
-    steps:
-      - name: Check Staging API
-        action: http
-        with:
-          url: https://staging-api.myapp.com/health
-          method: GET
-        test: res.status == 200
+- id: staging-check
+  name: Staging Health Check
+  steps:
+    - name: Check Staging API
+      uses: http
+      with:
+        url: https://staging-api.myapp.com/health
+        method: GET
+      test: res.code == 200
 ```
 
 ### Add Error Handling
@@ -136,19 +137,18 @@ Include steps that handle failures gracefully:
 
 ```yaml
 - name: Check Service
-  action: http
+  uses: http
   with:
     url: https://api.example.com/status
     method: GET
-  test: res.status == 200
+  test: res.code == 200
   
 - name: Fallback Check
-  if: steps.previous.failed
-  action: http
+  uses: http
   with:
     url: https://backup-api.example.com/status
     method: GET
-  test: res.status == 200
+  test: res.code == 200
 ```
 
 ## Troubleshooting

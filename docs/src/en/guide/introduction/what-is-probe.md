@@ -77,24 +77,23 @@ Here's a real-world example of a workflow that monitors API uptime:
 ```yaml
 name: API Health Check
 
-defaults:
-  http:
-    url: https://httpbin.org
-
 jobs:
 - name: Monitor API Health
+  defaults:
+    http:
+      url: https://httpbin.org
   steps:
   - name: Check Homepage
     uses: http
     with:
       get: /status/200
-    test: res.status == 200
+    test: res.code == 200
 
   - name: Check API Response
     uses: http
     with:
       get: /json
-    test: res.status == 200 && res.json != null
+    test: res.code == 200 && res.body != null
 ```
 
 As you can see, Probe enables you to create and execute workflows in a **simple**, **quick**, and **enjoyable** way.

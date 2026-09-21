@@ -1,312 +1,86 @@
 # SMTPアクション
 
-`smtp`アクションはSMTPサーバーを通じてメール通知とアラートを送信します。
+`smtp` アクションは SMTP サーバーへメールを配送します。任意の本文を書いて通知を送るためのものではなく、配送そのものを計測・負荷試験するためのアクションです。本文は自動生成され、サイズは `length` で指定します。
 
 ## 基本的な構文
 
 ```yaml
-vars:
-  smtp_user: "{{SMTP_USER}}"
-  smtp_pass: "{{SMTP_PASS}}"
-
 steps:
-  - name: "Send Alert"
+  - name: Send a probe mail
     uses: smtp
     with:
-      host: "smtp.gmail.com"
-      username: "{{vars.smtp_user}}"
-      password: "{{vars.smtp_pass}}"
-      from: "alerts@example.com"
-      to: ["admin@example.com"]
-      subject: "Service Alert"
-      body: "Service is down"
+      addr: "localhost:2525"
+      from: "sender@example.com"
+      to: "recipient@example.com"
+      subject: "Delivery probe"
+      session: 1
+      message: 1
+      length: 500
+    test: res.code == 0 && res.sent > 0
 ```
 
 ## パラメータ
 
-### `host` (必須)
+| パラメータ | 型 | 必須 | デフォルト | 説明 |
+|---|---|---|---|---|
+| `addr` | String | 必須 | - | SMTP サーバー（`host:port`） |
+| `from` | String | 必須 | - | エンベロープの送信者 |
+| `to` | String | 必須 | - | エンベロープの受信者 |
+| `subject` | String | 任意 | `""` | 件名 |
+| `myhostname` | String | 任意 | - | `HELO` / `EHLO` で名乗るホスト名 |
+| `session` | Integer | 任意 | `1` | 開く SMTP セッション数 |
+| `message` | Integer | 任意 | `1` | 1 セッションあたりの送信通数 |
+| `length` | Integer | 任意 | `0` | 生成する本文のバイト数 |
 
-**型:** String  
-**説明:** SMTPサーバーのホスト名またはIPアドレス
-
-```yaml
-with:
-  host: "smtp.gmail.com"
-  host: "mail.example.com"
-  host: "127.0.0.1"
-```
-
-### `port` (オプション)
-
-**型:** Integer  
-**デフォルト:** `587`  
-**説明:** SMTPサーバーポート
-
-```yaml
-with:
-  host: "smtp.gmail.com"
-  port: 587    # TLS/STARTTLS
-  port: 465    # SSL
-  port: 25     # Plain
-```
-
-### `username` (必須)
-
-**型:** String  
-**説明:** SMTP認証ユーザー名  
-**サポート:** テンプレート式
-
-```yaml
-vars:
-  smtp_username: "{{SMTP_USERNAME}}"
-
-with:
-  username: "{{vars.smtp_username}}"
-  username: "alerts@example.com"
-```
-
-### `password` (必須)
-
-**型:** String  
-**説明:** SMTP認証パスワード  
-**サポート:** テンプレート式
-
-```yaml
-vars:
-  smtp_password: "{{SMTP_PASSWORD}}"
-  email_app_password: "{{EMAIL_APP_PASSWORD}}"
-
-with:
-  password: "{{vars.smtp_password}}"
-  password: "{{vars.email_app_password}}"
-```
-
-### `from` (必須)
-
-**型:** String  
-**説明:** 送信者メールアドレス  
-**サポート:** テンプレート式
-
-```yaml
-vars:
-  from_email: "{{FROM_EMAIL}}"
-
-with:
-  from: "alerts@example.com"
-  from: "{{vars.from_email}}"
-  from: "Probe Monitor <probe@example.com>"
-```
-
-### `to` (必須)
-
-**型:** 文字列の配列  
-**説明:** 受信者メールアドレス  
-**サポート:** テンプレート式
-
-```yaml
-vars:
-  alert_email: "{{ALERT_EMAIL}}"
-
-with:
-  to: ["admin@example.com"]
-  to: ["user1@example.com", "user2@example.com"]
-  to: ["{{vars.alert_email}}"]
-```
-
-### `cc` (オプション)
-
-**型:** 文字列の配列  
-**説明:** カーボンコピー受信者
-
-```yaml
-with:
-  to: ["admin@example.com"]
-  cc: ["team@example.com", "manager@example.com"]
-```
-
-### `bcc` (オプション)
-
-**型:** 文字列の配列  
-**説明:** ブラインドカーボンコピー受信者
-
-```yaml
-with:
-  to: ["admin@example.com"]
-  bcc: ["audit@example.com"]
-```
-
-#### `subject` (必須)
-
-**型:** String  
-**説明:** メール件名行  
-**サポート:** テンプレート式
-
-```yaml
-vars:
-  service_name: "{{SERVICE_NAME}}"
-
-with:
-  subject: "Alert: Service Down"
-  subject: "{{vars.service_name}} Status: {{outputs.health-check.status}}"
-  subject: "Daily Report - {{unixtime() | date('2006-01-02')}}"
-```
-
-### `body` (必須)
-
-**型:** String  
-**説明:** メール本文コンテンツ  
-**サポート:** テンプレート式と複数行文字列
-
-```yaml
-with:
-  body: "Simple text message"
-
-  # 複数行テキスト
-  body: |
-    Service Alert Report
-
-    Status: {{outputs.check.status}}
-    Timestamp: {{unixtime()}}
-    Response Time: {{outputs.check.time}}ms
-
-    Please investigate immediately.
-
-  # HTMLメール (html: trueを設定)
-  body: |
-    <html>
-    <body>
-      <h1>Service Alert</h1>
-      <p>Status: <strong>{{outputs.check.status}}</strong></p>
-      <p>Time: {{unixtime()}}</p>
-    </body>
-    </html>
-```
-
-### `html` (オプション)
-
-**型:** Boolean  
-**デフォルト:** `false`  
-**説明:** 本文にHTMLコンテンツが含まれているかどうか
-
-```yaml
-with:
-  subject: "HTML Alert"
-  body: "<h1>Alert</h1><p>Service is <strong>down</strong></p>"
-  html: true
-```
-
-### `tls` (オプション)
-
-**型:** Boolean  
-**デフォルト:** `true`  
-**説明:** TLS/STARTTLS暗号化を使用するかどうか
-
-```yaml
-with:
-  host: "smtp.example.com"
-  port: 587
-  tls: true     # STARTTLSを使用
-
-with:
-  host: "smtp.example.com"
-  port: 465
-  tls: false    # SSL使用 (ポート465は通常暗黙的SSLを使用)
-```
+認証、TLS、CC/BCC、任意の本文や HTML を指定するパラメータはありません。実行結果にレポートを出したい場合はステップの `echo` を使います。
 
 ## レスポンスオブジェクト
 
-SMTPアクションは次のプロパティを持つ`res`オブジェクトを提供します：
+| フィールド | 型 | 説明 |
+|---|---|---|
+| `res.code` | Integer | すべて配送できたとき `0` |
+| `res.sent` | Integer | 配送できた通数 |
+| `res.failed` | Integer | 失敗した通数 |
+| `res.total` | Integer | 試行した通数 |
+| `res.error` | String | 失敗時のエラーメッセージ |
+| `res.maildata` | String | 生成したメール（テキストの場合） |
+| `res.filepath` | String | 生成したメールのパス（バイナリの場合） |
 
- | プロパティ   | 型      | 説明                                                 |
- | ----------   | ------  | -------------                                        |
- | `success`    | Boolean | メールが正常に送信されたかどうか                     |
- | `message_id` | String  | 一意のメッセージ識別子（サーバーから提供された場合） |
- | `time`       | Integer | メール送信にかかった時間（ミリ秒）                   |
+## 使用例
 
-## SMTP例
-
-### Gmail設定
-
-```yaml
-vars:
-  gmail_username: "{{GMAIL_USERNAME}}"
-  gmail_app_password: "{{GMAIL_APP_PASSWORD}}"
-
-steps:
-  - name: "Send Gmail Alert"
-    uses: smtp
-    with:
-      host: "smtp.gmail.com"
-      port: 587
-      username: "{{vars.gmail_username}}"
-      password: "{{vars.gmail_app_password}}"  # アカウントパスワードではなくアプリパスワードを使用
-      from: "{{vars.gmail_username}}"
-      to: ["admin@example.com"]
-      subject: "Probe Alert - {{unixtime() | date('15:04')}}"
-      body: |
-        Alert from Probe workflow.
-
-        Details:
-        - Workflow: {{workflow.name}}
-        - Time: {{unixtime()}}
-        - Status: Failed
-```
-
-### Office 365設定
+### 複数セッション・複数通の配送
 
 ```yaml
-vars:
-  o365_username: "{{O365_USERNAME}}"
-  o365_password: "{{O365_PASSWORD}}"
-
 steps:
-  - name: "Send Office 365 Alert"
+  - name: Deliver 3 messages over 2 sessions
+    id: bulk
     uses: smtp
     with:
-      host: "smtp.office365.com"
-      port: 587
-      username: "{{vars.o365_username}}"
-      password: "{{vars.o365_password}}"
-      from: "{{vars.o365_username}}"
-      to: ["team@company.com"]
-      subject: "System Alert"
-      body: "Alert message content"
-      tls: true
+      addr: "{{vars.smtp_addr}}"
+      from: "{{vars.from_addr}}"
+      to: "{{vars.to_addr}}"
+      subject: "Bulk delivery test"
+      myhostname: probe-client.local
+      session: 2
+      message: 3
+      length: 750
+    test: res.code == 0 && res.sent == 6
+    outputs:
+      sent: res.sent
 ```
 
-### 複数受信者でのHTMLメール
+### 結果をレポートする
 
 ```yaml
-vars:
-  smtp_host: "{{SMTP_HOST}}"
-  smtp_user: "{{SMTP_USER}}"
-  smtp_pass: "{{SMTP_PASS}}"
-
-steps:
-  - name: "HTML Status Report"
-    uses: smtp
-    with:
-      host: "{{vars.smtp_host}}"
-      port: 587
-      username: "{{vars.smtp_user}}"
-      password: "{{vars.smtp_pass}}"
-      from: "reports@example.com"
-      to: ["admin@example.com", "ops@example.com"]
-      cc: ["manager@example.com"]
-      subject: "Daily Health Report - {{unixtime() | date('2006-01-02')}}"
-      html: true
-      body: |
-        <html>
-        <head><title>Health Report</title></head>
-        <body>
-          <h1>Daily Health Report</h1>
-          <table border="1">
-            <tr><th>Service</th><th>Status</th><th>Response Time</th></tr>
-            <tr><td>API</td><td style="color: {{outputs.api.success ? 'green' : 'red'}}">{{outputs.api.status}}</td><td>{{outputs.api.time}}ms</td></tr>
-            <tr><td>Database</td><td style="color: {{outputs.db.success ? 'green' : 'red'}}">{{outputs.db.status}}</td><td>{{outputs.db.time}}ms</td></tr>
-          </table>
-          <p>Generated at {{unixtime()}}</p>
-        </body>
-        </html>
+  - name: Delivery summary
+    uses: hello
+    echo: |
+      Sent: {{outputs.bulk.sent}}
+      Round trip: {{rt.duration}}
 ```
 
+## 関連項目
+
+- **[Mail Latency](./mail-latency)** - 配送遅延の計測
+- **[IMAP](./imap)** - メールボックスの操作
+- **[YAML設定](../yaml-configuration)** - ステップのプロパティ

@@ -1,709 +1,390 @@
 # YAML設定リファレンス
 
-このページでは、利用可能なすべてのオプション、データ型、検証ルールを含む、ProbeのYAML設定構文の完全なドキュメントを提供します。
+Probe がワークフローファイルから読み取るキー、式が評価されるコンテキスト、バリデーションの規則をまとめます。
 
-## ワークフロー構造
-
-Probeワークフローの基本構造：
+## ワークフローの構造
 
 ```yaml
-name: string                    # 必須: ワークフロー名
-description: string             # オプション: ワークフローの説明
-vars:                          # オプション: 変数（環境変数を含む）
-  KEY: "{{ENV_VAR ?? 'default'}}"
-jobs:                          # 必須: ジョブ定義
-- name: "Job Name"
-  defaults:                    # オプション: デフォルト設定
-    http:
-      timeout: duration
-      headers:
-        KEY: value
-  steps:
-    # ステップ設定
+name: string                  # 必須: ワークフロー名
+description: string           # 任意: ワークフローの説明
+vars:                         # 任意: ワークフロー変数
+  key: value
+jobs:                         # 必須: ジョブのリスト
+  - name: string              # 必須: ジョブ名
+    id: string                # 任意: ジョブ ID。needs から参照する
+    needs: [job-id, ...]      # 任意: 依存するジョブ
+    skipif: expression        # 任意: 真ならジョブをスキップ
+    defaults:                 # 任意: アクションごとの with の既定値
+      http:
+        url: string
+    repeat:                   # 任意: ジョブを繰り返す
+      count: integer
+      interval: duration
+    steps:                    # 必須: ステップのリスト
+      - name: string          # 任意: ステップ名
+        id: string            # 任意: ステップ ID。outputs の公開に必要
+        uses: string          # 必須: アクション名
+        with:                 # 任意: アクション引数
+          key: value
+        test: expression      # 任意: アサーション
+        echo: string          # 任意: レポートに出力する文字列
+        vars:                 # 任意: ステップ変数
+          key: value
+        outputs:              # 任意: 後続へ渡す値
+          key: expression
+        skipif: expression    # 任意: 真ならステップをスキップ
+        wait: duration        # 任意: 実行前の待機
+        timeout: duration     # 任意: ステップのタイムアウト
+        iteration:            # 任意: 要素ごとにステップを繰り返す
+          - key: value
+        retry:                # 任意: 失敗時のリトライ
+          max_attempts: integer
+          interval: duration
+          initial_delay: duration
 ```
 
-## トップレベルプロパティ
+`jobs` は**リスト**です。ジョブ ID をキーにしたマップで書くと読み込みに失敗します。
+
+トップレベルの `env` と `defaults` はありません。環境変数は `vars` を通して読み、`defaults` はジョブに書きます。
+
+## トップレベルのプロパティ
 
 ### `name`
 
-**型:** String（必須）  
-**説明:** ワークフローの人間が読める名前  
-**制約:** 空でない必要があります
+**型:** String（必須）
+**説明:** ワークフロー名。レポートの先頭に表示されます。
 
 ```yaml
 name: "API Health Check"
-name: "Production Monitoring Workflow"
 ```
 
 ### `description`
 
-**型:** String（オプション）  
-**説明:** ワークフローの目的の詳細な説明  
-**サポート:** YAMLリテラルブロック構文を使用した複数行文字列
+**型:** String（任意）
+**説明:** ワークフローの説明。
 
 ```yaml
-description: "Monitors the health of production APIs"
-
-# 複数行の説明
 description: |
-  このワークフローでは以下を含む包括的なヘルスチェックを実行します：
-  - APIエンドポイントの検証
-  - データベース接続テスト
-  - パフォーマンス監視
+  本番 API を確認します。
+  - エンドポイントの死活
+  - レスポンスタイム
 ```
 
 ### `vars`
 
-**型:** Object（オプション）  
-**説明:** すべてのジョブとステップで利用可能な変数  
-**キー形式:** 有効な変数名（英数字 + アンダースコア）  
-**値の型:** String、number、boolean
+**型:** Object（任意）
+**説明:** すべてのジョブとステップから `vars.<name>` で参照できる変数です。
+
+環境変数が見えるのは `vars` の中だけで、変数名をそのまま書いて参照します。値は最初のジョブが始まる前に一度だけ評価されます。
 
 ```yaml
 vars:
-  API_BASE_URL: "https://api.example.com"
-  TIMEOUT_SECONDS: 30
-  DEBUG_MODE: true
-  USER_AGENT: "Probe Monitor v1.0"
-```
+  # 環境変数を読む
+  api_url: "{{API_URL}}"
 
-**環境変数の解決:**
-```yaml
-vars:
-  # 静的値
-  api_url: "https://api.example.com"
-  
-  # 外部環境変数を参照
-  db_password: "{{DATABASE_PASSWORD}}"
-  
-  # デフォルト値
+  # デフォルト付き
   timeout: "{{REQUEST_TIMEOUT ?? '30s'}}"
-  
-  # 計算値
-  build_info: "Build {{BUILD_NUMBER ?? 'unknown'}} at {{unixtime()}}"
+
+  # 読み込み時に計算する
+  run_id: "{{random_str(8)}}"
+
+  # ネストした値も書ける
+  auth:
+    user: "{{API_USER}}"
 ```
 
-## ジョブ設定
+ステップの式から環境変数を直接読むことはできません。式のコンテキストに `env` は存在しないため、`vars` に置いて `vars.<name>` で参照します。
 
-### ジョブ構造
+## ジョブ
 
-```yaml
-jobs:
-- name: string                  # オプション: 人間が読めるジョブ名
-  needs: [job-name, ...]       # オプション: ジョブ依存関係
-  if: expression               # オプション: 条件付き実行
-  continue_on_error: boolean   # オプション: ジョブ失敗時でもワークフローを継続
-  timeout: duration            # オプション: ジョブタイムアウト
-  defaults:                    # オプション: このジョブのデフォルト設定
-    http:
-      timeout: duration
-  steps:                       # 必須: ステップの配列
-    # ステップ設定
-```
+### ジョブのプロパティ
 
-### ジョブプロパティ
+| プロパティ | 型 | 必須 | 説明 |
+|---|---|---|---|
+| `name` | String | 必須 | ジョブ名。テンプレート式が使えます |
+| `id` | String | 任意 | 他ジョブの `needs` から参照する識別子。省略時は自動採番されます |
+| `needs` | Array | 任意 | 先に完了している必要があるジョブの ID |
+| `steps` | Array | 必須 | 実行するステップ |
+| `skipif` | Expression | 任意 | 真ならジョブ全体をスキップ |
+| `defaults` | Object | 任意 | アクション名をキーとした `with` の既定値 |
+| `repeat` | Object | 任意 | ジョブを繰り返す |
 
-#### `name`
-
-**型:** String（オプション）  
-**説明:** ジョブの人間が読める名前  
-**デフォルト:** 指定されない場合はジョブIDを使用
-
-```yaml
-jobs:
-- name: "API Health Check"
-```
+ジョブに `if`、`continue_on_error`、`timeout` はありません。
 
 #### `needs`
 
-**型:** 文字列の配列（オプション）  
-**説明:** このジョブが実行される前に完了する必要があるジョブ名のリスト  
-**制約:** 参照されるジョブが存在する必要があります
+依存のないジョブは並列に開始します。`needs` が参照するのはジョブの **ID** なので、依存される側には明示的な `id` が必要です。
 
 ```yaml
 jobs:
-- name: setup
-  # setupジョブ
-  
-- name: test
-  needs: [setup]              # 単一依存関係
-  
-- name: cleanup
-  needs: [setup, test]        # 複数依存関係
+  - id: setup
+    name: Setup
+    steps:
+      - name: Prepare
+        uses: hello
+        echo: "ready"
+
+  - name: Test
+    needs: [setup]
+    steps:
+      - name: Run
+        uses: hello
+        echo: "testing"
 ```
 
-#### `if`
+#### `skipif`
 
-**型:** 式文字列（オプション）  
-**説明:** ジョブを実行するかどうかを決定する条件式  
-**コンテキスト:** 環境変数と他のジョブ結果へのアクセス
-
-```yaml
-vars:
-  environment: "{{ENVIRONMENT}}"
-
-jobs:
-- name: production-only
-  if: vars.environment == "production"
-
-- name: cleanup
-  if: jobs.test.failed
-
-- name: notification
-  if: jobs.test.success || jobs.fallback.success
-```
-
-#### `continue_on_error`
-
-**型:** Boolean（オプション）  
-**デフォルト:** `false`  
-**説明:** このジョブが失敗した場合にワークフローを継続するかどうか
+ブール式です。真と評価されるとジョブをスキップします。
 
 ```yaml
 jobs:
-- name: critical-test
-  continue_on_error: false    # 失敗時にワークフロー停止（デフォルト）
-
-- name: optional-check
-  continue_on_error: true     # 失敗してもワークフローを継続
-```
-
-#### `timeout`
-
-**型:** Duration（オプション）  
-**説明:** このジョブが実行できる最大時間  
-**形式:** 期間文字列（例：`30s`, `5m`, `1h`）
-
-```yaml
-jobs:
-- name: quick-check
-  timeout: "30s"
-
-- name: comprehensive-test
-  timeout: "10m"
+  - name: Production only
+    skipif: vars.environment != "production"
+    steps:
+      - name: Check
+        uses: http
+        with:
+          url: "{{vars.api_url}}/health"
+          method: GET
 ```
 
 #### `defaults`
 
-**型:** Object（オプション）  
-**説明:** 上書きされない限り、すべてのアクションに適用されるデフォルト設定
-
-##### `defaults.http`
-
-HTTP固有のデフォルト設定：
+ジョブ内の該当アクションを使うステップの `with` にマージされる既定値です。ステップ側の指定が優先されます。
 
 ```yaml
 jobs:
-- name: api-tests
-  defaults:
-    http:
-      timeout: "30s"                    # HTTPアクションのデフォルトタイムアウト
-      follow_redirects: true            # HTTPリダイレクトに従う
-      verify_ssl: true                  # SSL証明書を検証
-      max_redirects: 5                  # 最大リダイレクト数
-      headers:                          # すべてのHTTPリクエストのデフォルトヘッダー
-        User-Agent: "Probe Monitor"
-        Accept: "application/json"
-        Authorization: "Bearer {{vars.api_token}}"
+  - name: API checks
+    defaults:
+      http:
+        url: "{{vars.api_url}}"
+        headers:
+          authorization: "Bearer {{vars.token}}"
+          accept: application/json
+    steps:
+      - name: Health
+        uses: http
+        with:
+          get: /health        # 既定の url からの相対パス
+        test: res.code == 200
 ```
 
-**サポートされるHTTPデフォルト:**
-
-| プロパティ | 型 | デフォルト | 説明 |
-|----------|------|---------|-------------|
-| `timeout` | Duration | `30s` | リクエストタイムアウト |
-| `follow_redirects` | Boolean | `true` | HTTPリダイレクトに従う |
-| `verify_ssl` | Boolean | `true` | SSL証明書を検証 |
-| `max_redirects` | Integer | `10` | 従う最大リダイレクト数 |
-| `headers` | Object | `{}` | デフォルトヘッダー |
-
-## ステップ設定
-
-### ステップ構造
+`http` アクションはメソッドの指定が必須です。`method` を明示するか、`get` / `post` / `put` / `delete` / `patch` といった省略記法を使います。省略記法の値は完全な URL か、`url` からの相対パスです。
 
 ```yaml
-steps:
-  - name: string                    # 必須: ステップ名
-    id: string                      # オプション: 参照用ステップ識別子
-    uses: string                    # オプション: 実行するアクション
-    with:                          # オプション: アクションパラメータ
-      parameter: value
-    test: expression               # オプション: テスト条件
-    outputs:                       # オプション: 出力定義
-      key: expression
-    if: expression                 # オプション: 条件付き実行
-    continue_on_error: boolean     # オプション: ステップ失敗時に継続
-    timeout: duration              # オプション: ステップタイムアウト
+      - name: Explicit method
+        uses: http
+        with:
+          url: "{{vars.api_url}}/health"
+          method: GET
 ```
 
-### ステッププロパティ
+#### `repeat`
 
-#### `name`
-
-**型:** String（必須）  
-**説明:** ステップの人間が読める名前
+| プロパティ | 型 | 必須 | 説明 |
+|---|---|---|---|
+| `count` | Integer | 必須 | 実行回数。上限は `PROBE_MAX_REPEAT_COUNT`（既定 10000） |
+| `interval` | Duration | 任意 | 実行間隔 |
+| `async` | Boolean | 任意 | 繰り返しを並行実行する |
 
 ```yaml
-steps:
-  - name: "Check API Health"
-  - name: "Validate User Authentication"
+jobs:
+  - name: Poll until ready
+    repeat:
+      count: 10
+      interval: 5s
+    steps:
+      - name: Check
+        uses: http
+        with:
+          url: "{{vars.api_url}}/status"
+          method: GET
+        test: res.code == 200
 ```
 
-#### `id`
+## ステップ
 
-**型:** String（オプション）  
-**説明:** ステップ出力を参照するための一意の識別子  
-**制約:** ジョブ内で一意、英数字 + ハイフン/アンダースコア
+### ステップのプロパティ
 
-```yaml
-steps:
-  - name: "Get Auth Token"
-    id: auth
-    # ... ステップ設定
-  
-  - name: "Use Auth Token"
-    uses: http
-    with:
-      headers:
-        Authorization: "Bearer {{outputs.auth.token}}"
-```
+| プロパティ | 型 | 必須 | 説明 |
+|---|---|---|---|
+| `uses` | String | 必須 | 実行するアクション名（`http`、`shell` など） |
+| `name` | String | 任意 | ステップ名 |
+| `id` | String | 任意 | このステップの `outputs` の名前空間になる識別子 |
+| `with` | Object | 任意 | アクション引数 |
+| `test` | Expression | 任意 | アサーション。偽ならステップは失敗します |
+| `echo` | String | 任意 | レポートに出力する文字列 |
+| `vars` | Object | 任意 | ステップ内だけの変数 |
+| `outputs` | Object | 任意 | 後続のステップやジョブへ渡す値 |
+| `skipif` | Expression | 任意 | 真ならステップをスキップ |
+| `wait` | Duration | 任意 | 実行前の待機時間 |
+| `timeout` | Duration | 任意 | ステップのタイムアウト（既定 5m） |
+| `iteration` | Array | 任意 | 要素ごとにステップを繰り返す。値は `vars` から参照します |
+| `retry` | Object | 任意 | 失敗時のリトライ |
 
-#### `uses`
-
-**型:** String（オプション）  
-**説明:** 実行するアクションプラグイン  
-**組み込みアクション:** `http`, `hello`, `smtp`
-
-```yaml
-steps:
-  - name: "HTTP Request"
-    uses: http
-  
-  - name: "Send Email"
-    uses: smtp
-  
-  - name: "Test Plugin"
-    uses: hello
-```
-
-#### `with`
-
-**型:** Object（オプション）  
-**説明:** アクションに渡されるパラメータ  
-**構造:** アクションタイプによって異なる
-
-**HTTPアクションパラメータ:**
-```yaml
-steps:
-  - name: "API Request"
-    uses: http
-    with:
-      url: "https://api.example.com/users"     # 必須
-      method: "GET"                            # オプション、デフォルト: GET
-      headers:                                 # オプション
-        Authorization: "Bearer {{vars.TOKEN}}"
-        Content-Type: "application/json"
-      body: |                                  # オプション
-        {
-          "name": "Test User"
-        }
-      timeout: "30s"                          # オプション
-      follow_redirects: true                   # オプション
-      verify_ssl: true                        # オプション
-      max_redirects: 5                        # オプション
-```
-
-**SMTPアクションパラメータ:**
-```yaml
-vars:
-  smtp_user: "{{SMTP_USER}}"
-  smtp_pass: "{{SMTP_PASS}}"
-  service_name: "{{SERVICE_NAME}}"
-
-steps:
-  - name: "Send Notification"
-    uses: smtp
-    with:
-      host: "smtp.gmail.com"                  # 必須
-      port: 587                               # オプション、デフォルト: 587
-      username: "{{vars.smtp_user}}"          # 必須
-      password: "{{vars.smtp_pass}}"          # 必須
-      from: "alerts@example.com"              # 必須
-      to: ["admin@example.com"]               # 必須
-      cc: ["team@example.com"]                # オプション
-      bcc: ["audit@example.com"]              # オプション
-      subject: "Alert: {{vars.service_name}}" # 必須
-      body: "Service alert message"           # 必須
-      html: false                             # オプション、デフォルト: false
-      tls: true                              # オプション、デフォルト: true
-```
-
-**Helloアクションパラメータ:**
-```yaml
-steps:
-  - name: "Test Hello"
-    uses: hello
-    with:
-      message: "Test message"                 # オプション
-      delay: "1s"                            # オプション
-```
-
-#### `test`
-
-**型:** 式文字列（オプション）  
-**説明:** ステップの成功/失敗を決定するブール式  
-**コンテキスト:** `res`オブジェクトを通じてアクションレスポンスにアクセス
-
-```yaml
-steps:
-  - name: "API Health Check"
-    uses: http
-    with:
-      url: "{{vars.API_URL}}/health"
-    test: res.code == 200
-  
-  - name: "Complex Validation"
-    uses: http
-    with:
-      url: "{{vars.API_URL}}/data"
-    test: |
-      res.code == 200 &&
-      res.body.json.success == true &&
-      res.body.json.data | length > 0 &&
-      res.time < 1000
-```
-
-**レスポンスオブジェクトプロパティ:**
-
-HTTPアクションの場合、`res`オブジェクトには以下が含まれます：
-
-| プロパティ | 型 | 説明 |
-|----------|------|-------------|
-| `code` | Integer | HTTPステータスコード |
-| `time` | Integer | レスポンス時間（ミリ秒） |
-| `body_size` | Integer | レスポンスボディサイズ（バイト） |
-| `headers` | Object | レスポンスヘッダー |
-| `body.json` | Object | 解析されたJSONレスポンス（該当する場合） |
-| `body.text` | String | レスポンスボディのテキスト |
+キーは `action` ではなく `uses`、条件は `if` ではなく `skipif` です。
 
 #### `outputs`
 
-**型:** Object（オプション）  
-**説明:** 後のステップで使用するためにステップから抽出された名前付きの値  
-**キー形式:** 有効な識別子名  
-**値の型:** 式文字列
+後続のステップやジョブへ渡す値です。**`id` を持つステップだけが outputs を公開します。** `id` が無いと `outputs` ブロックは捨てられます。
+
+値はテンプレートではなく式なので、波カッコは書きません。
 
 ```yaml
 steps:
-  - name: "Get User Data"
-    id: user-data
+  - name: Log in
+    id: auth
     uses: http
     with:
-      url: "{{vars.API_URL}}/users/1"
+      url: "{{vars.api_url}}/login"
+      method: POST
     test: res.code == 200
     outputs:
-      user_id: res.body.json.id
-      user_name: res.body.json.name
-      user_email: res.body.json.email
-      response_time: res.time
-      is_active: res.body.json.active == true
-      full_name: "{{res.body.json.first_name}} {{res.body.json.last_name}}"
+      token: res.body.access_token
+      user_id: res.body.user.id
 ```
 
-#### `if`
+後続からはステップ ID で名前空間を指定するか、出力名だけで参照します。
 
-**型:** 式文字列（オプション）  
-**説明:** ステップを実行するかどうかを決定する条件式
+```yaml
+      headers:
+        Authorization: "Bearer {{outputs.auth.token}}"
+        X-User: "{{outputs.user_id}}"
+```
+
+ハイフンを含む ID は式の識別子として解釈できないため、ブラケットで参照します。
+
+```yaml
+    echo: "{{outputs['create-user'].user_id}}"
+```
+
+#### `retry`
+
+| プロパティ | 型 | 必須 | 説明 |
+|---|---|---|---|
+| `max_attempts` | Integer | 必須 | 試行回数。1 以上で、上限は `PROBE_MAX_ATTEMPTS`（既定 10000） |
+| `interval` | Duration | 任意 | 試行間隔 |
+| `initial_delay` | Duration | 任意 | 最初の試行前の待機 |
 
 ```yaml
 steps:
-  - name: "Production Only Step"
-    if: "{{vars.ENVIRONMENT}}" == "production"
+  - name: Flaky endpoint
     uses: http
     with:
-      url: "{{vars.PROD_API_URL}}/check"
-  
-  - name: "Retry on Failure"
-    if: steps.previous-step.failed
-    uses: http
-    with:
-      url: "{{vars.FALLBACK_URL}}/retry"
+      url: "{{vars.api_url}}/slow"
+      method: GET
+    test: res.code == 200
+    retry:
+      max_attempts: 3
+      interval: 2s
 ```
 
-#### `continue_on_error`
+#### `iteration`
 
-**型:** Boolean（オプション）  
-**デフォルト:** `false`  
-**説明:** このステップが失敗した場合にジョブを継続するかどうか
+要素ごとにステップを繰り返します。各要素のキーは `vars` から参照できます。
 
 ```yaml
 steps:
-  - name: "Critical Step"
+  - name: Check {{vars.path}}
     uses: http
+    iteration:
+      - path: /health
+      - path: /metrics
+      - path: /version
     with:
-      url: "{{vars.CRITICAL_URL}}/check"
-    continue_on_error: false      # 失敗時にジョブ停止（デフォルト）
-  
-  - name: "Optional Step"
-    uses: http
-    with:
-      url: "{{vars.OPTIONAL_URL}}/info"
-    continue_on_error: true       # 失敗してもジョブを継続
+      url: "{{vars.api_url}}{{vars.path}}"
+      method: GET
+    test: res.code == 200
 ```
 
-#### `timeout`
+## 式のコンテキスト
 
-**型:** Duration（オプション）  
-**説明:** このステップが実行できる最大時間
+ステップの式から見えるのは次の名前だけです。
+
+| 名前 | 型 | 説明 |
+|---|---|---|
+| `vars` | Object | ワークフローの変数にステップの `vars` をマージしたもの |
+| `res` | Object | アクションのレスポンス |
+| `req` | Object | 送信したリクエスト |
+| `rt` | Object | レスポンスタイム。`rt.duration`（文字列）と `rt.sec`（秒、浮動小数点数） |
+| `status` | Integer | アクションの終了ステータス。成功は `0` |
+| `outputs` | Object | 先行ステップが公開した値 |
+| `repeat_index` | Integer | ジョブ繰り返し時の現在のインデックス |
+
+このコンテキストに `env`、`jobs`、`steps` はありません。
+
+### `http` の `res`
+
+| フィールド | 型 | 説明 |
+|---|---|---|
+| `res.code` | Integer | ステータスコード（例: `200`） |
+| `res.status` | String | ステータス行（例: `"200 OK"`） |
+| `res.headers` | Object | レスポンスヘッダー。キーは `Content-Type` のような正規形 |
+| `res.body` | Any | レスポンスボディ。JSON ならオブジェクトや配列に解析され、それ以外は文字列 |
+| `res.rawbody` | String | 解析前のボディ。JSON として解析したときに入ります |
 
 ```yaml
-steps:
-  - name: "Quick Check"
-    timeout: "5s"
-    uses: http
-    with:
-      url: "{{vars.API_URL}}/ping"
-  
-  - name: "Long Running Process"
-    timeout: "5m"
-    uses: http
-    with:
-      url: "{{vars.API_URL}}/long-process"
+    test: |
+      res.code == 200 &&
+      res.headers["Content-Type"] contains "application/json" &&
+      res.body.status == "ok" &&
+      rt.sec < 1
 ```
+
+他のアクションの `res` は[アクションリファレンス](./actions/variables)を参照してください。
 
 ## データ型
 
 ### Duration
 
-期間文字列は時間の期間を指定します：
-
-**形式:** `<数値><単位>`  
-**単位:** `ns`, `us`, `ms`, `s`, `m`, `h`
+Go の duration 文字列か、秒数の数値で指定します。
 
 ```yaml
-# 例
-timeout: "30s"          # 30秒
-timeout: "5m"           # 5分
-timeout: "1h30m"        # 1時間30分
-timeout: "500ms"        # 500ミリ秒
+timeout: "30s"
+timeout: "5m"
+interval: 10        # 10 秒
 ```
 
-### 式文字列
+### 式とテンプレート
 
-式文字列はカスタム関数を持つGoテンプレート構文を使用します：
-
-**テンプレート式:** `{{expression}}`  
-**テスト式:** プレーンブール式
+**テンプレート式**は文字列の中に書き、評価結果で置き換わります。
 
 ```yaml
-# テンプレート式（値用）
-url: "{{vars.BASE_URL}}/api/{{vars.VERSION}}"
-message: "Hello {{outputs.user.name}}"
-
-# テスト式（条件用）
-test: res.code == 200 && res.time < 1000
-if: "{{vars.ENVIRONMENT}}" == "production"
+url: "{{vars.api_url}}/users/{{outputs.auth.user_id}}"
 ```
 
-### 環境変数参照
-
-式で環境変数を参照：
+**ブール式**は波カッコなしでそのまま書きます。
 
 ```yaml
-vars:
-  API_URL: "{{EXTERNAL_API_URL}}"           # 外部環境変数を参照
-  TIMEOUT: "{{REQUEST_TIMEOUT ?? '30s'}}"   # デフォルト値付き
-  DEBUG: "{{DEBUG_MODE == 'true'}}"         # ブール変換
+test: res.code == 200 && rt.sec < 2
+skipif: vars.environment == "local"
 ```
 
-## 検証ルール
+`outputs` の値も式なので、波カッコは書きません。
 
-### ワークフロー検証
+式の中で使える関数は[組み込み関数](./built-in-functions)を参照してください。
 
-- `name`は必須で空でない
-- `jobs`は必須で少なくとも1つのジョブを含む
-- ジョブ名は一意である必要がある
-- `needs`のジョブ名は既存のジョブを参照する必要がある
-- ジョブの`needs`に循環依存がない
+## バリデーション規則
 
-### ジョブ検証
+- ワークフローには `name` が必要で、`jobs` は空でないリストである必要があります
+- 各ジョブには `name` と 1 つ以上のステップが必要です
+- 各ステップには `uses` が必要です
+- `needs` は存在するジョブ ID を指し、依存関係は循環していない必要があります
+- `repeat.count` は 0 以上、`retry.max_attempts` は 1 以上である必要があります
+- ステップに `id` が無いと `outputs` は公開されません
 
-- 各ジョブには`steps`配列が必要
-- ステップ名は必須で説明的である必要がある
-- ステップIDはジョブ内で一意である必要がある
-- アクション名は有効である必要がある（組み込みまたは利用可能なプラグイン）
+## ファイルのマージ
 
-### 式の検証
+複数のファイルをカンマ区切りで渡すと順に連結されます。複数回定義されたトップレベルのキーは、最後のファイルの値になります。
 
-- テンプレート式は有効なGoテンプレート構文を使用する必要がある
-- テスト式はブール値に評価される必要がある
-- 参照される変数と出力が存在する必要がある
-- 関数呼び出しは有効な組み込み関数を使用する必要がある
-
-## 一般的なパターン
-
-### 環境固有設定
-
-```yaml
-vars:
-  node_env: "{{NODE_ENV}}"
-  environment: "{{vars.node_env ?? 'development'}}"
-  api_url: |
-    {{vars.node_env == "production" ? 
-      "https://api.prod.com" : 
-      "https://api.dev.com"}}
-  timeout: |
-    {{vars.node_env == "production" ? "10s" : "30s"}}
+```bash
+probe base.yml,production.yml
 ```
 
-### 条件付きジョブ実行
-
-```yaml
-vars:
-  environment: "{{ENVIRONMENT}}"
-
-jobs:
-- name: setup
-  # 常に実行
-
-- name: development-tests
-  if: "{{vars.environment}}" == "development"
-  needs: [setup]
-
-- name: production-checks
-  if: "{{vars.environment}}" == "production"  
-  needs: [setup]
-
-- name: cleanup
-  needs: [development-tests, production-checks]
-  if: |
-    jobs.development-tests.executed || 
-    jobs.production-checks.executed
-```
-
-### エラーハンドリングと復旧
-
-```yaml
-jobs:
-- name: primary-test
-  continue_on_error: true
-  steps:
-    - name: "Primary Service Test"
-      uses: http
-      with:
-        url: "{{vars.PRIMARY_URL}}/test"
-      continue_on_error: true
-
-- name: fallback-test
-  if: jobs.primary-test.failed
-  steps:
-    - name: "Fallback Service Test"
-      uses: http
-      with:
-        url: "{{vars.FALLBACK_URL}}/test"
-```
-
-### ステップ間のデータフロー
-
-```yaml
-jobs:
-- name: data-processing
-  steps:
-    - name: "Fetch Data"
-      id: fetch
-      uses: http
-      with:
-        url: "{{vars.API_URL}}/data"
-      outputs:
-        data_count: res.body.json.items | length
-        first_item_id: res.body.json.items[0].id
-    
-    - name: "Process Data"
-      uses: http
-      with:
-        url: "{{vars.API_URL}}/process/{{outputs.fetch.first_item_id}}"
-      test: res.code == 200
-    
-    - name: "Summary"
-      uses: echo
-      with:
-        message: "Processed {{outputs.fetch.data_count}} items"
-```
-
-## ベストプラクティス
-
-### YAMLスタイル
-
-```yaml
-# 良い例: 一貫したインデント（2スペース）
-jobs:
-- name: test
-  steps:
-    - name: "Health Check"
-      uses: http
-
-# 良い例: 特殊文字を含む文字列の引用
-vars:
-  MESSAGE: "Hello, World!"
-  PATTERN: "user-\\d+"
-
-# 良い例: 可読性のための複数行文字列
-description: |
-  このワークフローでは以下を含む包括的なテストを実行します：
-  - APIエンドポイントの検証
-  - データベース接続
-  - パフォーマンスベンチマーク
-```
-
-### 命名規則
-
-```yaml
-# 良い例: 説明的な名前
-name: "Production API Health Check"
-
-jobs:
-- name: "User Authentication Test"
-    
-- name: "Database Connectivity Check"
-
-steps:
-  - name: "Verify SSL Certificate Validity"
-  - name: "Test User Login Endpoint"
-  - name: "Validate Database Connection Pool"
-```
-
-### 設定の整理
-
-```yaml
-# 良い例: 論理的なグループ化
-vars:
-  # API設定
-  API_BASE_URL: "https://api.example.com"
-  API_VERSION: "v1"
-  API_TIMEOUT: "30s"
-  
-  # データベース設定  
-  DB_HOST: "localhost"
-  DB_PORT: 5432
-  
-  # 機能フラグ
-  ENABLE_CACHING: true
-  ENABLE_METRICS: false
-
-jobs:
-- name: default
-  defaults:
-    http:
-      timeout: "{{vars.API_TIMEOUT}}"
-      headers:
-        User-Agent: "Probe Monitor"
-        Accept: "application/json"
-```
+マージの規則は[ファイルマージ](../guide/concepts/file-merging)を参照してください。
 
 ## 関連項目
 
-- **[CLIリファレンス](../cli-reference/)** - コマンドラインオプションと使用法
-- **[アクションリファレンス](../actions-reference/)** - 組み込みアクションとパラメータ
-- **[組み込み関数](../built-in-functions/)** - 式関数
-- **[概念: ワークフロー](../../concepts/workflows/)** - ワークフロー設計パターン
-- **[概念: 式とテンプレート](../../concepts/expressions-and-templates/)** - 式言語ガイド
+- **[CLI](./cli-reference)** - コマンドラインオプション
+- **[組み込み関数](./built-in-functions)** - 式で使える関数
+- **[環境変数](./environment-variables)** - Probe が読む環境変数

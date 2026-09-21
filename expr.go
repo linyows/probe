@@ -29,24 +29,29 @@ var (
 
 type Expr struct{}
 
+// Options builds the expr options used to compile every workflow expression.
+//
+// Two guards that used to live here have been removed because neither did
+// anything. ex.DisableBuiltin had no effect on all / any / one / filter / map /
+// count: expr's parser recognises those as predicate builtins before it looks
+// at the disabled set (parser.go, the `predicates` table), so the calls were
+// dead and the functions have always been reachable. A per-key blocklist that
+// filtered the environment was equally inert, because the filtered copy only
+// ever reached the type checker while ex.Run receives the caller's env, and
+// enforcing it would have broken the documented way of reading credentials
+// into `vars`.
+//
+// What still bounds an expression is the length check in validateExpression,
+// the evaluation timeout in executeWithTimeout, and the argument limits on the
+// functions registered below.
 func (e *Expr) Options(env any) []ex.Option {
-	// Security: Create a safe environment for expression evaluation
-	safeEnv := e.createSafeEnvironment(env)
-
 	return []ex.Option{
-		ex.Env(safeEnv),
-		// Security: Allow undefined variables but with safe environment only
+		ex.Env(env),
+		// Workflow expressions routinely reference names that only exist at
+		// run time, such as environment variables read into `vars`.
 		ex.AllowUndefinedVariables(),
 
-		// Security: Disable dangerous built-in functions
-		ex.DisableBuiltin("all"),
-		ex.DisableBuiltin("any"),
-		ex.DisableBuiltin("one"),
-		ex.DisableBuiltin("filter"),
-		ex.DisableBuiltin("map"),
-		ex.DisableBuiltin("count"),
-
-		// Security: Add only safe, whitelisted functions
+		// Functions probe adds on top of expr's own builtins.
 		ex.Function(
 			"match_json",
 			func(params ...any) (any, error) {
@@ -235,120 +240,17 @@ func (e *Expr) Options(env any) []ex.Option {
 	}
 }
 
-// Security: Create a safe environment by filtering out dangerous variables
-func (e *Expr) createSafeEnvironment(env any) any {
-	envMap, ok := env.(map[string]any)
-	if !ok {
-		// For non-map types (like structs with expr tags), return as-is
-		// This allows expr library to handle StepContext and similar safe structs
-		return env
-	}
-
-	safeEnv := make(map[string]any)
-
-	// Security: Whitelist safe environment variables and data
-	for key, value := range envMap {
-		if e.isSafeEnvKey(key) {
-			safeEnv[key] = e.sanitizeValue(value)
-		}
-	}
-
-	return safeEnv
-}
-
-// isSafeEnvKey reports whether the given environment variable name is
-// safe to expose to expression evaluation. probe uses a blocklist
-// model: any key whose upper-cased form *contains* one of the patterns
-// below is rejected, and every other key is allowed. The substring
-// match is intentional so compound names like "DB_PASSWORD" or
-// "MY_API_KEY" still get rejected, at the cost of also rejecting
-// unrelated keys that happen to embed one of these substrings (e.g.
-// anything containing "KEY"). That conservative bias is deliberate.
+// validateExpression bounds an expression before it is compiled.
 //
-// Historical note: this used to layer prefix / safeKeys / testEnvVars /
-// fallback whitelists on top of the blocklist, but every one of those
-// branches collapsed back to "anything that survived the blocklist is
-// allowed" — none of them actually narrowed what was reachable. They
-// were removed so the contract here matches the code.
-func (e *Expr) isSafeEnvKey(key string) bool {
-	upperKey := strings.ToUpper(key)
-	blocklist := []string{
-		// Shell and host metadata
-		"PATH", "HOME", "USER", "USERNAME", "SHELL", "PWD",
-		// Credential-bearing names
-		"SECRET", "KEY", "TOKEN", "PASSWORD", "CREDENTIAL",
-		"API_KEY", "PRIVATE", "CERT", "SSH",
-	}
-	for _, pattern := range blocklist {
-		if strings.Contains(upperKey, pattern) {
-			return false
-		}
-	}
-	return true
-}
-
-// Security: Sanitize values to prevent injection
-func (e *Expr) sanitizeValue(value any) any {
-	switch v := value.(type) {
-	case string:
-		// Security: Limit string length to prevent memory exhaustion
-		if len(v) > maxStringLength {
-			return v[:maxStringLength] + GetTruncationMessage()
-		}
-		return v
-	case map[string]any:
-		safeMap := make(map[string]any)
-		for k, val := range v {
-			if e.isSafeEnvKey(k) {
-				safeMap[k] = e.sanitizeValue(val)
-			}
-		}
-		return safeMap
-	case []any:
-		// Security: Limit array size to prevent memory exhaustion
-		if len(v) > 1000 {
-			return v[:1000]
-		}
-		safeSlice := make([]any, len(v))
-		for i, val := range v {
-			safeSlice[i] = e.sanitizeValue(val)
-		}
-		return safeSlice
-	default:
-		return v
-	}
-}
-
-// Security: Validate expression for dangerous patterns
+// This used to also reject any expression whose text contained "env.secret",
+// "env.path" and similar. That guarded a namespace expressions never had -
+// the evaluation context exposes vars, res, req, rt, status, outputs and
+// repeat_index, never env - while rejecting ordinary strings that happen to
+// contain one of the patterns, such as the URL "https://env.pathfinder.example.com".
 func (e *Expr) validateExpression(expression string) error {
 	// Security: Check expression length
 	if len(expression) > maxExpressionLength {
 		return fmt.Errorf("SECURITY: expression exceeds maximum length (%d chars)", maxExpressionLength)
-	}
-
-	lowerExpr := strings.ToLower(expression)
-
-	// Security: Special validation for env. patterns - only allow safe environment variables
-	if strings.Contains(lowerExpr, "env.") {
-		return e.validateEnvAccess(expression)
-	}
-
-	return nil
-}
-
-// Security: Validate environment variable access patterns
-func (e *Expr) validateEnvAccess(expression string) error {
-	// Block access to dangerous environment variables
-	dangerousEnvPatterns := []string{
-		"env.secret", "env.password", "env.credential",
-		"env.api_key", "env.private_key", "env.cert", "env.ssh_key", "env.path", "env.home",
-	}
-
-	lowerExpr := strings.ToLower(expression)
-	for _, pattern := range dangerousEnvPatterns {
-		if strings.Contains(lowerExpr, pattern) {
-			return fmt.Errorf("SECURITY: attempt to access dangerous environment variable '%s'", pattern)
-		}
 	}
 
 	return nil

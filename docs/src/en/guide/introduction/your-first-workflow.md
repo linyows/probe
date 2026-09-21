@@ -38,29 +38,31 @@ name: Web Application Health Check
 description: Comprehensive monitoring for our web application stack
 
 jobs:
-  frontend-check:
-    name: Frontend Application Check
-    steps:
-      - name: Check Homepage
-        action: http
-        with:
-          url: https://myapp.example.com
-          method: GET
-          headers:
-            User-Agent: "Probe Health Check"
-        test: res.status == 200 && res.time < 3000
-        outputs:
-          homepage_response_time: res.time
+- id: frontend-check
+  name: Frontend Application Check
+  steps:
+    - name: Check Homepage
+      id: frontend-check
+      uses: http
+      with:
+        url: https://myapp.example.com
+        method: GET
+        headers:
+          User-Agent: "Probe Health Check"
+      test: res.code == 200 && (rt.sec * 1000) < 3000
+      outputs:
+        homepage_response_time: (rt.sec * 1000)
 
-      - name: Check Critical Page
-        action: http
-        with:
-          url: https://myapp.example.com/dashboard
-          method: GET
-        test: res.status == 200 || res.status == 302
+    - name: Check Critical Page
+      uses: http
+      with:
+        url: https://myapp.example.com/dashboard
+        method: GET
+      test: res.code == 200 || res.code == 302
 
-      - name: Report Frontend Status
-        echo: "✅ Frontend is healthy ({{outputs.homepage_response_time}}ms)"
+    - name: Report Frontend Status
+      uses: hello
+      echo: "✅ Frontend is healthy ({{outputs.homepage_response_time}}ms)"
 ```
 
 ## Step 3: API Monitoring
@@ -73,19 +75,19 @@ Add a separate job for API monitoring:
     steps:
       - name: Check API Health Endpoint
         id: health-check
-        action: http
+        uses: http
         with:
           url: https://api.myapp.example.com/health
           method: GET
           headers:
             Accept: "application/json"
-        test: res.status == 200 && res.json.status == "healthy"
+        test: res.code == 200 && res.body.status == "healthy"
         outputs:
-          api_version: res.json.version
-          database_status: res.json.database
+          api_version: res.body.version
+          database_status: res.body.database
 
       - name: Test User Authentication
-        action: http
+        uses: http
         with:
           url: https://api.myapp.example.com/auth/login
           method: POST
@@ -94,22 +96,23 @@ Add a separate job for API monitoring:
           body: |
             {
               "username": "healthcheck",
-              "password": "{{env.HEALTH_CHECK_PASSWORD}}"
+              "password": "{{vars.HEALTH_CHECK_PASSWORD}}"
             }
-        test: res.status == 200 && res.json.token != null
+        test: res.code == 200 && res.body.token != null
         outputs:
-          auth_token: res.json.token
+          auth_token: res.body.token
 
       - name: Test Authenticated Endpoint
-        action: http
+        uses: http
         with:
           url: https://api.myapp.example.com/user/profile
           method: GET
           headers:
             Authorization: "Bearer {{outputs.auth_token}}"
-        test: res.status == 200
+        test: res.code == 200
 
       - name: Report API Status
+        uses: hello
         echo: "✅ API v{{outputs.api_version}} is healthy"
 ```
 
@@ -134,12 +137,12 @@ Add checks for external services:
     name: External Services Check
     steps:
       - name: Check Email Service
-        action: http
+        uses: http
         with:
           url: https://api.sendgrid.com/v3/mail/send
           method: POST
           headers:
-            Authorization: "Bearer {{env.SENDGRID_API_KEY}}"
+            Authorization: "Bearer {{vars.SENDGRID_API_KEY}}"
             Content-Type: "application/json"
           body: |
             {
@@ -148,18 +151,19 @@ Add checks for external services:
               "content": [{"type": "text/plain", "value": "Test"}],
               "personalizations": [{"to": [{"email": "test@myapp.example.com"}]}]
             }
-        test: res.status == 202
+        test: res.code == 202
 
       - name: Check Payment Gateway
-        action: http
+        uses: http
         with:
           url: https://api.stripe.com/v1/charges
           method: GET
           headers:
-            Authorization: "Bearer {{env.STRIPE_SECRET_KEY}}"
-        test: res.status == 200
+            Authorization: "Bearer {{vars.STRIPE_SECRET_KEY}}"
+        test: res.code == 200
 
       - name: Report External Services
+        uses: hello
         echo: "✅ All external services are responding"
 ```
 
@@ -173,24 +177,21 @@ Add error handling and notification logic:
     needs: [frontend-check, api-check, external-services]
     steps:
       - name: Success Notification
-        if: jobs.frontend-check.success && jobs.api-check.success && jobs.external-services.success
+        uses: hello
         echo: |
           🎉 All systems are healthy!
           
-          Frontend: ✅ ({{outputs.frontend-check.homepage_response_time}}ms)
-          API: ✅ v{{outputs.api-check.api_version}}
+          Frontend: ✅ ({{outputs['frontend-check'].homepage_response_time}}ms)
+          API: ✅ v{{outputs['api-check'].api_version}}
           External Services: ✅
           
           Monitoring completed at {{unixtime()}}
 
       - name: Failure Notification
-        if: jobs.frontend-check.failed || jobs.api-check.failed || jobs.external-services.failed
+        uses: hello
         echo: |
           🚨 ALERT: System health check failed!
           
-          Frontend: {{jobs.frontend-check.success ? "✅" : "❌"}}
-          API: {{jobs.api-check.success ? "✅" : "❌"}}
-          External Services: {{jobs.external-services.success ? "✅" : "❌"}}
           
           Please investigate immediately.
 ```
@@ -204,132 +205,134 @@ name: Web Application Health Check
 description: Comprehensive monitoring for our web application stack
 
 jobs:
-  frontend-check:
-    name: Frontend Application Check
-    steps:
-      - name: Check Homepage
-        action: http
-        with:
-          url: https://myapp.example.com
-          method: GET
-          headers:
-            User-Agent: "Probe Health Check"
-        test: res.status == 200 && res.time < 3000
-        outputs:
-          homepage_response_time: res.time
+- id: frontend-check
+  name: Frontend Application Check
+  steps:
+    - name: Check Homepage
+      id: frontend-check
+      uses: http
+      with:
+        url: https://myapp.example.com
+        method: GET
+        headers:
+          User-Agent: "Probe Health Check"
+      test: res.code == 200 && (rt.sec * 1000) < 3000
+      outputs:
+        homepage_response_time: (rt.sec * 1000)
 
-      - name: Check Critical Page
-        action: http
-        with:
-          url: https://myapp.example.com/dashboard
-          method: GET
-        test: res.status == 200 || res.status == 302
+    - name: Check Critical Page
+      uses: http
+      with:
+        url: https://myapp.example.com/dashboard
+        method: GET
+      test: res.code == 200 || res.code == 302
 
-      - name: Report Frontend Status
-        echo: "✅ Frontend is healthy ({{outputs.homepage_response_time}}ms)"
+    - name: Report Frontend Status
+      uses: hello
+      echo: "✅ Frontend is healthy ({{outputs.homepage_response_time}}ms)"
 
-  api-check:
-    name: API Health Check
-    needs: [frontend-check]
-    steps:
-      - name: Check API Health Endpoint
-        id: health-check
-        action: http
-        with:
-          url: https://api.myapp.example.com/health
-          method: GET
-          headers:
-            Accept: "application/json"
-        test: res.status == 200 && res.json.status == "healthy"
-        outputs:
-          api_version: res.json.version
-          database_status: res.json.database
+- id: api-check
+  name: API Health Check
+  needs: [frontend-check]
+  steps:
+    - name: Check API Health Endpoint
+      id: health-check
+      uses: http
+      with:
+        url: https://api.myapp.example.com/health
+        method: GET
+        headers:
+          Accept: "application/json"
+      test: res.code == 200 && res.body.status == "healthy"
+      outputs:
+        api_version: res.body.version
+        database_status: res.body.database
 
-      - name: Test User Authentication
-        action: http
-        with:
-          url: https://api.myapp.example.com/auth/login
-          method: POST
-          headers:
-            Content-Type: "application/json"
-          body: |
-            {
-              "username": "healthcheck",
-              "password": "{{env.HEALTH_CHECK_PASSWORD}}"
-            }
-        test: res.status == 200 && res.json.token != null
-        outputs:
-          auth_token: res.json.token
+    - name: Test User Authentication
+      id: api-check
+      uses: http
+      with:
+        url: https://api.myapp.example.com/auth/login
+        method: POST
+        headers:
+          Content-Type: "application/json"
+        body: |
+          {
+            "username": "healthcheck",
+            "password": "{{vars.HEALTH_CHECK_PASSWORD}}"
+          }
+      test: res.code == 200 && res.body.token != null
+      outputs:
+        auth_token: res.body.token
 
-      - name: Test Authenticated Endpoint
-        action: http
-        with:
-          url: https://api.myapp.example.com/user/profile
-          method: GET
-          headers:
-            Authorization: "Bearer {{outputs.auth_token}}"
-        test: res.status == 200
+    - name: Test Authenticated Endpoint
+      uses: http
+      with:
+        url: https://api.myapp.example.com/user/profile
+        method: GET
+        headers:
+          Authorization: "Bearer {{outputs.auth_token}}"
+      test: res.code == 200
 
-      - name: Report API Status
-        echo: "✅ API v{{outputs.api_version}} is healthy"
+    - name: Report API Status
+      uses: hello
+      echo: "✅ API v{{outputs.api_version}} is healthy"
 
-  external-services:
-    name: External Services Check
-    steps:
-      - name: Check Email Service
-        action: http
-        with:
-          url: https://api.sendgrid.com/v3/mail/send
-          method: POST
-          headers:
-            Authorization: "Bearer {{env.SENDGRID_API_KEY}}"
-            Content-Type: "application/json"
-          body: |
-            {
-              "from": {"email": "health@myapp.example.com"},
-              "subject": "Health Check Test",
-              "content": [{"type": "text/plain", "value": "Test"}],
-              "personalizations": [{"to": [{"email": "test@myapp.example.com"}]}]
-            }
-        test: res.status == 202
+- id: external-services
+  name: External Services Check
+  steps:
+    - name: Check Email Service
+      uses: http
+      with:
+        url: https://api.sendgrid.com/v3/mail/send
+        method: POST
+        headers:
+          Authorization: "Bearer {{vars.SENDGRID_API_KEY}}"
+          Content-Type: "application/json"
+        body: |
+          {
+            "from": {"email": "health@myapp.example.com"},
+            "subject": "Health Check Test",
+            "content": [{"type": "text/plain", "value": "Test"}],
+            "personalizations": [{"to": [{"email": "test@myapp.example.com"}]}]
+          }
+      test: res.code == 202
 
-      - name: Check Payment Gateway
-        action: http
-        with:
-          url: https://api.stripe.com/v1/charges
-          method: GET
-          headers:
-            Authorization: "Bearer {{env.STRIPE_SECRET_KEY}}"
-        test: res.status == 200
+    - name: Check Payment Gateway
+      uses: http
+      with:
+        url: https://api.stripe.com/v1/charges
+        method: GET
+        headers:
+          Authorization: "Bearer {{vars.STRIPE_SECRET_KEY}}"
+      test: res.code == 200
 
-      - name: Report External Services
-        echo: "✅ All external services are responding"
+    - name: Report External Services
+      uses: hello
+      echo: "✅ All external services are responding"
 
-  notification:
-    name: Send Notifications
-    needs: [frontend-check, api-check, external-services]
-    steps:
-      - name: Success Notification
-        if: jobs.frontend-check.success && jobs.api-check.success && jobs.external-services.success
-        echo: |
-          🎉 All systems are healthy!
+- id: notification
+  name: Send Notifications
+  needs: [frontend-check, api-check, external-services]
+  steps:
+    - name: Success Notification
+      uses: hello
+      echo: |
+        🎉 All systems are healthy!
           
-          Frontend: ✅ ({{outputs.frontend-check.homepage_response_time}}ms)
-          API: ✅ v{{outputs.api-check.api_version}}
-          External Services: ✅
+        Frontend: ✅ ({{outputs['frontend-check'].homepage_response_time}}ms)
+        API: ✅ v{{outputs['api-check'].api_version}}
+        External Services: ✅
           
-          Monitoring completed at {{unixtime()}}
+        Monitoring completed at {{unixtime()}}
 
-      - name: Failure Notification
-        if: jobs.frontend-check.failed || jobs.api-check.failed || jobs.external-services.failed
-        echo: |
-          🚨 ALERT: System health check failed!
+    - name: Failure Notification
+      uses: hello
+      echo: |
+        🚨 ALERT: System health check failed!
           
-          Frontend: {{jobs.frontend-check.success ? "✅" : "❌"}}
-          API: {{jobs.api-check.success ? "✅" : "❌"}}
-          External Services: {{jobs.external-services.success ? "✅" : "❌"}}
           
-          Please investigate immediately.
+        Please investigate immediately.
 ```
 
 ## Running the Workflow
@@ -391,13 +394,13 @@ probe health-check.yml,production.yml
 
 ```yaml
 - name: Check Critical Service
-  action: http
+  uses: http
   with:
     url: https://critical-service.example.com
     method: GET
     retry_count: 3
     retry_delay: 5s
-  test: res.status == 200
+  test: res.code == 200
 ```
 
 ### 3. Set up Monitoring Schedule
@@ -416,7 +419,7 @@ In this guide, you've learned how to:
 - ✅ Use job dependencies with `needs`
 - ✅ Pass data between steps using `outputs`
 - ✅ Handle authentication in API calls
-- ✅ Implement conditional logic with `if`
+- Implement conditional logic with `skipif`
 - ✅ Use environment variables for configuration
 - ✅ Create comprehensive error handling
 - ✅ Merge configuration files for different environments

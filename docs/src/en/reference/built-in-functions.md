@@ -1,260 +1,142 @@
-# Built-in Functions Reference
+# Built-in Functions
 
-This page provides comprehensive documentation for all built-in functions available in Probe expressions and templates. These functions can be used in template expressions (`{{}}`) and test conditions throughout your workflows.
+Probe evaluates expressions with [expr-lang/expr](https://expr-lang.org/) (v1.17). Every function on this page is either a built-in of that language or a function Probe registers on top of it.
 
 ## Overview
 
-Built-in functions provide utilities for string manipulation, data formatting, mathematical operations, and more. They are available in all expression contexts including:
+Expressions appear in two shapes:
 
-- Environment variable values
-- HTTP request URLs, headers, and bodies  
-- Test conditions and assertions
-- Output expressions
-- Conditional statements (`if` expressions)
+- **Template expressions** - a <span v-pre>`{{ ... }}`</span> placeholder inside a string, replaced by the evaluated value.
+- **Boolean expressions** - a bare expression, evaluated as a condition.
 
-### Function Categories
+### Where Expressions Can Be Used
 
-- **[String Functions](#string-functions)** - String manipulation and formatting
-- **[Date/Time Functions](#datetime-functions)** - Date and time utilities
-- **[Encoding Functions](#encoding-functions)** - Base64, URL encoding, and more
-- **[Mathematical Functions](#mathematical-functions)** - Numeric operations
-- **[Utility Functions](#utility-functions)** - General-purpose utilities
-- **[JSON Functions](#json-functions)** - JSON manipulation and queries
+| Level | Field | Template | Boolean | Notes |
+|---|---|:-:|:-:|---|
+| workflow | `vars` | Yes | - | Global variables. Environment variables are referenced by bare name here |
+| job | `name` | Yes | - | Job name |
+| job | `skipif` | - | Yes | Skip condition for the job |
+| step | `name` | Yes | - | Step name |
+| step | `with` | Yes | - | Action arguments |
+| step | `test` | - | Yes | Assertion |
+| step | `echo` | Yes | - | Report output |
+| step | `vars` | Yes | - | Step variables |
+| step | `outputs` | Yes | - | Values shared with later steps and jobs |
+| step | `skipif` | - | Yes | Skip condition for the step |
 
-## Function Syntax
+### Syntax
 
-Functions are called within template expressions using the pipe operator (`|`) or as direct function calls:
-
-```yaml
-# Pipe syntax (preferred for chaining)
-vars:
-  user_name: "{{USER_NAME}}"
-  base_url: "{{BASE_URL}}"
-  path: "{{PATH}}"
-
-value: "{{vars.user_name | upper | trim}}"
-
-# Direct function call
-value: "{{upper(vars.user_name)}}"
-
-# Mixed usage
-value: "{{vars.base_url}}/{{vars.path | lower | replace(' ', '-')}}"
-```
-
-## String Functions
-
-### `upper`
-
-Converts a string to uppercase.
-
-**Syntax:** `string | upper` or `upper(string)`  
-**Returns:** String
-
-```yaml
-env:
-  SERVICE_NAME: "{{env.SERVICE | upper}}"
-  # If SERVICE="api-service", result is "API-SERVICE"
-
-test: res.json.status | upper == "SUCCESS"
-```
-
-### `lower`
-
-Converts a string to lowercase.
-
-**Syntax:** `string | lower` or `lower(string)`  
-**Returns:** String
-
-```yaml
-with:
-  url: "{{env.BASE_URL}}/{{env.ENDPOINT | lower}}"
-  # If ENDPOINT="USERS", result is "/users"
-
-test: res.json.type | lower == "error"
-```
-
-### `trim`
-
-Removes whitespace from both ends of a string.
-
-**Syntax:** `string | trim` or `trim(string)`  
-**Returns:** String
-
-```yaml
-env:
-  API_KEY: "{{env.RAW_API_KEY | trim}}"
-  # Removes leading/trailing spaces
-
-with:
-  headers:
-    Authorization: "Bearer {{env.TOKEN | trim}}"
-```
-
-### `trimPrefix`
-
-Removes a prefix from the beginning of a string.
-
-**Syntax:** `trimPrefix(string, prefix)`  
-**Returns:** String
-
-```yaml
-outputs:
-  clean_url: trimPrefix(res.headers.Location, "https://")
-  # "https://api.example.com/users" becomes "api.example.com/users"
-
-vars:
-  full_path: "{{FULL_PATH}}"
-  clean_path: "{{trimPrefix(vars.full_path, '/api/v1')}}"
-```
-
-### `trimSuffix`
-
-Removes a suffix from the end of a string.
-
-**Syntax:** `trimSuffix(string, suffix)`  
-**Returns:** String
-
-```yaml
-outputs:
-  base_name: trimSuffix(res.json.filename, ".json")
-  # "data.json" becomes "data"
-
-vars:
-  container_name: "{{CONTAINER_NAME}}"
-  service_name: "{{trimSuffix(vars.container_name, '-container')}}"
-```
-
-### `replace`
-
-Replaces all occurrences of a substring with another string.
-
-**Syntax:** `replace(string, old, new)` or `string | replace(old, new)`  
-**Returns:** String
-
-```yaml
-with:
-  url: "{{env.TEMPLATE_URL | replace('{id}', outputs.user.id)}}"
-  # "/users/{id}/profile" becomes "/users/123/profile"
-
-env:
-  SAFE_NAME: "{{env.USER_INPUT | replace(' ', '_') | replace('-', '_')}}"
-```
-
-### `split`
-
-Splits a string by a delimiter and returns an array.
-
-**Syntax:** `split(string, delimiter)`  
-**Returns:** Array of strings
+Functions are called directly, or chained with the pipe operator. The pipe passes the left-hand value as the **first** argument.
 
 ```yaml
 vars:
-  comma_list: "{{COMMA_LIST}}"
-
-outputs:
-  url_parts: split(res.headers.Location, "/")
-  # "https://api.example.com/v1/users" becomes ["https:", "", "api.example.com", "v1", "users"]
-  
-  first_part: split(vars.comma_list, ",")[0]
-  # "apple,banana,cherry" -> first element is "apple"
+  service: "{{SERVICE_NAME | upper}}"
+  slug: "{{replace(lower(SERVICE_NAME), ' ', '-')}}"
+  path: "{{BASE_URL | trimSuffix('/')}}/api"
 ```
 
-### `join`
-
-Joins an array of strings with a delimiter.
-
-**Syntax:** `join(array, delimiter)`  
-**Returns:** String
-
-```yaml
-env:
-  # Assume we have an array from a previous step
-  COMBINED: "{{join(outputs.data.items, ', ')}}"
-  # ["apple", "banana", "cherry"] becomes "apple, banana, cherry"
-```
-
-### `contains`
-
-Checks if a string contains a substring.
-
-**Syntax:** `contains(string, substring)` or `string | contains(substring)`  
-**Returns:** Boolean
+Arithmetic and comparison use operators, not functions: `+`, `-`, `*`, `/`, `%`, `**`, `==`, `!=`, `<`, `>`, `&&`, `||`, `!`, `??` (nil coalescing), `in`, `contains`, `startsWith`, `endsWith`, `matches` (regular expression).
 
 ```yaml
 test: |
-  res.json.message | contains("success") &&
-  res.headers["Content-Type"] | contains("application/json")
-
-if: "{{env.ENVIRONMENT}}" | contains("prod")
+  res.code == 200 &&
+  res.body.status contains "ok" &&
+  rt.sec < 1
 ```
 
-### `hasPrefix`
+## Probe Functions
 
-Checks if a string starts with a prefix.
+These functions are registered by Probe itself.
 
-**Syntax:** `hasPrefix(string, prefix)`  
+### `match_json`
+
+Compares two objects strictly. Every key and value must match on both sides - extra or missing keys make it fail.
+
+**Syntax:** `match_json(src, target)`
 **Returns:** Boolean
 
 ```yaml
-test: hasPrefix(res.headers.Location, "https://")
-
-if: hasPrefix("{{env.API_URL}}", "https://secure")
+test: match_json(res.body, {"status": "ok", "count": 3})
 ```
 
-### `hasSuffix`
+### `diff_json`
 
-Checks if a string ends with a suffix.
+Compares two objects the same way as `match_json` and describes the differences. Returns the string `No diff` when they match.
 
-**Syntax:** `hasSuffix(string, suffix)`  
-**Returns:** Boolean
+**Syntax:** `diff_json(src, target)`
+**Returns:** String
 
 ```yaml
-test: hasSuffix(res.json.filename, ".json")
-
-if: hasSuffix("{{env.IMAGE_NAME}}", ":latest")
+echo: "{{diff_json(res.body, vars.expected)}}"
 ```
 
-### `len`
+### `parse_json`
 
-Returns the length of a string or array.
+Parses a JSON string into an object.
 
-**Syntax:** `len(value)`  
+**Syntax:** `parse_json(string)`
+**Returns:** Any
+
+```yaml
+outputs:
+  meta: "{{parse_json(res.body.metadata)}}"
+
+test: parse_json(res.body.metadata).version == "1.0"
+```
+
+### `parse_int`
+
+Converts a string or a number to a 64-bit integer. Fails on a string that is not a base-10 integer.
+
+**Syntax:** `parse_int(value)`
 **Returns:** Integer
 
 ```yaml
-test: |
-  len(res.json.items) > 0 &&
-  len(res.json.message) > 10
-
-outputs:
-  item_count: len(res.json.data)
-  name_length: len(res.json.user.name)
+test: parse_int(res.headers["Content-Length"]) > 0
 ```
 
-## Date/Time Functions
+### `parse_float`
 
-### `now`
+Converts a string to a floating-point number.
 
-Returns the current Unix timestamp.
+**Syntax:** `parse_float(string)`
+**Returns:** Float
 
-**Syntax:** `now()`  
-**Returns:** Integer (Unix timestamp)
+```yaml
+test: parse_float(res.body.score) >= 8.5
+```
+
+### `encode_base64`
+
+Encodes a string with standard base64.
+
+**Syntax:** `encode_base64(string)`
+**Returns:** String
+
+```yaml
+with:
+  headers:
+    Authorization: "Basic {{encode_base64(vars.user + ':' + vars.pass)}}"
+```
+
+### `decode_base64`
+
+Decodes a standard base64 string.
+
+**Syntax:** `decode_base64(string)`
+**Returns:** String
 
 ```yaml
 outputs:
-  timestamp: now()
-  # Returns something like 1693574400
-
-env:
-  REQUEST_TIME: "{{now()}}"
+  payload: "{{decode_base64(res.body.data)}}"
 ```
 
 ### `unixtime`
 
-Alias for `now()` - returns current Unix timestamp.
+Returns the current time as a Unix timestamp in seconds.
 
-**Syntax:** `unixtime()`  
-**Returns:** Integer (Unix timestamp)
+**Syntax:** `unixtime()`
+**Returns:** Integer
 
 ```yaml
 with:
@@ -262,555 +144,188 @@ with:
     X-Timestamp: "{{unixtime()}}"
 ```
 
-### `iso8601`
+### `random_int`
 
-Returns the current time in ISO 8601 format.
+Returns a random integer in the range `[0, n)`. `n` must be positive.
 
-**Syntax:** `iso8601()`  
-**Returns:** String (ISO 8601 formatted)
-
-```yaml
-outputs:
-  created_at: iso8601()
-  # Returns something like "2023-09-01T12:30:00Z"
-
-with:
-  body: |
-    {
-      "timestamp": "{{iso8601()}}",
-      "event": "test_execution"
-    }
-```
-
-### `date`
-
-Formats the current time using Go's time format layout.
-
-**Syntax:** `date(layout)`  
-**Returns:** String (formatted date)
-
-**Common layouts:**
-- `2006-01-02` - Date (YYYY-MM-DD)
-- `15:04:05` - Time (HH:MM:SS)
-- `2006-01-02 15:04:05` - DateTime
-- `Mon Jan 2 15:04:05 2006` - Full format
-
-```yaml
-outputs:
-  date_only: date("2006-01-02")
-  # Returns "2023-09-01"
-  
-  time_only: date("15:04:05")
-  # Returns "12:30:45"
-  
-  full_datetime: date("2006-01-02 15:04:05")
-  # Returns "2023-09-01 12:30:45"
-
-with:
-  headers:
-    X-Date: "{{date('Mon Jan 2 15:04:05 2006')}}"
-    # Returns "Fri Sep 1 12:30:45 2023"
-```
-
-## Encoding Functions
-
-### `base64`
-
-Encodes a string to base64.
-
-**Syntax:** `base64(string)` or `string | base64`  
-**Returns:** String (base64 encoded)
-
-```yaml
-with:
-  headers:
-    Authorization: "Basic {{base64(\"{{env.USERNAME}}\" + ':' + \"{{env.PASSWORD}}\")}}"
-    # Encodes "user:pass" to "dXNlcjpwYXNz"
-
-outputs:
-  encoded_data: base64(res.text)
-```
-
-### `base64decode`
-
-Decodes a base64 string.
-
-**Syntax:** `base64decode(string)` or `string | base64decode`  
-**Returns:** String (decoded)
-
-```yaml
-outputs:
-  decoded_token: base64decode(res.json.token)
-  # Decodes base64 token to plain text
-
-test: base64decode(res.json.data) | contains("expected_value")
-```
-
-### `urlEncode`
-
-URL encodes a string (percent encoding).
-
-**Syntax:** `urlEncode(string)` or `string | urlEncode`  
-**Returns:** String (URL encoded)
-
-```yaml
-with:
-  url: "{{env.BASE_URL}}/search?q={{env.SEARCH_TERM | urlEncode}}"
-  # Encodes "hello world" to "hello%20world"
-
-outputs:
-  encoded_param: urlEncode(res.json.user_input)
-```
-
-### `urlDecode`
-
-Decodes a URL encoded string.
-
-**Syntax:** `urlDecode(string)` or `string | urlDecode`  
-**Returns:** String (decoded)
-
-```yaml
-outputs:
-  original_query: urlDecode(res.json.encoded_query)
-  # Decodes "hello%20world" to "hello world"
-```
-
-## Mathematical Functions
-
-### `add`
-
-Adds two numbers.
-
-**Syntax:** `add(a, b)`  
-**Returns:** Number
-
-```yaml
-outputs:
-  total_time: add(res.time, 100)
-  # Adds 100ms to response time
-
-test: add(res.json.count, res.json.pending) > 50
-```
-
-### `sub`
-
-Subtracts the second number from the first.
-
-**Syntax:** `sub(a, b)`  
-**Returns:** Number
-
-```yaml
-outputs:
-  time_diff: sub(unixtime(), res.json.created_at)
-  # Calculate age in seconds
-
-test: sub(res.time, outputs.baseline.time) < 500
-```
-
-### `mul`
-
-Multiplies two numbers.
-
-**Syntax:** `mul(a, b)`  
-**Returns:** Number
-
-```yaml
-outputs:
-  time_in_seconds: mul(res.time, 0.001)
-  # Convert milliseconds to seconds
-
-test: mul(res.json.price, res.json.quantity) <= 1000
-```
-
-### `div`
-
-Divides the first number by the second.
-
-**Syntax:** `div(a, b)`  
-**Returns:** Number
-
-```yaml
-outputs:
-  average_time: div(res.json.total_time, res.json.request_count)
-  # Calculate average
-
-test: div(res.json.success_count, res.json.total_count) > 0.95
-```
-
-### `mod`
-
-Returns the remainder of division.
-
-**Syntax:** `mod(a, b)`  
-**Returns:** Number
-
-```yaml
-test: mod(res.json.id, 2) == 0
-# Check if ID is even
-
-if: mod(unixtime(), 3600) < 60
-# Execute only in the first minute of each hour
-```
-
-### `round`
-
-Rounds a number to the nearest integer.
-
-**Syntax:** `round(number)`  
-**Returns:** Integer
-
-```yaml
-outputs:
-  rounded_time: round(div(res.time, 1000))
-  # Convert to seconds and round
-
-test: round(res.json.score) >= 8
-```
-
-### `floor`
-
-Rounds a number down to the nearest integer.
-
-**Syntax:** `floor(number)`  
-**Returns:** Integer
-
-```yaml
-outputs:
-  time_seconds: floor(div(res.time, 1000))
-  # Convert milliseconds to seconds (rounded down)
-```
-
-### `ceil`
-
-Rounds a number up to the nearest integer.
-
-**Syntax:** `ceil(number)`  
-**Returns:** Integer
-
-```yaml
-outputs:
-  min_requests: ceil(mul(res.json.users, 1.5))
-  # Calculate minimum requests needed (rounded up)
-```
-
-## Utility Functions
-
-### `uuid`
-
-Generates a random UUID (version 4).
-
-**Syntax:** `uuid()`  
-**Returns:** String (UUID)
-
-```yaml
-with:
-  headers:
-    X-Request-ID: "{{uuid()}}"
-    # Generates something like "f47ac10b-58cc-4372-a567-0e02b2c3d479"
-
-outputs:
-  correlation_id: uuid()
-```
-
-### `random`
-
-Generates a random integer between 0 and the specified maximum (exclusive).
-
-**Syntax:** `random(max)`  
+**Syntax:** `random_int(n)`
 **Returns:** Integer
 
 ```yaml
 with:
-  url: "{{env.BASE_URL}}/test?seed={{random(1000)}}"
-  # Generates random number 0-999
-
-outputs:
-  random_delay: random(5000)
-  # Random number 0-4999 (for delay in ms)
+  url: "{{vars.base_url}}/test?seed={{random_int(1000)}}"
 ```
 
-### `env`
+### `random_str`
 
-Accesses environment variables (same as `env.VARIABLE_NAME`).
+Returns a random alphanumeric string of the given length (`[a-zA-Z0-9]`, at most 1000000 characters).
 
-**Syntax:** `env(variable_name)`  
+**Syntax:** `random_str(length)`
 **Returns:** String
 
 ```yaml
-# These are equivalent:
-with:
-  url: "{{env.API_URL}}"
-  url: "{{env('API_URL')}}"
+vars:
+  email: "user-{{random_str(8)}}@example.com"
 ```
 
-### `default`
+## String Functions
 
-Returns a default value if the input is empty or null.
-
-**Syntax:** `default(value, default_value)` or `value || default_value`  
-**Returns:** Any type
+| Function | Description |
+|---|---|
+| `upper(s)` | Uppercase |
+| `lower(s)` | Lowercase |
+| `trim(s)` / `trim(s, chars)` | Strip whitespace, or the given characters, from both ends |
+| `trimPrefix(s, prefix)` | Strip a leading prefix |
+| `trimSuffix(s, suffix)` | Strip a trailing suffix |
+| `replace(s, old, new)` | Replace every occurrence |
+| `split(s, sep)` / `split(s, sep, n)` | Split into an array |
+| `splitAfter(s, sep)` | Split, keeping the separator on each element |
+| `join(array, sep)` | Join an array into a string |
+| `repeat(s, n)` | Repeat a string |
+| `indexOf(s, sub)` | Index of the first occurrence, or `-1` |
+| `lastIndexOf(s, sub)` | Index of the last occurrence, or `-1` |
+| `hasPrefix(s, prefix)` | Prefix test |
+| `hasSuffix(s, suffix)` | Suffix test |
+| `len(s)` | Length in bytes |
 
 ```yaml
 vars:
-  request_timeout: "{{REQUEST_TIMEOUT || '30s'}}"
-  custom_timeout: "{{CUSTOM_TIMEOUT}}"
+  host: "{{trimPrefix(API_URL, 'https://')}}"
+  slug: "{{replace(lower(TITLE), ' ', '-')}}"
 
-with:
-  timeout: "{{default(vars.custom_timeout, '60s')}}"
+test: hasSuffix(res.body.filename, ".json")
 ```
 
-### `coalesce`
-
-Returns the first non-empty value from a list.
-
-**Syntax:** `coalesce(value1, value2, value3, ...)`  
-**Returns:** Any type
-
-```yaml
-vars:
-  custom_api_url: "{{CUSTOM_API_URL}}"
-  default_api_url: "{{DEFAULT_API_URL}}"
-  step_timeout: "{{STEP_TIMEOUT}}"
-  job_timeout: "{{JOB_TIMEOUT}}"
-  api_url: "{{coalesce(vars.custom_api_url, vars.default_api_url, 'https://api.example.com')}}"
-
-with:
-  timeout: "{{coalesce(vars.step_timeout, vars.job_timeout, '30s')}}"
-```
-
-## JSON Functions
-
-### `tojson`
-
-Converts a value to JSON string.
-
-**Syntax:** `tojson(value)` or `value | tojson`  
-**Returns:** String (JSON)
-
-```yaml
-with:
-  body: "{{outputs.user_data | tojson}}"
-  # Converts object to JSON string
-
-outputs:
-  json_response: tojson(res.json)
-```
-
-### `fromjson`
-
-Parses a JSON string to an object.
-
-**Syntax:** `fromjson(json_string)` or `json_string | fromjson`
-**Returns:** Object
-
-```yaml
-outputs:
-  parsed_data: fromjson(res.text)
-  # Parse JSON string to object
-
-test: fromjson(res.json.metadata).version == "1.0"
-```
-
-### `parse_json`
-
-Parses a JSON string into an object (`map[string]any`) or array (`[]any`). Useful for extracting fields from string values such as shell stdout or any action response that returns JSON as a string.
-
-**Syntax:** `parse_json(json_string)`
-**Returns:** Object or Array
-
-```yaml
-# Extract fields from shell stdout
-- name: Get user data
-  id: get_user
-  uses: shell
-  with:
-    cmd: curl -s https://api.example.com/user/1
-  outputs:
-    user_id: parse_json(res.stdout).data.id
-    user_name: parse_json(res.stdout).data.name
-  test: parse_json(res.stdout).data.id == 12345
-
-# Combine with match_json for validation
-- name: Validate JSON response
-  uses: shell
-  with:
-    cmd: echo '{"status":"ok","count":3}'
-  test: match_json(parse_json(res.stdout), {"status":"ok","count":3})
-
-# Parse JSON array
-- name: Parse array
-  uses: shell
-  with:
-    cmd: echo '[{"id":1},{"id":2}]'
-  test: len(parse_json(res.stdout)) == 2
-```
-
-### `jsonpath`
-
-Extracts values from JSON using JSONPath expressions.
-
-**Syntax:** `jsonpath(json_object, path)`  
-**Returns:** Any type
-
-```yaml
-outputs:
-  user_names: jsonpath(res.json, "$.users[*].name")
-  # Extract all user names from array
-  
-  first_email: jsonpath(res.json, "$.users[0].email")
-  # Get first user's email
-
-test: jsonpath(res.json, "$.status.code") == 200
-```
-
-### `keys`
-
-Returns the keys of an object as an array.
-
-**Syntax:** `keys(object)`  
-**Returns:** Array of strings
-
-```yaml
-outputs:
-  header_names: keys(res.headers)
-  # Get all response header names
-  
-  json_fields: keys(res.json)
-  # Get all JSON object keys
-
-test: len(keys(res.json)) > 5
-# Ensure response has more than 5 fields
-```
-
-### `values`
-
-Returns the values of an object as an array.
-
-**Syntax:** `values(object)`  
-**Returns:** Array
-
-```yaml
-outputs:
-  header_values: values(res.headers)
-  # Get all response header values
-  
-  all_user_names: values(res.json.users)
-  # Get all values from users object
-```
-
-## Advanced Function Usage
-
-### Function Chaining
-
-Functions can be chained using the pipe operator:
-
-```yaml
-env:
-  CLEAN_NAME: "{{env.RAW_NAME | trim | lower | replace(' ', '-')}}"
-  # Chain: trim whitespace → lowercase → replace spaces with hyphens
-
-with:
-  url: "{{env.BASE_URL | trimSuffix('/') | replace('http://', 'https://')}}/api"
-  # Chain: remove trailing slash → force HTTPS → add path
-```
-
-### Conditional Function Usage
-
-Functions can be used in conditional expressions:
+`contains`, `startsWith`, `endsWith` and `matches` are operators rather than functions:
 
 ```yaml
 test: |
-  res.status == 200 &&
-  len(res.json.items) > 0 &&
-  contains(res.json.status | upper, "SUCCESS")
-
-if: |
-  "{{env.ENVIRONMENT}}" == "production" ||
-  ("{{env.ENVIRONMENT}}" == "staging" && contains("{{env.BRANCH_NAME}}", "release"))
+  res.headers["Content-Type"] contains "application/json" &&
+  res.body.id matches "^[0-9a-f]{8}"
 ```
 
-### Complex Data Manipulation
+## Number Functions
+
+| Function | Description |
+|---|---|
+| `abs(n)` | Absolute value |
+| `ceil(n)` | Round up |
+| `floor(n)` | Round down |
+| `round(n)` | Round to the nearest integer |
+| `max(a, b, ...)` | Largest value |
+| `min(a, b, ...)` | Smallest value |
+| `sum(array)` | Sum of an array |
+| `mean(array)` | Arithmetic mean |
+| `median(array)` | Median |
+| `bitnot(n)` | Bitwise NOT |
+
+There is no `add` / `sub` / `mul` / `div` / `mod` function - use the operators instead.
 
 ```yaml
-vars:
-  base_url: "{{BASE_URL}}"
-  api_version: "{{API_VERSION}}"
-  resource: "{{RESOURCE}}"
+outputs:
+  seconds: "{{round(rt.sec)}}"
+
+test: res.body.id % 2 == 0
+```
+
+## Type Conversion Functions
+
+| Function | Description |
+|---|---|
+| `int(v)` | Convert to an integer |
+| `float(v)` | Convert to a float |
+| `string(v)` | Convert to a string |
+| `type(v)` | Name of the value's type, such as `string` or `int` |
+
+Probe's `parse_int` and `parse_float` differ from `int` and `float` in that they always parse base-10 text and return a 64-bit value.
+
+## Date and Time Functions
+
+| Function | Description |
+|---|---|
+| `now()` | Current time as a time value |
+| `date(s)` / `date(s, layout)` / `date(s, layout, tz)` | Parse a string into a time value |
+| `duration(s)` | Parse a duration such as `"1h30m"` |
+| `timezone(name)` | Look up a location such as `"UTC"` or `"Asia/Tokyo"` |
+
+`now()` returns a time value, not a number. Format it with Go layouts through `Format`, or take a Unix timestamp with `Unix()` - or use Probe's `unixtime()`.
+
+```yaml
+outputs:
+  today: "{{now().Format('2006-01-02')}}"
+  started_at: "{{now().Format('2006-01-02T15:04:05Z07:00')}}"
+  epoch: "{{unixtime()}}"
+
+test: date(res.body.expires_at) > now()
+```
+
+## Array and Map Functions
+
+| Function | Description |
+|---|---|
+| `len(v)` | Number of elements |
+| `first(array)` / `last(array)` | First or last element |
+| `take(array, n)` | First `n` elements |
+| `reverse(array)` | Reversed copy |
+| `uniq(array)` | Duplicates removed |
+| `concat(a, b, ...)` | Concatenate arrays |
+| `flatten(array)` | Flatten nested arrays |
+| `sort(array)` / `sort(array, "desc")` | Sort |
+| `sortBy(array, expr)` | Sort by a computed key |
+| `groupBy(array, expr)` | Group into a map by a computed key |
+| `filter(array, predicate)` | Elements matching a predicate |
+| `map(array, expr)` | Transform each element |
+| `find(array, predicate)` / `findLast(array, predicate)` | First or last matching element |
+| `findIndex(array, predicate)` / `findLastIndex(array, predicate)` | Index of a matching element |
+| `count(array, predicate)` | Number of matching elements |
+| `all` / `any` / `one` / `none` | Quantifiers over a predicate |
+| `reduce(array, expr, initial)` | Fold an array into a single value |
+| `keys(map)` / `values(map)` | Keys or values of a map |
+| `get(map, key)` | Value for a key, or `nil` |
+| `toPairs(map)` / `fromPairs(array)` | Convert between a map and key/value pairs |
+
+Inside a predicate, `#` is the current element and `#acc` is the accumulator of `reduce`.
+
+```yaml
+test: |
+  len(res.body.items) > 0 &&
+  all(res.body.items, #.status == "active")
 
 outputs:
-  # Extract and format user data
-  formatted_users: |
-    {{range res.json.users}}
-      {{.name | upper}}: {{.email | lower}}
-    {{end}}
-  
-  # Calculate metrics
-  success_rate: |
-    {{div(mul(res.json.successful_requests, 100), res.json.total_requests)}}%
-  
-  # Generate URLs
-  api_endpoints: |
-    {{vars.base_url | trimSuffix('/')}}/{{vars.api_version}}/{{vars.resource | lower}}
+  names: "{{join(map(res.body.users, #.name), ', ')}}"
+  total: "{{reduce(res.body.items, #acc + #.price, 0)}}"
 ```
 
-### Error-Safe Function Usage
+## JSON and Encoding Functions
 
-Use default values and null checks to make functions more robust:
+| Function | Description |
+|---|---|
+| `toJSON(v)` | Serialize a value as indented JSON |
+| `fromJSON(s)` | Parse a JSON string |
+| `toBase64(s)` | Encode with base64 |
+| `fromBase64(s)` | Decode base64 |
+
+Note the camel case: there is no `tojson` or `base64`. Probe's `parse_json`, `encode_base64` and `decode_base64` cover the same ground with stricter argument checking and Probe's own error messages.
 
 ```yaml
-vars:
-  custom_url: "{{CUSTOM_URL}}"
-  default_url: "{{DEFAULT_URL}}"
+with:
+  body: "{{toJSON(outputs.setup.user)}}"
 
 outputs:
-  safe_length: "{{len(res.json.items || []))}}"
-  # Use empty array if items is null
-  
-  safe_name: "{{res.json.user.name | default('Unknown') | upper}}"  
-  # Provide default if name is missing
-  
-  safe_url: "{{coalesce(vars.custom_url, vars.default_url, 'https://fallback.com')}}"
-  # Multiple fallback options
+  version: "{{fromJSON(res.body).version}}"
 ```
 
-## Performance Considerations
+## Limits
 
-### Function Performance
+Expression evaluation is bounded for safety:
 
-- **String functions:** Generally fast, but avoid excessive chaining
-- **Date functions:** `now()` and `iso8601()` have minimal overhead
-- **JSON functions:** `jsonpath()` can be slow on large objects
-- **Mathematical functions:** Very fast for simple operations
-
-### Best Practices
-
-```yaml
-# Good: Compute once, reuse
-vars:
-  base_url: "{{BASE_URL}}"
-  current_time: "{{iso8601()}}"
-  api_url: "{{vars.base_url | trimSuffix('/')}}"
-
-jobs:
-  test:
-    steps:
-      - name: "Use precomputed values"
-        with:
-          url: "{{vars.api_url}}/health"
-          headers:
-            X-Timestamp: "{{vars.current_time}}"
-
-# Avoid: Recomputing in every step
-      - name: "Inefficient"
-        with:
-          url: "{{vars.base_url | trimSuffix('/')}}/health"  # Recomputed
-          headers:
-            X-Timestamp: "{{iso8601()}}"  # Different timestamp
-```
+- An expression may be at most 1000000 characters long.
+- Evaluation times out after 5 seconds.
+- `parse_json`, `encode_base64` and `decode_base64` reject an argument longer than 1000000 characters.
 
 ## See Also
 
-- **[YAML Configuration](../yaml-configuration/)** - Using functions in YAML config
-- **[Actions Reference](../actions-reference/)** - Functions in action parameters
-- **[Concepts: Expressions and Templates](../../concepts/expressions-and-templates/)** - Expression language guide
-- **[How-tos: Dynamic Configuration](../../how-tos/environment-management/)** - Practical function usage
+- **[YAML Configuration](/reference/yaml-configuration)** - Where each field accepts expressions
+- **[Actions Reference](/reference/actions-reference)** - Action parameters and response objects
+- **[Expressions and Templates](/guide/concepts/expressions-and-templates)** - Concepts behind the expression language
+- **[Testing and Assertions](/guide/concepts/testing-and-assertions)** - Writing `test` expressions

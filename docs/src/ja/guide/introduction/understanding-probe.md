@@ -35,11 +35,11 @@ description: What this workflow does
 
 ```yaml
 jobs:
-  job-name:
-    name: Human-readable job name
-    needs: [other-job]  # Optional: wait for other jobs
-    steps:
-      # Steps go here...
+- id: job-name
+  name: Human-readable job name
+  needs: [other-job]  # Optional: wait for other jobs
+  steps:
+    # Steps go here...
 ```
 
 ### ステップ
@@ -59,9 +59,9 @@ steps:
     with:                 # Parameters for the action
       url: https://api.example.com
       method: GET
-    test: res.status == 200  # Test condition
+    test: res.code == 200  # Test condition
     outputs:              # Data to pass to other steps
-      response_time: res.time
+      response_time: (rt.sec * 1000)
 ```
 
 ### アクション
@@ -82,12 +82,15 @@ steps:
 
 ```yaml
 jobs:
-  frontend-check:    # These jobs run
-    # ...             # at the same time
-  backend-check:     # (in parallel)
-    # ...
-  database-check:
-    # ...
+- id: frontend-check
+  name: frontend-check
+  # ...             # at the same time
+- id: backend-check
+  name: backend-check
+  # ...
+- id: database-check
+  name: database-check
+  # ...
 ```
 
 ### 依存関係による順次実行
@@ -96,22 +99,22 @@ jobs:
 
 ```yaml
 jobs:
-  setup:
-    name: Setup Environment
-    steps:
-      # Setup steps...
+- id: setup
+  name: Setup Environment
+  steps:
+    # Setup steps...
 
-  test:
-    name: Run Tests
-    needs: [setup]     # Wait for 'setup' to complete
-    steps:
-      # Test steps...
+- id: test
+  name: Run Tests
+  needs: [setup]     # Wait for 'setup' to complete
+  steps:
+    # Test steps...
 
-  cleanup:
-    name: Clean Up
-    needs: [test]      # Wait for 'test' to complete
-    steps:
-      # Cleanup steps...
+- id: cleanup
+  name: Clean Up
+  needs: [test]      # Wait for 'test' to complete
+  steps:
+    # Cleanup steps...
 ```
 
 ### データフロー
@@ -120,21 +123,26 @@ jobs:
 
 ```yaml
 jobs:
-  data-fetch:
-    steps:
-      - name: Get User Info
-        action: http
-        with:
-          url: https://api.example.com/user/123
-        outputs:
-          user_id: res.json.id
-          user_name: res.json.name
+- id: data-fetch
+  name: data-fetch
+  steps:
+    - name: Get User Info
+      id: data-fetch
+      uses: http
+      with:
+        method: GET
+        url: https://api.example.com/user/123
+      outputs:
+        user_id: res.body.id
+        user_name: res.body.name
 
-  notification:
-    needs: [data-fetch]
-    steps:
-      - name: Send Welcome Email
-        echo: "Welcome {{outputs.data-fetch.user_name}}!"
+- id: notification
+  name: notification
+  needs: [data-fetch]
+  steps:
+    - name: Send Welcome Email
+      uses: hello
+      echo: "Welcome {{outputs['data-fetch'].user_name}}!"
 ```
 
 ## 式システム
@@ -147,7 +155,7 @@ Probeは動的な値とテストのために式を使用します。式は`{{}}`
 
 ```yaml
 - name: Greet User
-  echo: "Hello {{outputs.previous-step.username}}!"
+  echo: "Hello {{outputs['previous-step'].username}}!"
 ```
 
 ### テスト式
@@ -156,10 +164,11 @@ Probeは動的な値とテストのために式を使用します。式は`{{}}`
 
 ```yaml
 - name: Check API Response
-  action: http
+  uses: http
   with:
+    method: GET
     url: https://api.example.com/status
-  test: res.status == 200 && res.json.healthy == true
+  test: res.code == 200 && res.body.healthy == true
 ```
 
 ### 利用可能な変数
@@ -184,7 +193,7 @@ Probeは複数のYAMLファイルのマージをサポートしており、以�
 probe base-workflow.yml,production-config.yml
 ```
 
-ファイルは順序でマージされ、後のファイルが前のファイルの値を上書きします。
+ファイルは順に連結され、複数のファイルで定義されたトップレベルのキーは最後のファイルの値になります。
 
 ## エラーハンドリング
 
@@ -196,44 +205,54 @@ Probeはエラーを処理するためのいくつかのメカニズムを提供
 
 ```yaml
 - name: Critical Check
-  action: http
+  uses: http
   with:
+    method: GET
     url: https://critical-api.example.com
-  test: res.status == 200  # If this fails, step fails
+  test: res.code == 200  # If this fails, step fails
 ```
 
 ### 条件付き実行
 
-`if`条件を使用して失敗を処理：
+ステップをスキップするには `skipif` を使います。式からは先行ステップの outputs が見えるので、判断材料は `test` で失敗させずに outputs として公開します。
 
 ```yaml
 - name: Primary Service Check
   id: primary
-  action: http
+  uses: http
   with:
+    method: GET
     url: https://primary-api.example.com
-  test: res.status == 200
+  outputs:
+    primary_ok: res.code == 200
 
 - name: Fallback Check
-  if: steps.primary.failed
-  action: http
+  uses: http
+  skipif: outputs.primary.primary_ok
   with:
+    method: GET
     url: https://backup-api.example.com
-  test: res.status == 200
+  test: res.code == 200
 ```
 
-### 失敗時の継続
 
-デフォルトでは、ジョブ実行は最初の失敗で停止します。この動作を変更できます：
+### ステップが失敗したとき
+
+`test` が失敗するとそのステップとジョブは失敗扱いになりますが、同じジョブの残りのステップは実行されます。失敗したジョブを `needs` に指定したジョブはスキップされ、ワークフローの終了ステータスは `1` になります。
+
+失敗を無視するためのステップ単位・ジョブ単位のスイッチはありません。ワークフロー全体を失敗させたくないチェックは、`test` で判定せず結果を outputs として公開します。
 
 ```yaml
-- name: Non-Critical Check
-  continue_on_error: true
-  action: http
+- name: Optional Service Check
+  id: optional
+  uses: http
   with:
+    method: GET
     url: https://optional-service.example.com
-  test: res.status == 200
+  outputs:
+    optional_ok: res.code == 200
 ```
+
 
 ## ベストプラクティス
 
@@ -242,12 +261,12 @@ Probeはエラーを処理するためのいくつかのメカニズムを提供
 ```yaml
 # Good
 - name: Check Production API Health
-  action: http
+  uses: http
   # ...
 
 # Not so good  
 - name: HTTP Check
-  action: http
+  uses: http
   # ...
 ```
 
@@ -255,15 +274,15 @@ Probeはエラーを処理するためのいくつかのメカニズムを提供
 
 ```yaml
 jobs:
-  infrastructure-check:
-    name: Infrastructure Health Check
-    steps:
-      - name: Check Database
-        # ...
-      - name: Check Cache
-        # ...
-      - name: Check Load Balancer
-        # ...
+- id: infrastructure-check
+  name: Infrastructure Health Check
+  steps:
+    - name: Check Database
+      # ...
+    - name: Check Cache
+      # ...
+    - name: Check Load Balancer
+      # ...
 ```
 
 ### 3. データ共有に出力を使用
@@ -271,15 +290,17 @@ jobs:
 ```yaml
 - name: Fetch Configuration
   id: config
-  action: http
+  uses: http
   with:
+    method: GET
     url: https://config-service.example.com
   outputs:
-    database_url: res.json.database_url
+    database_url: res.body.database_url
     
 - name: Test Database Connection
-  action: http
+  uses: http
   with:
+    method: GET
     url: "{{outputs.config.database_url}}/health"
 ```
 
@@ -287,10 +308,10 @@ jobs:
 
 ```yaml
 # Good - specific test conditions
-test: res.status == 200 && res.json.status == "healthy" && res.time < 1000
+test: res.code == 200 && res.body.status == "healthy" && (rt.sec * 1000) < 1000
 
 # Not so good - generic test
-test: res.status == 200
+test: res.code == 200
 ```
 
 ## 次のステップ

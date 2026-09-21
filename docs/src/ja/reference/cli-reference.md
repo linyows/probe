@@ -27,7 +27,7 @@ probe workflow.yml
 probe base.yml,environment.yml,overrides.yml
 ```
 
-複数のファイルは左から右にマージされ、後のファイルが前のファイルを上書きします。
+ファイルは左から右に連結され、1 つの YAML ドキュメントとして解析されます。複数のファイルで定義されたトップレベルのキーは最後のファイルの値になり、エントリ単位ではなくキーごと置き換わります。
 
 ### 位置引数
 
@@ -95,9 +95,34 @@ probe --version
 
 **出力形式:**
 ```
-Probe Version 1.2.3
-Build: abc1234
-Go Version: go1.20.1
+Probe Version 1.2.3 (commit: abc1234)
+```
+
+### `--timing`
+
+**型:** ブールフラグ  
+**デフォルト:** `false`  
+**説明:** ステップごとの時刻情報（開始時刻とレスポンスタイム）を表示
+
+**例:**
+```bash
+probe --timing workflow.yml
+```
+
+### `--output`
+
+**型:** String  
+**値:** `auto`, `spinner`, `stream`  
+**デフォルト:** `auto`  
+**説明:** レポートの出力方法を選択します。`auto` は対話的な端末なら `spinner`、それ以外なら `stream` を選びます。`spinner` は進捗をその場で描き換え、`stream` は完了したものから順に書き出すため、CI のログやパイプに向いています。
+
+値は環境変数 `PROBE_OUTPUT` でも指定できます。優先順位はフラグ、環境変数、自動判定の順です。
+
+**例:**
+```bash
+probe --output stream workflow.yml
+probe --output=spinner workflow.yml
+PROBE_OUTPUT=stream probe workflow.yml
 ```
 
 ## サブコマンド
@@ -189,64 +214,53 @@ flowchart LR
 
 ## 環境変数
 
-以下の環境変数がProbeの動作に影響します：
+以下の環境変数が Probe の動作に影響します。
 
-### `PROBE_CONFIG`
-
-**型:** String  
-**説明:** デフォルト設定ファイルのパス  
-**デフォルト:** なし
-
-```bash
-export PROBE_CONFIG=/etc/probe/default.yml
-probe workflow.yml  # デフォルト設定とマージされる
-```
-
-### `PROBE_LOG_LEVEL`
+### `PROBE_OUTPUT`
 
 **型:** String  
-**値:** `debug`, `info`, `warn`, `error`  
-**デフォルト:** `info`  
-**説明:** ログレベルを設定
+**値:** `auto`, `spinner`, `stream`  
+**デフォルト:** `auto`  
+**説明:** レポートの出力方法。`--output` と同じ値を取り、フラグが指定された場合はそちらが優先されます。
 
 ```bash
-export PROBE_LOG_LEVEL=debug
+export PROBE_OUTPUT=stream
 probe workflow.yml
 ```
 
-### `PROBE_NO_COLOR`
+### `PROBE_MAX_REPEAT_COUNT`
 
-**型:** Boolean  
-**値:** `true`, `false`, `1`, `0`  
-**デフォルト:** `false`  
-**説明:** カラー出力を無効化
+**型:** Integer  
+**デフォルト:** `10000`  
+**説明:** ステップの `repeat.count` の上限。これを超える指定をしたワークフローはエラーになります。
 
 ```bash
-export PROBE_NO_COLOR=true
+export PROBE_MAX_REPEAT_COUNT=50000
+probe load-test.yml
+```
+
+### `PROBE_MAX_ATTEMPTS`
+
+**型:** Integer  
+**デフォルト:** `10000`  
+**説明:** ステップのリトライ `max_attempts` の上限。
+
+```bash
+export PROBE_MAX_ATTEMPTS=100
 probe workflow.yml
 ```
 
-### `PROBE_TIMEOUT`
-
-**型:** Duration  
-**デフォルト:** `300s`  
-**説明:** ワークフロー実行のグローバルタイムアウト
-
-```bash
-export PROBE_TIMEOUT=600s
-probe workflow.yml
-```
-
-### `PROBE_PLUGIN_DIR`
+### `FORCE_COLOR`
 
 **型:** String  
-**デフォルト:** `~/.probe/plugins`  
-**説明:** カスタムプラグインを含むディレクトリ
+**値:** `1`  
+**説明:** 標準出力が端末でない場合でも色付き出力を強制します。CI のログで色を残したいときに使います。
 
 ```bash
-export PROBE_PLUGIN_DIR=/usr/local/lib/probe/plugins
-probe workflow.yml
+FORCE_COLOR=1 probe workflow.yml
 ```
+
+これら以外の環境変数は、ワークフローの `vars` から名前そのままで参照できます。詳しくは[環境変数](./environment-variables)を参照してください。
 
 ## 使用例
 
@@ -342,18 +356,12 @@ WantedBy=multi-user.target
 
 ## 終了コード
 
-Probeは実行結果を示すために標準的な終了コードを使用します：
+Probe が返す終了コードは 2 つです。
 
 | 終了コード | 意味 | 説明 |
 |-----------|---------|-------------|
-| `0` | 成功 | すべてのワークフロージョブが正常に完了 |
-| `1` | 一般エラー | テスト失敗またはアクションエラーによりワークフローが失敗 |
-| `2` | 設定エラー | 無効なYAML構文または設定 |
-| `3` | ファイルが見つからない | ワークフローファイルが見つからない |
-| `4` | 権限エラー | ファイル読み取りまたは実行の権限不足 |
-| `5` | ネットワークエラー | ネットワーク接続の問題 |
-| `6` | タイムアウトエラー | ワークフロー実行がタイムアウトを超過 |
-| `7` | プラグインエラー | プラグインの読み込みまたは実行が失敗 |
+| `0` | 成功 | すべてのジョブが完了し、すべてのテストが成功 |
+| `1` | 失敗 | テストの失敗、アクションのエラー、またはワークフローを読み込めなかった場合（ファイルが無い、YAML が不正、未知のフラグ など） |
 
 ### 終了コードの例
 
@@ -368,29 +376,6 @@ fi
 
 # CI/CDパイプラインで使用
 probe integration-tests.yml || exit 1
-```
-
-## 設定ファイル検索順序
-
-Probeは以下の順序で設定ファイルを検索します：
-
-1. **コマンドライン引数**（明示的なファイルパス）
-2. **カレントディレクトリ**（`./probe.yml`, `./probe.yaml`）  
-3. **ホームディレクトリ**（`~/.probe.yml`, `~/.probe.yaml`）
-4. **システムディレクトリ**（`/etc/probe/probe.yml`）
-5. **環境変数**（`$PROBE_CONFIG`）
-
-### 検索例
-
-```bash
-# Probeは以下の順序で検索します：
-# 1. ./my-workflow.yml (コマンドライン)
-# 2. ./probe.yml (カレントディレクトリ)
-# 3. ~/.probe.yml (ホームディレクトリ)  
-# 4. /etc/probe/probe.yml (システム)
-# 5. $PROBE_CONFIG (環境変数)
-
-probe my-workflow.yml
 ```
 
 ## パフォーマンスとリソース使用量
@@ -427,14 +412,14 @@ probe -v parallel-workflow.yml
 ### デバッグ情報
 
 ```bash
-# 最大デバッグ出力
-PROBE_LOG_LEVEL=debug probe -v workflow.yml
+# 最大限の情報を出す
+probe -v --timing workflow.yml
 
-# バージョンとビルド情報を確認
+# バージョンとコミットを確認
 probe --version
 
-# 実行せずにワークフロー構文を検証
-probe --dry-run workflow.yml  # (サポートされている場合)
+# 実行せずにジョブの依存関係を確認
+probe dag workflow.yml
 ```
 
 ### よくある問題
@@ -513,7 +498,7 @@ pipeline {
     
     environment {
         API_TOKEN = credentials('api-token')
-        PROBE_LOG_LEVEL = 'info'
+        PROBE_OUTPUT = 'stream'
     }
     
     stages {

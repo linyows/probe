@@ -35,11 +35,11 @@ A **job** is a collection of steps that execute together. Jobs can:
 
 ```yaml
 jobs:
-  job-name:
-    name: Human-readable job name
-    needs: [other-job]  # Optional: wait for other jobs
-    steps:
-      # Steps go here...
+- id: job-name
+  name: Human-readable job name
+  needs: [other-job]  # Optional: wait for other jobs
+  steps:
+    # Steps go here...
 ```
 
 ### Steps
@@ -59,9 +59,9 @@ steps:
     with:                 # Parameters for the action
       url: https://api.example.com
       method: GET
-    test: res.status == 200  # Test condition
+    test: res.code == 200  # Test condition
     outputs:              # Data to pass to other steps
-      response_time: res.time
+      response_time: (rt.sec * 1000)
 ```
 
 ### Actions
@@ -83,12 +83,15 @@ By default, jobs run in parallel for maximum efficiency:
 
 ```yaml
 jobs:
-  frontend-check:    # These jobs run
-    # ...             # at the same time
-  backend-check:     # (in parallel)
-    # ...
-  database-check:
-    # ...
+- id: frontend-check
+  name: frontend-check
+  # ...             # at the same time
+- id: backend-check
+  name: backend-check
+  # ...
+- id: database-check
+  name: database-check
+  # ...
 ```
 
 ### Sequential Execution with Dependencies
@@ -97,22 +100,22 @@ Use the `needs` keyword to create dependencies:
 
 ```yaml
 jobs:
-  setup:
-    name: Setup Environment
-    steps:
-      # Setup steps...
+- id: setup
+  name: Setup Environment
+  steps:
+    # Setup steps...
 
-  test:
-    name: Run Tests
-    needs: [setup]     # Wait for 'setup' to complete
-    steps:
-      # Test steps...
+- id: test
+  name: Run Tests
+  needs: [setup]     # Wait for 'setup' to complete
+  steps:
+    # Test steps...
 
-  cleanup:
-    name: Clean Up
-    needs: [test]      # Wait for 'test' to complete
-    steps:
-      # Cleanup steps...
+- id: cleanup
+  name: Clean Up
+  needs: [test]      # Wait for 'test' to complete
+  steps:
+    # Cleanup steps...
 ```
 
 ### Data Flow
@@ -121,21 +124,26 @@ Data flows through the workflow using **outputs**:
 
 ```yaml
 jobs:
-  data-fetch:
-    steps:
-      - name: Get User Info
-        action: http
-        with:
-          url: https://api.example.com/user/123
-        outputs:
-          user_id: res.json.id
-          user_name: res.json.name
+- id: data-fetch
+  name: data-fetch
+  steps:
+    - name: Get User Info
+      id: data-fetch
+      uses: http
+      with:
+        method: GET
+        url: https://api.example.com/user/123
+      outputs:
+        user_id: res.body.id
+        user_name: res.body.name
 
-  notification:
-    needs: [data-fetch]
-    steps:
-      - name: Send Welcome Email
-        echo: "Welcome {{outputs.data-fetch.user_name}}!"
+- id: notification
+  name: notification
+  needs: [data-fetch]
+  steps:
+    - name: Send Welcome Email
+      uses: hello
+      echo: "Welcome {{outputs['data-fetch'].user_name}}!"
 ```
 
 ## Expression System
@@ -148,7 +156,7 @@ Use template expressions to insert dynamic values:
 
 ```yaml
 - name: Greet User
-  echo: "Hello {{outputs.previous-step.username}}!"
+  echo: "Hello {{outputs['previous-step'].username}}!"
 ```
 
 ### Test Expressions
@@ -157,10 +165,11 @@ Use test expressions to validate results:
 
 ```yaml
 - name: Check API Response
-  action: http
+  uses: http
   with:
+    method: GET
     url: https://api.example.com/status
-  test: res.status == 200 && res.json.healthy == true
+  test: res.code == 200 && res.body.healthy == true
 ```
 
 ### Available Variables
@@ -197,44 +206,54 @@ When a test fails, the step is marked as failed:
 
 ```yaml
 - name: Critical Check
-  action: http
+  uses: http
   with:
+    method: GET
     url: https://critical-api.example.com
-  test: res.status == 200  # If this fails, step fails
+  test: res.code == 200  # If this fails, step fails
 ```
 
 ### Conditional Execution
 
-Use the `if` condition to handle failures:
+Use `skipif` to skip a step. The expression sees the outputs of earlier steps, so publish what the decision depends on rather than asserting it with `test`.
 
 ```yaml
 - name: Primary Service Check
   id: primary
-  action: http
+  uses: http
   with:
+    method: GET
     url: https://primary-api.example.com
-  test: res.status == 200
+  outputs:
+    primary_ok: res.code == 200
 
 - name: Fallback Check
-  if: steps.primary.failed
-  action: http
+  uses: http
+  skipif: outputs.primary.primary_ok
   with:
+    method: GET
     url: https://backup-api.example.com
-  test: res.status == 200
+  test: res.code == 200
 ```
 
-### Continue on Failure
 
-By default, job execution stops on the first failure. You can change this behavior:
+### When a Step Fails
+
+A failing `test` marks the step and its job as failed, but the remaining steps of that job still run. Jobs that declare the failed job in `needs` are skipped, and the workflow exits with status `1`.
+
+There is no per-step or per-job switch to ignore a failure. If a check is not meant to fail the workflow, publish its result as an output instead of asserting it:
 
 ```yaml
-- name: Non-Critical Check
-  continue_on_error: true
-  action: http
+- name: Optional Service Check
+  id: optional
+  uses: http
   with:
+    method: GET
     url: https://optional-service.example.com
-  test: res.status == 200
+  outputs:
+    optional_ok: res.code == 200
 ```
+
 
 ## Best Practices
 
@@ -243,12 +262,12 @@ By default, job execution stops on the first failure. You can change this behavi
 ```yaml
 # Good
 - name: Check Production API Health
-  action: http
+  uses: http
   # ...
 
 # Not so good  
 - name: HTTP Check
-  action: http
+  uses: http
   # ...
 ```
 
@@ -256,15 +275,15 @@ By default, job execution stops on the first failure. You can change this behavi
 
 ```yaml
 jobs:
-  infrastructure-check:
-    name: Infrastructure Health Check
-    steps:
-      - name: Check Database
-        # ...
-      - name: Check Cache
-        # ...
-      - name: Check Load Balancer
-        # ...
+- id: infrastructure-check
+  name: Infrastructure Health Check
+  steps:
+    - name: Check Database
+      # ...
+    - name: Check Cache
+      # ...
+    - name: Check Load Balancer
+      # ...
 ```
 
 ### 3. Use Outputs for Data Sharing
@@ -272,15 +291,17 @@ jobs:
 ```yaml
 - name: Fetch Configuration
   id: config
-  action: http
+  uses: http
   with:
+    method: GET
     url: https://config-service.example.com
   outputs:
-    database_url: res.json.database_url
+    database_url: res.body.database_url
     
 - name: Test Database Connection
-  action: http
+  uses: http
   with:
+    method: GET
     url: "{{outputs.config.database_url}}/health"
 ```
 
@@ -288,10 +309,10 @@ jobs:
 
 ```yaml
 # Good - specific test conditions
-test: res.status == 200 && res.json.status == "healthy" && res.time < 1000
+test: res.code == 200 && res.body.status == "healthy" && (rt.sec * 1000) < 1000
 
 # Not so good - generic test
-test: res.status == 200
+test: res.code == 200
 ```
 
 ## What's Next?

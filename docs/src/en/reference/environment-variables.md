@@ -15,134 +15,54 @@ Environment variables can be set at the system level, in CI/CD pipelines, or def
 
 ## Runtime Configuration Variables
 
-### `PROBE_LOG_LEVEL`
+These variables are read by Probe itself.
+
+### `PROBE_OUTPUT`
 
 **Type:** String  
-**Values:** `debug`, `info`, `warn`, `error`  
-**Default:** `info`  
-**Description:** Controls the verbosity of Probe's logging output
+**Values:** `auto`, `spinner`, `stream`  
+**Default:** `auto`  
+**Description:** Selects how the report is rendered. `auto` picks `spinner` on an interactive terminal and `stream` otherwise. The `--output` flag overrides this variable.
 
 ```bash
-# Enable debug logging
-export PROBE_LOG_LEVEL=debug
-probe workflow.yml
-
-# Reduce to warnings and errors only
-export PROBE_LOG_LEVEL=warn
+# Stream results as they complete, which suits CI logs
+export PROBE_OUTPUT=stream
 probe workflow.yml
 ```
 
-**Output Examples:**
+### `PROBE_MAX_REPEAT_COUNT`
+
+**Type:** Integer  
+**Default:** `10000`  
+**Description:** Upper limit for a step's `repeat.count`. A workflow asking for more is rejected before it runs.
 
 ```bash
-# info level (default)
-2023-09-01 12:30:00 [INFO] Starting workflow: API Health Check
-2023-09-01 12:30:01 [INFO] Job 'health-check' completed successfully
-
-# debug level
-2023-09-01 12:30:00 [DEBUG] Loading workflow file: workflow.yml
-2023-09-01 12:30:00 [DEBUG] Parsing YAML configuration
-2023-09-01 12:30:00 [INFO] Starting workflow: API Health Check
-2023-09-01 12:30:00 [DEBUG] Starting job: health-check
-2023-09-01 12:30:00 [DEBUG] Executing step: Check API Status
-2023-09-01 12:30:01 [DEBUG] HTTP request: GET https://api.example.com/health
-2023-09-01 12:30:01 [DEBUG] HTTP response: 200 OK (345ms)
-2023-09-01 12:30:01 [INFO] Job 'health-check' completed successfully
+export PROBE_MAX_REPEAT_COUNT=50000
+probe load-test.yml
 ```
 
-### `PROBE_NO_COLOR`
+### `PROBE_MAX_ATTEMPTS`
 
-**Type:** Boolean  
-**Values:** `true`, `false`, `1`, `0`  
-**Default:** `false`  
-**Description:** Disables colored output in terminal
+**Type:** Integer  
+**Default:** `10000`  
+**Description:** Upper limit for a step's retry `max_attempts`.
 
 ```bash
-# Disable colors (useful for CI/CD logs)
-export PROBE_NO_COLOR=true
-probe workflow.yml
-
-# Force color output (override terminal detection)
-export PROBE_NO_COLOR=false
+export PROBE_MAX_ATTEMPTS=100
 probe workflow.yml
 ```
 
-### `PROBE_TIMEOUT`
+### `FORCE_COLOR`
 
-**Type:** Duration  
-**Default:** `300s` (5 minutes)  
-**Description:** Global timeout for entire workflow execution
+**Type:** String  
+**Values:** `1`  
+**Description:** Forces colored output even when standard output is not a terminal.
 
 ```bash
-# Set 10-minute timeout
-export PROBE_TIMEOUT=600s
-probe long-running-workflow.yml
-
-# Set 30-second timeout for quick tests
-export PROBE_TIMEOUT=30s
-probe quick-health-check.yml
+FORCE_COLOR=1 probe workflow.yml | tee run.log
 ```
 
-### `PROBE_CONFIG`
-
-**Type:** String (file path)  
-**Default:** None  
-**Description:** Path to default configuration file that gets merged with all workflows
-
-```bash
-# Use global defaults
-export PROBE_CONFIG=/etc/probe/defaults.yml
-probe workflow.yml  # Merges with defaults.yml
-
-# User-specific defaults
-export PROBE_CONFIG=~/.probe/defaults.yml
-probe workflow.yml
-```
-
-**Example default configuration file:**
-
-```yaml
-# /etc/probe/defaults.yml
-vars:
-  # Environment variables accessed via vars
-  user_agent: "{{USER_AGENT ?? 'Probe Monitor v1.0'}}"
-  default_timeout: "{{DEFAULT_TIMEOUT ?? '30s'}}"
-
-defaults:
-  http:
-    timeout: "{{vars.default_timeout}}"
-    headers:
-      User-Agent: "{{vars.user_agent}}"
-      Accept: "application/json"
-```
-
-### `PROBE_PLUGIN_DIR`
-
-**Type:** String (directory path)  
-**Default:** `~/.probe/plugins`  
-**Description:** Directory containing custom action plugins
-
-```bash
-# Use system-wide plugins
-export PROBE_PLUGIN_DIR=/usr/local/lib/probe/plugins
-probe workflow.yml
-
-# Use project-specific plugins
-export PROBE_PLUGIN_DIR=./plugins
-probe workflow.yml
-```
-
-**Plugin directory structure:**
-
-```
-/usr/local/lib/probe/plugins/
-├── custom-http/
-│   └── custom-http-plugin
-├── database/
-│   └── db-plugin
-└── notification/
-    └── notification-plugin
-```
+Everything else on this page is a variable you define yourself and read from a workflow through `vars`.
 
 ## Authentication Variables
 
@@ -162,10 +82,18 @@ export API_TOKEN="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
 vars:
   api_token: "{{API_TOKEN}}"
 
-defaults:
-  http:
-    headers:
-      Authorization: "Bearer {{vars.api_token}}"
+jobs:
+- name: API checks
+  defaults:
+    http:
+      headers:
+        Authorization: "Bearer {{vars.api_token}}"
+  steps:
+    - name: Check
+      uses: http
+      with:
+        get: /health
+      test: res.code == 200
 ```
 
 #### `USERNAME` / `PASSWORD`
@@ -186,6 +114,7 @@ steps:
   - name: "Authenticated Request"
     uses: http
     with:
+      method: GET
       url: "https://api.example.com/protected"
       headers:
         Authorization: "Basic {{encode_base64(vars.username + ':' + vars.password)}}"
@@ -212,18 +141,26 @@ export SMTP_PASSWORD="account-password"
 ```yaml
 # workflow.yml
 vars:
-  smtp_host: "{{SMTP_HOST}}"
-  smtp_port: "{{SMTP_PORT}}"
-  smtp_username: "{{SMTP_USERNAME}}"
-  smtp_password: "{{SMTP_PASSWORD}}"
+  smtp_addr: "{{SMTP_ADDR ?? 'localhost:25'}}"
+  mail_from: "{{MAIL_FROM}}"
+  mail_to: "{{MAIL_TO}}"
 
-defaults:
-  smtp:
-    host: "{{vars.smtp_host}}"
-    port: "{{vars.smtp_port}}"
-    username: "{{vars.smtp_username}}"
-    password: "{{vars.smtp_password}}"
-    from: "{{vars.smtp_username}}"
+jobs:
+- name: Delivery check
+  defaults:
+    smtp:
+      addr: "{{vars.smtp_addr}}"
+      from: "{{vars.mail_from}}"
+  steps:
+    - name: Send a probe mail
+      uses: smtp
+      with:
+        to: "{{vars.mail_to}}"
+        subject: "Delivery probe"
+        session: 1
+        message: 1
+        length: 500
+      test: res.code == 0
 ```
 
 ## Application Configuration Variables
@@ -265,28 +202,27 @@ vars:
   slack_webhook_url: "{{SLACK_WEBHOOK_URL}}"
 
 jobs:
-  monitoring:
-    if: vars.enable_monitoring == "true"
-    steps:
-      - name: "Performance Check"
-        if: vars.enable_performance_tracking == "true"
-        uses: http
-        with:
-          url: "{{vars.api_base_url}}/metrics"
+- id: monitoring
+  name: monitoring
+  steps:
+    - name: "Performance Check"
+      uses: http
+      with:
+        method: GET
+        url: "{{vars.api_base_url}}/metrics"
 
-  notifications:
-    if: vars.enable_slack_notifications == "true"
-    needs: [monitoring]
-    steps:
-      - name: "Slack Alert"
-        uses: http
-        with:
-          url: "{{vars.slack_webhook_url}}"
-          method: "POST"
-          body: |
-            {
-              "text": "Monitoring completed: {{jobs.monitoring.status}}"
-            }
+- id: notifications
+  name: notifications
+  needs: [monitoring]
+  steps:
+    - name: "Slack Alert"
+      uses: http
+      with:
+        url: "{{vars.slack_webhook_url}}"
+        method: "POST"
+        body: |
+          {
+          }
 ```
 
 ## CI/CD Integration Variables
@@ -424,9 +360,7 @@ RUN curl -L https://github.com/linyows/probe/releases/latest/download/probe-linu
     chmod +x /usr/local/bin/probe
 
 # Set default environment variables
-ENV PROBE_LOG_LEVEL=info
-ENV PROBE_NO_COLOR=true
-ENV PROBE_TIMEOUT=300s
+ENV PROBE_OUTPUT=stream
 
 COPY workflows/ /workflows/
 WORKDIR /workflows
@@ -446,7 +380,7 @@ services:
       - API_TOKEN=${API_TOKEN}
       - API_BASE_URL=https://api.example.com
       - ENVIRONMENT=production
-      - PROBE_LOG_LEVEL=info
+      - PROBE_OUTPUT=stream
     volumes:
       - ./workflows:/workflows
       - ./reports:/reports
@@ -460,11 +394,11 @@ services:
 **Never commit sensitive values to version control:**
 
 ```bash
-# ❌ Bad: Hardcoded in workflow file
-env:
-  API_TOKEN: "secret-token-here"
+# Bad: hardcoded in the workflow file
+vars:
+  api_token: "secret-token-here"
 
-# ✅ Good: Reference environment variable
+# Good: read from the environment
 vars:
   api_token: "{{API_TOKEN}}"
 ```
@@ -504,7 +438,7 @@ env | grep -E '^(PROBE_|API_|SMTP_)' | sort
 
 # Check specific variables
 echo "API_TOKEN: $API_TOKEN"
-echo "PROBE_LOG_LEVEL: $PROBE_LOG_LEVEL"
+echo "PROBE_OUTPUT: $PROBE_OUTPUT"
 
 # Debug in workflow (be careful with sensitive data)
 probe -v workflow.yml 2>&1 | grep -i "environment"
@@ -517,11 +451,11 @@ probe -v workflow.yml 2>&1 | grep -i "environment"
 vars:
   api_base_url: "{{API_BASE_URL}}"
   environment: "{{ENVIRONMENT}}"
-  default_timeout: "{{DEFAULT_TIMEOUT || 'not set'}}"
+  default_timeout: "{{DEFAULT_TIMEOUT ?? 'not set'}}"
 
 steps:
   - name: "Debug Environment"
-    action: hello
+    uses: hello
     with:
       message: |
         Environment Debug:
@@ -530,6 +464,7 @@ steps:
         Timeout: "{{vars.default_timeout}}"
         
   - name: "Test Variable Access"
+    uses: hello
     echo: |
       Available variables:
       {{range $key, $value := vars}}
@@ -543,7 +478,7 @@ steps:
 
 ```bash
 # System defaults
-export PROBE_CONFIG=/etc/probe/system.yml
+export SYSTEM_CONFIG=/etc/probe/system.yml
 
 # Team defaults  
 export TEAM_CONFIG=/opt/team/defaults.yml
@@ -552,7 +487,7 @@ export TEAM_CONFIG=/opt/team/defaults.yml
 export PROJECT_CONFIG=./probe-defaults.yml
 
 # Runtime execution with cascading
-probe ${PROBE_CONFIG},${TEAM_CONFIG},${PROJECT_CONFIG},workflow.yml
+probe ${SYSTEM_CONFIG},${TEAM_CONFIG},${PROJECT_CONFIG},workflow.yml
 ```
 
 ### Dynamic Configuration
@@ -582,14 +517,14 @@ vars:
   enable_slack_alerts: "{{ENABLE_SLACK_ALERTS}}"
 
 jobs:
-  performance-tests:
-    if: "{{vars.skip_performance_tests}}" != "true"
-    # Performance test steps
+- id: performance-tests
+  name: performance-tests
+  # Performance test steps
     
-  alerts:
-    if: "{{vars.enable_slack_alerts}}" == "true"
-    needs: [performance-tests]
-    # Alert steps
+- id: alerts
+  name: alerts
+  needs: [performance-tests]
+  # Alert steps
 ```
 
 ## See Also

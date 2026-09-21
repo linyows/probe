@@ -89,13 +89,13 @@ jobs:
     uses: http
     with:
       get: /repos/linyows/probe
-    test: res.status == "200 OK" && res.body.language == "Go"
+    test: res.code == "200 OK" && res.body.language == "Go"
 
   - name: Check User API
     uses: http
     with:
       get: /users/linyows
-    test: res.status == "200 OK" && res.body.id == 72049
+    test: res.code == "200 OK" && res.body.id == 72049
 ```
 
 このように、Probeを使えば**簡単**で**迅速**、そして**楽しく**ワークフローを作成・実行できます。

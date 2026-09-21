@@ -22,7 +22,6 @@ jobs:
 - name: Response Time Baseline
   defaults:
     http:
-      timeout: 30s
       headers:
         User-Agent: "Probe Performance Tester v1.0"
   steps:
@@ -30,50 +29,53 @@ jobs:
       id: ping
       uses: http
       with:
+        method: GET
         url: "{{vars.api_base_url}}/ping"
       test: |
         res.code == 200 &&
-        res.time < 200
+        (rt.sec * 1000) < 200
       outputs:
-        ping_time: res.time
+        ping_time: (rt.sec * 1000)
         ping_performance: |
-          {{res.time < 100 ? "excellent" :
-            res.time < 200 ? "good" :
-            res.time < 500 ? "acceptable" : "poor"}}
+          {{(rt.sec * 1000) < 100 ? "excellent" :
+            (rt.sec * 1000) < 200 ? "good" :
+            (rt.sec * 1000) < 500 ? "acceptable" : "poor"}}
 
     - name: Database Query Endpoint
       id: query
       uses: http
       with:
+        method: GET
         url: "{{vars.api_base_url}}/users?limit=50"
         headers:
           Authorization: "Bearer {{vars.api_token}}"
       test: |
         res.code == 200 &&
-        res.time < {{vars.performance_threshold_ms}}
+        (rt.sec * 1000) < {{vars.performance_threshold_ms}}
       outputs:
-        query_time: res.time
+        query_time: (rt.sec * 1000)
         query_performance: |
-          {{res.time < vars.excellent_threshold_ms ? "excellent" :
-            res.time < vars.performance_threshold_ms ? "good" :
-            res.time < 2000 ? "acceptable" : "poor"}}
+          {{(rt.sec * 1000) < vars.excellent_threshold_ms ? "excellent" :
+            (rt.sec * 1000) < vars.performance_threshold_ms ? "good" :
+            (rt.sec * 1000) < 2000 ? "acceptable" : "poor"}}
 
     - name: Complex Computation Endpoint
       id: computation
       uses: http
       with:
+        method: GET
         url: "{{vars.api_base_url}}/analytics/summary"
         headers:
           Authorization: "Bearer {{vars.api_token}}"
       test: |
         res.code == 200 &&
-        res.time < 5000
+        (rt.sec * 1000) < 5000
       outputs:
-        computation_time: res.time
+        computation_time: (rt.sec * 1000)
         computation_performance: |
-          {{res.time < 2000 ? "excellent" :
-            res.time < 5000 ? "good" :
-            res.time < 10000 ? "acceptable" : "poor"}}
+          {{(rt.sec * 1000) < 2000 ? "excellent" :
+            (rt.sec * 1000) < 5000 ? "good" :
+            (rt.sec * 1000) < 10000 ? "acceptable" : "poor"}}
 
     - name: File Upload Test
       id: upload
@@ -95,12 +97,13 @@ jobs:
           --boundary123--
       test: |
         res.code == 201 &&
-        res.time < 10000
+        (rt.sec * 1000) < 10000
       outputs:
-        upload_time: res.time
-        upload_throughput: "{{1024 / (res.time / 1000)}} bytes/sec"  # 概算
+        upload_time: (rt.sec * 1000)
+        upload_throughput: "{{1024 / ((rt.sec * 1000) / 1000)}} bytes/sec"  # 概算
 
     - name: Performance Baseline Summary
+      uses: hello
       echo: |
         📊 Performance Baseline Results:
         
@@ -155,68 +158,69 @@ jobs:
       id: sample1
       uses: http
       with:
+        method: GET
         url: "{{vars.api_base_url}}/users"
         headers:
           Authorization: "Bearer {{vars.api_token}}"
       test: res.code == 200
-      continue_on_error: true
       outputs:
-        response_time: res.time
+        response_time: (rt.sec * 1000)
         success: res.code == 200
 
     - name: Performance Sample 2
       id: sample2
       uses: http
       with:
+        method: GET
         url: "{{vars.api_base_url}}/orders"
         headers:
           Authorization: "Bearer {{vars.api_token}}"
       test: res.code == 200
-      continue_on_error: true
       outputs:
-        response_time: res.time
+        response_time: (rt.sec * 1000)
         success: res.code == 200
 
     - name: Performance Sample 3
       id: sample3
       uses: http
       with:
+        method: GET
         url: "{{vars.api_base_url}}/products"
         headers:
           Authorization: "Bearer {{vars.api_token}}"
       test: res.code == 200
-      continue_on_error: true
       outputs:
-        response_time: res.time
+        response_time: (rt.sec * 1000)
         success: res.code == 200
 
     - name: Performance Sample 4
       id: sample4
       uses: http
       with:
+        method: GET
         url: "{{vars.api_base_url}}/analytics"
         headers:
           Authorization: "Bearer {{vars.api_token}}"
       test: res.code == 200
-      continue_on_error: true
       outputs:
-        response_time: res.time
+        response_time: (rt.sec * 1000)
         success: res.code == 200
 
     - name: Performance Sample 5
       id: sample5
       uses: http
       with:
+        method: GET
         url: "{{vars.api_base_url}}/reports"
         headers:
           Authorization: "Bearer {{vars.api_token}}"
       test: res.code == 200
-      continue_on_error: true
       outputs:
-        response_time: res.time
+        response_time: (rt.sec * 1000)
         success: res.code == 200
 
     - name: SLO Analysis
+      uses: hello
       id: slo-analysis
       echo: "Analyzing performance against SLOs"
       outputs:
@@ -239,11 +243,11 @@ jobs:
         
         # 最大レスポンス時間を見つける（小さなサンプルで99パーセンタイルを近似）
         max_response_time: |
-          {{[outputs.sample1.response_time,
+          {{max([outputs.sample1.response_time,
              outputs.sample2.response_time,
              outputs.sample3.response_time,
              outputs.sample4.response_time,
-             outputs.sample5.response_time].max()}}
+             outputs.sample5.response_time])}}
         
         # エラー率を計算
         error_rate: |
@@ -262,6 +266,7 @@ jobs:
              (outputs.sample5.success ? 1 : 0)) / 5}}
 
     - name: SLO Compliance Check
+      uses: hello
       echo: |
         📈 Performance SLO Validation Results:
         ======================================
@@ -274,22 +279,22 @@ jobs:
         Sample 5: {{outputs.sample5.response_time}}ms {{outputs.sample5.success ? "✅" : "❌"}}
         
         PERFORMANCE METRICS:
-        Average Response Time: {{outputs.slo-analysis.avg_response_time}}ms
-        Max Response Time: {{outputs.slo-analysis.max_response_time}}ms
-        Success Rate: {{(outputs.slo-analysis.availability * 100)}}%
-        Error Rate: {{(outputs.slo-analysis.error_rate * 100)}}%
+        Average Response Time: {{outputs['slo-analysis'].avg_response_time}}ms
+        Max Response Time: {{outputs['slo-analysis'].max_response_time}}ms
+        Success Rate: {{(outputs['slo-analysis'].availability * 100)}}%
+        Error Rate: {{(outputs['slo-analysis'].error_rate * 100)}}%
         
         SLO COMPLIANCE:
-        P50 (Average): {{outputs.slo-analysis.avg_response_time <= vars.slo_p50_ms ? "✅ PASS" : "❌ FAIL"}} ({{outputs.slo-analysis.avg_response_time}}ms ≤ {{vars.slo_p50_ms}}ms)
-        P99 (Max): {{outputs.slo-analysis.max_response_time <= vars.slo_p99_ms ? "✅ PASS" : "❌ FAIL"}} ({{outputs.slo-analysis.max_response_time}}ms ≤ {{vars.slo_p99_ms}}ms)
-        Error Rate: {{outputs.slo-analysis.error_rate <= vars.slo_error_rate ? "✅ PASS" : "❌ FAIL"}} ({{(outputs.slo-analysis.error_rate * 100)}}% ≤ {{(vars.slo_error_rate * 100)}}%)
-        Availability: {{outputs.slo-analysis.availability >= vars.slo_availability ? "✅ PASS" : "❌ FAIL"}} ({{(outputs.slo-analysis.availability * 100)}}% ≥ {{(vars.slo_availability * 100)}}%)
+        P50 (Average): {{outputs['slo-analysis'].avg_response_time <= vars.slo_p50_ms ? "✅ PASS" : "❌ FAIL"}} ({{outputs['slo-analysis'].avg_response_time}}ms ≤ {{vars.slo_p50_ms}}ms)
+        P99 (Max): {{outputs['slo-analysis'].max_response_time <= vars.slo_p99_ms ? "✅ PASS" : "❌ FAIL"}} ({{outputs['slo-analysis'].max_response_time}}ms ≤ {{vars.slo_p99_ms}}ms)
+        Error Rate: {{outputs['slo-analysis'].error_rate <= vars.slo_error_rate ? "✅ PASS" : "❌ FAIL"}} ({{(outputs['slo-analysis'].error_rate * 100)}}% ≤ {{(vars.slo_error_rate * 100)}}%)
+        Availability: {{outputs['slo-analysis'].availability >= vars.slo_availability ? "✅ PASS" : "❌ FAIL"}} ({{(outputs['slo-analysis'].availability * 100)}}% ≥ {{(vars.slo_availability * 100)}}%)
         
         OVERALL SLO STATUS: {{
-          outputs.slo-analysis.avg_response_time <= vars.slo_p50_ms &&
-          outputs.slo-analysis.max_response_time <= vars.slo_p99_ms &&
-          outputs.slo-analysis.error_rate <= vars.slo_error_rate &&
-          outputs.slo-analysis.availability >= vars.slo_availability
+          outputs['slo-analysis'].avg_response_time <= vars.slo_p50_ms &&
+          outputs['slo-analysis'].max_response_time <= vars.slo_p99_ms &&
+          outputs['slo-analysis'].error_rate <= vars.slo_error_rate &&
+          outputs['slo-analysis'].availability >= vars.slo_availability
           ? "🟢 ALL SLOs MET" : "🔴 SLO VIOLATIONS DETECTED"
         }}
 ```
@@ -331,14 +336,14 @@ jobs:
           }
       test: |
         res.code == 200 &&
-        res.body.json.test_completed == true &&
-        res.body.json.success_rate >= 0.99
+        res.body.test_completed == true &&
+        res.body.success_rate >= 0.99
       outputs:
-        success_rate: res.body.json.success_rate
-        avg_response_time: res.body.json.avg_response_time
-        max_response_time: res.body.json.max_response_time
-        throughput: res.body.json.requests_per_second
-        errors: res.body.json.error_count
+        success_rate: res.body.success_rate
+        avg_response_time: res.body.avg_response_time
+        max_response_time: res.body.max_response_time
+        throughput: res.body.requests_per_second
+        errors: res.body.error_count
 
     # 中負荷テスト（5同時ユーザー）
     - name: Medium Load Test
@@ -359,14 +364,14 @@ jobs:
           }
       test: |
         res.code == 200 &&
-        res.body.json.test_completed == true &&
-        res.body.json.success_rate >= 0.95
+        res.body.test_completed == true &&
+        res.body.success_rate >= 0.95
       outputs:
-        success_rate: res.body.json.success_rate
-        avg_response_time: res.body.json.avg_response_time
-        max_response_time: res.body.json.max_response_time
-        throughput: res.body.json.requests_per_second
-        errors: res.body.json.error_count
+        success_rate: res.body.success_rate
+        avg_response_time: res.body.avg_response_time
+        max_response_time: res.body.max_response_time
+        throughput: res.body.requests_per_second
+        errors: res.body.error_count
 
     # 高負荷テスト（20同時ユーザー）
     - name: Heavy Load Test
@@ -387,16 +392,15 @@ jobs:
           }
       test: |
         res.code == 200 &&
-        res.body.json.test_completed == true &&
-        res.body.json.success_rate >= 0.90
-      continue_on_error: true
+        res.body.test_completed == true &&
+        res.body.success_rate >= 0.90
       outputs:
-        success_rate: res.body.json.success_rate
-        avg_response_time: res.body.json.avg_response_time
-        max_response_time: res.body.json.max_response_time
-        throughput: res.body.json.requests_per_second
-        errors: res.body.json.error_count
-        load_test_passed: res.body.json.success_rate >= 0.90
+        success_rate: res.body.success_rate
+        avg_response_time: res.body.avg_response_time
+        max_response_time: res.body.max_response_time
+        throughput: res.body.requests_per_second
+        errors: res.body.error_count
+        load_test_passed: res.body.success_rate >= 0.90
 
     # ピーク負荷テスト（50同時ユーザー）
     - name: Peak Load Test
@@ -417,65 +421,65 @@ jobs:
           }
       test: |
         res.code == 200 &&
-        res.body.json.test_completed == true
-      continue_on_error: true
+        res.body.test_completed == true
       outputs:
-        success_rate: res.body.json.success_rate
-        avg_response_time: res.body.json.avg_response_time
-        max_response_time: res.body.json.max_response_time
-        throughput: res.body.json.requests_per_second
-        errors: res.body.json.error_count
-        peak_test_passed: res.body.json.success_rate >= 0.80
+        success_rate: res.body.success_rate
+        avg_response_time: res.body.avg_response_time
+        max_response_time: res.body.max_response_time
+        throughput: res.body.requests_per_second
+        errors: res.body.error_count
+        peak_test_passed: res.body.success_rate >= 0.80
 
     - name: Load Testing Analysis
+      uses: hello
       echo: |
         🔥 Sequential Load Testing Results:
         ===================================
         
         LIGHT LOAD (1 user, 5 RPS):
-        Success Rate: {{(outputs.light-load.success_rate * 100)}}%
-        Avg Response: {{outputs.light-load.avg_response_time}}ms
-        Max Response: {{outputs.light-load.max_response_time}}ms
-        Throughput: {{outputs.light-load.throughput}} RPS
-        Errors: {{outputs.light-load.errors}}
+        Success Rate: {{(outputs['light-load'].success_rate * 100)}}%
+        Avg Response: {{outputs['light-load'].avg_response_time}}ms
+        Max Response: {{outputs['light-load'].max_response_time}}ms
+        Throughput: {{outputs['light-load'].throughput}} RPS
+        Errors: {{outputs['light-load'].errors}}
         
         MEDIUM LOAD (5 users, 25 RPS):
-        Success Rate: {{(outputs.medium-load.success_rate * 100)}}%
-        Avg Response: {{outputs.medium-load.avg_response_time}}ms
-        Max Response: {{outputs.medium-load.max_response_time}}ms
-        Throughput: {{outputs.medium-load.throughput}} RPS
-        Errors: {{outputs.medium-load.errors}}
+        Success Rate: {{(outputs['medium-load'].success_rate * 100)}}%
+        Avg Response: {{outputs['medium-load'].avg_response_time}}ms
+        Max Response: {{outputs['medium-load'].max_response_time}}ms
+        Throughput: {{outputs['medium-load'].throughput}} RPS
+        Errors: {{outputs['medium-load'].errors}}
         
         HEAVY LOAD (20 users, 100 RPS):
-        Success Rate: {{(outputs.heavy-load.success_rate * 100)}}%
-        Avg Response: {{outputs.heavy-load.avg_response_time}}ms
-        Max Response: {{outputs.heavy-load.max_response_time}}ms
-        Throughput: {{outputs.heavy-load.throughput}} RPS
-        Errors: {{outputs.heavy-load.errors}}
-        Status: {{outputs.heavy-load.load_test_passed ? "✅ PASSED" : "❌ FAILED"}}
+        Success Rate: {{(outputs['heavy-load'].success_rate * 100)}}%
+        Avg Response: {{outputs['heavy-load'].avg_response_time}}ms
+        Max Response: {{outputs['heavy-load'].max_response_time}}ms
+        Throughput: {{outputs['heavy-load'].throughput}} RPS
+        Errors: {{outputs['heavy-load'].errors}}
+        Status: {{outputs['heavy-load'].load_test_passed ? "✅ PASSED" : "❌ FAILED"}}
         
         PEAK LOAD (50 users, 250 RPS):
-        Success Rate: {{(outputs.peak-load.success_rate * 100)}}%
-        Avg Response: {{outputs.peak-load.avg_response_time}}ms
-        Max Response: {{outputs.peak-load.max_response_time}}ms
-        Throughput: {{outputs.peak-load.throughput}} RPS
-        Errors: {{outputs.peak-load.errors}}
-        Status: {{outputs.peak-load.peak_test_passed ? "✅ PASSED" : "❌ FAILED"}}
+        Success Rate: {{(outputs['peak-load'].success_rate * 100)}}%
+        Avg Response: {{outputs['peak-load'].avg_response_time}}ms
+        Max Response: {{outputs['peak-load'].max_response_time}}ms
+        Throughput: {{outputs['peak-load'].throughput}} RPS
+        Errors: {{outputs['peak-load'].errors}}
+        Status: {{outputs['peak-load'].peak_test_passed ? "✅ PASSED" : "❌ FAILED"}}
         
         PERFORMANCE ANALYSIS:
-        {{outputs.light-load.avg_response_time < outputs.medium-load.avg_response_time ? "✅ Response time increases under load (expected)" : "⚠️ Unexpected response time pattern"}}
-        {{outputs.heavy-load.load_test_passed ? "✅ System handles heavy load well" : "⚠️ System shows stress under heavy load"}}
-        {{outputs.peak-load.peak_test_passed ? "✅ System survives peak load" : "⚠️ System struggles under peak load"}}
+        {{outputs['light-load'].avg_response_time < outputs['medium-load'].avg_response_time ? "✅ Response time increases under load (expected)" : "⚠️ Unexpected response time pattern"}}
+        {{outputs['heavy-load'].load_test_passed ? "✅ System handles heavy load well" : "⚠️ System shows stress under heavy load"}}
+        {{outputs['peak-load'].peak_test_passed ? "✅ System survives peak load" : "⚠️ System struggles under peak load"}}
         
         CAPACITY RECOMMENDATIONS:
         Maximum Recommended Load: {{
-          outputs.peak-load.peak_test_passed ? "50+ concurrent users" :
-          outputs.heavy-load.load_test_passed ? "20-50 concurrent users" :
+          outputs['peak-load'].peak_test_passed ? "50+ concurrent users" :
+          outputs['heavy-load'].load_test_passed ? "20-50 concurrent users" :
           "Under 20 concurrent users"
         }}
         
         Performance Optimization Needed: {{
-          outputs.heavy-load.avg_response_time > 2000 || outputs.peak-load.success_rate < 0.8 ? "YES" : "NO"
+          outputs['heavy-load'].avg_response_time > 2000 || outputs['peak-load'].success_rate < 0.8 ? "YES" : "NO"
         }}
 ```
 
@@ -514,8 +518,8 @@ jobs:
           }
       test: res.code == 200
       outputs:
-        baseline_response_time: res.body.json.avg_response_time
-        baseline_success_rate: res.body.json.success_rate
+        baseline_response_time: res.body.avg_response_time
+        baseline_success_rate: res.body.success_rate
 
     # ストレステスト - 高同時性
     - name: High Concurrency Stress Test
@@ -535,14 +539,13 @@ jobs:
             "requests_per_second": 500
           }
       test: res.code == 200
-      continue_on_error: true
       outputs:
-        concurrency_success_rate: res.body.json.success_rate
-        concurrency_avg_response: res.body.json.avg_response_time
-        concurrency_max_response: res.body.json.max_response_time
-        concurrency_throughput: res.body.json.actual_throughput
-        concurrency_errors: res.body.json.error_count
-        concurrency_survived: res.body.json.success_rate > 0.5
+        concurrency_success_rate: res.body.success_rate
+        concurrency_avg_response: res.body.avg_response_time
+        concurrency_max_response: res.body.max_response_time
+        concurrency_throughput: res.body.actual_throughput
+        concurrency_errors: res.body.error_count
+        concurrency_survived: res.body.success_rate > 0.5
 
     # ストレステスト - 高リクエスト率
     - name: High Request Rate Stress Test
@@ -562,14 +565,13 @@ jobs:
             "requests_per_second": 1000
           }
       test: res.code == 200
-      continue_on_error: true
       outputs:
-        rate_success_rate: res.body.json.success_rate
-        rate_avg_response: res.body.json.avg_response_time
-        rate_max_response: res.body.json.max_response_time
-        rate_throughput: res.body.json.actual_throughput
-        rate_errors: res.body.json.error_count
-        rate_survived: res.body.json.success_rate > 0.3
+        rate_success_rate: res.body.success_rate
+        rate_avg_response: res.body.avg_response_time
+        rate_max_response: res.body.max_response_time
+        rate_throughput: res.body.actual_throughput
+        rate_errors: res.body.error_count
+        rate_survived: res.body.success_rate > 0.3
 
     # メモリストレステスト
     - name: Memory Stress Test
@@ -591,15 +593,15 @@ jobs:
             "payload_size_mb": 10
           }
       test: res.code == 200
-      continue_on_error: true
       outputs:
-        memory_success_rate: res.body.json.success_rate
-        memory_avg_response: res.body.json.avg_response_time
-        memory_max_response: res.body.json.max_response_time
-        memory_errors: res.body.json.error_count
-        memory_survived: res.body.json.success_rate > 0.7
+        memory_success_rate: res.body.success_rate
+        memory_avg_response: res.body.avg_response_time
+        memory_max_response: res.body.max_response_time
+        memory_errors: res.body.error_count
+        memory_survived: res.body.success_rate > 0.7
 
     - name: Stress Test Analysis
+      uses: hello
       echo: |
         💥 Stress Testing Analysis:
         ===========================
@@ -609,42 +611,42 @@ jobs:
         Success Rate: {{(outputs.baseline.baseline_success_rate * 100)}}%
         
         HIGH CONCURRENCY STRESS (100 users, 500 RPS):
-        Success Rate: {{(outputs.concurrency-stress.concurrency_success_rate * 100)}}%
-        Avg Response: {{outputs.concurrency-stress.concurrency_avg_response}}ms
-        Max Response: {{outputs.concurrency-stress.concurrency_max_response}}ms
-        Actual Throughput: {{outputs.concurrency-stress.concurrency_throughput}} RPS
-        Total Errors: {{outputs.concurrency-stress.concurrency_errors}}
-        Survival Status: {{outputs.concurrency-stress.concurrency_survived ? "✅ SURVIVED" : "❌ FAILED"}}
+        Success Rate: {{(outputs['concurrency-stress'].concurrency_success_rate * 100)}}%
+        Avg Response: {{outputs['concurrency-stress'].concurrency_avg_response}}ms
+        Max Response: {{outputs['concurrency-stress'].concurrency_max_response}}ms
+        Actual Throughput: {{outputs['concurrency-stress'].concurrency_throughput}} RPS
+        Total Errors: {{outputs['concurrency-stress'].concurrency_errors}}
+        Survival Status: {{outputs['concurrency-stress'].concurrency_survived ? "✅ SURVIVED" : "❌ FAILED"}}
         
         HIGH REQUEST RATE STRESS (20 users, 1000 RPS):
-        Success Rate: {{(outputs.rate-stress.rate_success_rate * 100)}}%
-        Avg Response: {{outputs.rate-stress.rate_avg_response}}ms
-        Max Response: {{outputs.rate-stress.rate_max_response}}ms
-        Actual Throughput: {{outputs.rate-stress.rate_throughput}} RPS
-        Total Errors: {{outputs.rate-stress.rate_errors}}
-        Survival Status: {{outputs.rate-stress.rate_survived ? "✅ SURVIVED" : "❌ FAILED"}}
+        Success Rate: {{(outputs['rate-stress'].rate_success_rate * 100)}}%
+        Avg Response: {{outputs['rate-stress'].rate_avg_response}}ms
+        Max Response: {{outputs['rate-stress'].rate_max_response}}ms
+        Actual Throughput: {{outputs['rate-stress'].rate_throughput}} RPS
+        Total Errors: {{outputs['rate-stress'].rate_errors}}
+        Survival Status: {{outputs['rate-stress'].rate_survived ? "✅ SURVIVED" : "❌ FAILED"}}
         
         MEMORY STRESS (10MB payloads):
-        Success Rate: {{(outputs.memory-stress.memory_success_rate * 100)}}%
-        Avg Response: {{outputs.memory-stress.memory_avg_response}}ms
-        Max Response: {{outputs.memory-stress.memory_max_response}}ms
-        Total Errors: {{outputs.memory-stress.memory_errors}}
-        Survival Status: {{outputs.memory-stress.memory_survived ? "✅ SURVIVED" : "❌ FAILED"}}
+        Success Rate: {{(outputs['memory-stress'].memory_success_rate * 100)}}%
+        Avg Response: {{outputs['memory-stress'].memory_avg_response}}ms
+        Max Response: {{outputs['memory-stress'].memory_max_response}}ms
+        Total Errors: {{outputs['memory-stress'].memory_errors}}
+        Survival Status: {{outputs['memory-stress'].memory_survived ? "✅ SURVIVED" : "❌ FAILED"}}
         
         DEGRADATION ANALYSIS:
-        Response Time Degradation: {{((outputs.concurrency-stress.concurrency_avg_response / outputs.baseline.baseline_response_time) * 100)}}% of baseline
-        Throughput vs Target: {{(outputs.concurrency-stress.concurrency_throughput / 500 * 100)}}%
+        Response Time Degradation: {{((outputs['concurrency-stress'].concurrency_avg_response / outputs.baseline.baseline_response_time) * 100)}}% of baseline
+        Throughput vs Target: {{(outputs['concurrency-stress'].concurrency_throughput / 500 * 100)}}%
         
         SYSTEM RESILIENCE:
-        {{outputs.concurrency-stress.concurrency_survived && outputs.rate-stress.rate_survived && outputs.memory-stress.memory_survived ? "🟢 EXCELLENT - System handles all stress scenarios" : ""}}
-        {{outputs.concurrency-stress.concurrency_survived && outputs.rate-stress.rate_survived ? "🟡 GOOD - System handles most stress scenarios" : ""}}
-        {{!outputs.concurrency-stress.concurrency_survived || !outputs.rate-stress.rate_survived ? "🔴 NEEDS IMPROVEMENT - System struggles under stress" : ""}}
+        {{outputs['concurrency-stress'].concurrency_survived && outputs['rate-stress'].rate_survived && outputs['memory-stress'].memory_survived ? "🟢 EXCELLENT - System handles all stress scenarios" : ""}}
+        {{outputs['concurrency-stress'].concurrency_survived && outputs['rate-stress'].rate_survived ? "🟡 GOOD - System handles most stress scenarios" : ""}}
+        {{!outputs['concurrency-stress'].concurrency_survived || !outputs['rate-stress'].rate_survived ? "🔴 NEEDS IMPROVEMENT - System struggles under stress" : ""}}
         
         BREAKING POINTS IDENTIFIED:
-        {{!outputs.concurrency-stress.concurrency_survived ? "• High concurrency breaks the system" : ""}}
-        {{!outputs.rate-stress.rate_survived ? "• High request rate overwhelms the system" : ""}}
-        {{!outputs.memory-stress.memory_survived ? "• Large payloads cause memory issues" : ""}}
-        {{outputs.concurrency-stress.concurrency_avg_response > (outputs.baseline.baseline_response_time * 10) ? "• Severe response time degradation under load" : ""}}
+        {{!outputs['concurrency-stress'].concurrency_survived ? "• High concurrency breaks the system" : ""}}
+        {{!outputs['rate-stress'].rate_survived ? "• High request rate overwhelms the system" : ""}}
+        {{!outputs['memory-stress'].memory_survived ? "• Large payloads cause memory issues" : ""}}
+        {{outputs['concurrency-stress'].concurrency_avg_response > (outputs.baseline.baseline_response_time * 10) ? "• Severe response time degradation under load" : ""}}
 ```
 
 ## パフォーマンス監視とアラート
@@ -685,21 +687,22 @@ jobs:
           }
       test: res.code == 200
       outputs:
-        login_time: res.time
+        login_time: (rt.sec * 1000)
         login_success: res.code == 200
-        auth_token: res.body.json.access_token
+        auth_token: res.body.access_token
 
     # データ取得パフォーマンスを監視
     - name: Data Retrieval Performance
       id: data-retrieval
       uses: http
       with:
+        method: GET
         url: "{{vars.api_base_url}}/dashboard/data"
         headers:
           Authorization: "Bearer {{outputs.login.auth_token}}"
       test: res.code == 200
       outputs:
-        retrieval_time: res.time
+        retrieval_time: (rt.sec * 1000)
         retrieval_success: res.code == 200
         data_size: res.body_size
 
@@ -708,14 +711,15 @@ jobs:
       id: search
       uses: http
       with:
+        method: GET
         url: "{{vars.api_base_url}}/search?q=test&limit=50"
         headers:
           Authorization: "Bearer {{outputs.login.auth_token}}"
       test: res.code == 200
       outputs:
-        search_time: res.time
+        search_time: (rt.sec * 1000)
         search_success: res.code == 200
-        results_count: res.body.json.results.length
+        results_count: len(res.body.results)
 
     # トランザクションパフォーマンスを監視
     - name: Transaction Performance
@@ -735,42 +739,43 @@ jobs:
           }
       test: res.code == 201
       outputs:
-        transaction_time: res.time
+        transaction_time: (rt.sec * 1000)
         transaction_success: res.code == 201
 
     - name: Performance Analysis
+      uses: hello
       id: analysis
       echo: "Analyzing performance metrics"
       outputs:
         # 全体的なヘルスを計算
         all_operations_healthy: |
           {{outputs.login.login_success &&
-            outputs.data-retrieval.retrieval_success &&
+            outputs['data-retrieval'].retrieval_success &&
             outputs.search.search_success &&
             outputs.transaction.transaction_success}}
         
         # 平均レスポンス時間を計算
         avg_response_time: |
           {{(outputs.login.login_time +
-             outputs.data-retrieval.retrieval_time +
+             outputs['data-retrieval'].retrieval_time +
              outputs.search.search_time +
              outputs.transaction.transaction_time) / 4}}
         
         # パフォーマンス劣化をチェック
         degradation_detected: |
           {{outputs.login.login_time > (vars.baseline_response_time * vars.degradation_threshold) ||
-            outputs.data-retrieval.retrieval_time > (vars.baseline_response_time * vars.degradation_threshold) ||
+            outputs['data-retrieval'].retrieval_time > (vars.baseline_response_time * vars.degradation_threshold) ||
             outputs.search.search_time > (vars.baseline_response_time * vars.degradation_threshold) ||
             outputs.transaction.transaction_time > (vars.baseline_response_time * vars.degradation_threshold)}}
         
         # アラートレベルを決定
         alert_level: |
           {{outputs.login.login_time > vars.critical_threshold ||
-            outputs.data-retrieval.retrieval_time > vars.critical_threshold ||
+            outputs['data-retrieval'].retrieval_time > vars.critical_threshold ||
             outputs.search.search_time > vars.critical_threshold ||
             outputs.transaction.transaction_time > vars.critical_threshold ? "critical" :
             outputs.login.login_time > vars.warning_threshold ||
-            outputs.data-retrieval.retrieval_time > vars.warning_threshold ||
+            outputs['data-retrieval'].retrieval_time > vars.warning_threshold ||
             outputs.search.search_time > vars.warning_threshold ||
             outputs.transaction.transaction_time > vars.warning_threshold ? "warning" : "ok"}}
 
@@ -779,81 +784,79 @@ jobs:
   steps:
     # 重大なパフォーマンスアラート
     - name: Critical Performance Alert
-      if: outputs.performance-monitoring.alert_level == "critical"
       uses: smtp
       with:
-        host: "{{vars.SMTP_HOST}}"
-        port: 587
-        username: "{{vars.SMTP_USERNAME}}"
-        password: "{{vars.SMTP_PASSWORD}}"
+        addr: "{{vars.SMTP_HOST}}:587"
         from: "performance-alerts@yourcompany.com"
-        to: ["oncall@yourcompany.com", "performance-team@yourcompany.com"]
+        to: "oncall@yourcompany.com"
         subject: "🚨 CRITICAL: Performance Degradation Detected"
-        body: |
-          CRITICAL PERFORMANCE ALERT
-          =========================
+        session: 1
+        message: 1
+        length: 500
+      echo: |
+        CRITICAL PERFORMANCE ALERT
+        =========================
           
-          Time: {{unixtime()}}
-          Environment: {{vars.ENVIRONMENT}}
+        Time: {{unixtime()}}
+        Environment: {{vars.ENVIRONMENT}}
           
-          Performance Metrics:
-          Login: {{outputs.performance-monitoring.login_time}}ms (threshold: {{vars.critical_threshold}}ms)
-          Data Retrieval: {{outputs.performance-monitoring.retrieval_time}}ms
-          Search: {{outputs.performance-monitoring.search_time}}ms
-          Transaction: {{outputs.performance-monitoring.transaction_time}}ms
+        Performance Metrics:
+        Login: {{outputs['performance-monitoring'].login_time}}ms (threshold: {{vars.critical_threshold}}ms)
+        Data Retrieval: {{outputs['performance-monitoring'].retrieval_time}}ms
+        Search: {{outputs['performance-monitoring'].search_time}}ms
+        Transaction: {{outputs['performance-monitoring'].transaction_time}}ms
           
-          Average Response Time: {{outputs.performance-monitoring.avg_response_time}}ms
-          Baseline: {{vars.baseline_response_time}}ms
+        Average Response Time: {{outputs['performance-monitoring'].avg_response_time}}ms
+        Baseline: {{vars.baseline_response_time}}ms
           
-          Impact: User experience severely degraded
-          Action Required: Immediate investigation
+        Impact: User experience severely degraded
+        Action Required: Immediate investigation
           
-          Dashboard: {{vars.PERFORMANCE_DASHBOARD_URL}}
-          Runbook: {{vars.PERFORMANCE_RUNBOOK_URL}}
+        Dashboard: {{vars.PERFORMANCE_DASHBOARD_URL}}
+        Runbook: {{vars.PERFORMANCE_RUNBOOK_URL}}
 
-    # 警告パフォーマンスアラート
+        ォーマンスアラート
     - name: Warning Performance Alert
-      if: outputs.performance-monitoring.alert_level == "warning"
       uses: smtp
       with:
-        host: "{{vars.SMTP_HOST}}"
-        port: 587
-        username: "{{vars.SMTP_USERNAME}}"
-        password: "{{vars.SMTP_PASSWORD}}"
+        addr: "{{vars.SMTP_HOST}}:587"
         from: "performance-alerts@yourcompany.com"
-        to: ["performance-team@yourcompany.com"]
+        to: "performance-team@yourcompany.com"
         subject: "⚠️ WARNING: Performance Degradation Detected"
-        body: |
-          PERFORMANCE WARNING
-          ==================
+        session: 1
+        message: 1
+        length: 500
+      echo: |
+        PERFORMANCE WARNING
+        ==================
           
-          Time: {{unixtime()}}
-          Environment: {{vars.ENVIRONMENT}}
+        Time: {{unixtime()}}
+        Environment: {{vars.ENVIRONMENT}}
           
-          Performance Metrics:
-          Login: {{outputs.performance-monitoring.login_time}}ms
-          Data Retrieval: {{outputs.performance-monitoring.retrieval_time}}ms
-          Search: {{outputs.performance-monitoring.search_time}}ms
-          Transaction: {{outputs.performance-monitoring.transaction_time}}ms
+        Performance Metrics:
+        Login: {{outputs['performance-monitoring'].login_time}}ms
+        Data Retrieval: {{outputs['performance-monitoring'].retrieval_time}}ms
+        Search: {{outputs['performance-monitoring'].search_time}}ms
+        Transaction: {{outputs['performance-monitoring'].transaction_time}}ms
           
-          Average Response Time: {{outputs.performance-monitoring.avg_response_time}}ms
-          Warning Threshold: {{vars.warning_threshold}}ms
+        Average Response Time: {{outputs['performance-monitoring'].avg_response_time}}ms
+        Warning Threshold: {{vars.warning_threshold}}ms
           
-          Action: Monitor closely and investigate if degradation continues
+        Action: Monitor closely and investigate if degradation continues
 
-    # 正常ステータス
+        ータス
     - name: Performance Status Report
-      if: outputs.performance-monitoring.alert_level == "ok"
+      uses: hello
       echo: |
         ✅ Performance Monitoring - All Systems Normal
         
         Performance Metrics:
-        Login: {{outputs.performance-monitoring.login_time}}ms
-        Data Retrieval: {{outputs.performance-monitoring.retrieval_time}}ms
-        Search: {{outputs.performance-monitoring.search_time}}ms
-        Transaction: {{outputs.performance-monitoring.transaction_time}}ms
+        Login: {{outputs['performance-monitoring'].login_time}}ms
+        Data Retrieval: {{outputs['performance-monitoring'].retrieval_time}}ms
+        Search: {{outputs['performance-monitoring'].search_time}}ms
+        Transaction: {{outputs['performance-monitoring'].transaction_time}}ms
         
-        Average Response Time: {{outputs.performance-monitoring.avg_response_time}}ms
+        Average Response Time: {{outputs['performance-monitoring'].avg_response_time}}ms
         Status: All operations within acceptable performance ranges
 ```
 
@@ -892,12 +895,12 @@ jobs:
           }
       test: |
         res.code == 200 &&
-        res.time < 1000 &&
-        res.body.json.execution_time_ms < 500
+        (rt.sec * 1000) < 1000 &&
+        res.body.execution_time_ms < 500
       outputs:
-        simple_query_time: res.time
-        simple_execution_time: res.body.json.execution_time_ms
-        simple_rows_affected: res.body.json.rows_affected
+        simple_query_time: (rt.sec * 1000)
+        simple_execution_time: res.body.execution_time_ms
+        simple_rows_affected: res.body.rows_affected
 
     # 複雑クエリパフォーマンス
     - name: Complex Query Performance
@@ -916,12 +919,12 @@ jobs:
           }
       test: |
         res.code == 200 &&
-        res.time < 3000 &&
-        res.body.json.execution_time_ms < 2000
+        (rt.sec * 1000) < 3000 &&
+        res.body.execution_time_ms < 2000
       outputs:
-        complex_query_time: res.time
-        complex_execution_time: res.body.json.execution_time_ms
-        complex_rows_returned: res.body.json.rows_returned
+        complex_query_time: (rt.sec * 1000)
+        complex_execution_time: res.body.execution_time_ms
+        complex_rows_returned: res.body.rows_returned
 
     # 集計クエリパフォーマンス
     - name: Aggregation Query Performance
@@ -940,60 +943,62 @@ jobs:
           }
       test: |
         res.code == 200 &&
-        res.time < 5000 &&
-        res.body.json.execution_time_ms < 3000
+        (rt.sec * 1000) < 5000 &&
+        res.body.execution_time_ms < 3000
       outputs:
-        aggregation_query_time: res.time
-        aggregation_execution_time: res.body.json.execution_time_ms
-        aggregation_rows_returned: res.body.json.rows_returned
+        aggregation_query_time: (rt.sec * 1000)
+        aggregation_execution_time: res.body.execution_time_ms
+        aggregation_rows_returned: res.body.rows_returned
 
     # インデックスパフォーマンステスト
     - name: Index Performance Test
       id: index-test
       uses: http
       with:
+        method: GET
         url: "{{vars.db_api_url}}/performance/indexes"
         headers:
           Authorization: "Bearer {{vars.db_api_token}}"
       test: res.code == 200
       outputs:
-        index_efficiency: res.body.json.index_efficiency_percent
-        slow_queries_count: res.body.json.slow_queries_last_hour
-        missing_indexes: res.body.json.missing_indexes_count
+        index_efficiency: res.body.index_efficiency_percent
+        slow_queries_count: res.body.slow_queries_last_hour
+        missing_indexes: res.body.missing_indexes_count
 
     - name: Database Performance Analysis
+      uses: hello
       echo: |
         🗄️ Database Performance Analysis:
         =================================
         
         QUERY PERFORMANCE:
-        Simple Query: {{outputs.simple-query.simple_execution_time}}ms ({{outputs.simple-query.simple_rows_affected}} rows)
-        Complex Query: {{outputs.complex-query.complex_execution_time}}ms ({{outputs.complex-query.complex_rows_returned}} rows)
-        Aggregation Query: {{outputs.aggregation-query.aggregation_execution_time}}ms ({{outputs.aggregation-query.aggregation_rows_returned}} rows)
+        Simple Query: {{outputs['simple-query'].simple_execution_time}}ms ({{outputs['simple-query'].simple_rows_affected}} rows)
+        Complex Query: {{outputs['complex-query'].complex_execution_time}}ms ({{outputs['complex-query'].complex_rows_returned}} rows)
+        Aggregation Query: {{outputs['aggregation-query'].aggregation_execution_time}}ms ({{outputs['aggregation-query'].aggregation_rows_returned}} rows)
         
         PERFORMANCE CLASSIFICATION:
-        Simple Query: {{outputs.simple-query.simple_execution_time < 100 ? "🟢 Excellent" : outputs.simple-query.simple_execution_time < 500 ? "🟡 Good" : "🔴 Needs Optimization"}}
-        Complex Query: {{outputs.complex-query.complex_execution_time < 500 ? "🟢 Excellent" : outputs.complex-query.complex_execution_time < 2000 ? "🟡 Good" : "🔴 Needs Optimization"}}
-        Aggregation Query: {{outputs.aggregation-query.aggregation_execution_time < 1000 ? "🟢 Excellent" : outputs.aggregation-query.aggregation_execution_time < 3000 ? "🟡 Good" : "🔴 Needs Optimization"}}
+        Simple Query: {{outputs['simple-query'].simple_execution_time < 100 ? "🟢 Excellent" : outputs['simple-query'].simple_execution_time < 500 ? "🟡 Good" : "🔴 Needs Optimization"}}
+        Complex Query: {{outputs['complex-query'].complex_execution_time < 500 ? "🟢 Excellent" : outputs['complex-query'].complex_execution_time < 2000 ? "🟡 Good" : "🔴 Needs Optimization"}}
+        Aggregation Query: {{outputs['aggregation-query'].aggregation_execution_time < 1000 ? "🟢 Excellent" : outputs['aggregation-query'].aggregation_execution_time < 3000 ? "🟡 Good" : "🔴 Needs Optimization"}}
         
         INDEX PERFORMANCE:
-        Index Efficiency: {{outputs.index-test.index_efficiency}}%
-        Slow Queries (1hr): {{outputs.index-test.slow_queries_count}}
-        Missing Indexes: {{outputs.index-test.missing_indexes}}
+        Index Efficiency: {{outputs['index-test'].index_efficiency}}%
+        Slow Queries (1hr): {{outputs['index-test'].slow_queries_count}}
+        Missing Indexes: {{outputs['index-test'].missing_indexes}}
         
         RECOMMENDATIONS:
-        {{outputs.simple-query.simple_execution_time > 500 ? "• Optimize simple query execution - consider indexing" : ""}}
-        {{outputs.complex-query.complex_execution_time > 2000 ? "• Complex query needs optimization - review joins and indexes" : ""}}
-        {{outputs.aggregation-query.aggregation_execution_time > 3000 ? "• Aggregation query is slow - consider pre-computed summaries" : ""}}
-        {{outputs.index-test.index_efficiency < 80 ? "• Index efficiency is low - review and optimize indexes" : ""}}
-        {{outputs.index-test.slow_queries_count > 10 ? "• High number of slow queries detected - investigate query patterns" : ""}}
-        {{outputs.index-test.missing_indexes > 0 ? "• Missing indexes detected - implement recommended indexes" : ""}}
+        {{outputs['simple-query'].simple_execution_time > 500 ? "• Optimize simple query execution - consider indexing" : ""}}
+        {{outputs['complex-query'].complex_execution_time > 2000 ? "• Complex query needs optimization - review joins and indexes" : ""}}
+        {{outputs['aggregation-query'].aggregation_execution_time > 3000 ? "• Aggregation query is slow - consider pre-computed summaries" : ""}}
+        {{outputs['index-test'].index_efficiency < 80 ? "• Index efficiency is low - review and optimize indexes" : ""}}
+        {{outputs['index-test'].slow_queries_count > 10 ? "• High number of slow queries detected - investigate query patterns" : ""}}
+        {{outputs['index-test'].missing_indexes > 0 ? "• Missing indexes detected - implement recommended indexes" : ""}}
         
         OVERALL DATABASE HEALTH: {{
-          outputs.simple-query.simple_execution_time < 500 &&
-          outputs.complex-query.complex_execution_time < 2000 &&
-          outputs.aggregation-query.aggregation_execution_time < 3000 &&
-          outputs.index-test.index_efficiency > 80
+          outputs['simple-query'].simple_execution_time < 500 &&
+          outputs['complex-query'].complex_execution_time < 2000 &&
+          outputs['aggregation-query'].aggregation_execution_time < 3000 &&
+          outputs['index-test'].index_efficiency > 80
           ? "🟢 EXCELLENT" : "🟡 NEEDS ATTENTION"
         }}
 ```
@@ -1010,9 +1015,10 @@ vars:
 - name: Establish Baseline
   uses: http
   with:
+    method: GET
     url: "{{vars.api_url}}/health"
   outputs:
-    baseline_response_time: res.time
+    baseline_response_time: (rt.sec * 1000)
 ```
 
 ### 2. 段階的負荷増加
@@ -1031,12 +1037,12 @@ jobs:
 ```yaml
 # 良い例: 複数のパフォーマンスメトリクスを取得
 outputs:
-  response_time: res.time
-  throughput: res.body.json.requests_per_second
-  success_rate: res.body.json.success_rate
-  error_rate: res.body.json.error_rate
-  cpu_usage: res.body.json.system.cpu_percent
-  memory_usage: res.body.json.system.memory_percent
+  response_time: (rt.sec * 1000)
+  throughput: res.body.requests_per_second
+  success_rate: res.body.success_rate
+  error_rate: res.body.error_rate
+  cpu_usage: res.body.system.cpu_percent
+  memory_usage: res.body.system.memory_percent
 ```
 
 ### 4. パフォーマンスしきい値

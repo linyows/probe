@@ -15,136 +15,54 @@ Probeは以下のために環境変数を使用します：
 
 ## ランタイム設定変数
 
-### `PROBE_LOG_LEVEL`
+Probe 自身が読む環境変数です。
+
+### `PROBE_OUTPUT`
 
 **型:** String  
-**値:** `debug`, `info`, `warn`, `error`  
-**デフォルト:** `info`  
-**説明:** Probeのログ出力の詳細レベルを制御
+**値:** `auto`, `spinner`, `stream`  
+**デフォルト:** `auto`  
+**説明:** レポートの出力方法を選びます。`auto` は対話的な端末なら `spinner`、それ以外なら `stream` を選びます。`--output` フラグを指定した場合はそちらが優先されます。
 
 ```bash
-# デバッグログを有効化
-export PROBE_LOG_LEVEL=debug
-probe workflow.yml
-
-# 警告とエラーのみに減らす
-export PROBE_LOG_LEVEL=warn
+# 完了したものから順に出力する。CI のログ向け
+export PROBE_OUTPUT=stream
 probe workflow.yml
 ```
 
-**出力例:**
+### `PROBE_MAX_REPEAT_COUNT`
+
+**型:** Integer  
+**デフォルト:** `10000`  
+**説明:** ステップの `repeat.count` の上限です。これを超える指定は実行前にエラーになります。
 
 ```bash
-# infoレベル（デフォルト）
-2023-09-01 12:30:00 [INFO] Starting workflow: API Health Check
-2023-09-01 12:30:01 [INFO] Job 'health-check' completed successfully
-
-# debugレベル
-2023-09-01 12:30:00 [DEBUG] Loading workflow file: workflow.yml
-2023-09-01 12:30:00 [DEBUG] Parsing YAML configuration
-2023-09-01 12:30:00 [INFO] Starting workflow: API Health Check
-2023-09-01 12:30:00 [DEBUG] Starting job: health-check
-2023-09-01 12:30:00 [DEBUG] Executing step: Check API Status
-2023-09-01 12:30:01 [DEBUG] HTTP request: GET https://api.example.com/health
-2023-09-01 12:30:01 [DEBUG] HTTP response: 200 OK (345ms)
-2023-09-01 12:30:01 [INFO] Job 'health-check' completed successfully
+export PROBE_MAX_REPEAT_COUNT=50000
+probe load-test.yml
 ```
 
-### `PROBE_NO_COLOR`
+### `PROBE_MAX_ATTEMPTS`
 
-**型:** Boolean  
-**値:** `true`, `false`, `1`, `0`  
-**デフォルト:** `false`  
-**説明:** ターミナルでのカラー出力を無効化
+**型:** Integer  
+**デフォルト:** `10000`  
+**説明:** ステップのリトライ `max_attempts` の上限です。
 
 ```bash
-# カラーを無効化（CI/CDログに有用）
-export PROBE_NO_COLOR=true
-probe workflow.yml
-
-# カラー出力を強制（ターミナル検出を上書き）
-export PROBE_NO_COLOR=false
+export PROBE_MAX_ATTEMPTS=100
 probe workflow.yml
 ```
 
-### `PROBE_TIMEOUT`
+### `FORCE_COLOR`
 
-**型:** Duration  
-**デフォルト:** `300s`（5分）  
-**説明:** ワークフロー全体実行のグローバルタイムアウト
+**型:** String  
+**値:** `1`  
+**説明:** 標準出力が端末でない場合でも色付き出力を強制します。
 
 ```bash
-# 10分タイムアウトを設定
-export PROBE_TIMEOUT=600s
-probe long-running-workflow.yml
-
-# クイックテスト用30秒タイムアウト
-export PROBE_TIMEOUT=30s
-probe quick-health-check.yml
+FORCE_COLOR=1 probe workflow.yml | tee run.log
 ```
 
-### `PROBE_CONFIG`
-
-**型:** String（ファイルパス）  
-**デフォルト:** なし  
-**説明:** すべてのワークフローとマージされるデフォルト設定ファイルのパス
-
-```bash
-# グローバルデフォルトを使用
-export PROBE_CONFIG=/etc/probe/defaults.yml
-probe workflow.yml  # defaults.ymlとマージされる
-
-# ユーザー固有のデフォルト
-export PROBE_CONFIG=~/.probe/defaults.yml
-probe workflow.yml
-```
-
-**デフォルト設定ファイルの例:**
-
-```yaml
-# /etc/probe/defaults.yml
-vars:
-  # varsを通じてアクセスされる環境変数
-  user_agent: "{{USER_AGENT ?? 'Probe Monitor v1.0'}}"
-  default_timeout: "{{DEFAULT_TIMEOUT ?? '30s'}}"
-
-jobs:
-- name: default
-  defaults:
-    http:
-      timeout: "{{vars.default_timeout}}"
-      headers:
-        User-Agent: "{{vars.user_agent}}"
-        Accept: "application/json"
-```
-
-### `PROBE_PLUGIN_DIR`
-
-**型:** String（ディレクトリパス）  
-**デフォルト:** `~/.probe/plugins`  
-**説明:** カスタムアクションプラグインを含むディレクトリ
-
-```bash
-# システム全体のプラグインを使用
-export PROBE_PLUGIN_DIR=/usr/local/lib/probe/plugins
-probe workflow.yml
-
-# プロジェクト固有のプラグインを使用
-export PROBE_PLUGIN_DIR=./plugins
-probe workflow.yml
-```
-
-**プラグインディレクトリ構造:**
-
-```
-/usr/local/lib/probe/plugins/
-├── custom-http/
-│   └── custom-http-plugin
-├── database/
-│   └── db-plugin
-└── notification/
-    └── notification-plugin
-```
+このページのこれ以降で扱うのは、利用者が定義し、ワークフローの `vars` から参照する環境変数です。
 
 ## 認証変数
 
@@ -190,6 +108,7 @@ steps:
   - name: "Authenticated Request"
     uses: http
     with:
+      method: GET
       url: "https://api.example.com/protected"
       headers:
         Authorization: "Basic {{base64(vars.username + ':' + vars.password)}}"
@@ -272,16 +191,14 @@ vars:
 
 jobs:
 - name: monitoring
-  if: vars.enable_monitoring == "true"
   steps:
     - name: "Performance Check"
-      if: vars.enable_performance_tracking == "true"
       uses: http
       with:
+        method: GET
         url: "{{vars.api_base_url}}/metrics"
 
 - name: notifications
-  if: vars.enable_slack_notifications == "true"
   needs: [monitoring]
   steps:
     - name: "Slack Alert"
@@ -291,7 +208,6 @@ jobs:
         method: "POST"
         body: |
           {
-            "text": "Monitoring completed: {{jobs.monitoring.status}}"
           }
 ```
 
@@ -430,9 +346,7 @@ RUN curl -L https://github.com/linyows/probe/releases/latest/download/probe-linu
     chmod +x /usr/local/bin/probe
 
 # デフォルト環境変数を設定
-ENV PROBE_LOG_LEVEL=info
-ENV PROBE_NO_COLOR=true
-ENV PROBE_TIMEOUT=300s
+ENV PROBE_OUTPUT=stream
 
 COPY workflows/ /workflows/
 WORKDIR /workflows
@@ -452,7 +366,7 @@ services:
       - API_TOKEN=${API_TOKEN}
       - API_BASE_URL=https://api.example.com
       - ENVIRONMENT=production
-      - PROBE_LOG_LEVEL=info
+      - PROBE_OUTPUT=stream
     volumes:
       - ./workflows:/workflows
       - ./reports:/reports
@@ -510,7 +424,7 @@ env | grep -E '^(PROBE_|API_|SMTP_)' | sort
 
 # 特定の変数をチェック
 echo "API_TOKEN: $API_TOKEN"
-echo "PROBE_LOG_LEVEL: $PROBE_LOG_LEVEL"
+echo "PROBE_OUTPUT: $PROBE_OUTPUT"
 
 # ワークフローでデバッグ（機密データに注意）
 probe -v workflow.yml 2>&1 | grep -i "environment"
@@ -551,7 +465,7 @@ steps:
 
 ```bash
 # システムデフォルト
-export PROBE_CONFIG=/etc/probe/system.yml
+export SYSTEM_CONFIG=/etc/probe/system.yml
 
 # チームデフォルト  
 export TEAM_CONFIG=/opt/team/defaults.yml
@@ -560,7 +474,7 @@ export TEAM_CONFIG=/opt/team/defaults.yml
 export PROJECT_CONFIG=./probe-defaults.yml
 
 # カスケードでランタイム実行
-probe ${PROBE_CONFIG},${TEAM_CONFIG},${PROJECT_CONFIG},workflow.yml
+probe ${SYSTEM_CONFIG},${TEAM_CONFIG},${PROJECT_CONFIG},workflow.yml
 ```
 
 ### 動的設定
@@ -591,11 +505,9 @@ vars:
 
 jobs:
 - name: performance-tests
-  if: "{{vars.skip_performance_tests}}" != "true"
   # パフォーマンステストステップ
     
 - name: alerts
-  if: "{{vars.enable_slack_alerts}}" == "true"
   needs: [performance-tests]
   # アラートステップ
 ```

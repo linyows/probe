@@ -54,7 +54,7 @@ description: |
   Comprehensive monitoring of e-commerce API endpoints including
   health checks, performance monitoring, and data validation.
 
-env:
+vars:
   # API Configuration
   API_BASE_URL: "https://api.example.com"
   API_VERSION: "v1"
@@ -64,31 +64,30 @@ env:
   CRITICAL_RESPONSE_TIME: 5000  # 5 seconds
   
   # Authentication
-  API_TOKEN: "{{env.API_AUTH_TOKEN}}"
-
-defaults:
-  http:
-    timeout: "10s"
-    headers:
-      User-Agent: "Probe Monitor v1.0"
-      Accept: "application/json"
+  API_TOKEN: "{{vars.API_AUTH_TOKEN}}"
 
 jobs:
-  health-check:
-    name: "Basic Health Check"
-    steps:
-      - name: "Check API Health Endpoint"
-        id: health
-        action: http
-        with:
-          url: "{{env.API_BASE_URL}}/health"
-        test: |
-          res.status == 200 &&
-          res.time < env.MAX_RESPONSE_TIME
-        outputs:
-          status: res.json.status
-          response_time: res.time
-          healthy: res.status == 200 && res.json.status == "healthy"
+- id: health-check
+  name: "Basic Health Check"
+  defaults:
+    http:
+      headers:
+        User-Agent: "Probe Monitor v1.0"
+        Accept: "application/json"
+  steps:
+    - name: "Check API Health Endpoint"
+      id: health
+      uses: http
+      with:
+        method: GET
+        url: "{{vars.API_BASE_URL}}/health"
+      test: |
+        res.code == 200 &&
+        (rt.sec * 1000) < vars.MAX_RESPONSE_TIME
+      outputs:
+        status: res.body.status
+        response_time: (rt.sec * 1000)
+        healthy: res.code == 200 && res.body.status == "healthy"
 ```
 
 **Save this as `monitoring.yml` and test it:**
@@ -111,64 +110,66 @@ Now let's expand to monitor all critical endpoints:
   endpoint-monitoring:
     name: "API Endpoint Monitoring"
     needs: [health-check]
-    if: jobs.health-check.outputs.healthy == true
     steps:
       - name: "Test Product Catalog"
         id: products
-        action: http
+        uses: http
         with:
-          url: "{{env.API_BASE_URL}}/api/{{env.API_VERSION}}/products"
+          method: GET
+          url: "{{vars.API_BASE_URL}}/api/{{vars.API_VERSION}}/products"
         test: |
-          res.status == 200 &&
-          res.time < env.MAX_RESPONSE_TIME &&
-          res.json.products != null &&
-          len(res.json.products) > 0
+          res.code == 200 &&
+          (rt.sec * 1000) < vars.MAX_RESPONSE_TIME &&
+          res.body.products != null &&
+          len(res.body.products) > 0
         outputs:
-          product_count: len(res.json.products)
-          response_time: res.time
-          available: res.status == 200
+          product_count: len(res.body.products)
+          response_time: (rt.sec * 1000)
+          available: res.code == 200
 
       - name: "Test User Authentication"
         id: auth
-        action: http
+        uses: http
         with:
-          url: "{{env.API_BASE_URL}}/api/{{env.API_VERSION}}/users/me"
+          method: GET
+          url: "{{vars.API_BASE_URL}}/api/{{vars.API_VERSION}}/users/me"
           headers:
-            Authorization: "Bearer {{env.API_TOKEN}}"
+            Authorization: "Bearer {{vars.API_TOKEN}}"
         test: |
-          res.status == 200 &&
-          res.time < env.MAX_RESPONSE_TIME &&
-          res.json.user != null &&
-          res.json.user.id != null
+          res.code == 200 &&
+          (rt.sec * 1000) < vars.MAX_RESPONSE_TIME &&
+          res.body.user != null &&
+          res.body.user.id != null
         outputs:
-          authenticated: res.status == 200
-          user_id: res.json.user.id
-          response_time: res.time
+          authenticated: res.code == 200
+          user_id: res.body.user.id
+          response_time: (rt.sec * 1000)
 
       - name: "Test Order System"
         id: orders
-        action: http
+        uses: http
         with:
-          url: "{{env.API_BASE_URL}}/api/{{env.API_VERSION}}/orders/recent"
+          method: GET
+          url: "{{vars.API_BASE_URL}}/api/{{vars.API_VERSION}}/orders/recent"
           headers:
-            Authorization: "Bearer {{env.API_TOKEN}}"
+            Authorization: "Bearer {{vars.API_TOKEN}}"
         test: |
-          res.status == 200 &&
-          res.time < env.MAX_RESPONSE_TIME &&
-          res.json.orders != null
+          res.code == 200 &&
+          (rt.sec * 1000) < vars.MAX_RESPONSE_TIME &&
+          res.body.orders != null
         outputs:
-          order_count: len(res.json.orders)
-          response_time: res.time
-          available: res.status == 200
+          order_count: len(res.body.orders)
+          response_time: (rt.sec * 1000)
+          available: res.code == 200
 
       - name: "Test Search Functionality"
         id: search
-        action: http
+        uses: http
         with:
-          url: "{{env.API_BASE_URL}}/api/{{env.API_VERSION}}/search"
+          url: "{{vars.API_BASE_URL}}/api/{{vars.API_VERSION}}/search"
           method: "POST"
           headers:
-            Authorization: "Bearer {{env.API_TOKEN}}"
+            Authorization: "Bearer {{vars.API_TOKEN}}"
             Content-Type: "application/json"
           body: |
             {
@@ -176,13 +177,13 @@ Now let's expand to monitor all critical endpoints:
               "limit": 10
             }
         test: |
-          res.status == 200 &&
-          res.time < env.MAX_RESPONSE_TIME &&
-          res.json.results != null
+          res.code == 200 &&
+          (rt.sec * 1000) < vars.MAX_RESPONSE_TIME &&
+          res.body.results != null
         outputs:
-          result_count: len(res.json.results)
-          response_time: res.time
-          available: res.status == 200
+          result_count: len(res.body.results)
+          response_time: (rt.sec * 1000)
+          available: res.code == 200
 ```
 
 ## Step 4: Adding Performance Analysis
@@ -198,31 +199,29 @@ Let's add a job that analyzes overall performance:
     steps:
       - name: "Calculate Performance Metrics"
         id: metrics
-        action: hello
+        uses: hello
         with:
           message: "Analyzing performance metrics"
         outputs:
           # Calculate average response time across all endpoints
           avg_response_time: |
-            {{div(add(add(add(
-              outputs.health.response_time,
-              outputs.products.response_time),
-              outputs.auth.response_time),
-              outputs.orders.response_time),
-              outputs.search.response_time), 5)}}
+            {{(outputs.health.response_time +
+               outputs.products.response_time +
+               outputs.auth.response_time +
+               outputs.orders.response_time +
+               outputs.search.response_time) / 5}}
           
           # Count successful endpoints
           successful_endpoints: |
-            {{add(add(add(add(
-              outputs.health.healthy ? 1 : 0,
-              outputs.products.available ? 1 : 0),
-              outputs.auth.authenticated ? 1 : 0),
-              outputs.orders.available ? 1 : 0),
-              outputs.search.available ? 1 : 0)}}
+            {{(outputs.health.healthy ? 1 : 0) +
+               (outputs.products.available ? 1 : 0) +
+               (outputs.auth.authenticated ? 1 : 0) +
+               (outputs.orders.available ? 1 : 0) +
+               (outputs.search.available ? 1 : 0)}}
           
           # Calculate success rate percentage
           success_rate: |
-            {{mul(div(outputs.metrics.successful_endpoints, 5), 100)}}
+            {{((outputs.metrics.successful_endpoints / 5) * 100)}}
           
           # Determine overall health status
           overall_status: |
@@ -230,6 +229,7 @@ Let's add a job that analyzes overall performance:
               outputs.metrics.success_rate >= 80 ? "degraded" : "critical"}}
 
       - name: "Performance Report"
+        uses: hello
         echo: |
           === MONITORING REPORT ===
           
@@ -249,7 +249,7 @@ Let's add a job that analyzes overall performance:
           - Recent Orders: {{outputs.orders.order_count}}
           - Search Results: {{outputs.search.result_count}}
           
-          Generated: {{iso8601()}}
+          Generated: {{now().Format('2006-01-02T15:04:05Z07:00')}}
 ```
 
 ## Step 5: Adding Error Handling and Retries
@@ -262,56 +262,53 @@ Now let's make our monitoring more robust with error handling:
   endpoint-monitoring:
     name: "API Endpoint Monitoring"
     needs: [health-check]
-    if: jobs.health-check.outputs.healthy == true
-    continue_on_error: true  # Continue even if some endpoints fail
     steps:
       - name: "Test Product Catalog"
         id: products
-        action: http
+        uses: http
         with:
-          url: "{{env.API_BASE_URL}}/api/{{env.API_VERSION}}/products"
+          method: GET
+          url: "{{vars.API_BASE_URL}}/api/{{vars.API_VERSION}}/products"
         test: |
-          res.status == 200 &&
-          res.time < env.MAX_RESPONSE_TIME &&
-          res.json.products != null &&
-          len(res.json.products) > 0
-        continue_on_error: true
+          res.code == 200 &&
+          (rt.sec * 1000) < vars.MAX_RESPONSE_TIME &&
+          res.body.products != null &&
+          len(res.body.products) > 0
         outputs:
-          product_count: len(res.json.products || [])
-          response_time: res.time
-          available: res.status == 200
+          product_count: len(res.body.products || [])
+          response_time: (rt.sec * 1000)
+          available: res.code == 200
           status_code: res.status
 
       - name: "Retry Product Catalog (if failed)"
         id: products-retry
-        if: steps.products.outputs.available != true
-        action: http
+        uses: http
+        timeout: "30s"  # Longer timeout for retry
         with:
-          url: "{{env.API_BASE_URL}}/api/{{env.API_VERSION}}/products"
-          timeout: "30s"  # Longer timeout for retry
-        test: res.status == 200
-        continue_on_error: true
+          method: GET
+          url: "{{vars.API_BASE_URL}}/api/{{vars.API_VERSION}}/products"
+        test: res.code == 200
         outputs:
-          retry_successful: res.status == 200
-          retry_time: res.time
+          retry_successful: res.code == 200
+          retry_time: (rt.sec * 1000)
 
       - name: "Test User Authentication"
         id: auth
-        action: http
+        uses: http
         with:
-          url: "{{env.API_BASE_URL}}/api/{{env.API_VERSION}}/users/me"
+          method: GET
+          url: "{{vars.API_BASE_URL}}/api/{{vars.API_VERSION}}/users/me"
           headers:
-            Authorization: "Bearer {{env.API_TOKEN}}"
+            Authorization: "Bearer {{vars.API_TOKEN}}"
         test: |
-          res.status == 200 &&
-          res.time < env.MAX_RESPONSE_TIME &&
-          res.json.user != null &&
-          res.json.user.id != null
-        continue_on_error: true
+          res.code == 200 &&
+          (rt.sec * 1000) < vars.MAX_RESPONSE_TIME &&
+          res.body.user != null &&
+          res.body.user.id != null
         outputs:
-          authenticated: res.status == 200
-          user_id: res.json.user.id || "unknown"
-          response_time: res.time
+          authenticated: res.code == 200
+          user_id: res.body.user.id || "unknown"
+          response_time: (rt.sec * 1000)
           status_code: res.status
 
       # Continue with other endpoints using similar patterns...
@@ -327,113 +324,110 @@ Let's add email alerts when issues are detected:
   alerting:
     name: "Alert Notifications"
     needs: [performance-analysis]
-    if: |
-      outputs.metrics.overall_status == "critical" ||
-      outputs.metrics.success_rate < 80
     steps:
       - name: "Send Critical Alert Email"
-        action: smtp
+        uses: smtp
         with:
-          host: "{{env.SMTP_HOST || 'smtp.gmail.com'}}"
-          port: "{{env.SMTP_PORT || 587}}"
-          username: "{{env.SMTP_USERNAME}}"
-          password: "{{env.SMTP_PASSWORD}}"
-          from: "{{env.ALERT_FROM_EMAIL}}"
-          to: ["{{env.ALERT_TO_EMAIL}}"]
+          addr: "{{vars.SMTP_HOST || 'smtp.gmail.com'}}:{{vars.SMTP_PORT || 587}}"
+          from: "{{vars.ALERT_FROM_EMAIL}}"
+          to: "{{vars.ALERT_TO_EMAIL}}"
           subject: "🚨 CRITICAL: API Monitoring Alert - {{outputs.metrics.overall_status | upper}}"
-          html: true
-          body: |
-            <html>
-            <head><title>API Monitoring Alert</title></head>
-            <body style="font-family: Arial, sans-serif; margin: 20px;">
+          session: 1
+          message: 1
+          length: 500
+        echo: |
+          <html>
+          <head><title>API Monitoring Alert</title></head>
+          <body style="font-family: Arial, sans-serif; margin: 20px;">
             
-            <h1 style="color: #d32f2f;">🚨 Critical API Monitoring Alert</h1>
+          <h1 style="color: #d32f2f;">🚨 Critical API Monitoring Alert</h1>
             
-            <div style="background: #ffebee; border-left: 4px solid #d32f2f; padding: 15px; margin: 20px 0;">
-              <h2>Alert Summary</h2>
-              <p><strong>Overall Status:</strong> {{outputs.metrics.overall_status | upper}}</p>
-              <p><strong>Success Rate:</strong> {{outputs.metrics.success_rate}}%</p>
-              <p><strong>Average Response Time:</strong> {{outputs.metrics.avg_response_time}}ms</p>
-              <p><strong>Time:</strong> {{iso8601()}}</p>
-            </div>
+          <div style="background: #ffebee; border-left: 4px solid #d32f2f; padding: 15px; margin: 20px 0;">
+            <h2>Alert Summary</h2>
+            <p><strong>Overall Status:</strong> {{outputs.metrics.overall_status | upper}}</p>
+            <p><strong>Success Rate:</strong> {{outputs.metrics.success_rate}}%</p>
+            <p><strong>Average Response Time:</strong> {{outputs.metrics.avg_response_time}}ms</p>
+            <p><strong>Time:</strong> {{now().Format('2006-01-02T15:04:05Z07:00')}}</p>
+          </div>
             
-            <h2>Endpoint Status</h2>
-            <table border="1" style="border-collapse: collapse; width: 100%;">
-              <tr style="background: #f5f5f5;">
-                <th style="padding: 10px; text-align: left;">Endpoint</th>
-                <th style="padding: 10px; text-align: left;">Status</th>
-                <th style="padding: 10px; text-align: left;">Response Time</th>
-                <th style="padding: 10px; text-align: left;">Details</th>
-              </tr>
-              <tr>
-                <td style="padding: 10px;">Health Check</td>
-                <td style="padding: 10px; color: {{outputs.health.healthy ? 'green' : 'red'}};">
-                  {{outputs.health.healthy ? "✅ UP" : "❌ DOWN"}}
-                </td>
-                <td style="padding: 10px;">{{outputs.health.response_time}}ms</td>
-                <td style="padding: 10px;">{{outputs.health.status}}</td>
-              </tr>
-              <tr>
-                <td style="padding: 10px;">Products API</td>
-                <td style="padding: 10px; color: {{outputs.products.available ? 'green' : 'red'}};">
-                  {{outputs.products.available ? "✅ UP" : "❌ DOWN"}}
-                </td>
-                <td style="padding: 10px;">{{outputs.products.response_time}}ms</td>
-                <td style="padding: 10px;">{{outputs.products.product_count}} products</td>
-              </tr>
-              <tr>
-                <td style="padding: 10px;">Authentication</td>
-                <td style="padding: 10px; color: {{outputs.auth.authenticated ? 'green' : 'red'}};">
-                  {{outputs.auth.authenticated ? "✅ UP" : "❌ DOWN"}}
-                </td>
-                <td style="padding: 10px;">{{outputs.auth.response_time}}ms</td>
-                <td style="padding: 10px;">User ID: {{outputs.auth.user_id}}</td>
-              </tr>
-              <tr>
-                <td style="padding: 10px;">Orders API</td>
-                <td style="padding: 10px; color: {{outputs.orders.available ? 'green' : 'red'}};">
-                  {{outputs.orders.available ? "✅ UP" : "❌ DOWN"}}
-                </td>
-                <td style="padding: 10px;">{{outputs.orders.response_time}}ms</td>
-                <td style="padding: 10px;">{{outputs.orders.order_count}} recent orders</td>
-              </tr>
-              <tr>
-                <td style="padding: 10px;">Search API</td>
-                <td style="padding: 10px; color: {{outputs.search.available ? 'green' : 'red'}};">
-                  {{outputs.search.available ? "✅ UP" : "❌ DOWN"}}
-                </td>
-                <td style="padding: 10px;">{{outputs.search.response_time}}ms</td>
-                <td style="padding: 10px;">{{outputs.search.result_count}} search results</td>
-              </tr>
-            </table>
+          <h2>Endpoint Status</h2>
+          <table border="1" style="border-collapse: collapse; width: 100%;">
+            <tr style="background: #f5f5f5;">
+              <th style="padding: 10px; text-align: left;">Endpoint</th>
+              <th style="padding: 10px; text-align: left;">Status</th>
+              <th style="padding: 10px; text-align: left;">Response Time</th>
+              <th style="padding: 10px; text-align: left;">Details</th>
+            </tr>
+            <tr>
+              <td style="padding: 10px;">Health Check</td>
+              <td style="padding: 10px; color: {{outputs.health.healthy ? 'green' : 'red'}};">
+                {{outputs.health.healthy ? "✅ UP" : "❌ DOWN"}}
+              </td>
+              <td style="padding: 10px;">{{outputs.health.response_time}}ms</td>
+              <td style="padding: 10px;">{{outputs.health.status}}</td>
+            </tr>
+            <tr>
+              <td style="padding: 10px;">Products API</td>
+              <td style="padding: 10px; color: {{outputs.products.available ? 'green' : 'red'}};">
+                {{outputs.products.available ? "✅ UP" : "❌ DOWN"}}
+              </td>
+              <td style="padding: 10px;">{{outputs.products.response_time}}ms</td>
+              <td style="padding: 10px;">{{outputs.products.product_count}} products</td>
+            </tr>
+            <tr>
+              <td style="padding: 10px;">Authentication</td>
+              <td style="padding: 10px; color: {{outputs.auth.authenticated ? 'green' : 'red'}};">
+                {{outputs.auth.authenticated ? "✅ UP" : "❌ DOWN"}}
+              </td>
+              <td style="padding: 10px;">{{outputs.auth.response_time}}ms</td>
+              <td style="padding: 10px;">User ID: {{outputs.auth.user_id}}</td>
+            </tr>
+            <tr>
+              <td style="padding: 10px;">Orders API</td>
+              <td style="padding: 10px; color: {{outputs.orders.available ? 'green' : 'red'}};">
+                {{outputs.orders.available ? "✅ UP" : "❌ DOWN"}}
+              </td>
+              <td style="padding: 10px;">{{outputs.orders.response_time}}ms</td>
+              <td style="padding: 10px;">{{outputs.orders.order_count}} recent orders</td>
+            </tr>
+            <tr>
+              <td style="padding: 10px;">Search API</td>
+              <td style="padding: 10px; color: {{outputs.search.available ? 'green' : 'red'}};">
+                {{outputs.search.available ? "✅ UP" : "❌ DOWN"}}
+              </td>
+              <td style="padding: 10px;">{{outputs.search.response_time}}ms</td>
+              <td style="padding: 10px;">{{outputs.search.result_count}} search results</td>
+            </tr>
+          </table>
             
-            <div style="background: #f5f5f5; padding: 15px; margin: 20px 0;">
-              <h3>Recommended Actions</h3>
-              <ul>
-                {{if not outputs.health.healthy}}<li>Check API server health and connectivity</li>{{end}}
-                {{if not outputs.products.available}}<li>Investigate product catalog service</li>{{end}}
-                {{if not outputs.auth.authenticated}}<li>Verify authentication service and token validity</li>{{end}}
-                {{if not outputs.orders.available}}<li>Check order processing system</li>{{end}}
-                {{if not outputs.search.available}}<li>Investigate search service functionality</li>{{end}}
-                {{if gt outputs.metrics.avg_response_time 3000}}<li>Performance issue detected - investigate slow responses</li>{{end}}
-              </ul>
-            </div>
+          <div style="background: #f5f5f5; padding: 15px; margin: 20px 0;">
+            <h3>Recommended Actions</h3>
+            <ul>
+              {{if not outputs.health.healthy}}<li>Check API server health and connectivity</li>{{end}}
+              {{if not outputs.products.available}}<li>Investigate product catalog service</li>{{end}}
+              {{if not outputs.auth.authenticated}}<li>Verify authentication service and token validity</li>{{end}}
+              {{if not outputs.orders.available}}<li>Check order processing system</li>{{end}}
+              {{if not outputs.search.available}}<li>Investigate search service functionality</li>{{end}}
+              {{if gt outputs.metrics.avg_response_time 3000}}<li>Performance issue detected - investigate slow responses</li>{{end}}
+            </ul>
+          </div>
             
-            <p style="font-size: 12px; color: #666;">
-              This alert was generated by Probe Monitoring System.<br>
-              Workflow: {{workflow.name}}<br>
-              Generated: {{iso8601()}}
-            </p>
+          <p style="font-size: 12px; color: #666;">
+            This alert was generated by Probe Monitoring System.<br>
+            Workflow: {{workflow.name}}<br>
+            Generated: {{now().Format('2006-01-02T15:04:05Z07:00')}}
+          </p>
             
-            </body>
-            </html>
+          </body>
+          </html>
 
       - name: "Log Alert Sent"
+        uses: hello
         echo: |
           🚨 CRITICAL ALERT SENT
           Status: {{outputs.metrics.overall_status}}
           Success Rate: {{outputs.metrics.success_rate}}%
-          Alert sent to: {{env.ALERT_TO_EMAIL}}
+          Alert sent to: {{vars.ALERT_TO_EMAIL}}
 ```
 
 ## Step 7: Environment Configuration
@@ -442,43 +436,32 @@ Create environment-specific configuration files:
 
 **development.yml:**
 ```yaml
-env:
+vars:
   API_BASE_URL: "http://localhost:3000"
   API_VERSION: "v1"
   MAX_RESPONSE_TIME: 5000  # More lenient for dev
   CRITICAL_RESPONSE_TIME: 10000
 
-defaults:
-  http:
-    timeout: "30s"  # Longer timeout for development
-    verify_ssl: false  # Allow self-signed certificates
 ```
 
 **staging.yml:**
 ```yaml
-env:
+vars:
   API_BASE_URL: "https://api-staging.example.com"
   API_VERSION: "v1"
   MAX_RESPONSE_TIME: 3000
   CRITICAL_RESPONSE_TIME: 7000
 
-defaults:
-  http:
-    timeout: "15s"
 ```
 
 **production.yml:**
 ```yaml
-env:
+vars:
   API_BASE_URL: "https://api.example.com"
   API_VERSION: "v1"
   MAX_RESPONSE_TIME: 2000
   CRITICAL_RESPONSE_TIME: 5000
 
-defaults:
-  http:
-    timeout: "10s"
-    verify_ssl: true
 ```
 
 ## Step 8: Setting Up Environment Variables

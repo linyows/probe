@@ -59,7 +59,7 @@ deployment-tests/
 name: "Multi-Environment Deployment Testing"
 description: "Comprehensive testing across development, staging, and production environments"
 
-env:
+vars:
   # Common Configuration
   API_VERSION: "v2"
   USER_AGENT: "Probe Multi-Env Tester v1.0"
@@ -80,19 +80,28 @@ env:
   FEATURE_VALIDATION_ENABLED: true
   A_B_TEST_VALIDATION_ENABLED: false
 
-defaults:
-  http:
-    timeout: "15s"
-    headers:
-      User-Agent: "{{env.USER_AGENT}}"
-      Accept: "application/json"
-    follow_redirects: true
-    verify_ssl: true
+shared:
+  common_headers: &common_headers
+    User-Agent: "{{vars.USER_AGENT}}"
+    Accept: "application/json"
+```
+
+`defaults` is a job key, so the shared headers are defined here as a YAML anchor and pulled into each job's `defaults`:
+
+```yaml
+jobs:
+- name: Environment checks
+  defaults:
+    http:
+      headers:
+        <<: *common_headers
+  steps:
+    # ...
 ```
 
 **config/environments/development.yml:**
 ```yaml
-env:
+vars:
   # Environment Identification
   ENVIRONMENT: "development"
   ENVIRONMENT_COLOR: "🟡"
@@ -120,15 +129,11 @@ env:
   USE_TEST_DATA: true
   RESET_DATA_BEFORE_TESTS: true
 
-defaults:
-  http:
-    timeout: "30s"         # Longer timeout for development
-    verify_ssl: false      # Allow self-signed certificates
 ```
 
 **config/environments/staging.yml:**
 ```yaml
-env:
+vars:
   # Environment Identification
   ENVIRONMENT: "staging"
   ENVIRONMENT_COLOR: "🟠"
@@ -157,15 +162,11 @@ env:
   USE_PRODUCTION_LIKE_DATA: true
   RESET_DATA_BEFORE_TESTS: false
 
-defaults:
-  http:
-    timeout: "15s"
-    verify_ssl: true
 ```
 
 **config/environments/production.yml:**
 ```yaml
-env:
+vars:
   # Environment Identification
   ENVIRONMENT: "production"
   ENVIRONMENT_COLOR: "🔴"
@@ -198,10 +199,6 @@ env:
   ENABLE_REAL_USER_MONITORING: true
   ENABLE_ERROR_TRACKING: true
 
-defaults:
-  http:
-    timeout: "10s"
-    verify_ssl: true
 ```
 
 ## Step 2: Basic Environment Health Checks
@@ -210,147 +207,150 @@ Create comprehensive health validation:
 
 **workflows/health-check.yml:**
 ```yaml
-name: "{{env.ENVIRONMENT | upper}} Environment Health Check"
-description: "Comprehensive health validation for {{env.ENVIRONMENT}} environment"
+name: "{{vars.ENVIRONMENT | upper}} Environment Health Check"
+description: "Comprehensive health validation for {{vars.ENVIRONMENT}} environment"
 
 jobs:
-  infrastructure-health:
-    name: "Infrastructure Health Check"
-    steps:
-      - name: "API Server Health"
-        id: api-health
-        action: http
-        with:
-          url: "{{env.API_BASE_URL}}/health"
-        test: |
-          res.status == 200 &&
-          res.time < env.RESPONSE_TIME_THRESHOLD &&
-          res.json.status == "healthy"
-        outputs:
-          api_status: res.json.status
-          api_version: res.json.version
-          api_response_time: res.time
-          api_uptime: res.json.uptime
+- id: infrastructure-health
+  name: "Infrastructure Health Check"
+  steps:
+    - name: "API Server Health"
+      id: api-health
+      uses: http
+      with:
+        method: GET
+        url: "{{vars.API_BASE_URL}}/health"
+      test: |
+        res.code == 200 &&
+        (rt.sec * 1000) < vars.RESPONSE_TIME_THRESHOLD &&
+        res.body.status == "healthy"
+      outputs:
+        api_status: res.body.status
+        api_version: res.body.version
+        api_response_time: (rt.sec * 1000)
+        api_uptime: res.body.uptime
 
-      - name: "Web Application Health"
-        id: web-health
-        action: http
-        with:
-          url: "{{env.WEB_BASE_URL}}/health"
-        test: |
-          res.status == 200 &&
-          res.time < env.RESPONSE_TIME_THRESHOLD
-        continue_on_error: true
-        outputs:
-          web_status: res.status == 200 ? "healthy" : "unhealthy"
-          web_response_time: res.time
+    - name: "Web Application Health"
+      id: web-health
+      uses: http
+      with:
+        method: GET
+        url: "{{vars.WEB_BASE_URL}}/health"
+      test: |
+        res.code == 200 &&
+        (rt.sec * 1000) < vars.RESPONSE_TIME_THRESHOLD
+      outputs:
+        web_status: res.code == 200 ? "healthy" : "unhealthy"
+        web_response_time: (rt.sec * 1000)
 
-      - name: "Database Connectivity"
-        id: db-health
-        action: http
-        with:
-          url: "{{env.API_BASE_URL}}/health/database"
-        test: |
-          res.status == 200 &&
-          res.json.database.connected == true &&
-          res.json.database.responseTime < 1000
-        outputs:
-          db_status: res.json.database.connected ? "connected" : "disconnected"
-          db_response_time: res.json.database.responseTime
-          db_pool_size: res.json.database.poolSize
+    - name: "Database Connectivity"
+      id: db-health
+      uses: http
+      with:
+        method: GET
+        url: "{{vars.API_BASE_URL}}/health/database"
+      test: |
+        res.code == 200 &&
+        res.body.database.connected == true &&
+        res.body.database.responseTime < 1000
+      outputs:
+        db_status: res.body.database.connected ? "connected" : "disconnected"
+        db_response_time: res.body.database.responseTime
+        db_pool_size: res.body.database.poolSize
 
-      - name: "Cache System Health"
-        id: cache-health
-        action: http
-        with:
-          url: "{{env.API_BASE_URL}}/health/cache"
-        test: |
-          res.status == 200 &&
-          res.json.cache.connected == true
-        continue_on_error: true
-        outputs:
-          cache_status: res.json.cache.connected ? "connected" : "disconnected"
-          cache_hit_rate: res.json.cache.hitRate
+    - name: "Cache System Health"
+      id: cache-health
+      uses: http
+      with:
+        method: GET
+        url: "{{vars.API_BASE_URL}}/health/cache"
+      test: |
+        res.code == 200 &&
+        res.body.cache.connected == true
+      outputs:
+        cache_status: res.body.cache.connected ? "connected" : "disconnected"
+        cache_hit_rate: res.body.cache.hitRate
 
-  service-dependencies:
-    name: "External Service Dependencies"
-    needs: [infrastructure-health]
-    steps:
-      - name: "Payment Service Health"
-        id: payment-health
-        action: http
-        with:
-          url: "{{env.API_BASE_URL}}/health/payment"
-        test: |
-          res.status == 200 &&
-          res.json.paymentService.available == true
-        continue_on_error: true
-        outputs:
-          payment_status: res.json.paymentService.available ? "available" : "unavailable"
+- id: service-dependencies
+  name: "External Service Dependencies"
+  needs: [infrastructure-health]
+  steps:
+    - name: "Payment Service Health"
+      id: payment-health
+      uses: http
+      with:
+        method: GET
+        url: "{{vars.API_BASE_URL}}/health/payment"
+      test: |
+        res.code == 200 &&
+        res.body.paymentService.available == true
+      outputs:
+        payment_status: res.body.paymentService.available ? "available" : "unavailable"
 
-      - name: "Email Service Health"
-        id: email-health
-        action: http
-        with:
-          url: "{{env.API_BASE_URL}}/health/email"
-        test: |
-          res.status == 200 &&
-          res.json.emailService.available == true
-        continue_on_error: true
-        outputs:
-          email_status: res.json.emailService.available ? "available" : "unavailable"
+    - name: "Email Service Health"
+      id: email-health
+      uses: http
+      with:
+        method: GET
+        url: "{{vars.API_BASE_URL}}/health/email"
+      test: |
+        res.code == 200 &&
+        res.body.emailService.available == true
+      outputs:
+        email_status: res.body.emailService.available ? "available" : "unavailable"
 
-      - name: "Search Service Health"
-        id: search-health
-        action: http
-        with:
-          url: "{{env.API_BASE_URL}}/health/search"
-        test: |
-          res.status == 200 &&
-          res.json.searchService.available == true
-        continue_on_error: true
-        outputs:
-          search_status: res.json.searchService.available ? "available" : "unavailable"
+    - name: "Search Service Health"
+      id: search-health
+      uses: http
+      with:
+        method: GET
+        url: "{{vars.API_BASE_URL}}/health/search"
+      test: |
+        res.code == 200 &&
+        res.body.searchService.available == true
+      outputs:
+        search_status: res.body.searchService.available ? "available" : "unavailable"
 
-  environment-report:
-    name: "Environment Health Report"
-    needs: [infrastructure-health, service-dependencies]
-    steps:
-      - name: "Generate Health Report"
-        echo: |
-          {{env.ENVIRONMENT_COLOR}} === {{env.ENVIRONMENT | upper}} ENVIRONMENT HEALTH REPORT ===
+- id: environment-report
+  name: "Environment Health Report"
+  needs: [infrastructure-health, service-dependencies]
+  steps:
+    - name: "Generate Health Report"
+      uses: hello
+      echo: |
+        {{vars.ENVIRONMENT_COLOR}} === {{vars.ENVIRONMENT | upper}} ENVIRONMENT HEALTH REPORT ===
           
-          Infrastructure Status:
-          • API Server: {{outputs.api-health.api_status | upper}} ({{outputs.api-health.api_response_time}}ms)
-            Version: {{outputs.api-health.api_version}}
-            Uptime: {{outputs.api-health.api_uptime}}
+        Infrastructure Status:
+        • API Server: {{outputs['api-health'].api_status | upper}} ({{outputs['api-health'].api_response_time}}ms)
+          Version: {{outputs['api-health'].api_version}}
+          Uptime: {{outputs['api-health'].api_uptime}}
           
-          • Web Application: {{outputs.web-health.web_status | upper}} ({{outputs.web-health.web_response_time}}ms)
+        • Web Application: {{outputs['web-health'].web_status | upper}} ({{outputs['web-health'].web_response_time}}ms)
           
-          • Database: {{outputs.db-health.db_status | upper}} ({{outputs.db-health.db_response_time}}ms)
-            Pool Size: {{outputs.db-health.db_pool_size}}
+        • Database: {{outputs['db-health'].db_status | upper}} ({{outputs['db-health'].db_response_time}}ms)
+          Pool Size: {{outputs['db-health'].db_pool_size}}
           
-          • Cache: {{outputs.cache-health.cache_status | upper}}
-            Hit Rate: {{outputs.cache-health.cache_hit_rate}}%
+        • Cache: {{outputs['cache-health'].cache_status | upper}}
+          Hit Rate: {{outputs['cache-health'].cache_hit_rate}}%
           
-          External Services:
-          • Payment Service: {{outputs.payment-health.payment_status | upper}}
-          • Email Service: {{outputs.email-health.email_status | upper}}
-          • Search Service: {{outputs.search-health.search_status | upper}}
+        External Services:
+        • Payment Service: {{outputs['payment-health'].payment_status | upper}}
+        • Email Service: {{outputs['email-health'].email_status | upper}}
+        • Search Service: {{outputs['search-health'].search_status | upper}}
           
-          Overall Status: {{
-            outputs.api-health.api_status == "healthy" &&
-            outputs.web-health.web_status == "healthy" &&
-            outputs.db-health.db_status == "connected" ? "✅ HEALTHY" : "⚠️ DEGRADED"
-          }}
+        Overall Status: {{
+          outputs['api-health'].api_status == "healthy" &&
+          outputs['web-health'].web_status == "healthy" &&
+          outputs['db-health'].db_status == "connected" ? "✅ HEALTHY" : "⚠️ DEGRADED"
+        }}
           
-          Generated: {{iso8601()}}
-          Environment: {{env.ENVIRONMENT}}
+        Generated: {{now().Format('2006-01-02T15:04:05Z07:00')}}
+        Environment: {{vars.ENVIRONMENT}}
 
-      - name: "Health Check Validation"
-        test: |
-          outputs.api-health.api_status == "healthy" &&
-          outputs.db-health.db_status == "connected"
+    - name: "Health Check Validation"
+      test: |
+        outputs['api-health'].api_status == "healthy" &&
+        outputs['db-health'].db_status == "connected"
 ```
 
 ## Step 3: Deployment Validation Workflow
@@ -359,245 +359,250 @@ Create comprehensive deployment verification:
 
 **workflows/deployment-validation.yml:**
 ```yaml
-name: "{{env.ENVIRONMENT | upper}} Deployment Validation"
-description: "Validate deployment success in {{env.ENVIRONMENT}} environment"
+name: "{{vars.ENVIRONMENT | upper}} Deployment Validation"
+description: "Validate deployment success in {{vars.ENVIRONMENT}} environment"
 
-env:
+vars:
   # Deployment metadata (passed from CI/CD)
-  DEPLOYMENT_ID: "{{env.DEPLOYMENT_ID || unixtime()}}"
-  BUILD_VERSION: "{{env.BUILD_VERSION || 'unknown'}}"
-  DEPLOYMENT_TIMESTAMP: "{{env.DEPLOYMENT_TIMESTAMP || iso8601()}}"
+  DEPLOYMENT_ID: "{{vars.DEPLOYMENT_ID || unixtime()}}"
+  BUILD_VERSION: "{{vars.BUILD_VERSION || 'unknown'}}"
+  DEPLOYMENT_TIMESTAMP: "{{vars.DEPLOYMENT_TIMESTAMP || now().Format('2006-01-02T15:04:05Z07:00')}}"
 
 jobs:
-  pre-deployment-validation:
-    name: "Pre-Deployment Validation"
-    steps:
-      - name: "Verify Deployment Prerequisites"
-        id: prerequisites
-        action: http
-        with:
-          url: "{{env.API_BASE_URL}}/deployment/prerequisites"
-          headers:
-            X-Deployment-ID: "{{env.DEPLOYMENT_ID}}"
-        test: |
-          res.status == 200 &&
-          res.json.readyForDeployment == true
-        outputs:
-          deployment_ready: res.json.readyForDeployment
-          current_version: res.json.currentVersion
-          target_version: res.json.targetVersion
+- id: pre-deployment-validation
+  name: "Pre-Deployment Validation"
+  steps:
+    - name: "Verify Deployment Prerequisites"
+      id: prerequisites
+      uses: http
+      with:
+        method: GET
+        url: "{{vars.API_BASE_URL}}/deployment/prerequisites"
+        headers:
+          X-Deployment-ID: "{{vars.DEPLOYMENT_ID}}"
+      test: |
+        res.code == 200 &&
+        res.body.readyForDeployment == true
+      outputs:
+        deployment_ready: res.body.readyForDeployment
+        current_version: res.body.currentVersion
+        target_version: res.body.targetVersion
 
-      - name: "Database Migration Status"
-        id: migration-status
-        action: http
-        with:
-          url: "{{env.API_BASE_URL}}/deployment/migrations"
-        test: |
-          res.status == 200 &&
-          res.json.pendingMigrations == 0
-        outputs:
-          pending_migrations: res.json.pendingMigrations
-          last_migration: res.json.lastMigration
+    - name: "Database Migration Status"
+      id: migration-status
+      uses: http
+      with:
+        method: GET
+        url: "{{vars.API_BASE_URL}}/deployment/migrations"
+      test: |
+        res.code == 200 &&
+        res.body.pendingMigrations == 0
+      outputs:
+        pending_migrations: res.body.pendingMigrations
+        last_migration: res.body.lastMigration
 
-  deployment-verification:
-    name: "Deployment Verification"
-    needs: [pre-deployment-validation]
-    steps:
-      - name: "Verify New Version Deployment"
-        id: version-check
-        action: http
-        with:
-          url: "{{env.API_BASE_URL}}/version"
-        test: |
-          res.status == 200 &&
-          res.json.version == env.BUILD_VERSION
-        outputs:
-          deployed_version: res.json.version
-          deployment_time: res.json.deploymentTime
-          build_hash: res.json.buildHash
+- id: deployment-verification
+  name: "Deployment Verification"
+  needs: [pre-deployment-validation]
+  steps:
+    - name: "Verify New Version Deployment"
+      id: version-check
+      uses: http
+      with:
+        method: GET
+        url: "{{vars.API_BASE_URL}}/version"
+      test: |
+        res.code == 200 &&
+        res.body.version == vars.BUILD_VERSION
+      outputs:
+        deployed_version: res.body.version
+        deployment_time: res.body.deploymentTime
+        build_hash: res.body.buildHash
 
-      - name: "Feature Flag Validation"
-        id: feature-flags
-        if: env.ENABLE_NEW_FEATURES == "true"
-        action: http
-        with:
-          url: "{{env.API_BASE_URL}}/features"
-        test: |
-          res.status == 200 &&
-          res.json.features != null
-        outputs:
-          active_features: res.json.features
-          feature_count: len(res.json.features)
+    - name: "Feature Flag Validation"
+      id: feature-flags
+      uses: http
+      with:
+        method: GET
+        url: "{{vars.API_BASE_URL}}/features"
+      test: |
+        res.code == 200 &&
+        res.body.features != null
+      outputs:
+        active_features: res.body.features
+        feature_count: len(res.body.features)
 
-      - name: "Configuration Validation"
-        id: config-validation
-        action: http
-        with:
-          url: "{{env.API_BASE_URL}}/configuration"
-        test: |
-          res.status == 200 &&
-          res.json.environment == env.ENVIRONMENT &&
-          res.json.configVersion != null
-        outputs:
-          config_environment: res.json.environment
-          config_version: res.json.configVersion
-          config_valid: res.json.valid
+    - name: "Configuration Validation"
+      id: config-validation
+      uses: http
+      with:
+        method: GET
+        url: "{{vars.API_BASE_URL}}/configuration"
+      test: |
+        res.code == 200 &&
+        res.body.environment == vars.ENVIRONMENT &&
+        res.body.configVersion != null
+      outputs:
+        config_environment: res.body.environment
+        config_version: res.body.configVersion
+        config_valid: res.body.valid
 
-  functional-validation:
-    name: "Post-Deployment Functional Tests"
-    needs: [deployment-verification]
-    steps:
-      - name: "Critical Path Test - User Authentication"
-        id: auth-test
-        action: http
-        with:
-          url: "{{env.API_BASE_URL}}/api/{{env.API_VERSION}}/auth/login"
-          method: "POST"
-          body: |
-            {
-              "email": "{{env.TEST_USER_EMAIL}}",
-              "password": "{{env.TEST_USER_PASSWORD}}"
-            }
-        test: |
-          res.status == 200 &&
-          res.json.token != null &&
-          res.time < env.RESPONSE_TIME_THRESHOLD
-        outputs:
-          auth_token: res.json.token
-          auth_response_time: res.time
+- id: functional-validation
+  name: "Post-Deployment Functional Tests"
+  needs: [deployment-verification]
+  steps:
+    - name: "Critical Path Test - User Authentication"
+      id: auth-test
+      uses: http
+      with:
+        url: "{{vars.API_BASE_URL}}/api/{{vars.API_VERSION}}/auth/login"
+        method: "POST"
+        body: |
+          {
+            "email": "{{vars.TEST_USER_EMAIL}}",
+            "password": "{{vars.TEST_USER_PASSWORD}}"
+          }
+      test: |
+        res.code == 200 &&
+        res.body.token != null &&
+        (rt.sec * 1000) < vars.RESPONSE_TIME_THRESHOLD
+      outputs:
+        auth_token: res.body.token
+        auth_response_time: (rt.sec * 1000)
 
-      - name: "Critical Path Test - Data Retrieval"
-        id: data-test
-        action: http
-        with:
-          url: "{{env.API_BASE_URL}}/api/{{env.API_VERSION}}/products?limit=5"
-          headers:
-            Authorization: "Bearer {{outputs.auth-test.auth_token}}"
-        test: |
-          res.status == 200 &&
-          res.json.products != null &&
-          len(res.json.products) > 0 &&
-          res.time < env.RESPONSE_TIME_THRESHOLD
-        outputs:
-          product_count: len(res.json.products)
-          data_response_time: res.time
+    - name: "Critical Path Test - Data Retrieval"
+      id: data-test
+      uses: http
+      with:
+        method: GET
+        url: "{{vars.API_BASE_URL}}/api/{{vars.API_VERSION}}/products?limit=5"
+        headers:
+          Authorization: "Bearer {{outputs['auth-test'].auth_token}}"
+      test: |
+        res.code == 200 &&
+        res.body.products != null &&
+        len(res.body.products) > 0 &&
+        (rt.sec * 1000) < vars.RESPONSE_TIME_THRESHOLD
+      outputs:
+        product_count: len(res.body.products)
+        data_response_time: (rt.sec * 1000)
 
-      - name: "Critical Path Test - Data Mutation"
-        id: mutation-test
-        action: http
-        with:
-          url: "{{env.API_BASE_URL}}/api/{{env.API_VERSION}}/products"
-          method: "POST"
-          headers:
-            Authorization: "Bearer {{outputs.auth-test.auth_token}}"
-          body: |
-            {
-              "name": "Deployment Test Product {{env.DEPLOYMENT_ID}}",
-              "price": 99.99,
-              "category": "Test"
-            }
-        test: |
-          res.status == 201 &&
-          res.json.id != null &&
-          res.time < env.RESPONSE_TIME_THRESHOLD
-        outputs:
-          created_product_id: res.json.id
-          mutation_response_time: res.time
+    - name: "Critical Path Test - Data Mutation"
+      id: mutation-test
+      uses: http
+      with:
+        url: "{{vars.API_BASE_URL}}/api/{{vars.API_VERSION}}/products"
+        method: "POST"
+        headers:
+          Authorization: "Bearer {{outputs['auth-test'].auth_token}}"
+        body: |
+          {
+            "name": "Deployment Test Product {{vars.DEPLOYMENT_ID}}",
+            "price": 99.99,
+            "category": "Test"
+          }
+      test: |
+        res.code == 201 &&
+        res.body.id != null &&
+        (rt.sec * 1000) < vars.RESPONSE_TIME_THRESHOLD
+      outputs:
+        created_product_id: res.body.id
+        mutation_response_time: (rt.sec * 1000)
 
-      - name: "Cleanup Test Data"
-        action: http
-        with:
-          url: "{{env.API_BASE_URL}}/api/{{env.API_VERSION}}/products/{{outputs.mutation-test.created_product_id}}"
-          method: "DELETE"
-          headers:
-            Authorization: "Bearer {{outputs.auth-test.auth_token}}"
-        test: res.status == 204 || res.status == 200
-        continue_on_error: true
+    - name: "Cleanup Test Data"
+      uses: http
+      with:
+        url: "{{vars.API_BASE_URL}}/api/{{vars.API_VERSION}}/products/{{outputs['mutation-test'].created_product_id}}"
+        method: "DELETE"
+        headers:
+          Authorization: "Bearer {{outputs['auth-test'].auth_token}}"
+      test: res.code == 204 || res.code == 200
 
-  performance-validation:
-    name: "Performance Validation"
-    needs: [functional-validation]
-    if: env.SKIP_PERFORMANCE_TESTS != "true"
-    steps:
-      - name: "Response Time Validation"
-        id: perf-test
-        action: http
-        with:
-          url: "{{env.API_BASE_URL}}/api/{{env.API_VERSION}}/products"
-        test: |
-          res.status == 200 &&
-          res.time < env.RESPONSE_TIME_THRESHOLD
-        outputs:
-          response_time: res.time
-          performance_grade: |
-            {{res.time < 500 ? "A" :
-              res.time < 1000 ? "B" :
-              res.time < 2000 ? "C" : "D"}}
+- id: performance-validation
+  name: "Performance Validation"
+  needs: [functional-validation]
+  steps:
+    - name: "Response Time Validation"
+      id: perf-test
+      uses: http
+      with:
+        method: GET
+        url: "{{vars.API_BASE_URL}}/api/{{vars.API_VERSION}}/products"
+      test: |
+        res.code == 200 &&
+        (rt.sec * 1000) < vars.RESPONSE_TIME_THRESHOLD
+      outputs:
+        response_time: (rt.sec * 1000)
+        performance_grade: |
+          {{(rt.sec * 1000) < 500 ? "A" :
+            (rt.sec * 1000) < 1000 ? "B" :
+            (rt.sec * 1000) < 2000 ? "C" : "D"}}
 
-      - name: "Load Test Simulation"
-        if: env.SKIP_LOAD_TESTS != "true"
-        action: http
-        with:
-          url: "{{env.API_BASE_URL}}/health"
-        test: res.status == 200 && res.time < mul(env.RESPONSE_TIME_THRESHOLD, 2)
-        # In real scenario, this would trigger concurrent requests
+    - name: "Load Test Simulation"
+      uses: http
+      with:
+        method: GET
+        url: "{{vars.API_BASE_URL}}/health"
+      test: res.code == 200 && (rt.sec * 1000) < (vars.RESPONSE_TIME_THRESHOLD * 2)
+      # In real scenario, this would trigger concurrent requests
 
-  deployment-report:
-    name: "Deployment Validation Report"
-    needs: [pre-deployment-validation, deployment-verification, functional-validation, performance-validation]
-    steps:
-      - name: "Generate Deployment Report"
-        echo: |
-          {{env.ENVIRONMENT_COLOR}} === {{env.ENVIRONMENT | upper}} DEPLOYMENT VALIDATION REPORT ===
+- id: deployment-report
+  name: "Deployment Validation Report"
+  needs: [pre-deployment-validation, deployment-verification, functional-validation, performance-validation]
+  steps:
+    - name: "Generate Deployment Report"
+      uses: hello
+      echo: |
+        {{vars.ENVIRONMENT_COLOR}} === {{vars.ENVIRONMENT | upper}} DEPLOYMENT VALIDATION REPORT ===
           
-          Deployment Information:
-          • Deployment ID: {{env.DEPLOYMENT_ID}}
-          • Target Version: {{env.BUILD_VERSION}}
-          • Deployed Version: {{outputs.version-check.deployed_version}}
-          • Deployment Time: {{outputs.version-check.deployment_time}}
-          • Environment: {{env.ENVIRONMENT}}
+        Deployment Information:
+        • Deployment ID: {{vars.DEPLOYMENT_ID}}
+        • Target Version: {{vars.BUILD_VERSION}}
+        • Deployed Version: {{outputs['version-check'].deployed_version}}
+        • Deployment Time: {{outputs['version-check'].deployment_time}}
+        • Environment: {{vars.ENVIRONMENT}}
           
-          Pre-Deployment Status:
-          • Prerequisites: {{outputs.prerequisites.deployment_ready ? "✅ Ready" : "❌ Not Ready"}}
-          • Current Version: {{outputs.prerequisites.current_version}}
-          • Target Version: {{outputs.prerequisites.target_version}}
-          • Pending Migrations: {{outputs.migration-status.pending_migrations}}
+        Pre-Deployment Status:
+        • Prerequisites: {{outputs.prerequisites.deployment_ready ? "✅ Ready" : "❌ Not Ready"}}
+        • Current Version: {{outputs.prerequisites.current_version}}
+        • Target Version: {{outputs.prerequisites.target_version}}
+        • Pending Migrations: {{outputs['migration-status'].pending_migrations}}
           
-          Deployment Verification:
-          • Version Match: {{outputs.version-check.deployed_version == env.BUILD_VERSION ? "✅ Correct" : "❌ Mismatch"}}
-          • Configuration: {{outputs.config-validation.config_valid ? "✅ Valid" : "❌ Invalid"}}
-          • Feature Flags: {{env.ENABLE_NEW_FEATURES == "true" ? outputs.feature-flags.feature_count + " features active" : "Default features"}}
+        Deployment Verification:
+        • Version Match: {{outputs['version-check'].deployed_version == vars.BUILD_VERSION ? "✅ Correct" : "❌ Mismatch"}}
+        • Configuration: {{outputs['config-validation'].config_valid ? "✅ Valid" : "❌ Invalid"}}
+        • Feature Flags: {{vars.ENABLE_NEW_FEATURES == "true" ? outputs['feature-flags'].feature_count + " features active" : "Default features"}}
           
-          Functional Tests:
-          • Authentication: {{outputs.auth-test.auth_response_time}}ms {{outputs.auth-test.auth_response_time < env.RESPONSE_TIME_THRESHOLD ? "✅" : "⚠️"}}
-          • Data Retrieval: {{outputs.data-test.data_response_time}}ms {{outputs.data-test.data_response_time < env.RESPONSE_TIME_THRESHOLD ? "✅" : "⚠️"}}
-          • Data Mutation: {{outputs.mutation-test.mutation_response_time}}ms {{outputs.mutation-test.mutation_response_time < env.RESPONSE_TIME_THRESHOLD ? "✅" : "⚠️"}}
+        Functional Tests:
+        • Authentication: {{outputs['auth-test'].auth_response_time}}ms {{outputs['auth-test'].auth_response_time < vars.RESPONSE_TIME_THRESHOLD ? "✅" : "⚠️"}}
+        • Data Retrieval: {{outputs['data-test'].data_response_time}}ms {{outputs['data-test'].data_response_time < vars.RESPONSE_TIME_THRESHOLD ? "✅" : "⚠️"}}
+        • Data Mutation: {{outputs['mutation-test'].mutation_response_time}}ms {{outputs['mutation-test'].mutation_response_time < vars.RESPONSE_TIME_THRESHOLD ? "✅" : "⚠️"}}
           
-          Performance Validation:
-          {{if env.SKIP_PERFORMANCE_TESTS != "true"}}
-          • Response Time: {{outputs.perf-test.response_time}}ms (Grade: {{outputs.perf-test.performance_grade}})
-          • Performance Status: {{outputs.perf-test.response_time < env.RESPONSE_TIME_THRESHOLD ? "✅ Acceptable" : "⚠️ Slow"}}
-          {{else}}
-          • Performance Tests: ⏭️ Skipped
-          {{end}}
+        Performance Validation:
+        {{if vars.SKIP_PERFORMANCE_TESTS != "true"}}
+        • Response Time: {{outputs['perf-test'].response_time}}ms (Grade: {{outputs['perf-test'].performance_grade}})
+        • Performance Status: {{outputs['perf-test'].response_time < vars.RESPONSE_TIME_THRESHOLD ? "✅ Acceptable" : "⚠️ Slow"}}
+        {{else}}
+        • Performance Tests: ⏭️ Skipped
+        {{end}}
           
-          Overall Deployment Status: {{
-            outputs.version-check.deployed_version == env.BUILD_VERSION &&
-            outputs.config-validation.config_valid &&
-            outputs.auth-test.auth_response_time < env.RESPONSE_TIME_THRESHOLD &&
-            outputs.data-test.data_response_time < env.RESPONSE_TIME_THRESHOLD &&
-            outputs.mutation-test.mutation_response_time < env.RESPONSE_TIME_THRESHOLD ? 
-            "✅ DEPLOYMENT SUCCESSFUL" : "❌ DEPLOYMENT ISSUES DETECTED"
-          }}
+        Overall Deployment Status: {{
+          outputs['version-check'].deployed_version == vars.BUILD_VERSION &&
+          outputs['config-validation'].config_valid &&
+          outputs['auth-test'].auth_response_time < vars.RESPONSE_TIME_THRESHOLD &&
+          outputs['data-test'].data_response_time < vars.RESPONSE_TIME_THRESHOLD &&
+          outputs['mutation-test'].mutation_response_time < vars.RESPONSE_TIME_THRESHOLD ? 
+          "✅ DEPLOYMENT SUCCESSFUL" : "❌ DEPLOYMENT ISSUES DETECTED"
+        }}
           
-          Generated: {{iso8601()}}
+        Generated: {{now().Format('2006-01-02T15:04:05Z07:00')}}
 
-      - name: "Validate Deployment Success"
-        test: |
-          outputs.version-check.deployed_version == env.BUILD_VERSION &&
-          outputs.config-validation.config_valid &&
-          outputs.auth-test.auth_response_time < env.RESPONSE_TIME_THRESHOLD &&
-          outputs.data-test.data_response_time < env.RESPONSE_TIME_THRESHOLD
+    - name: "Validate Deployment Success"
+      test: |
+        outputs['version-check'].deployed_version == vars.BUILD_VERSION &&
+        outputs['config-validation'].config_valid &&
+        outputs['auth-test'].auth_response_time < vars.RESPONSE_TIME_THRESHOLD &&
+        outputs['data-test'].data_response_time < vars.RESPONSE_TIME_THRESHOLD
 ```
 
 ## Step 4: Cross-Environment Consistency Checks
@@ -609,193 +614,202 @@ Create workflows to validate consistency across environments:
 name: "Cross-Environment Consistency Check"
 description: "Validate consistency between environments"
 
-env:
+vars:
   # Define environments to compare
-  PRIMARY_ENVIRONMENT: "{{env.PRIMARY_ENV || 'production'}}"
-  COMPARISON_ENVIRONMENTS: "{{env.COMPARISON_ENVS || 'staging,development'}}"
+  PRIMARY_ENVIRONMENT: "{{vars.PRIMARY_ENV || 'production'}}"
+  COMPARISON_ENVIRONMENTS: "{{vars.COMPARISON_ENVS || 'staging,development'}}"
 
 jobs:
-  version-consistency:
-    name: "Version Consistency Check"
-    steps:
-      - name: "Get Primary Environment Version"
-        id: primary-version
-        action: http
-        with:
-          url: "{{env.PRIMARY_ENV == 'production' ? 'https://api.example.com' : 
-                  env.PRIMARY_ENV == 'staging' ? 'https://api-staging.example.com' :
-                  'https://api-dev.example.com'}}/version"
-        test: res.status == 200
-        outputs:
-          primary_version: res.json.version
-          primary_env: env.PRIMARY_ENVIRONMENT
-          primary_config_version: res.json.configVersion
+- id: version-consistency
+  name: "Version Consistency Check"
+  steps:
+    - name: "Get Primary Environment Version"
+      id: primary-version
+      uses: http
+      with:
+        method: GET
+        url: "{{vars.PRIMARY_ENV == 'production' ? 'https://api.example.com' : 
+                vars.PRIMARY_ENV == 'staging' ? 'https://api-staging.example.com' :
+                'https://api-dev.example.com'}}/version"
+      test: res.code == 200
+      outputs:
+        primary_version: res.body.version
+        primary_env: vars.PRIMARY_ENVIRONMENT
+        primary_config_version: res.body.configVersion
 
-      - name: "Get Staging Environment Version"
-        id: staging-version
-        if: env.PRIMARY_ENVIRONMENT != "staging"
-        action: http
-        with:
-          url: "https://api-staging.example.com/version"
-        test: res.status == 200
-        continue_on_error: true
-        outputs:
-          staging_version: res.json.version
-          staging_config_version: res.json.configVersion
+    - name: "Get Staging Environment Version"
+      id: staging-version
+      uses: http
+      with:
+        method: GET
+        url: "https://api-staging.example.com/version"
+      test: res.code == 200
+      outputs:
+        staging_version: res.body.version
+        staging_config_version: res.body.configVersion
 
-      - name: "Get Development Environment Version"
-        id: dev-version
-        if: env.PRIMARY_ENVIRONMENT != "development"
-        action: http
-        with:
-          url: "https://api-dev.example.com/version"
-        test: res.status == 200
-        continue_on_error: true
-        outputs:
-          dev_version: res.json.version
-          dev_config_version: res.json.configVersion
+    - name: "Get Development Environment Version"
+      id: dev-version
+      uses: http
+      with:
+        method: GET
+        url: "https://api-dev.example.com/version"
+      test: res.code == 200
+      outputs:
+        dev_version: res.body.version
+        dev_config_version: res.body.configVersion
 
-  feature-consistency:
-    name: "Feature Flag Consistency"
-    needs: [version-consistency]
-    steps:
-      - name: "Compare Production vs Staging Features"
-        id: prod-staging-features
-        action: http
-        with:
-          url: "https://api.example.com/features"
-        test: res.status == 200
-        outputs:
-          prod_features: keys(res.json.features)
-          prod_feature_count: len(res.json.features)
+- id: feature-consistency
+  name: "Feature Flag Consistency"
+  needs: [version-consistency]
+  steps:
+    - name: "Compare Production vs Staging Features"
+      id: prod-staging-features
+      uses: http
+      with:
+        method: GET
+        url: "https://api.example.com/features"
+      test: res.code == 200
+      outputs:
+        prod_features: keys(res.body.features)
+        prod_feature_count: len(res.body.features)
 
-      - name: "Get Staging Features"
-        id: staging-features
-        action: http
-        with:
-          url: "https://api-staging.example.com/features"
-        test: res.status == 200
-        outputs:
-          staging_features: keys(res.json.features)
-          staging_feature_count: len(res.json.features)
+    - name: "Get Staging Features"
+      id: staging-features
+      uses: http
+      with:
+        method: GET
+        url: "https://api-staging.example.com/features"
+      test: res.code == 200
+      outputs:
+        staging_features: keys(res.body.features)
+        staging_feature_count: len(res.body.features)
 
-      - name: "Feature Drift Analysis"
-        echo: |
-          === FEATURE FLAG CONSISTENCY ANALYSIS ===
+    - name: "Feature Drift Analysis"
+      uses: hello
+      echo: |
+        === FEATURE FLAG CONSISTENCY ANALYSIS ===
           
-          Production Features: {{outputs.prod-staging-features.prod_feature_count}}
-          Staging Features: {{outputs.staging-features.staging_feature_count}}
+        Production Features: {{outputs['prod-staging-features'].prod_feature_count}}
+        Staging Features: {{outputs['staging-features'].staging_feature_count}}
           
-          Feature Drift: {{abs(sub(outputs.prod-staging-features.prod_feature_count, outputs.staging-features.staging_feature_count))}} features different
+        Feature Drift: {{abs(outputs['prod-staging-features'].prod_feature_count - outputs['staging-features'].staging_feature_count)}} features different
           
-          Status: {{outputs.prod-staging-features.prod_feature_count == outputs.staging-features.staging_feature_count ? "✅ Consistent" : "⚠️ Drift Detected"}}
+        Status: {{outputs['prod-staging-features'].prod_feature_count == outputs['staging-features'].staging_feature_count ? "✅ Consistent" : "⚠️ Drift Detected"}}
 
-  configuration-consistency:
-    name: "Configuration Consistency"
-    needs: [version-consistency]
-    steps:
-      - name: "Database Schema Consistency"
-        id: schema-consistency
-        action: http
-        with:
-          url: "https://api.example.com/schema/version"
-        test: res.status == 200
-        outputs:
-          prod_schema_version: res.json.schemaVersion
-          prod_migration_count: res.json.migrationCount
+- id: configuration-consistency
+  name: "Configuration Consistency"
+  needs: [version-consistency]
+  steps:
+    - name: "Database Schema Consistency"
+      id: schema-consistency
+      uses: http
+      with:
+        method: GET
+        url: "https://api.example.com/schema/version"
+      test: res.code == 200
+      outputs:
+        prod_schema_version: res.body.schemaVersion
+        prod_migration_count: res.body.migrationCount
 
-      - name: "Staging Schema Version"
-        id: staging-schema
-        action: http
-        with:
-          url: "https://api-staging.example.com/schema/version"
-        test: res.status == 200
-        outputs:
-          staging_schema_version: res.json.schemaVersion
-          staging_migration_count: res.json.migrationCount
+    - name: "Staging Schema Version"
+      id: staging-schema
+      uses: http
+      with:
+        method: GET
+        url: "https://api-staging.example.com/schema/version"
+      test: res.code == 200
+      outputs:
+        staging_schema_version: res.body.schemaVersion
+        staging_migration_count: res.body.migrationCount
 
-      - name: "Schema Consistency Report"
-        echo: |
-          === DATABASE SCHEMA CONSISTENCY ===
+    - name: "Schema Consistency Report"
+      uses: hello
+      echo: |
+        === DATABASE SCHEMA CONSISTENCY ===
           
-          Production Schema: v{{outputs.schema-consistency.prod_schema_version}} ({{outputs.schema-consistency.prod_migration_count}} migrations)
-          Staging Schema: v{{outputs.staging-schema.staging_schema_version}} ({{outputs.staging-schema.staging_migration_count}} migrations)
+        Production Schema: v{{outputs['schema-consistency'].prod_schema_version}} ({{outputs['schema-consistency'].prod_migration_count}} migrations)
+        Staging Schema: v{{outputs['staging-schema'].staging_schema_version}} ({{outputs['staging-schema'].staging_migration_count}} migrations)
           
-          Schema Status: {{outputs.schema-consistency.prod_schema_version == outputs.staging-schema.staging_schema_version ? "✅ Synchronized" : "⚠️ Version Mismatch"}}
-          Migration Status: {{outputs.schema-consistency.prod_migration_count == outputs.staging-schema.staging_migration_count ? "✅ Synchronized" : "⚠️ Migration Count Mismatch"}}
+        Schema Status: {{outputs['schema-consistency'].prod_schema_version == outputs['staging-schema'].staging_schema_version ? "✅ Synchronized" : "⚠️ Version Mismatch"}}
+        Migration Status: {{outputs['schema-consistency'].prod_migration_count == outputs['staging-schema'].staging_migration_count ? "✅ Synchronized" : "⚠️ Migration Count Mismatch"}}
 
-  api-consistency:
-    name: "API Endpoint Consistency"
-    needs: [version-consistency]
-    steps:
-      - name: "Get Production API Endpoints"
-        id: prod-endpoints
-        action: http
-        with:
-          url: "https://api.example.com/api/endpoints"
-        test: res.status == 200
-        outputs:
-          prod_endpoints: keys(res.json.endpoints)
-          prod_endpoint_count: len(res.json.endpoints)
+- id: api-consistency
+  name: "API Endpoint Consistency"
+  needs: [version-consistency]
+  steps:
+    - name: "Get Production API Endpoints"
+      id: prod-endpoints
+      uses: http
+      with:
+        method: GET
+        url: "https://api.example.com/api/endpoints"
+      test: res.code == 200
+      outputs:
+        prod_endpoints: keys(res.body.endpoints)
+        prod_endpoint_count: len(res.body.endpoints)
 
-      - name: "Get Staging API Endpoints"
-        id: staging-endpoints
-        action: http
-        with:
-          url: "https://api-staging.example.com/api/endpoints"
-        test: res.status == 200
-        outputs:
-          staging_endpoints: keys(res.json.endpoints)
-          staging_endpoint_count: len(res.json.endpoints)
+    - name: "Get Staging API Endpoints"
+      id: staging-endpoints
+      uses: http
+      with:
+        method: GET
+        url: "https://api-staging.example.com/api/endpoints"
+      test: res.code == 200
+      outputs:
+        staging_endpoints: keys(res.body.endpoints)
+        staging_endpoint_count: len(res.body.endpoints)
 
-      - name: "API Consistency Analysis"
-        echo: |
-          === API ENDPOINT CONSISTENCY ===
+    - name: "API Consistency Analysis"
+      uses: hello
+      echo: |
+        === API ENDPOINT CONSISTENCY ===
           
-          Production Endpoints: {{outputs.prod-endpoints.prod_endpoint_count}}
-          Staging Endpoints: {{outputs.staging-endpoints.staging_endpoint_count}}
+        Production Endpoints: {{outputs['prod-endpoints'].prod_endpoint_count}}
+        Staging Endpoints: {{outputs['staging-endpoints'].staging_endpoint_count}}
           
-          Endpoint Drift: {{abs(sub(outputs.prod-endpoints.prod_endpoint_count, outputs.staging-endpoints.staging_endpoint_count))}} endpoints different
+        Endpoint Drift: {{abs(outputs['prod-endpoints'].prod_endpoint_count - outputs['staging-endpoints'].staging_endpoint_count)}} endpoints different
           
-          API Status: {{outputs.prod-endpoints.prod_endpoint_count == outputs.staging-endpoints.staging_endpoint_count ? "✅ Consistent" : "⚠️ Endpoint Drift"}}
+        API Status: {{outputs['prod-endpoints'].prod_endpoint_count == outputs['staging-endpoints'].staging_endpoint_count ? "✅ Consistent" : "⚠️ Endpoint Drift"}}
 
-  consistency-report:
-    name: "Overall Consistency Report"
-    needs: [version-consistency, feature-consistency, configuration-consistency, api-consistency]
-    steps:
-      - name: "Generate Consistency Report"
-        echo: |
-          🔍 === CROSS-ENVIRONMENT CONSISTENCY REPORT ===
+- id: consistency-report
+  name: "Overall Consistency Report"
+  needs: [version-consistency, feature-consistency, configuration-consistency, api-consistency]
+  steps:
+    - name: "Generate Consistency Report"
+      uses: hello
+      echo: |
+        🔍 === CROSS-ENVIRONMENT CONSISTENCY REPORT ===
           
-          Environment Versions:
-          • Production: {{outputs.primary-version.primary_version}} (config: {{outputs.primary-version.primary_config_version}})
-          • Staging: {{outputs.staging-version.staging_version || "N/A"}} (config: {{outputs.staging-version.staging_config_version || "N/A"}})
-          • Development: {{outputs.dev-version.dev_version || "N/A"}} (config: {{outputs.dev-version.dev_config_version || "N/A"}})
+        Environment Versions:
+        • Production: {{outputs['primary-version'].primary_version}} (config: {{outputs['primary-version'].primary_config_version}})
+        • Staging: {{outputs['staging-version'].staging_version || "N/A"}} (config: {{outputs['staging-version'].staging_config_version || "N/A"}})
+        • Development: {{outputs['dev-version'].dev_version || "N/A"}} (config: {{outputs['dev-version'].dev_config_version || "N/A"}})
           
-          Consistency Checks:
-          • Version Alignment: {{outputs.primary-version.primary_version == outputs.staging-version.staging_version ? "✅ Aligned" : "⚠️ Misaligned"}}
-          • Feature Flags: {{outputs.prod-staging-features.prod_feature_count == outputs.staging-features.staging_feature_count ? "✅ Consistent" : "⚠️ Drift Detected"}}
-          • Database Schema: {{outputs.schema-consistency.prod_schema_version == outputs.staging-schema.staging_schema_version ? "✅ Synchronized" : "⚠️ Mismatch"}}
-          • API Endpoints: {{outputs.prod-endpoints.prod_endpoint_count == outputs.staging-endpoints.staging_endpoint_count ? "✅ Consistent" : "⚠️ Drift"}}
+        Consistency Checks:
+        • Version Alignment: {{outputs['primary-version'].primary_version == outputs['staging-version'].staging_version ? "✅ Aligned" : "⚠️ Misaligned"}}
+        • Feature Flags: {{outputs['prod-staging-features'].prod_feature_count == outputs['staging-features'].staging_feature_count ? "✅ Consistent" : "⚠️ Drift Detected"}}
+        • Database Schema: {{outputs['schema-consistency'].prod_schema_version == outputs['staging-schema'].staging_schema_version ? "✅ Synchronized" : "⚠️ Mismatch"}}
+        • API Endpoints: {{outputs['prod-endpoints'].prod_endpoint_count == outputs['staging-endpoints'].staging_endpoint_count ? "✅ Consistent" : "⚠️ Drift"}}
           
-          Recommendations:
-          {{if outputs.primary-version.primary_version != outputs.staging-version.staging_version}}
-          ⚠️ Version mismatch detected - consider updating staging environment
-          {{end}}
-          {{if outputs.schema-consistency.prod_schema_version != outputs.staging-schema.staging_schema_version}}
-          ⚠️ Schema version mismatch - verify migration deployment
-          {{end}}
-          {{if outputs.prod-staging-features.prod_feature_count != outputs.staging-features.staging_feature_count}}
-          ⚠️ Feature flag drift - review feature flag synchronization
-          {{end}}
+        Recommendations:
+        {{if outputs['primary-version'].primary_version != outputs['staging-version'].staging_version}}
+        ⚠️ Version mismatch detected - consider updating staging environment
+        {{end}}
+        {{if outputs['schema-consistency'].prod_schema_version != outputs['staging-schema'].staging_schema_version}}
+        ⚠️ Schema version mismatch - verify migration deployment
+        {{end}}
+        {{if outputs['prod-staging-features'].prod_feature_count != outputs['staging-features'].staging_feature_count}}
+        ⚠️ Feature flag drift - review feature flag synchronization
+        {{end}}
           
-          Overall Status: {{
-            outputs.primary-version.primary_version == outputs.staging-version.staging_version &&
-            outputs.schema-consistency.prod_schema_version == outputs.staging-schema.staging_schema_version ?
-            "✅ ENVIRONMENTS CONSISTENT" : "⚠️ CONSISTENCY ISSUES DETECTED"
-          }}
+        Overall Status: {{
+          outputs['primary-version'].primary_version == outputs['staging-version'].staging_version &&
+          outputs['schema-consistency'].prod_schema_version == outputs['staging-schema'].staging_schema_version ?
+          "✅ ENVIRONMENTS CONSISTENT" : "⚠️ CONSISTENCY ISSUES DETECTED"
+        }}
           
-          Generated: {{iso8601()}}
+        Generated: {{now().Format('2006-01-02T15:04:05Z07:00')}}
 ```
 
 ## Step 5: Automated Deployment Pipeline Integration
@@ -909,8 +923,7 @@ case $ENVIRONMENT in
 esac
 
 # Common environment variables
-export PROBE_LOG_LEVEL=${PROBE_LOG_LEVEL:-info}
-export PROBE_NO_COLOR=${PROBE_NO_COLOR:-false}
+export PROBE_OUTPUT=${PROBE_OUTPUT:-auto}
 
 echo "✅ Environment setup complete for: $ENVIRONMENT"
 ```
@@ -1003,9 +1016,9 @@ jobs:
       - name: Run deployment validation
         run: |
           chmod +x scripts/deploy-validation.sh
-          ./scripts/deploy-validation.sh ${{ matrix.environment }} ${{ needs.determine-environments.outputs.build-version }}
+          ./scripts/deploy-validation.sh ${{ matrix.environment }} ${{ needs.determine-environments.outputs['build-version'] }}
         env:
-          BUILD_VERSION: ${{ needs.determine-environments.outputs.build-version }}
+          BUILD_VERSION: ${{ needs.determine-environments.outputs['build-version'] }}
           DEPLOYMENT_ID: ${{ github.run_id }}-${{ matrix.environment }}
       
       - name: Upload test results
@@ -1048,7 +1061,7 @@ jobs:
         run: |
           echo "## 🚀 Multi-Environment Deployment Report" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Build Version:** ${{ needs.determine-environments.outputs.build-version }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Build Version:** ${{ needs.determine-environments.outputs['build-version'] }}" >> $GITHUB_STEP_SUMMARY
           echo "**Environments:** ${{ needs.determine-environments.outputs.environments }}" >> $GITHUB_STEP_SUMMARY
           echo "**Timestamp:** $(date -u +"%Y-%m-%dT%H:%M:%SZ")" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
@@ -1100,27 +1113,31 @@ Create tests for blue-green deployments:
 name: "Blue-Green Deployment Validation"
 
 jobs:
-  blue-green-test:
-    steps:
-      - name: "Test Blue Environment"
-        id: blue-test
-        action: http
-        with:
-          url: "{{env.BLUE_URL}}/health"
-        test: res.status == 200
+- id: blue-green-test
+  name: blue-green-test
+  steps:
+    - name: "Test Blue Environment"
+      id: blue-test
+      uses: http
+      with:
+        method: GET
+        url: "{{vars.BLUE_URL}}/health"
+      test: res.code == 200
         
-      - name: "Test Green Environment"
-        id: green-test
-        action: http
-        with:
-          url: "{{env.GREEN_URL}}/health"
-        test: res.status == 200
+    - name: "Test Green Environment"
+      id: green-test
+      uses: http
+      with:
+        method: GET
+        url: "{{vars.GREEN_URL}}/health"
+      test: res.code == 200
         
-      - name: "Compare Environment Performance"
-        echo: |
-          Blue Environment: {{outputs.blue-test.time}}ms
-          Green Environment: {{outputs.green-test.time}}ms
-          Performance Difference: {{abs(sub(outputs.blue-test.time, outputs.green-test.time))}}ms
+    - name: "Compare Environment Performance"
+      uses: hello
+      echo: |
+        Blue Environment: {{outputs['blue-test'].time}}ms
+        Green Environment: {{outputs['green-test'].time}}ms
+        Performance Difference: {{abs(outputs['blue-test'].time - outputs['green-test'].time)}}ms
 ```
 
 ### Canary Deployment Testing
@@ -1132,16 +1149,18 @@ Monitor canary deployments:
 name: "Canary Deployment Validation"
 
 jobs:
-  canary-monitoring:
-    steps:
-      - name: "Monitor Canary Traffic"
-        action: http
-        with:
-          url: "{{env.API_BASE_URL}}/metrics/canary"
-        test: |
-          res.status == 200 &&
-          res.json.canaryTrafficPercent <= env.MAX_CANARY_TRAFFIC &&
-          res.json.canaryErrorRate < env.MAX_CANARY_ERROR_RATE
+- id: canary-monitoring
+  name: canary-monitoring
+  steps:
+    - name: "Monitor Canary Traffic"
+      uses: http
+      with:
+        method: GET
+        url: "{{vars.API_BASE_URL}}/metrics/canary"
+      test: |
+        res.code == 200 &&
+        res.body.canaryTrafficPercent <= vars.MAX_CANARY_TRAFFIC &&
+        res.body.canaryErrorRate < vars.MAX_CANARY_ERROR_RATE
 ```
 
 ## Troubleshooting

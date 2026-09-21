@@ -44,6 +44,7 @@ Probe には一般的な使用例をカバーする組み込みアクション�
 ```yaml
 - name: Comprehensive HTTP Request
   uses: http
+  timeout: 30s                                  # オプション: リクエストタイムアウト
   with:
     url: https://api.example.com/users/123        # 必須: ターゲット URL
     method: POST                                  # オプション: HTTP メソッド (デフォルト: GET)
@@ -57,15 +58,11 @@ Probe には一般的な使用例をカバーする組み込みアクション�
         "email": "john@example.com",
         "active": true
       }
-    timeout: 30s                                  # オプション: リクエストタイムアウト
-    follow_redirects: true                        # オプション: HTTP リダイレクトに従う
-    verify_ssl: true                             # オプション: SSL 証明書を検証
-    max_redirects: 5                             # オプション: 最大リダイレクト回数
-  test: res.code == 200 && res.body.json.success == true
+  test: res.code == 200 && res.body.success == true
   outputs:
-    user_id: res.body.json.user.id
-    created_at: res.body.json.user.created_at
-    response_time: res.time
+    user_id: res.body.user.id
+    created_at: res.body.user.created_at
+    response_time: (rt.sec * 1000)
 ```
 
 #### HTTP レスポンス オブジェクト
@@ -76,11 +73,11 @@ HTTP アクションは豊富なレスポンスオブジェクトを提供しま
 # 利用可能なレスポンスプロパティ:
 test: |
   res.code == 200 &&                    # HTTP ステータスコード
-  res.time < 1000 &&                      # レスポンス時間（ミリ秒）
+  (rt.sec * 1000) < 1000 &&                      # レスポンス時間（ミリ秒）
   res.body_size < 10000 &&               # レスポンスボディサイズ（バイト）
-  res.headers["content-type"] == "application/json" &&  # レスポンスヘッダー
-  res.body.json.success == true &&            # 解析された JSON ボディ（該当する場合）
-  res.text.contains("success")           # テキストとしてのレスポンスボディ
+  res.headers["Content-Type"] == "application/json" &&  # レスポンスヘッダー
+  res.body.success == true &&            # 解析された JSON ボディ（該当する場合）
+  res.body contains "success"           # テキストとしてのレスポンスボディ
 ```
 
 #### 一般的な HTTP パターン
@@ -88,34 +85,35 @@ test: |
 **API 認証:**
 ```yaml
 jobs:
-  api-test:
-    steps:
-      - name: Authenticate
-        id: auth
-        uses: http
-        with:
-          url: "{{vars.api_base_url}}/auth/login"
-          method: POST
-          headers:
-            Content-Type: "application/json"
-          body: |
-            {
-              "username": "{{vars.api_username}}",
-              "password": "{{vars.api_password}}"
-            }
-        test: res.code == 200
-        outputs:
-          access_token: res.body.json.access_token
-          refresh_token: res.body.json.refresh_token
+- id: api-test
+  name: api-test
+  steps:
+    - name: Authenticate
+      id: auth
+      uses: http
+      with:
+        url: "{{vars.api_base_url}}/auth/login"
+        method: POST
+        headers:
+          Content-Type: "application/json"
+        body: |
+          {
+            "username": "{{vars.api_username}}",
+            "password": "{{vars.api_password}}"
+          }
+      test: res.code == 200
+      outputs:
+        access_token: res.body.access_token
+        refresh_token: res.body.refresh_token
 
-      - name: Make Authenticated Request
-        uses: http
-        with:
-          url: "{{vars.api_base_url}}/protected/resource"
-          method: GET
-          headers:
-            Authorization: "Bearer {{outputs.auth.access_token}}"
-        test: res.code == 200
+    - name: Make Authenticated Request
+      uses: http
+      with:
+        url: "{{vars.api_base_url}}/protected/resource"
+        method: GET
+        headers:
+          Authorization: "Bearer {{outputs.auth.access_token}}"
+      test: res.code == 200
 ```
 
 **ファイルアップロード:**
@@ -152,10 +150,10 @@ jobs:
         "query": "query GetUser($id: ID!) { user(id: $id) { name email active } }",
         "variables": { "id": "{{vars.test_user_id}}" }
       }
-  test: res.code == 200 && res.body.json.data.user != null
+  test: res.code == 200 && res.body.data.user != null
   outputs:
-    user_name: res.body.json.data.user.name
-    user_email: res.body.json.data.user.email
+    user_name: res.body.data.user.name
+    user_email: res.body.data.user.email
 ```
 
 ### Shell アクション
@@ -200,7 +198,7 @@ jobs:
 # 利用可能なレスポンスプロパティ:
 test: |
   res.code == 0 &&                         # 終了コード（0 = 成功）
-  res.stdout.contains("success") &&        # 標準出力
+  res.stdout contains "success" &&        # 標準出力
   res.stderr == "" &&                      # 標準エラー（空 = エラーなし）
   req.cmd == "npm run build" &&           # 元のコマンド
   req.shell == "/bin/bash"                # 実行に使用されたシェル
@@ -211,34 +209,35 @@ test: |
 **ビルドとテストのパイプライン:**
 ```yaml
 jobs:
-  build-and-test:
-    steps:
-      - name: Install Dependencies
-        uses: shell
-        with:
-          cmd: "npm ci"
-          workdir: "/app"
-          timeout: "5m"
-        test: res.code == 0
+- id: build-and-test
+  name: build-and-test
+  steps:
+    - name: Install Dependencies
+      uses: shell
+      with:
+        cmd: "npm ci"
+        workdir: "/app"
+        timeout: "5m"
+      test: res.code == 0
 
-      - name: Run Tests
-        uses: shell
-        with:
-          cmd: "npm test"
-          workdir: "/app"
-          env:
-            NODE_ENV: "test"
-            CI: "true"
-        test: res.code == 0
+    - name: Run Tests
+      uses: shell
+      with:
+        cmd: "npm test"
+        workdir: "/app"
+        env:
+          NODE_ENV: "test"
+          CI: "true"
+      test: res.code == 0
 
-      - name: Build Application
-        uses: shell
-        with:
-          cmd: "npm run build"
-          workdir: "/app"
-          env:
-            NODE_ENV: "production"
-        test: res.code == 0
+    - name: Build Application
+      uses: shell
+      with:
+        cmd: "npm run build"
+        workdir: "/app"
+        env:
+          NODE_ENV: "production"
+      test: res.code == 0
 ```
 
 **システムヘルス監視:**
@@ -272,23 +271,19 @@ shell アクションは複数のセキュリティレイヤーを実装しま�
 
 ```yaml
 - name: Test Hello Action
+  id: hello
   uses: hello
   with:
-    message: "Test message"           # オプション: カスタムメッセージ
-    delay: 1s                        # オプション: 人工的な遅延
-  test: res.code == "success"
+    message: "Test message"           # res にそのまま返る
+  echo: "{{res.message}}"
   outputs:
     greeting: res.message
-    timestamp: res.timestamp
 ```
 
-**Hello アクション レスポンス:**
+**Hello アクション レスポンス:** このアクション固有のパラメータはありません。`with` に渡したキーはそのまま `res` に返り、`status` は常に `0` です。
+
 ```yaml
-# 利用可能なレスポンスプロパティ:
-test: |
-  res.code == "success" &&         # 常に "success"
-  res.message != null &&             # 挨拶メッセージ
-  res.timestamp != null              # 実行タイムスタンプ
+test: status == 0 && res.message != null
 ```
 
 ### SMTP アクション
@@ -299,25 +294,14 @@ test: |
 - name: Send Email Notification
   uses: smtp
   with:
-    host: smtp.gmail.com              # SMTP サーバーホスト
-    port: 587                         # SMTP サーバーポート
-    username: "{{vars.smtp_username}}" # SMTP 認証ユーザー名
-    password: "{{vars.smtp_password}}" # SMTP 認証パスワード
+    addr: "smtp.gmail.com              # SMTP サーバーホスト:587                         # SMTP サーバーポート"
     from: alerts@mycompany.com        # 送信者メールアドレス
     to: ["admin@mycompany.com", "team@mycompany.com"]  # 受信者
-    cc: ["manager@mycompany.com"]     # CC 受信者（オプション）
-    bcc: ["audit@mycompany.com"]      # BCC 受信者（オプション）
     subject: "System Alert: {{vars.alert_type}}"       # メール件名
-    body: |                           # メール本文（プレーンテキストまたは HTML）
-      System Alert Notification
-      
-      Alert Type: {{vars.alert_type}}
-      Time: {{unixtime()}}
-      Service: {{vars.service_name}}
-      
-      Please investigate immediately.
-    html: true                        # オプション: HTML として送信
-    tls: true                        # オプション: TLS 暗号化を使用
+    session: 1
+    message: 1
+    length: 500
+  echo: |                           # メール本文（プレーンテキストまたは HTML）
   test: res.code == "sent"
   outputs:
     message_id: res.message_id
@@ -368,6 +352,7 @@ Probeは全てのアクションで利用可能な統一されたリトライ機
 - name: "Service Health Check"
   uses: http
   with:
+    method: GET
     url: "http://localhost:8080/health"
   retry:
     max_attempts: 10      # 最大試行回数 (1-100)
@@ -424,15 +409,15 @@ Probeは全てのアクションで利用可能な統一されたリトライ機
 ```yaml
 - name: "Wait for API Server"
   uses: http
+  timeout: "5s"
   with:
     url: "{{vars.api_base_url}}/health"
     method: GET
-    timeout: "5s"
   retry:
     max_attempts: 30
     interval: "2s"
     initial_delay: "10s"
-  test: res.code == 200 && res.body.json.status == "healthy"
+  test: res.code == 200 && res.body.status == "healthy"
 ```
 
 #### Shell リトライ - サービス起動監視
@@ -469,26 +454,29 @@ Probeは全てのアクションで利用可能な統一されたリトライ機
 
 ```yaml
 jobs:
-  staged-startup:
-    steps:
-      - name: "Quick Health Check"
-        uses: http
-        with:
-          url: "{{vars.service_url}}/ping"
-        retry:
-          max_attempts: 5
-          interval: "100ms"
-        test: res.code == 200
+- id: staged-startup
+  name: staged-startup
+  steps:
+    - name: "Quick Health Check"
+      uses: http
+      with:
+        method: GET
+        url: "{{vars.service_url}}/ping"
+      retry:
+        max_attempts: 5
+        interval: "100ms"
+      test: res.code == 200
 
-      - name: "Detailed Health Check"
-        uses: http
-        with:
-          url: "{{vars.service_url}}/health"
-        retry:
-          max_attempts: 30
-          interval: "2s"
-          initial_delay: "1s"
-        test: res.code == 200 && res.body.json.database_connected == true
+    - name: "Detailed Health Check"
+      uses: http
+      with:
+        method: GET
+        url: "{{vars.service_url}}/health"
+      retry:
+        max_attempts: 30
+        interval: "2s"
+        initial_delay: "1s"
+      test: res.code == 200 && res.body.database_connected == true
 ```
 
 #### 条件付きリトライ
@@ -497,6 +485,7 @@ jobs:
 - name: "Environment-Aware Health Check"
   uses: http
   with:
+    method: GET
     url: "{{vars.service_url}}/health"
   retry:
     max_attempts: "{{vars.environment == 'production' ? 60 : 10}}"
@@ -511,9 +500,10 @@ jobs:
 # 良い例: リトライ間隔より短いタイムアウト
 - name: "Quick API Check"
   uses: http
+  timeout: "2s"        # 短いタイムアウト
   with:
+    method: GET
     url: "{{vars.api_url}}/ping"
-    timeout: "2s"        # 短いタイムアウト
   retry:
     max_attempts: 10
     interval: "3s"       # タイムアウトより長い間隔
@@ -553,55 +543,52 @@ jobs:
 
 ```yaml
 jobs:
-  resilient-http-check:
-    steps:
-      - name: Primary Endpoint Check
-        id: primary
-        uses: http
-        with:
-          url: "{{vars.primary_url}}/health"
-          method: GET
-          timeout: 10s
-        test: res.code == 200
-        continue_on_error: true
-        outputs:
-          primary_healthy: res.code == 200
-          primary_response_time: res.time
+- id: resilient-http-check
+  name: resilient-http-check
+  steps:
+    - name: Primary Endpoint Check
+      id: primary
+      uses: http
+      timeout: 10s
+      with:
+        url: "{{vars.primary_url}}/health"
+        method: GET
+      test: res.code == 200
+      outputs:
+        primary_healthy: res.code == 200
+        primary_response_time: (rt.sec * 1000)
 
-      - name: Secondary Endpoint Check
-        if: "!outputs.primary.primary_healthy"
-        id: secondary
-        uses: http
-        with:
-          url: "{{vars.secondary_url}}/health"
-          method: GET
-          timeout: 15s
-        test: res.code == 200
-        continue_on_error: true
-        outputs:
-          secondary_healthy: res.code == 200
-          secondary_response_time: res.time
+    - name: Secondary Endpoint Check
+      id: secondary
+      uses: http
+      timeout: 15s
+      with:
+        url: "{{vars.secondary_url}}/health"
+        method: GET
+      test: res.code == 200
+      outputs:
+        secondary_healthy: res.code == 200
+        secondary_response_time: (rt.sec * 1000)
 
-      - name: Alert on Total Failure
-        if: "!outputs.primary.primary_healthy && !outputs.secondary.secondary_healthy"
-        uses: smtp
-        with:
-          host: "{{vars.smtp_host}}"
-          port: 587
-          username: "{{vars.smtp_user}}"
-          password: "{{vars.smtp_pass}}"
-          from: "alerts@company.com"
-          to: ["ops-team@company.com"]
-          subject: "CRITICAL: All endpoints down"
-          body: |
-            CRITICAL ALERT: All monitored endpoints are down
-            
-            Primary Endpoint: FAILED
-            Secondary Endpoint: FAILED
-            
-            Time: {{unixtime()}}
-            
-            Immediate investigation required!
+    - name: Alert on Total Failure
+      uses: smtp
+      with:
+        addr: "{{vars.smtp_host}}:587"
+        from: "alerts@company.com"
+        to: "ops-team@company.com"
+        subject: "CRITICAL: All endpoints down"
+        session: 1
+        message: 1
+        length: 500
+      echo: |
+        CRITICAL ALERT: All monitored endpoints are down
+          
+        Primary Endpoint: FAILED
+        Secondary Endpoint: FAILED
+          
+        Time: {{unixtime()}}
+          
+        Immediate investigation required!
 ```
 
 ### アクション構成パターン
@@ -610,85 +597,85 @@ jobs:
 
 ```yaml
 jobs:
-  comprehensive-api-test:
-    name: Comprehensive API Testing
-    steps:
-      # 1. ヘルスチェック
-      - name: Verify API Health
-        id: health
-        uses: http
-        with:
-          url: "{{vars.api_url}}/health"
-        test: res.code == 200
-        outputs:
-          api_version: res.body.json.version
-          database_connected: res.body.json.database.connected
+- id: comprehensive-api-test
+  name: Comprehensive API Testing
+  steps:
+    # 1. ヘルスチェック
+    - name: Verify API Health
+      id: health
+      uses: http
+      with:
+        method: GET
+        url: "{{vars.api_url}}/health"
+      test: res.code == 200
+      outputs:
+        api_version: res.body.version
+        database_connected: res.body.database.connected
 
-      # 2. 認証テスト
-      - name: Test Authentication
-        id: auth
-        uses: http
-        with:
-          url: "{{vars.api_url}}/auth/token"
-          method: POST
-          headers:
-            Content-Type: "application/json"
-          body: |
-            {
-              "client_id": "{{vars.client_id}}",
-              "client_secret": "{{vars.client_secret}}",
-              "grant_type": "client_credentials"
-            }
-        test: res.code == 200
-        outputs:
-          access_token: res.body.json.access_token
-          token_expires: res.body.json.expires_in
+    # 2. 認証テスト
+    - name: Test Authentication
+      id: auth
+      uses: http
+      with:
+        url: "{{vars.api_url}}/auth/token"
+        method: POST
+        headers:
+          Content-Type: "application/json"
+        body: |
+          {
+            "client_id": "{{vars.client_id}}",
+            "client_secret": "{{vars.client_secret}}",
+            "grant_type": "client_credentials"
+          }
+      test: res.code == 200
+      outputs:
+        access_token: res.body.access_token
+        token_expires: res.body.expires_in
 
-      # 3. 機能テスト
-      - name: Test Core Functionality
-        id: functional
-        uses: http
-        with:
-          url: "{{vars.api_url}}/api/test"
-          method: GET
-          headers:
-            Authorization: "Bearer {{outputs.auth.access_token}}"
-        test: res.code == 200 && res.body.json.test_passed == true
-        outputs:
-          test_duration: res.time
-          test_results: res.body.json.results
+    # 3. 機能テスト
+    - name: Test Core Functionality
+      id: functional
+      uses: http
+      with:
+        url: "{{vars.api_url}}/api/test"
+        method: GET
+        headers:
+          Authorization: "Bearer {{outputs.auth.access_token}}"
+      test: res.code == 200 && res.body.test_passed == true
+      outputs:
+        test_duration: (rt.sec * 1000)
+        test_results: res.body.results
 
-      # 4. パフォーマンス検証
-      - name: Validate Performance
-        if: outputs.functional.test_duration > 2000
-        uses: smtp
-        with:
-          host: "{{vars.smtp_host}}"
-          port: 587
-          username: "{{vars.smtp_user}}"
-          password: "{{vars.smtp_pass}}"
-          from: "performance@company.com"
-          to: ["dev-team@company.com"]
-          subject: "Performance Alert: Slow API Response"
-          body: |
-            Performance Alert
-            
-            API Version: {{outputs.health.api_version}}
-            Response Time: {{outputs.functional.test_duration}}ms
-            Expected: < 2000ms
-            
-            Please investigate performance degradation.
-
-      # 5. 成功通知
-      - name: Success Report
-        if: outputs.functional.test_duration <= 2000
-        echo: |
-          ✅ API Test Suite Completed Successfully
+    # 4. パフォーマンス検証
+    - name: Validate Performance
+      uses: smtp
+      with:
+        addr: "{{vars.smtp_host}}:587"
+        from: "performance@company.com"
+        to: "dev-team@company.com"
+        subject: "Performance Alert: Slow API Response"
+        session: 1
+        message: 1
+        length: 500
+      echo: |
+        Performance Alert
           
-          Health Check: ✅ (v{{outputs.health.api_version}})
-          Authentication: ✅ (expires in {{outputs.auth.token_expires}}s)
-          Functionality: ✅ ({{outputs.functional.test_duration}}ms)
-          Performance: ✅ (within acceptable limits)
+        API Version: {{outputs.health.api_version}}
+        Response Time: {{outputs.functional.test_duration}}ms
+        Expected: < 2000ms
+          
+        Please investigate performance degradation.
+
+        功通知
+    - name: Success Report
+      uses: hello
+      echo: |
+        ✅ API Test Suite Completed Successfully
+          
+        Health Check: ✅ (v{{outputs.health.api_version}})
+        Authentication: ✅ (expires in {{outputs.auth.token_expires}}s)
+        Functionality: ✅ ({{outputs.functional.test_duration}}ms)
+        Performance: ✅ (within acceptable limits)
 ```
 
 ### 動的アクション設定
@@ -697,51 +684,51 @@ jobs:
 
 ```yaml
 jobs:
-  adaptive-monitoring:
-    steps:
-      - name: Determine Environment
-        id: env
-        uses: http
-        with:
-          url: "{{vars.config_service_url}}/environment"
-        test: res.code == 200
-        outputs:
-          environment: res.body.json.environment
-          notification_level: res.body.json.notifications.level
-          smtp_config: res.body.json.smtp
+- id: adaptive-monitoring
+  name: adaptive-monitoring
+  steps:
+    - name: Determine Environment
+      id: env
+      uses: http
+      with:
+        method: GET
+        url: "{{vars.config_service_url}}/environment"
+      test: res.code == 200
+      outputs:
+        environment: res.body.environment
+        notification_level: res.body.notifications.level
+        smtp_config: res.body.smtp
 
-      - name: Environment-Specific Health Check
-        id: health
-        uses: http
-        with:
-          url: "{{vars.service_url}}/health"
-          timeout: "{{outputs.env.environment == 'production' ? '5s' : '30s'}}"
-        test: res.code == 200
-        outputs:
-          service_status: res.body.json.status
-          error_count: res.body.json.errors
+    - name: Environment-Specific Health Check
+      id: health
+      uses: http
+      timeout: "{{outputs.vars.environment == 'production' ? '5s' : '30s'}}"
+      with:
+        method: GET
+        url: "{{vars.service_url}}/health"
+      test: res.code == 200
+      outputs:
+        service_status: res.body.status
+        error_count: res.body.errors
 
-      - name: Conditional Alert
-        if: |
-          outputs.health.error_count > 0 && 
-          (outputs.env.environment == "production" || outputs.env.notification_level == "verbose")
-        uses: smtp
-        with:
-          host: "{{outputs.env.smtp_config.host}}"
-          port: "{{outputs.env.smtp_config.port}}"
-          username: "{{outputs.env.smtp_config.username}}"
-          password: "{{vars.smtp_password}}"
-          from: "monitoring@company.com"
-          to: "{{outputs.env.environment == 'production' ? ['ops@company.com', 'management@company.com'] : ['dev@company.com']}}"
-          subject: "{{outputs.env.environment == 'production' ? 'PRODUCTION' : 'NON-PROD'}} Alert: Service Errors Detected"
-          body: |
-            Service Error Alert
-            
-            Environment: {{outputs.env.environment}}
-            Service Status: {{outputs.health.service_status}}
-            Error Count: {{outputs.health.error_count}}
-            
-            {{outputs.env.environment == "production" ? "IMMEDIATE ACTION REQUIRED" : "Please investigate when convenient"}}
+    - name: Conditional Alert
+      uses: smtp
+      with:
+        addr: "{{outputs.vars.smtp_config.host}}:{{outputs.vars.smtp_config.port}}"
+        from: "monitoring@company.com"
+        to: "{{outputs.vars.environment == 'production' ? ['ops@company.com', 'management@company.com'] : ['dev@company.com']}}"
+        subject: "{{outputs.vars.environment == 'production' ? 'PRODUCTION' : 'NON-PROD'}} Alert: Service Errors Detected"
+        session: 1
+        message: 1
+        length: 500
+      echo: |
+        Service Error Alert
+          
+        Environment: {{outputs.vars.environment}}
+        Service Status: {{outputs.health.service_status}}
+        Error Count: {{outputs.health.error_count}}
+          
+        {{outputs.vars.environment == "production" ? "IMMEDIATE ACTION REQUIRED" : "Please investigate when convenient"}}
 ```
 
 ## プラグインアーキテクチャ詳細
@@ -787,15 +774,17 @@ probe workflow.yml  # 必要なプラグインを自動的に読み込みます
 # 良い例: 期待されるレスポンス時間に基づく具体的なタイムアウト
 - name: Quick Health Check
   uses: http
+  timeout: 5s              # クイックping は高速でレスポンスすべき
   with:
+    method: GET
     url: "{{vars.api_url}}/ping"
-    timeout: 5s              # クイックping は高速でレスポンスすべき
 
 - name: Complex Query
   uses: http
+  timeout: 60s             # 複雑な操作にはより多くの時間が必要
   with:
+    method: GET
     url: "{{vars.api_url}}/complex-report"
-    timeout: 60s             # 複雑な操作にはより多くの時間が必要
 ```
 
 ### 2. エラーハンドリング戦略
@@ -807,17 +796,17 @@ probe workflow.yml  # 必要なプラグインを自動的に読み込みます
 - name: Database Connectivity Check
   uses: http
   with:
+    method: GET
     url: "{{vars.db_url}}/ping"
   test: res.code == 200
-  continue_on_error: false   # デフォルト: 失敗時に停止
 
 # 非重要なアクション - エラーでも継続
 - name: Optional Analytics Update
   uses: http
   with:
+    method: GET
     url: "{{vars.analytics_url}}/update"
   test: res.code == 200
-  continue_on_error: true    # これが失敗しても継続
 ```
 
 ### 3. 安全な設定
@@ -829,6 +818,7 @@ probe workflow.yml  # 必要なプラグインを自動的に読み込みます
 - name: Authenticated Request
   uses: http
   with:
+    method: GET
     url: "{{vars.api_url}}/secure"
     headers:
       Authorization: "Bearer {{vars.api_token}}"  # vars から
@@ -837,11 +827,12 @@ probe workflow.yml  # 必要なプラグインを自動的に読み込みます
 - name: Send Alert
   uses: smtp
   with:
-    host: "{{vars.smtp_host}}"
-    username: "{{vars.smtp_user}}"
-    password: "{{vars.smtp_pass}}"     # パスワードを決してハードコードしない
-
-# 避ける: ハードコードされたシークレット
+    addr: "{{vars.smtp_host}}:25"
+    from: "probe@example.com"
+    to: "ops@example.com"
+    session: 1
+    message: 1
+    length: 500
 - name: Bad Example
   uses: http
   with:
@@ -857,16 +848,17 @@ probe workflow.yml  # 必要なプラグインを自動的に読み込みます
 - name: Comprehensive API Test
   uses: http
   with:
+    method: GET
     url: "{{vars.api_url}}/users"
   test: |
     res.code == 200 &&
-    res.headers["content-type"].contains("application/json") &&
-    res.body.json.users != null &&
-    res.body.json.users.length > 0 &&
-    res.time < 1000
+    res.headers["Content-Type"] contains "application/json" &&
+    res.body.users != null &&
+    len(res.body.users) > 0 &&
+    (rt.sec * 1000) < 1000
   outputs:
-    user_count: res.body.json.users.length
-    response_time: res.time
+    user_count: len(res.body.users)
+    response_time: (rt.sec * 1000)
 ```
 
 ### 5. 意味のある出力
@@ -882,10 +874,10 @@ probe workflow.yml  # 必要なプラグインを自動的に読み込みます
     body: '{"name": "Test User", "email": "test@example.com"}'
   test: res.code == 201
   outputs:
-    created_user_id: res.body.json.user.id
-    created_user_email: res.body.json.user.email
-    creation_timestamp: res.body.json.user.created_at
-    response_time: res.time
+    created_user_id: res.body.user.id
+    created_user_email: res.body.user.email
+    creation_timestamp: res.body.user.created_at
+    response_time: (rt.sec * 1000)
 ```
 
 ## カスタムアクション（上級）
