@@ -451,8 +451,23 @@
     display: grid;
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
     column-gap: clamp(2.5rem, 4vw, 4.5rem);
-    max-width: 1600px;
+    /* Wider than the other sections, so each diagram grows with it. */
+    max-width: 2000px;
     padding-inline: var(--lp-gutter);
+    position: relative;
+  }
+
+  /*
+   * The pair is wider than the rest of the page, but its rule should not be:
+   * draw it at the width every other section rule takes.
+   */
+  .lp-duo::before {
+    content: '';
+    position: absolute;
+    inset-block-start: 0;
+    inset-inline-start: 50%;
+    transform: translateX(-50%);
+    width: min(1400px, 100%);
     border-top: 1px solid var(--lp-rule);
   }
 
@@ -466,9 +481,9 @@
 
 /* Sections -------------------------------------------------------------- */
 
+/* No cap of its own: the diagram fills whatever the column gives it. */
 .lp-section__chart {
   margin: clamp(2rem, 4vw, 3rem) auto 0;
-  max-width: 58rem;
 }
 
 .lp-flow__chip {

@@ -126,7 +126,7 @@ export const homeCopy: Record<Locale, HomeCopy> = {
     copy: { idle: 'Copy', done: 'Copied' },
   },
   ja: {
-    headline: ['複雑なシナリオを、ひとつのWorkflowに'],
+    headline: ['複雑なシナリオを', 'ひとつのWorkflowに'],
     lede: 'ProbeはYAMLに定義したWorkflowを実行するソフトウェアです。GitHub ActionsのようなYAML定義と、HTTP、DB、Shell、SSH、gRPC、SMTP、IMAP、Browserといった多くのアクションがビルトインされています。アクションの結果を検証できるので、テストや監視といった目的にも使えます。',
     primaryCta: { label: 'Probeをインストール', href: '/ja/guide/introduction/installation' },
     secondaryCta: { label: 'クイックスタートを読む', href: '/ja/guide/introduction/quickstart' },

@@ -86,7 +86,8 @@
   max-width: none;
 }
 
-:root div:has(> .nextra-sidebar) > article {
+/* The landing page is excluded: it manages its own widths section by section. */
+:root:not(:has(.lp)) div:has(> .nextra-sidebar) > article {
   max-width: 62rem;
   margin-inline: auto;
 }
