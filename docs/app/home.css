@@ -125,6 +125,11 @@
   font-weight: 900;
 }
 
+/* The Japanese headline is set over two lines and wants the air; English is not. */
+:root[lang='en'] .lp-hero__headline {
+  line-height: 1.1;
+}
+
 .lp-hero__lede {
   margin: 1.75rem auto 0;
   max-width: var(--lp-measure);
