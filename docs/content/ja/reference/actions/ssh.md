@@ -1,6 +1,6 @@
 # SSH Action
 
-SSH Action を使用すると、リモートサーバーに SSH 接続してコマンドを実行できます。デプロイメント、リモート監視、サーバー管理などの用途に最適です。
+SSH Actionを使用すると、リモートサーバーにSSH接続してコマンドを実行できます。デプロイメント、リモート監視、サーバー管理などの用途に最適です。
 
 ## 基本的な使用方法
 
@@ -22,7 +22,7 @@ SSH Action を使用すると、リモートサーバーに SSH 接続してコ�
 | パラメータ | 型 | 説明 |
 |-----------|---|------|
 | `host` | string | 接続先ホスト名またはIPアドレス |
-| `user` | string | SSH ユーザー名 |
+| `user` | string | SSHユーザー名 |
 | `cmd` | string | 実行するコマンド |
 
 ### 認証パラメータ（いずれか必須）
@@ -30,22 +30,22 @@ SSH Action を使用すると、リモートサーバーに SSH 接続してコ�
 | パラメータ | 型 | 説明 |
 |-----------|---|------|
 | `password` | string | パスワード認証 |
-| `key_file` | string | 秘密鍵ファイルのパス（`~` 展開対応） |
+| `key_file` | string | 秘密鍵ファイルのパス（`~`展開対応） |
 | `key_passphrase` | string | 秘密鍵のパスフレーズ（暗号化された鍵の場合） |
 
 ### オプションパラメータ
 
 | パラメータ | 型 | デフォルト | 説明 |
 |-----------|---|-----------|------|
-| `port` | int | 22 | SSH ポート番号 |
+| `port` | int | 22 | SSHポート番号 |
 | `timeout` | string | "30s" | コマンド実行のタイムアウト |
 | `workdir` | string | - | リモートでの作業ディレクトリ |
-| `strict_host_check` | bool | true | Host Key の厳密検証 |
-| `known_hosts` | string | `~/.ssh/known_hosts` | Known Hosts ファイルのパス |
+| `strict_host_check` | bool | true | Host Keyの厳密検証 |
+| `known_hosts` | string | `~/.ssh/known_hosts` | Known Hostsファイルのパス |
 
 ### 環境変数
 
-`env__` プレフィックスで環境変数を設定できます：
+`env__`プレフィックスで環境変数を設定できます：
 
 ```yaml
 with:
@@ -55,7 +55,7 @@ with:
 
 ## 戻り値
 
-SSH Action は以下の値を返します：
+SSH Actionは以下の値を返します：
 
 | フィールド | 型 | 説明 |
 |-----------|---|------|
@@ -179,7 +179,7 @@ SSH Action は以下の値を返します：
 
 ## セキュリティ設定
 
-### Host Key 検証
+### Host Key検証
 
 ```yaml
 - name: 厳密なHost Key検証
@@ -194,7 +194,7 @@ SSH Action は以下の値を返します：
   test: res.code == 0
 ```
 
-### Host Key 検証を無効化（開発環境のみ推奨）
+### Host Key検証を無効化（開発環境のみ推奨）
 
 ```yaml
 - name: 開発環境での接続
@@ -262,9 +262,9 @@ steps:
 
 ## 制限事項
 
-### SSH Config ファイル非対応
+### SSH Configファイル非対応
 
-移植性と再現性を重視するため、SSH Config ファイル（`~/.ssh/config`）はサポートしていません。すべての接続パラメータはワークフロー内で明示的に定義する必要があります。
+移植性と再現性を重視するため、SSH Configファイル（`~/.ssh/config`）はサポートしていません。すべての接続パラメータはワークフロー内で明示的に定義する必要があります。
 
 ### 対話的コマンド
 
@@ -274,7 +274,7 @@ steps:
 
 ### 接続エラー
 
-**Host Key 検証エラー**:
+**Host Key検証エラー**:
 ```yaml
 # known_hosts を確認
 known_hosts: "~/.ssh/known_hosts"
@@ -325,5 +325,5 @@ timeout: "300s"
 ## 関連項目
 
 - [Shell Action](/ja/reference/actions/shell) - ローカルでのコマンド実行
-- [HTTP Action](/ja/reference/actions/http) - REST API との通信
+- [HTTP Action](/ja/reference/actions/http) - REST APIとの通信
 - [環境変数の管理](/ja/reference/environment-variables)

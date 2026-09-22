@@ -5,7 +5,7 @@
 ## 演算子
 
 四則演算は演算子で書きます。
-`add()` `sub()` `mul()` `div()` `mod()` といった関数はありません。
+`add()` `sub()` `mul()` `div()` `mod()`といった関数はありません。
 
 ```yaml
 outputs:
@@ -14,7 +14,7 @@ outputs:
 test: res.body.id % 2 == 0
 ```
 
-利用できる演算子は `+` `-` `*` `/` `%`（剰余）`**`（べき乗）です。
+利用できる演算子は`+` `-` `*` `/` `%`（剰余）`**`（べき乗）です。
 
 ## 数値関数
 
@@ -46,6 +46,6 @@ test: mean(outputs.load.times) < 500
 | `int(v)` | 整数に変換 |
 | `float(v)` | 浮動小数点数に変換 |
 | `string(v)` | 文字列に変換 |
-| `type(v)` | 値の型名（`string`、`int` など）を返す |
+| `type(v)` | 値の型名（`string`、`int`など）を返す |
 
-Probe 固有の [`parse_int`](/ja/reference/functions/probe#parse-int) と [`parse_float`](/ja/reference/functions/probe#parse-float) は、10 進表記の文字列を厳密に解析し、64 ビット値を返す点が `int` / `float` と異なります。
+Probe固有の [`parse_int`](/ja/reference/functions/probe#parse-int) と [`parse_float`](/ja/reference/functions/probe#parse-float) は、10進表記の文字列を厳密に解析し、64ビット値を返す点が`int` / `float`と異なります。

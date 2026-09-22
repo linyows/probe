@@ -1,9 +1,9 @@
 # 利用可能なフィールドと構文
 
-Probe の式は [expr-lang/expr](https://expr-lang.org/)（v1.17）で評価されます。
-このリファレンスに載っている関数は、expr の組み込み関数か、Probe が独自に登録した関数のどちらかです。
+Probeの式は [expr-lang/expr](https://expr-lang.org/)（v1.17）で評価されます。
+このリファレンスに載っている関数は、exprの組み込み関数か、Probeが独自に登録した関数のどちらかです。
 
-式には 2 つの形があります。
+式には2つの形があります。
 
 - **テンプレート式** — 文字列中の <span v-pre>`{{ ... }}`</span> を評価結果で置き換えます
 - **ブール式** — 式そのものを条件として評価します
@@ -29,7 +29,7 @@ step     | iter         | -              | -        | イテレーション変�
 ## 関数の構文
 
 関数は直接呼び出すか、パイプ演算子（`|`）でつなぎます。
-パイプは左辺の値を**第 1 引数**として渡します。
+パイプは左辺の値を**第1引数**として渡します。
 
 ```yaml
 vars:
@@ -41,9 +41,9 @@ vars:
 ## 演算子
 
 四則演算や比較は関数ではなく演算子で書きます。
-`add()` や `mod()` のような関数はありません。
+`add()`や`mod()`のような関数はありません。
 
-`+` `-` `*` `/` `%` `**` `==` `!=` `<` `>` `&&` `||` `!` `??`（nil 合体）`in` `contains` `startsWith` `endsWith` `matches`（正規表現）
+`+` `-` `*` `/` `%` `**` `==` `!=` `<` `>` `&&` `||` `!` `??`（nil合体）`in` `contains` `startsWith` `endsWith` `matches`（正規表現）
 
 ```yaml
 test: |
@@ -56,16 +56,16 @@ test: |
 
 式の評価には安全のための上限があります。
 
-- 式の長さは最大 1000000 文字
-- 評価のタイムアウトは 5 秒
-- `parse_json`、`encode_base64`、`decode_base64` は 1000000 文字を超える引数を受け付けません
+- 式の長さは最大1000000文字
+- 評価のタイムアウトは5秒
+- `parse_json`、`encode_base64`、`decode_base64`は1000000文字を超える引数を受け付けません
 
 ## 関数カテゴリ
 
-- **[Probe 固有関数](/ja/reference/functions/probe)** - Probe が独自に登録する関数
+- **[Probe固有関数](/ja/reference/functions/probe)** - Probeが独自に登録する関数
 - **[文字列関数](/ja/reference/functions/string)** - 文字列操作とフォーマット
 - **[数値関数](/ja/reference/functions/mathematics)** - 数値演算と型変換
 - **[日時関数](/ja/reference/functions/datetime)** - 日付と時刻のユーティリティ
 - **[配列・マップ関数](/ja/reference/functions/array)** - コレクション操作
-- **[JSON・エンコーディング関数](/ja/reference/functions/json)** - JSON と Base64
+- **[JSON・エンコーディング関数](/ja/reference/functions/json)** - JSONとBase64
 - **[高度な関数使用法](/ja/reference/functions/advanced-usage)** - 組み合わせとベストプラクティス

@@ -15,14 +15,14 @@ Probeは以下のために環境変数を使用します：
 
 ## ランタイム設定変数
 
-Probe 自身が読む環境変数です。
+Probe自身が読む環境変数です。
 
 ### `PROBE_OUTPUT`
 
 **型:** String  
 **値:** `auto`, `spinner`, `stream`  
 **デフォルト:** `auto`  
-**説明:** レポートの出力方法を選びます。`auto` は対話的な端末なら `spinner`、それ以外なら `stream` を選びます。`--output` フラグを指定した場合はそちらが優先されます。
+**説明:** レポートの出力方法を選びます。`auto`は対話的な端末なら`spinner`、それ以外なら`stream`を選びます。`--output`フラグを指定した場合はそちらが優先されます。
 
 ```bash
 # 完了したものから順に出力する。CI のログ向け
@@ -34,7 +34,7 @@ probe workflow.yml
 
 **型:** Integer  
 **デフォルト:** `10000`  
-**説明:** ステップの `repeat.count` の上限です。これを超える指定は実行前にエラーになります。
+**説明:** ステップの`repeat.count`の上限です。これを超える指定は実行前にエラーになります。
 
 ```bash
 export PROBE_MAX_REPEAT_COUNT=50000
@@ -45,7 +45,7 @@ probe load-test.yml
 
 **型:** Integer  
 **デフォルト:** `10000`  
-**説明:** ステップのリトライ `max_attempts` の上限です。
+**説明:** ステップのリトライ`max_attempts`の上限です。
 
 ```bash
 export PROBE_MAX_ATTEMPTS=100
@@ -62,7 +62,7 @@ probe workflow.yml
 FORCE_COLOR=1 probe workflow.yml | tee run.log
 ```
 
-このページのこれ以降で扱うのは、利用者が定義し、ワークフローの `vars` から参照する環境変数です。
+このページのこれ以降で扱うのは、利用者が定義し、ワークフローの`vars`から参照する環境変数です。
 
 ## 認証変数
 

@@ -86,18 +86,18 @@ $ probe workflow.yml --timing
 probe --output stream workflow.yml
 ```
 
-- `auto`（デフォルト）: 対話的な端末では spinner、それ以外では stream
-- `spinner`: spinner を表示し、実行完了後にレポート全体を出力
-- `stream`: ジョブが確定するたびにそのブロックを stdout に出力し、実行中は
-  ステップの進捗を stderr にログ出力
+- `auto`（デフォルト）: 対話的な端末ではspinner、それ以外ではstream
+- `spinner`: spinnerを表示し、実行完了後にレポート全体を出力
+- `stream`: ジョブが確定するたびにそのブロックをstdoutに出力し、実行中は
+  ステップの進捗をstderrにログ出力
 
-CI では spinner が描画されず、ワークフロー完了まで何も出力されないため、
-`stream` が適しています。ジョブブロックは宣言順で先行するジョブがすべて出力
-されるまで保留されるため、stdout のレポートは `spinner` の場合と同一です。
-ステップの進捗行は stderr に出るので、stdout をリダイレクトすれば整形された
+CIではspinnerが描画されず、ワークフロー完了まで何も出力されないため、
+`stream`が適しています。ジョブブロックは宣言順で先行するジョブがすべて出力
+されるまで保留されるため、stdoutのレポートは`spinner`の場合と同一です。
+ステップの進捗行はstderrに出るので、stdoutをリダイレクトすれば整形された
 レポートだけが得られます。
 
-モードは環境変数 `PROBE_OUTPUT` でも指定できます。フラグのほうが優先されます。
+モードは環境変数`PROBE_OUTPUT`でも指定できます。フラグのほうが優先されます。
 
 ### オプションの組み合わせ
 

@@ -1,6 +1,6 @@
 # YAML設定リファレンス
 
-Probe がワークフローファイルから読み取るキー、式が評価されるコンテキスト、バリデーションの規則をまとめます。
+Probeがワークフローファイルから読み取るキー、式が評価されるコンテキスト、バリデーションの規則をまとめます。
 
 ## ワークフローの構造
 
@@ -43,9 +43,9 @@ jobs:                         # 必須: ジョブのリスト
           initial_delay: duration
 ```
 
-`jobs` は**リスト**です。ジョブ ID をキーにしたマップで書くと読み込みに失敗します。
+`jobs`は**リスト**です。ジョブIDをキーにしたマップで書くと読み込みに失敗します。
 
-トップレベルの `env` と `defaults` はありません。環境変数は `vars` を通して読み、`defaults` はジョブに書きます。
+トップレベルの`env`と`defaults`はありません。環境変数は`vars`を通して読み、`defaults`はジョブに書きます。
 
 ## トップレベルのプロパティ
 
@@ -73,9 +73,9 @@ description: |
 ### `vars`
 
 **型:** Object（任意）
-**説明:** すべてのジョブとステップから `vars.<name>` で参照できる変数です。
+**説明:** すべてのジョブとステップから`vars.<name>`で参照できる変数です。
 
-環境変数が見えるのは `vars` の中だけで、変数名をそのまま書いて参照します。値は最初のジョブが始まる前に一度だけ評価されます。
+環境変数が見えるのは`vars`の中だけで、変数名をそのまま書いて参照します。値は最初のジョブが始まる前に一度だけ評価されます。
 
 ```yaml
 vars:
@@ -93,7 +93,7 @@ vars:
     user: "{{API_USER}}"
 ```
 
-ステップの式から環境変数を直接読むことはできません。式のコンテキストに `env` は存在しないため、`vars` に置いて `vars.<name>` で参照します。
+ステップの式から環境変数を直接読むことはできません。式のコンテキストに`env`は存在しないため、`vars`に置いて`vars.<name>`で参照します。
 
 ## ジョブ
 
@@ -102,18 +102,18 @@ vars:
 | プロパティ | 型 | 必須 | 説明 |
 |---|---|---|---|
 | `name` | String | 必須 | ジョブ名。テンプレート式が使えます |
-| `id` | String | 任意 | 他ジョブの `needs` から参照する識別子。省略時は自動採番されます |
-| `needs` | Array | 任意 | 先に完了している必要があるジョブの ID |
+| `id` | String | 任意 | 他ジョブの`needs`から参照する識別子。省略時は自動採番されます |
+| `needs` | Array | 任意 | 先に完了している必要があるジョブのID |
 | `steps` | Array | 必須 | 実行するステップ |
 | `skipif` | Expression | 任意 | 真ならジョブ全体をスキップ |
-| `defaults` | Object | 任意 | アクション名をキーとした `with` の既定値 |
+| `defaults` | Object | 任意 | アクション名をキーとした`with`の既定値 |
 | `repeat` | Object | 任意 | ジョブを繰り返す |
 
-ジョブに `if`、`continue_on_error`、`timeout` はありません。
+ジョブに`if`、`continue_on_error`、`timeout`はありません。
 
 #### `needs`
 
-依存のないジョブは並列に開始します。`needs` が参照するのはジョブの **ID** なので、依存される側には明示的な `id` が必要です。
+依存のないジョブは並列に開始します。`needs`が参照するのはジョブの**ID**なので、依存される側には明示的な`id`が必要です。
 
 ```yaml
 jobs:
@@ -150,7 +150,7 @@ jobs:
 
 #### `defaults`
 
-ジョブ内の該当アクションを使うステップの `with` にマージされる既定値です。ステップ側の指定が優先されます。
+ジョブ内の該当アクションを使うステップの`with`にマージされる既定値です。ステップ側の指定が優先されます。
 
 ```yaml
 jobs:
@@ -169,7 +169,7 @@ jobs:
         test: res.code == 200
 ```
 
-`http` アクションはメソッドの指定が必須です。`method` を明示するか、`get` / `post` / `put` / `delete` / `patch` といった省略記法を使います。省略記法の値は完全な URL か、`url` からの相対パスです。
+`http`アクションはメソッドの指定が必須です。`method`を明示するか、`get` / `post` / `put` / `delete` / `patch`といった省略記法を使います。省略記法の値は完全なURLか、`url`からの相対パスです。
 
 ```yaml
       - name: Explicit method
@@ -183,7 +183,7 @@ jobs:
 
 | プロパティ | 型 | 必須 | 説明 |
 |---|---|---|---|
-| `count` | Integer | 必須 | 実行回数。上限は `PROBE_MAX_REPEAT_COUNT`（既定 10000） |
+| `count` | Integer | 必須 | 実行回数。上限は`PROBE_MAX_REPEAT_COUNT`（既定10000） |
 | `interval` | Duration | 任意 | 実行間隔 |
 | `async` | Boolean | 任意 | 繰り返しを並行実行する |
 
@@ -208,9 +208,9 @@ jobs:
 
 | プロパティ | 型 | 必須 | 説明 |
 |---|---|---|---|
-| `uses` | String | 必須 | 実行するアクション名（`http`、`shell` など） |
+| `uses` | String | 必須 | 実行するアクション名（`http`、`shell`など） |
 | `name` | String | 任意 | ステップ名 |
-| `id` | String | 任意 | このステップの `outputs` の名前空間になる識別子 |
+| `id` | String | 任意 | このステップの`outputs`の名前空間になる識別子 |
 | `with` | Object | 任意 | アクション引数 |
 | `test` | Expression | 任意 | アサーション。偽ならステップは失敗します |
 | `echo` | String | 任意 | レポートに出力する文字列 |
@@ -218,15 +218,15 @@ jobs:
 | `outputs` | Object | 任意 | 後続のステップやジョブへ渡す値 |
 | `skipif` | Expression | 任意 | 真ならステップをスキップ |
 | `wait` | Duration | 任意 | 実行前の待機時間 |
-| `timeout` | Duration | 任意 | ステップのタイムアウト（既定 5m） |
-| `iteration` | Array | 任意 | 要素ごとにステップを繰り返す。値は `vars` から参照します |
+| `timeout` | Duration | 任意 | ステップのタイムアウト（既定5m） |
+| `iteration` | Array | 任意 | 要素ごとにステップを繰り返す。値は`vars`から参照します |
 | `retry` | Object | 任意 | 失敗時のリトライ |
 
-キーは `action` ではなく `uses`、条件は `if` ではなく `skipif` です。
+キーは`action`ではなく`uses`、条件は`if`ではなく`skipif`です。
 
 #### `outputs`
 
-後続のステップやジョブへ渡す値です。**`id` を持つステップだけが outputs を公開します。** `id` が無いと `outputs` ブロックは捨てられます。
+後続のステップやジョブへ渡す値です。**`id`を持つステップだけがoutputsを公開します。** `id`が無いと`outputs`ブロックは捨てられます。
 
 値はテンプレートではなく式なので、波カッコは書きません。
 
@@ -244,7 +244,7 @@ steps:
       user_id: res.body.user.id
 ```
 
-後続からはステップ ID で名前空間を指定するか、出力名だけで参照します。
+後続からはステップIDで名前空間を指定するか、出力名だけで参照します。
 
 ```yaml
       headers:
@@ -252,7 +252,7 @@ steps:
         X-User: "{{outputs.user_id}}"
 ```
 
-ハイフンを含む ID は式の識別子として解釈できないため、ブラケットで参照します。
+ハイフンを含むIDは式の識別子として解釈できないため、ブラケットで参照します。
 
 ```yaml
     echo: "{{outputs['create-user'].user_id}}"
@@ -262,7 +262,7 @@ steps:
 
 | プロパティ | 型 | 必須 | 説明 |
 |---|---|---|---|
-| `max_attempts` | Integer | 必須 | 試行回数。1 以上で、上限は `PROBE_MAX_ATTEMPTS`（既定 10000） |
+| `max_attempts` | Integer | 必須 | 試行回数。1以上で、上限は`PROBE_MAX_ATTEMPTS`（既定10000） |
 | `interval` | Duration | 任意 | 試行間隔 |
 | `initial_delay` | Duration | 任意 | 最初の試行前の待機 |
 
@@ -281,7 +281,7 @@ steps:
 
 #### `iteration`
 
-要素ごとにステップを繰り返します。各要素のキーは `vars` から参照できます。
+要素ごとにステップを繰り返します。各要素のキーは`vars`から参照できます。
 
 ```yaml
 steps:
@@ -303,25 +303,25 @@ steps:
 
 | 名前 | 型 | 説明 |
 |---|---|---|
-| `vars` | Object | ワークフローの変数にステップの `vars` をマージしたもの |
+| `vars` | Object | ワークフローの変数にステップの`vars`をマージしたもの |
 | `res` | Object | アクションのレスポンス |
 | `req` | Object | 送信したリクエスト |
-| `rt` | Object | レスポンスタイム。`rt.duration`（文字列）と `rt.sec`（秒、浮動小数点数） |
-| `status` | Integer | アクションの終了ステータス。成功は `0` |
+| `rt` | Object | レスポンスタイム。`rt.duration`（文字列）と`rt.sec`（秒、浮動小数点数） |
+| `status` | Integer | アクションの終了ステータス。成功は`0` |
 | `outputs` | Object | 先行ステップが公開した値 |
 | `repeat_index` | Integer | ジョブ繰り返し時の現在のインデックス |
 
-このコンテキストに `env`、`jobs`、`steps` はありません。
+このコンテキストに`env`、`jobs`、`steps`はありません。
 
-### `http` の `res`
+### `http`の`res`
 
 | フィールド | 型 | 説明 |
 |---|---|---|
 | `res.code` | Integer | ステータスコード（例: `200`） |
 | `res.status` | String | ステータス行（例: `"200 OK"`） |
-| `res.headers` | Object | レスポンスヘッダー。キーは `Content-Type` のような正規形 |
-| `res.body` | Any | レスポンスボディ。JSON ならオブジェクトや配列に解析され、それ以外は文字列 |
-| `res.rawbody` | String | 解析前のボディ。JSON として解析したときに入ります |
+| `res.headers` | Object | レスポンスヘッダー。キーは`Content-Type`のような正規形 |
+| `res.body` | Any | レスポンスボディ。JSONならオブジェクトや配列に解析され、それ以外は文字列 |
+| `res.rawbody` | String | 解析前のボディ。JSONとして解析したときに入ります |
 
 ```yaml
     test: |
@@ -331,13 +331,13 @@ steps:
       rt.sec < 1
 ```
 
-他のアクションの `res` は[アクションリファレンス](/ja/reference/actions/variables)を参照してください。
+他のアクションの`res`は[アクションリファレンス](/ja/reference/actions/variables)を参照してください。
 
 ## データ型
 
 ### Duration
 
-Go の duration 文字列か、秒数の数値で指定します。
+Goのduration文字列か、秒数の数値で指定します。
 
 ```yaml
 timeout: "30s"
@@ -360,18 +360,18 @@ test: res.code == 200 && rt.sec < 2
 skipif: vars.environment == "local"
 ```
 
-`outputs` の値も式なので、波カッコは書きません。
+`outputs`の値も式なので、波カッコは書きません。
 
 式の中で使える関数は[組み込み関数](/ja/reference/built-in-functions)を参照してください。
 
 ## バリデーション規則
 
-- ワークフローには `name` が必要で、`jobs` は空でないリストである必要があります
-- 各ジョブには `name` と 1 つ以上のステップが必要です
-- 各ステップには `uses` が必要です
-- `needs` は存在するジョブ ID を指し、依存関係は循環していない必要があります
-- `repeat.count` は 0 以上、`retry.max_attempts` は 1 以上である必要があります
-- ステップに `id` が無いと `outputs` は公開されません
+- ワークフローには`name`が必要で、`jobs`は空でないリストである必要があります
+- 各ジョブには`name`と1つ以上のステップが必要です
+- 各ステップには`uses`が必要です
+- `needs`は存在するジョブIDを指し、依存関係は循環していない必要があります
+- `repeat.count`は0以上、`retry.max_attempts`は1以上である必要があります
+- ステップに`id`が無いと`outputs`は公開されません
 
 ## ファイルのマージ
 
@@ -387,4 +387,4 @@ probe base.yml,production.yml
 
 - **[CLI](/ja/reference/cli-reference)** - コマンドラインオプション
 - **[組み込み関数](/ja/reference/built-in-functions)** - 式で使える関数
-- **[環境変数](/ja/reference/environment-variables)** - Probe が読む環境変数
+- **[環境変数](/ja/reference/environment-variables)** - Probeが読む環境変数

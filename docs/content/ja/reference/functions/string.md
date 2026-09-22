@@ -13,9 +13,9 @@
 | `split(s, sep)` / `split(s, sep, n)` | 区切り文字で分割して配列を返す |
 | `splitAfter(s, sep)` | 区切り文字を各要素に残したまま分割 |
 | `join(array, sep)` | 配列を区切り文字で結合 |
-| `repeat(s, n)` | 文字列を n 回繰り返す |
-| `indexOf(s, sub)` | 最初に出現する位置。見つからなければ `-1` |
-| `lastIndexOf(s, sub)` | 最後に出現する位置。見つからなければ `-1` |
+| `repeat(s, n)` | 文字列をn回繰り返す |
+| `indexOf(s, sub)` | 最初に出現する位置。見つからなければ`-1` |
+| `lastIndexOf(s, sub)` | 最後に出現する位置。見つからなければ`-1` |
 | `hasPrefix(s, prefix)` | プレフィックスの判定 |
 | `hasSuffix(s, suffix)` | サフィックスの判定 |
 | `len(s)` | バイト長 |
@@ -31,7 +31,7 @@ test: hasSuffix(res.body.filename, ".json")
 ## 演算子で書く判定
 
 部分一致や正規表現は関数ではなく演算子です。
-`contains()` や `matches()` という関数はありません。
+`contains()`や`matches()`という関数はありません。
 
 ```yaml
 test: |
@@ -40,7 +40,7 @@ test: |
   res.body.id matches "^[0-9a-f]{8}"
 ```
 
-長さの取得は `len()` を使います。`length()` という関数はありません。
+長さの取得は`len()`を使います。`length()`という関数はありません。
 
 ```yaml
 test: len(res.body.items) > 0

@@ -1,6 +1,6 @@
 # Mail Latencyアクション
 
-`mail-latency` アクションは Maildir 形式のディレクトリからメールを読み、`Received` ヘッダーから配送にかかった時間を求めて CSV ファイルに書き出します。
+`mail-latency`アクションはMaildir形式のディレクトリからメールを読み、`Received`ヘッダーから配送にかかった時間を求めてCSVファイルに書き出します。
 
 ## 基本的な構文
 
@@ -19,19 +19,19 @@ steps:
 | パラメータ | 型 | 必須 | 説明 |
 |---|---|---|---|
 | `mail_dir` | String | 必須 | 計測対象のメールが置かれたディレクトリ |
-| `output_dir` | String | 必須 | CSV を書き出すディレクトリ |
+| `output_dir` | String | 必須 | CSVを書き出すディレクトリ |
 
 ## レスポンスオブジェクト
 
 | プロパティ | 型 | 説明 |
 |---|---|---|
-| `res.output_file` | String | 書き出した CSV のパス。ファイル名は `mail-latency.<timestamp>.csv` |
-| `res.status` | Integer | 成功時は `0` |
+| `res.output_file` | String | 書き出したCSVのパス。ファイル名は`mail-latency.<timestamp>.csv` |
+| `res.status` | Integer | 成功時は`0` |
 | `rt` | Object | 計測に要した時間 |
 
 ## 使用例
 
-SMTP で送ったメールが届くのを待ってから計測する例です。
+SMTPで送ったメールが届くのを待ってから計測する例です。
 
 ```yaml
 jobs:

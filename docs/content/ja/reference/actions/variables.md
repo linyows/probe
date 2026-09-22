@@ -33,30 +33,30 @@ echo: |
   Response Time: {{ rt.duration }}
 ```
 
-## status フィールド
+## statusフィールド
 
-`status` フィールドは全てのアクションで共通して利用可能な実行結果ステータスです：
+`status`フィールドは全てのアクションで共通して利用可能な実行結果ステータスです：
 
 - **`0`** - 成功（アクションが正常に完了）
 - **`1`** - 失敗（エラーが発生またはアクション固有の失敗条件）
 
 ### アクション別のステータス条件
 
-#### HTTP アクション
+#### HTTPアクション
 ```yaml
 # HTTP ステータスコード 200-299 の場合: status = 0
 # その他のステータスコードの場合: status = 1
 test: status == 0 && res.code == 200
 ```
 
-#### Shell アクション  
+#### Shellアクション  
 ```yaml
 # 終了コード 0 の場合: status = 0
 # 終了コード 0 以外の場合: status = 1
 test: status == 0 && res.code == 0
 ```
 
-#### DB アクション
+#### DBアクション
 ```yaml
 # クエリ成功の場合: status = 0
 # エラー発生の場合: status = 1
@@ -65,7 +65,7 @@ test: status == 0 && res.code == 0
 
 ## リトライ機能でのstatus利用
 
-リトライ機能は `status` フィールドを使用して成功/失敗を判定します：
+リトライ機能は`status`フィールドを使用して成功/失敗を判定します：
 
 ```yaml
 - name: "Service Health Check with Retry"

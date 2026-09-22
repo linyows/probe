@@ -1,10 +1,10 @@
-# Probe 固有関数
+# Probe固有関数
 
-Probe が expr に追加している関数です。
+Probeがexprに追加している関数です。
 
 ## `match_json`
 
-2 つのオブジェクトを厳密に比較します。
+2つのオブジェクトを厳密に比較します。
 キーと値が完全に一致する必要があり、片方にだけ存在するキーがあれば一致しません。
 
 **構文:** `match_json(src, target)`
@@ -16,8 +16,8 @@ test: match_json(res.body, {"status": "ok", "count": 3})
 
 ## `diff_json`
 
-`match_json` と同じ基準で比較し、差分を文字列で返します。
-一致する場合は `No diff` を返します。
+`match_json`と同じ基準で比較し、差分を文字列で返します。
+一致する場合は`No diff`を返します。
 
 **構文:** `diff_json(src, target)`
 **戻り値:** String
@@ -28,7 +28,7 @@ echo: "{{diff_json(res.body, vars.expected)}}"
 
 ## `parse_json`
 
-JSON 文字列をオブジェクトに解析します。
+JSON文字列をオブジェクトに解析します。
 
 **構文:** `parse_json(string)`
 **戻り値:** 任意の型
@@ -42,8 +42,8 @@ test: parse_json(res.body.metadata).version == "1.0"
 
 ## `parse_int`
 
-文字列または数値を 64 ビット整数に変換します。
-10 進整数として解釈できない文字列はエラーになります。
+文字列または数値を64ビット整数に変換します。
+10進整数として解釈できない文字列はエラーになります。
 
 **構文:** `parse_int(value)`
 **戻り値:** Integer
@@ -65,7 +65,7 @@ test: parse_float(res.body.score) >= 8.5
 
 ## `encode_base64`
 
-文字列を標準 Base64 でエンコードします。
+文字列を標準Base64でエンコードします。
 
 **構文:** `encode_base64(string)`
 **戻り値:** String
@@ -78,7 +78,7 @@ with:
 
 ## `decode_base64`
 
-標準 Base64 の文字列をデコードします。
+標準Base64の文字列をデコードします。
 
 **構文:** `decode_base64(string)`
 **戻り値:** String
@@ -90,7 +90,7 @@ outputs:
 
 ## `unixtime`
 
-現在時刻を Unix タイムスタンプ（秒）で返します。
+現在時刻をUnixタイムスタンプ（秒）で返します。
 
 **構文:** `unixtime()`
 **戻り値:** Integer
@@ -103,8 +103,8 @@ with:
 
 ## `random_int`
 
-`[0, n)` の範囲の乱数を返します。
-`n` は正の整数である必要があります。
+`[0, n)`の範囲の乱数を返します。
+`n`は正の整数である必要があります。
 
 **構文:** `random_int(n)`
 **戻り値:** Integer
@@ -117,7 +117,7 @@ with:
 ## `random_str`
 
 指定した長さのランダムな英数字（`[a-zA-Z0-9]`）を返します。
-長さの上限は 1000000 文字です。
+長さの上限は1000000文字です。
 
 **構文:** `random_str(length)`
 **戻り値:** String

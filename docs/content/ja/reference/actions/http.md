@@ -1,6 +1,6 @@
 # HTTPアクション
 
-`http` アクションは HTTP リクエストを実行し、レスポンスをアサーションや outputs から参照できるようにします。
+`http`アクションはHTTPリクエストを実行し、レスポンスをアサーションやoutputsから参照できるようにします。
 
 ## 基本的な構文
 
@@ -18,17 +18,17 @@ steps:
 
 | パラメータ | 型 | 必須 | デフォルト | 説明 |
 |---|---|---|---|---|
-| `url` | String | 必須 | - | リクエスト URL。メソッド省略記法でパスを渡す場合はベース URL |
-| `method` | String | 必須 | - | HTTP メソッド。メソッド省略記法を使う場合はそちらが設定します |
+| `url` | String | 必須 | - | リクエストURL。メソッド省略記法でパスを渡す場合はベースURL |
+| `method` | String | 必須 | - | HTTPメソッド。メソッド省略記法を使う場合はそちらが設定します |
 | `headers` | Object | 任意 | - | リクエストヘッダー |
-| `body` | String または Object | 任意 | - | リクエストボディ。`content-type` が `application/json` のとき、オブジェクトは JSON にシリアライズされます |
+| `body` | StringまたはObject | 任意 | - | リクエストボディ。`content-type`が`application/json`のとき、オブジェクトはJSONにシリアライズされます |
 | `timeout` | Duration | 任意 | `30s` | レスポンスの読み取りまで含めた、リクエスト全体の制限時間 |
 
-リダイレクトと TLS 検証を指定するパラメータはありません。リダイレクトは既定で追跡します。
+リダイレクトとTLS検証を指定するパラメータはありません。リダイレクトは既定で追跡します。
 
 ### `timeout`
 
-`timeout` には `10s` や `1m30s` のような duration 文字列、または秒数の数値を指定します。`0` を指定すると制限しません。
+`timeout`には`10s`や`1m30s`のようなduration文字列、または秒数の数値を指定します。`0`を指定すると制限しません。
 
 ```yaml
   - name: Slow endpoint
@@ -40,9 +40,9 @@ steps:
     test: res.code == 200
 ```
 
-制限時間を超えたリクエストは `Client.Timeout exceeded` のエラーになり、ステップは失敗します。
+制限時間を超えたリクエストは`Client.Timeout exceeded`のエラーになり、ステップは失敗します。
 
-ジョブの `defaults` でまとめて指定できます。
+ジョブの`defaults`でまとめて指定できます。
 
 ```yaml
 jobs:
@@ -58,11 +58,11 @@ jobs:
         test: res.code == 200
 ```
 
-ステップの `timeout` はこれとは別の、アクション実行 1 回ごとの外側の制限です（既定 5 分）。`with.timeout` が HTTP リクエストそのものを、ステップの `timeout` がそれを包むアクション呼び出しを区切ります。応答を返さないまま固まったアクションを止めるのは後者です。
+ステップの`timeout`はこれとは別の、アクション実行1回ごとの外側の制限です（既定5分）。`with.timeout`がHTTPリクエストそのものを、ステップの`timeout`がそれを包むアクション呼び出しを区切ります。応答を返さないまま固まったアクションを止めるのは後者です。
 
 ### メソッド省略記法
 
-`get` `head` `post` `put` `patch` `delete` `connect` `options` `trace` は、メソッドとパスを 1 つのキーで指定します。値は完全な URL か、`url` からの相対パスです。ジョブの `defaults` と組み合わせると簡潔に書けます。
+`get` `head` `post` `put` `patch` `delete` `connect` `options` `trace`は、メソッドとパスを1つのキーで指定します。値は完全なURLか、`url`からの相対パスです。ジョブの`defaults`と組み合わせると簡潔に書けます。
 
 ```yaml
 jobs:
@@ -96,17 +96,17 @@ jobs:
 |---|---|---|
 | `res.code` | Integer | ステータスコード（例: `200`） |
 | `res.status` | String | ステータス行（例: `"200 OK"`） |
-| `res.headers` | Object | レスポンスヘッダー。キーは `Content-Type` のような正規形 |
-| `res.body` | Any | レスポンスボディ。JSON ならオブジェクトや配列に解析され、それ以外は文字列 |
-| `res.rawbody` | String | 解析前のボディ。JSON として解析したときに入ります |
+| `res.headers` | Object | レスポンスヘッダー。キーは`Content-Type`のような正規形 |
+| `res.body` | Any | レスポンスボディ。JSONならオブジェクトや配列に解析され、それ以外は文字列 |
+| `res.rawbody` | String | 解析前のボディ。JSONとして解析したときに入ります |
 | `res.filepath` | String | バイナリレスポンスを保存したファイルのパス |
 | `rt.duration` | String | ラウンドトリップ時間（例: `"120ms"`） |
 | `rt.sec` | Float | ラウンドトリップ時間（秒） |
-| `status` | Integer | ステータスコードが 2xx なら `0`、それ以外は `1` |
+| `status` | Integer | ステータスコードが2xxなら`0`、それ以外は`1` |
 
 ## レスポンス例
 
-JSON レスポンスの値は `res.body` から直接読みます。
+JSONレスポンスの値は`res.body`から直接読みます。
 
 ```yaml
     test: |
@@ -119,7 +119,7 @@ JSON レスポンスの値は `res.body` から直接読みます。
       elapsed_ms: rt.sec * 1000
 ```
 
-テキストや HTML のレスポンスでは、`res.body` は文字列そのものです。
+テキストやHTMLのレスポンスでは、`res.body`は文字列そのものです。
 
 ```yaml
     test: |
@@ -158,7 +158,7 @@ JSON レスポンスの値は `res.body` から直接読みます。
     test: res.code == 200
 ```
 
-Basic 認証は `encode_base64` で組み立てます。
+Basic認証は`encode_base64`で組み立てます。
 
 ```yaml
       headers:

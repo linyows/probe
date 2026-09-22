@@ -6,13 +6,13 @@
 |---|---|
 | `now()` | 現在時刻を時刻値として返す |
 | `date(s)` / `date(s, layout)` / `date(s, layout, tz)` | 文字列を時刻値に解析する |
-| `duration(s)` | `"1h30m"` のような期間を解析する |
-| `timezone(name)` | `"UTC"` や `"Asia/Tokyo"` などのロケーションを取得する |
+| `duration(s)` | `"1h30m"`のような期間を解析する |
+| `timezone(name)` | `"UTC"`や`"Asia/Tokyo"`などのロケーションを取得する |
 
 ## `now`
 
-`now()` が返すのは数値ではなく時刻値です。
-フォーマットするには Go のレイアウトを `Format` に渡し、Unix タイムスタンプが欲しい場合は `Unix()` または Probe 固有の [`unixtime()`](/ja/reference/functions/probe#unixtime) を使います。
+`now()`が返すのは数値ではなく時刻値です。
+フォーマットするにはGoのレイアウトを`Format`に渡し、Unixタイムスタンプが欲しい場合は`Unix()`またはProbe固有の [`unixtime()`](/ja/reference/functions/probe#unixtime) を使います。
 
 ```yaml
 outputs:
@@ -30,7 +30,7 @@ outputs:
 
 ## `date`
 
-`date()` は現在時刻をフォーマットする関数ではなく、文字列を時刻値に解析する関数です。
+`date()`は現在時刻をフォーマットする関数ではなく、文字列を時刻値に解析する関数です。
 
 ```yaml
 test: date(res.body.expires_at) > now()
