@@ -7,4 +7,5 @@ export default {
   'cli-basics': 'CLIの基本',
   quickstart: 'クイックスタート',
   'your-first-workflow': '最初のワークフロー',
+  comparison: '類似ソフトウェアとの比較',
 } satisfies MetaRecord
