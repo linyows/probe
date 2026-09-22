@@ -1,0 +1,614 @@
+/* Landing page. Scoped to .lp so the docs pages keep the Nextra theme untouched. */
+
+:root:has(.lp) {
+  --lp-paper: #d7efff;
+  --lp-surface: #ffffff;
+  --lp-readout: #062639;
+  --lp-readout-edge: #16445f;
+  --lp-blue: #0a5e8f;
+  --lp-accent: #351e28;
+  --lp-accent-on: #d7efff;
+  --lp-pass-screen: #5be0a5;
+  --lp-ink: #2e4657;
+  --lp-muted: #476b85;
+  --lp-rule: #608cab;
+
+  --lp-font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace;
+  --lp-font-body: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto,
+    var(--font-jp), sans-serif;
+  --lp-font-display: var(--font-display), var(--font-jp), sans-serif;
+}
+
+:root[lang='ja']:has(.lp) {
+  --lp-font-display: var(--font-jp), var(--lp-font-body);
+}
+
+.dark:has(.lp) {
+  --lp-paper: #233643;
+  --lp-surface: #2c4354;
+  --lp-readout: #0c1b25;
+  --lp-readout-edge: #3a5568;
+  --lp-blue: #7fcbf7;
+  --lp-accent: #985d78;
+  --lp-accent-on: #eaf7ff;
+  --lp-pass-screen: #5be0a5;
+  --lp-ink: #d7efff;
+  --lp-muted: #9dbed4;
+  --lp-rule: #608cab;
+}
+
+/* The landing page manages its own gutters and background. */
+:root:has(.lp) body {
+  background-color: var(--lp-paper);
+}
+
+:root:has(.lp) article {
+  padding-inline: 0;
+  padding-top: 0;
+}
+
+.lp {
+  --lp-measure: 66ch;
+  --lp-gutter: clamp(1.25rem, 5vw, 4.5rem);
+
+  background-color: var(--lp-paper);
+  color: var(--lp-ink);
+  font-family: var(--lp-font-body);
+  font-size: 1rem;
+  line-height: 1.65;
+}
+
+.lp :is(h1, h2) {
+  font-family: var(--lp-font-display);
+  font-weight: 500;
+  font-synthesis-weight: none;
+  letter-spacing: 0;
+  text-wrap: balance;
+}
+
+.lp h3 {
+  font-family: var(--lp-font-display);
+  font-weight: 500;
+  font-synthesis-weight: none;
+  text-wrap: balance;
+}
+
+/* Hero ------------------------------------------------------------------- */
+
+.lp-hero {
+  padding: clamp(3rem, 8vw, 6rem) var(--lp-gutter) clamp(4rem, 9vw, 7rem);
+  max-width: 1400px;
+  margin-inline: auto;
+}
+
+.lp-hero__lead {
+  max-width: 48rem;
+  margin-inline: auto;
+  text-align: center;
+}
+
+/* Decorative: the headline carries the meaning, so the mark has no alt text. */
+.lp-hero__mark {
+  display: flex;
+  justify-content: center;
+  margin: 0 0 clamp(1.75rem, 4vw, 3rem);
+}
+
+.lp-hero__markImg {
+  width: auto;
+  height: clamp(11rem, 30vw, 21rem);
+}
+
+.lp-hero__markImg--dark {
+  display: none;
+}
+
+.dark .lp-hero__markImg--light {
+  display: none;
+}
+
+.dark .lp-hero__markImg--dark {
+  display: block;
+}
+
+.lp-hero__headline {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  font-size: clamp(2.3rem, 6.4vw, 4.5rem);
+  line-height: 1.35;
+  margin: 0;
+}
+
+/* One level more specific than the `article :is(h1..h4)` rule it overrides. */
+.lp .lp-hero__headline {
+  font-weight: 900;
+}
+
+.lp-hero__lede {
+  margin: 1.75rem auto 0;
+  max-width: var(--lp-measure);
+  text-align: left;
+  font-size: clamp(1rem, 1.6vw, 1.125rem);
+  color: var(--lp-muted);
+}
+
+.lp-hero__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.75rem;
+  margin-top: clamp(2rem, 5vw, 3rem);
+}
+
+.lp-hero__exampleHeading {
+  margin: clamp(5rem, 11vw, 8rem) auto 0;
+  text-align: center;
+  color: var(--lp-muted);
+}
+
+/* One level more specific than the `article :is(h1..h4)` rule it overrides. */
+.lp .lp-hero__exampleHeading {
+  font-size: clamp(1.4rem, 2.7vw, 1.9rem);
+  font-weight: 700;
+}
+
+/* The flowchart carries no window chrome: it is a drawing, not a readout. */
+.lp-hero__flow {
+  margin: clamp(1.5rem, 3vw, 2rem) auto 0;
+  max-width: 58rem;
+}
+
+.lp-hero__flowNote {
+  max-width: var(--lp-measure);
+  margin: clamp(2.5rem, 5vw, 4rem) auto 0;
+  text-align: center;
+  color: var(--lp-muted);
+}
+
+.lp-button {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid transparent;
+  border-radius: 2px;
+  padding: 0.65rem 1.4rem;
+  font-family: var(--lp-font-display);
+  font-size: 0.9375rem;
+  font-weight: 500;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.lp-button--solid {
+  background-color: var(--lp-accent);
+  color: var(--lp-accent-on);
+}
+
+.lp-button--solid:hover {
+  background-color: var(--lp-ink);
+  color: var(--lp-paper);
+}
+
+.lp-button--quiet {
+  border-color: var(--lp-rule);
+  color: var(--lp-ink);
+}
+
+.lp-button--quiet:hover {
+  border-color: var(--lp-blue);
+  color: var(--lp-blue);
+}
+
+/* The file you write and what came back, cropped to the report's height. */
+.lp-pair {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 1.25rem;
+  margin-top: clamp(2rem, 5vw, 3rem);
+  align-items: stretch;
+}
+
+.lp-pair__source .lp-source {
+  max-height: 22rem;
+  overflow: auto;
+}
+
+@media (min-width: 60rem) {
+  .lp-pair {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+
+  /*
+   * Taking the listing out of the flow leaves the panel as tall as its label,
+   * so the row is sized by the report beside it and the listing scrolls to fit.
+   */
+  .lp-pair__source {
+    position: relative;
+  }
+
+  .lp-pair__source .lp-source {
+    position: absolute;
+    inset: 2.35rem 0 0;
+    max-height: none;
+  }
+}
+
+/* Panels ----------------------------------------------------------------- */
+
+.lp-panel {
+  margin: 0;
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.lp-panel__label {
+  font-family: var(--lp-font-mono);
+  font-size: 0.75rem;
+  letter-spacing: 0.01em;
+  padding: 0.6rem 1rem;
+}
+
+.lp-panel--paper {
+  background-color: var(--lp-surface);
+  border: 1px solid var(--lp-rule);
+}
+
+.lp-panel--paper .lp-panel__label {
+  color: var(--lp-muted);
+  border-bottom: 1px solid var(--lp-rule);
+}
+
+.lp-panel--readout {
+  background-color: var(--lp-readout);
+  border: 1px solid var(--lp-readout-edge);
+}
+
+.lp-panel--readout .lp-panel__label {
+  color: #7fa6c0;
+  border-bottom: 1px solid var(--lp-readout-edge);
+}
+
+/* Source listing --------------------------------------------------------- */
+
+.lp-source {
+  margin: 0;
+  padding: 1rem 0 1.15rem;
+  font-family: var(--lp-font-mono);
+  font-size: 0.8125rem;
+  line-height: 1.7;
+  overflow-x: auto;
+}
+
+.lp-source__line {
+  display: block;
+  white-space: pre;
+}
+
+.lp-source__number {
+  display: inline-block;
+  width: 2.5rem;
+  padding-right: 0.85rem;
+  text-align: right;
+  color: var(--lp-rule);
+  user-select: none;
+}
+
+.lp-source__code {
+  color: var(--lp-ink);
+}
+
+/* Job graph -------------------------------------------------------------- */
+
+.lp-flow {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.lp-flow__edge {
+  fill: none;
+  stroke: var(--lp-rule);
+  stroke-width: 2;
+}
+
+.lp-flow__head {
+  fill: var(--lp-rule);
+}
+
+.lp-flow__frame {
+  fill: none;
+  stroke: var(--lp-rule);
+  stroke-width: 1.5;
+  stroke-dasharray: 5 4;
+}
+
+.lp-flow__job {
+  fill: var(--lp-surface);
+  stroke: var(--lp-rule);
+  stroke-width: 2.5;
+}
+
+.lp-flow__step {
+  fill: var(--lp-paper);
+  stroke: none;
+}
+
+.lp-flow__jobName {
+  fill: var(--lp-ink);
+  font-family: var(--lp-font-body);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.lp-flow__action {
+  fill: var(--lp-blue);
+  font-family: var(--lp-font-mono);
+  font-size: 11px;
+}
+
+.lp-flow__stepName {
+  fill: var(--lp-muted);
+  font-family: var(--lp-font-body);
+  font-size: 12px;
+}
+
+/* Terminal readout ------------------------------------------------------- */
+
+.lp-report {
+  margin: 0;
+  padding: 1rem 1.15rem 1.25rem;
+  font-family: var(--lp-font-mono);
+  font-size: 0.8125rem;
+  line-height: 1.7;
+  color: #bcd8ea;
+  overflow-x: auto;
+}
+
+.lp-report__line {
+  display: block;
+  white-space: pre;
+}
+
+.lp-report__line--title {
+  color: #e8f6ff;
+}
+
+.lp-report__line--job {
+  color: #8fd2ff;
+}
+
+.lp-report__line--pass {
+  color: var(--lp-pass-screen);
+}
+
+.lp-report__line--idle {
+  color: #7fa6c0;
+}
+
+.lp-report__line--echo {
+  color: #6d94ae;
+}
+
+.lp-report__line--total {
+  color: #e8f6ff;
+}
+
+.lp-report--animate .lp-report__line {
+  opacity: 0;
+  animation: lp-report-line 0.3s ease forwards;
+}
+
+@keyframes lp-report-line {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce), print {
+  .lp-report--animate .lp-report__line {
+    opacity: 1;
+    animation: none;
+  }
+}
+
+/* Sections --------------------------------------------------------------- */
+
+.lp-section {
+  max-width: 1400px;
+  margin-inline: auto;
+  padding: clamp(4rem, 9vw, 7rem) var(--lp-gutter);
+  border-top: 1px solid var(--lp-rule);
+}
+
+.lp-section__head {
+  max-width: var(--lp-measure);
+}
+
+.lp-section__heading {
+  margin: 0;
+  font-size: clamp(1.55rem, 3.2vw, 2.25rem);
+  line-height: 1.22;
+}
+
+.lp-section__body {
+  margin: 1rem 0 0;
+  color: var(--lp-muted);
+}
+
+/*
+ * The two structural sections sit side by side once there is room for both
+ * diagrams at a readable size; below that they stack like every other section.
+ */
+.lp-duo {
+  margin-inline: auto;
+}
+
+@media (min-width: 100rem) {
+  /* One rule across the pair, rather than one above each column. */
+  .lp-duo {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    column-gap: clamp(2.5rem, 4vw, 4.5rem);
+    max-width: 1600px;
+    padding-inline: var(--lp-gutter);
+    border-top: 1px solid var(--lp-rule);
+  }
+
+  .lp-duo > .lp-section {
+    max-width: none;
+    margin-inline: 0;
+    padding-inline: 0;
+    border-top: 0;
+  }
+}
+
+/* Sections -------------------------------------------------------------- */
+
+.lp-section__chart {
+  margin: clamp(2rem, 4vw, 3rem) auto 0;
+  max-width: 58rem;
+}
+
+.lp-flow__chip {
+  fill: var(--lp-ink);
+  font-family: var(--lp-font-mono);
+  font-size: 12px;
+}
+
+.lp-flow__transport {
+  font-size: 12px;
+}
+
+.lp-section__link {
+  margin-top: clamp(1.5rem, 3vw, 2rem);
+}
+
+/* Graph ------------------------------------------------------------------ */
+
+.lp-graph {
+  margin-top: clamp(2rem, 4vw, 3rem);
+}
+
+.lp-report--graph {
+  color: #cfe6f5;
+  font-size: 0.8125rem;
+  line-height: 1.35;
+  padding: 1.5rem 1.15rem 1.75rem;
+}
+
+/* Parts ------------------------------------------------------------------ */
+
+.lp-parts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(19rem, 1fr));
+  gap: clamp(2.25rem, 4vw, 3.25rem);
+  margin-top: clamp(2rem, 4vw, 3rem);
+}
+
+.lp .lp-part__name {
+  margin: 0;
+  font-family: var(--lp-font-mono);
+  font-weight: 400;
+  font-size: 1.125rem;
+  color: var(--lp-blue);
+}
+
+.lp-part__description {
+  margin: 0.5rem 0 0;
+  color: var(--lp-muted);
+  font-size: 0.9375rem;
+}
+
+.lp-part__code {
+  margin-top: 1rem;
+}
+
+/* Install ---------------------------------------------------------------- */
+
+.lp-install {
+  margin: clamp(1.75rem, 4vw, 2.5rem) auto 0;
+  max-width: 44rem;
+}
+
+/* The closing section is centred, so its heading sits over the block. */
+.lp-section--install .lp-section__head {
+  margin-inline: auto;
+  text-align: center;
+}
+
+.lp-command {
+  display: flex;
+  align-items: stretch;
+  gap: 0.75rem;
+  background-color: var(--lp-readout);
+  border: 1px solid var(--lp-readout-edge);
+  border-radius: 3px;
+  padding: 0.35rem 0.35rem 0.35rem 1rem;
+}
+
+.lp-command__text {
+  flex: 1;
+  align-self: center;
+  font-family: var(--lp-font-mono);
+  font-size: 0.8125rem;
+  color: #cfe6f5;
+  overflow-x: auto;
+  white-space: nowrap;
+}
+
+.lp-command__prompt {
+  color: #608cab;
+}
+
+.lp-command__button {
+  flex: none;
+  border: 1px solid var(--lp-readout-edge);
+  border-radius: 2px;
+  background-color: transparent;
+  padding: 0.45rem 0.9rem;
+  font-family: var(--lp-font-mono);
+  font-size: 0.75rem;
+  color: #9dc0d6;
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.lp-command__button:hover {
+  background-color: #10354c;
+  color: #e8f6ff;
+}
+
+.lp-install__source {
+  margin-top: 2rem;
+}
+
+.lp .lp-install__sourceLabel {
+  margin: 0;
+  font-family: var(--lp-font-body);
+  font-weight: 600;
+  font-size: 0.875rem;
+  color: var(--lp-muted);
+}
+
+.lp-install__code {
+  margin: 0.75rem 0 0;
+  padding: 0.9rem 1rem;
+  background-color: var(--lp-surface);
+  border: 1px solid var(--lp-rule);
+  border-radius: 3px;
+  font-family: var(--lp-font-mono);
+  font-size: 0.8125rem;
+  line-height: 1.7;
+  overflow-x: auto;
+}
+
+.lp-install__link {
+  margin-top: 1.75rem;
+}
+
+.lp :is(a, button):focus-visible {
+  outline: 2px solid var(--lp-blue);
+  outline-offset: 3px;
+}

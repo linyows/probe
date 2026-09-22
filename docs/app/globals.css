@@ -1,0 +1,222 @@
+/*
+ * One blue family, inverted between the modes: #d7efff is the ground in light
+ * and the text in dark. #608cab sits between the two at 3:1 against either, so
+ * it is used for rules and never for running text.
+ *
+ * The docs theme colours its text with Tailwind's slate/gray ramps, so remap
+ * those variables rather than chasing each utility class.
+ */
+:root {
+  --x-color-slate-900: #1c2b35;
+  --x-color-slate-700: #2e4657;
+  --x-color-gray-900: #1c2b35;
+  --x-color-gray-600: #476b85;
+
+  --x-color-slate-200: #d7efff;
+  --x-color-slate-100: #eaf7ff;
+  --x-color-gray-100: #eaf7ff;
+  --x-color-gray-300: #bcd8ea;
+  --x-color-gray-400: #9dbed4;
+  --x-color-neutral-400: #9dbed4;
+
+  --probe-brand: #0065a8;
+  --probe-muted: #476b85;
+  --probe-rule: #608cab;
+
+  /*
+   * Latin keeps the platform UI face; every Japanese glyph falls through to
+   * Noto Sans JP. Headings ask for 800 — Noto Sans JP has it, and the Latin
+   * display face clamps to its own maximum.
+   */
+  --x-font-sans: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto,
+    var(--font-jp), sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji';
+}
+
+:root.dark {
+  --probe-brand: #7fcbf7;
+  --probe-muted: #9dbed4;
+  --probe-rule: #608cab;
+}
+
+:root .nextra-border {
+  border-color: #608cab;
+}
+
+:root.dark .nextra-border {
+  border-color: #608cab;
+}
+
+/*
+ * Headings: Oswald carries the Latin, Noto Sans JP every Japanese glyph Oswald
+ * does not have. Both are loaded at 500, so nothing is synthesised.
+ */
+:root article :is(h1, h2, h3, h4) {
+  font-family: var(--font-display), var(--font-jp), sans-serif;
+  font-weight: 500;
+  font-synthesis-weight: none;
+  letter-spacing: 0;
+}
+
+/* Oswald is a Latin face; on the Japanese pages it would set the odd English
+ * word in a condensed style the surrounding text does not share. */
+:root[lang='ja'] article :is(h1, h2, h3, h4) {
+  font-family: var(--font-jp), sans-serif;
+  font-weight: 900;
+}
+
+/* The header spans the viewport, and neither it nor the footer is ruled off. */
+:root .nextra-navbar > nav {
+  max-width: none;
+}
+
+:root .nextra-navbar-blur {
+  border-bottom-width: 0;
+}
+
+:root hr.nextra-border:has(+ footer) {
+  display: none;
+}
+
+/*
+ * Push the two navigations to the edges of the window: the container that
+ * holds the sidebar, the article and the table of contents drops its width
+ * cap, and the article keeps a readable measure with auto margins instead.
+ */
+:root div:has(> .nextra-sidebar) {
+  max-width: none;
+}
+
+:root div:has(> .nextra-sidebar) > article {
+  max-width: 62rem;
+  margin-inline: auto;
+}
+
+/*
+ * With no sidebar to hold it, the landing page puts the theme switch in a bar
+ * of its own above the footer. Give it the page ground rather than the footer
+ * band, and start it at the window edge as the sidebar does elsewhere.
+ */
+:root:has(.lp) div:has(> footer) > div:first-child {
+  max-width: none;
+  background-color: var(--lp-paper);
+}
+
+/* The footer stays centred at every width, not just the narrow ones. */
+:root footer {
+  justify-content: center;
+}
+
+/* No rule above the theme switch at the foot of the sidebar. */
+:root .nextra-sidebar-footer {
+  border-top-width: 0;
+}
+
+/* Keep code blocks recessed against the blue ground in both modes. */
+:root.dark .nextra-code > pre {
+  background-color: #172630;
+}
+
+.probe-logo {
+  display: inline-flex;
+  align-items: center;
+}
+
+.probe-logo__img {
+  height: 1.6rem;
+  width: auto;
+}
+
+.probe-logo__img--dark {
+  display: none;
+}
+
+.dark .probe-logo__img--light {
+  display: none;
+}
+
+.dark .probe-logo__img--dark {
+  display: inline-block;
+}
+
+/*
+ * Language picker. Not a <select>: a button and a panel drawn with 1px rules,
+ * down to the caret, which is two borders of an empty box turned 45 degrees.
+ */
+.probe-locale {
+  position: relative;
+}
+
+.probe-locale__button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  border: 1px solid var(--probe-rule);
+  background-color: transparent;
+  padding: 0.3rem 0.6rem;
+  font: inherit;
+  font-size: 0.8125rem;
+  line-height: 1.4;
+  color: var(--probe-muted);
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+
+.probe-locale__button:hover,
+.probe-locale__button[aria-expanded='true'] {
+  color: var(--probe-brand);
+  border-color: var(--probe-brand);
+}
+
+.probe-locale__caret {
+  width: 0.35rem;
+  height: 0.35rem;
+  border-right: 1px solid currentColor;
+  border-bottom: 1px solid currentColor;
+  transform: translateY(-0.1em) rotate(45deg);
+  transition: transform 0.15s ease;
+}
+
+.probe-locale__button[aria-expanded='true'] .probe-locale__caret {
+  transform: translateY(0.1em) rotate(-135deg);
+}
+
+.probe-locale__menu {
+  position: absolute;
+  top: calc(100% - 1px);
+  right: 0;
+  z-index: 30;
+  min-width: 100%;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border: 1px solid var(--probe-brand);
+  background-color: rgb(var(--nextra-bg));
+}
+
+.probe-locale__menu[hidden] {
+  display: none;
+}
+
+.probe-locale__menu li + li {
+  border-top: 1px solid var(--probe-rule);
+}
+
+.probe-locale__option {
+  display: block;
+  padding: 0.35rem 0.6rem;
+  font-size: 0.8125rem;
+  line-height: 1.4;
+  white-space: nowrap;
+  color: var(--probe-muted);
+  transition: color 0.15s ease;
+}
+
+.probe-locale__option:hover,
+.probe-locale__option[aria-current='true'] {
+  color: var(--probe-brand);
+}
+
+.probe-locale :is(button, a):focus-visible {
+  outline: 2px solid var(--probe-brand);
+  outline-offset: 2px;
+}

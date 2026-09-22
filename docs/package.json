@@ -1,18 +1,26 @@
 {
-  "name": "vitepress",
-  "module": "index.ts",
-  "type": "module",
+  "name": "probe-docs",
   "private": true,
-  "devDependencies": {
-    "@types/bun": "^1.4.2",
-    "vitepress": "^1.6.4"
-  },
-  "peerDependencies": {
-    "typescript": "^5.9.3"
-  },
+  "type": "module",
   "scripts": {
-    "dev": "vitepress dev",
-    "build": "vitepress build",
-    "preview": "vitepress preview"
+    "dev": "next dev",
+    "build": "next build && pagefind --site out --output-path out/_pagefind",
+    "preview": "bunx --bun serve out"
+  },
+  "dependencies": {
+    "next": "^15.5.4",
+    "nextra": "^4.6.1",
+    "nextra-theme-docs": "^4.6.1",
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1"
+  },
+  "devDependencies": {
+    "@types/node": "^24.5.2",
+    "@types/react": "^19.1.13",
+    "pagefind": "^1.5.0",
+    "typescript": "^5.9.2"
+  },
+  "resolutions": {
+    "zod": "4.1.12"
   }
 }

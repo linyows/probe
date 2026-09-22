@@ -1,36 +1,23 @@
 # dependencies (bun install)
 node_modules
 
-# output
+# next.js
+.next
 out
-dist
-*.tgz
+next-env.d.ts
 
-# code coverage
-coverage
-*.lcov
-
-# logs
-logs
-_.log
-report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
+# caches
+*.tsbuildinfo
 
 # dotenv environment variable files
 .env
+.env.local
 .env.development.local
 .env.test.local
 .env.production.local
-.env.local
-
-# caches
-.eslintcache
-.cache
-*.tsbuildinfo
 
 # IntelliJ based IDEs
 .idea
 
 # Finder (MacOS) folder config
 .DS_Store
-
-/.vitepress/cache
