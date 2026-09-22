@@ -46,6 +46,15 @@
   border-color: #608cab;
 }
 
+/* Headings below h1 take the same ink the landing page sets its headings in. */
+:root article :is(h2, h3, h4, h5) {
+  color: #2e4657;
+}
+
+:root.dark article :is(h2, h3, h4, h5) {
+  color: #d7efff;
+}
+
 /*
  * Headings: Oswald carries the Latin, Noto Sans JP every Japanese glyph Oswald
  * does not have. Both are loaded at 500, so nothing is synthesised.
