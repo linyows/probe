@@ -324,6 +324,6 @@ If you experience issues with consecutive connections to the same host, add appr
 
 ## Related Actions
 
-- [Shell Action](/reference/actions-reference) - Local command execution
-- [HTTP Action](/reference/actions-reference) - REST API communication
+- [Shell Action](/reference/actions/shell) - Local command execution
+- [HTTP Action](/reference/actions/http) - REST API communication
 - [Environment Variables](/reference/environment-variables)
