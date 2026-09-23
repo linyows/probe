@@ -105,14 +105,17 @@ export const heroReport: ReportLine[] = [
 
 /*
  * The pair below was run the same way: `probe orders.yml` against a stub that
- * answers POST /login with a token and refuses GET /orders without it. Only
- * the API host was swapped for a presentable one.
+ * answers POST /login with a token when the credentials match and refuses
+ * GET /orders without one. Only the API host was swapped for a presentable
+ * one, and the password is an env var here as it would be anywhere.
  */
 
 export const sharedWorkflow = `name: Orders
 
 vars:
   api: https://api.example.com
+  username: ada
+  password: "{{PASSWORD}}"
 
 jobs:
 - name: Order history
@@ -123,9 +126,8 @@ jobs:
     with:
       path: ./login-job.yml
       vars:
-        api: "{{vars.api}}"
-        email: ada@example.com
-        password: "{{PASSWORD}}"
+        username: "{{vars.username}}"
+        password: "{{vars.password}}"
     test: res.code == 0
     outputs:
       token: res.outputs.token
@@ -146,10 +148,12 @@ steps:
   id: login
   uses: http
   with:
-    url: "{{vars.api}}"
+    url: https://api.example.com
     post: /login
+    headers:
+      content-type: application/json
     body:
-      email: "{{vars.email}}"
+      username: "{{vars.username}}"
       password: "{{vars.password}}"
   test: res.code == 200
   outputs:
