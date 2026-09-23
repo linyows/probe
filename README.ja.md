@@ -1,20 +1,16 @@
 <p align="right"><a href="https://github.com/linyows/probe/blob/main/README.md">English</a> | 日本語</p>
 
-<br><br><br><br><br>
+<br><br><br><br>
 
 <p align="center">
   <img alt="PROBE" src="https://github.com/linyows/probe/blob/main/misc/probe.svg" width="200">
 </p>
 
-<br><br><br><br><br>
+<br><br><br><br>
 
-ProbeはYAMLで書いたワークフローを、HTTP API、データベース、メールサーバー、ブラウザ、シェルに対して実行し、応答を1つずつ検証して、読めるレポートを出力します。
-
-単体のGoバイナリで、別途用意するランタイムはありません。そのため同じファイルを手元でも、CIでも、cronからでも実行できます。実行結果は終了コードに反映され、`repeat`を加えればテストとして書いたファイルがそのまま監視になります。
-
-**ドキュメント: [probe.linyo.ws/ja](https://probe.linyo.ws/ja)**
-
-![Architecture](/misc/probe-architecture.svg)
+<p align="center">
+  <strong>Probe</strong>は、テスト、監視、自動化タスクのために設計された強力なYAMLベースのワークフロー自動化ツールです。
+</p>
 
 <p align="center">
   <a href="https://github.com/linyows/probe/actions/workflows/build.yml">
@@ -27,6 +23,26 @@ ProbeはYAMLで書いたワークフローを、HTTP API、データベース、
     <img src="http://img.shields.io/badge/go-docs-blue.svg?style=for-the-badge&labelColor=666666&color=DDDDDD" alt="Go Documentation">
   </a>
 </p>
+
+単体のGoバイナリで、別途用意するランタイムはありません。そのため同じファイルを手元でも、CIでも、cronからでも実行できます。実行結果は終了コードに反映され、`repeat`を加えればテストとして書いたファイルがそのまま監視になります。Probeはプラグインベースのアクションでワークフローを実行するため、柔軟に拡張できます。ドキュメント: [probe.linyo.ws/ja](https://probe.linyo.ws/ja)
+
+![Architecture](/misc/probe-architecture.svg)
+
+特徴
+----
+
+類似のソフトウェアは、テストを実行するものか、監視のために繰り返し確認するもののどちらかであることがほとんどです。扱えるプロトコルも1つに限られる場合が多くあります。Probeはその両方を、Webシステムが実際に使っているプロトコルの範囲で扱います。
+
+- **1つのファイルでシステム全体を対象にできる**: HTTP、gRPC、MySQL、PostgreSQL、SQLite、SMTP、IMAP、SSH、シェル、実際のブラウザが組み込みです。エンドポイントを呼び、書き込まれた行を問い合わせ、送信されたメールを読むところまでを、3つのツールをつなぎ合わせずに1回の実行で行えます。
+- **共通処理を別のファイルに置ける**: シナリオの多くはログインから始まり、2つ目以降のシナリオでも同じ手順を書くことになります。その手順を、接続先を`defaults`に書いたジョブファイルに置けば、どのワークフローからも`uses: embedded`で実行できます。呼び出し側は認証情報を`vars`で渡し、トークンを`outputs`から受け取ります。ジョブのステップは、レポートでも呼び出し元のステップの下に入れ子で表示されます。
+- **同じファイルがテストにも監視にもなる**: ジョブに`repeat`を加えると一定の間隔で繰り返し、`3/3 success (100.0%)`のように結果を報告します。監視用に書き直した2つ目のワークフローは要りません。
+- **ジョブは一覧ではなくグラフ**: `needs`で宣言するのは順序が必要な箇所だけで、残りは並行して実行されます。そのグラフは`probe dag`でASCIIまたはMermaidとして出力できます。シナリオを実行するツールはファイルを上から下へ順にたどります。
+- **どこで動かしても同じ**: 単体のGoバイナリで、併せて入れるものも、常駐させるサービスもありません。手元の端末でも、CIのステップでも、cronからでも同じ動作になります。
+- **アクションはプラグイン**: 各アクションは[go-plugin](https://github.com/hashicorp/go-plugin)越しの別プロセスです。組み込みにないプロトコルは、バイナリをフォークせずに追加できます。
+
+このほかワークフローには、ステップやジョブの間でデータを渡す`outputs`、任意の応答を検証する`test`、`retry`、`skipif`、`iteration`、`wait`、`timeout`、ステップ間で共通する設定をまとめる`defaults`、そしてコマンドラインで複数のYAMLをマージする機能があります。
+
+これらの関係は[Probeの理解](https://probe.linyo.ws/ja/guide/introduction/understanding-probe)で、k6、Hurl、Venom、runn、Blackbox exporter、GitHub Actionsのいずれを選んだほうがよいかは[比較](https://probe.linyo.ws/ja/guide/introduction/comparison)で説明しています。
 
 クイックスタート
 ----------------
@@ -69,22 +85,6 @@ Total workflow time: 0.02s ✓ All jobs succeeded
 ```
 
 [クイックスタート](https://probe.linyo.ws/ja/guide/introduction/quickstart)では同じ手順を順に追い、[最初のワークフロー](https://probe.linyo.ws/ja/guide/introduction/your-first-workflow)では動かし続けられる形まで広げます。
-
-特徴
-----
-
-類似のソフトウェアは、テストを実行するものか、監視のために繰り返し確認するもののどちらかであることがほとんどです。扱えるプロトコルも1つに限られる場合が多くあります。Probeはその両方を、Webシステムが実際に使っているプロトコルの範囲で扱います。
-
-- **1つのファイルでシステム全体を対象にできる**: HTTP、gRPC、MySQL、PostgreSQL、SQLite、SMTP、IMAP、SSH、シェル、実際のブラウザが組み込みです。エンドポイントを呼び、書き込まれた行を問い合わせ、送信されたメールを読むところまでを、3つのツールをつなぎ合わせずに1回の実行で行えます。
-- **共通処理を別のファイルに置ける**: シナリオの多くはログインから始まり、2つ目以降のシナリオでも同じ手順を書くことになります。その手順を、接続先を`defaults`に書いたジョブファイルに置けば、どのワークフローからも`uses: embedded`で実行できます。呼び出し側は認証情報を`vars`で渡し、トークンを`outputs`から受け取ります。ジョブのステップは、レポートでも呼び出し元のステップの下に入れ子で表示されます。
-- **同じファイルがテストにも監視にもなる**: ジョブに`repeat`を加えると一定の間隔で繰り返し、`3/3 success (100.0%)`のように結果を報告します。監視用に書き直した2つ目のワークフローは要りません。
-- **ジョブは一覧ではなくグラフ**: `needs`で宣言するのは順序が必要な箇所だけで、残りは並行して実行されます。そのグラフは`probe dag`でASCIIまたはMermaidとして出力できます。シナリオを実行するツールはファイルを上から下へ順にたどります。
-- **どこで動かしても同じ**: 単体のGoバイナリで、併せて入れるものも、常駐させるサービスもありません。手元の端末でも、CIのステップでも、cronからでも同じ動作になります。
-- **アクションはプラグイン**: 各アクションは[go-plugin](https://github.com/hashicorp/go-plugin)越しの別プロセスです。組み込みにないプロトコルは、バイナリをフォークせずに追加できます。
-
-このほかワークフローには、ステップやジョブの間でデータを渡す`outputs`、任意の応答を検証する`test`、`retry`、`skipif`、`iteration`、`wait`、`timeout`、ステップ間で共通する設定をまとめる`defaults`、そしてコマンドラインで複数のYAMLをマージする機能があります。
-
-これらの関係は[Probeの理解](https://probe.linyo.ws/ja/guide/introduction/understanding-probe)で、k6、Hurl、Venom、runn、Blackbox exporter、GitHub Actionsのいずれを選んだほうがよいかは[比較](https://probe.linyo.ws/ja/guide/introduction/comparison)で説明しています。
 
 組み込みアクション
 ------------------
