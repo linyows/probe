@@ -217,6 +217,11 @@
   overflow: auto;
 }
 
+/* Two listings of unequal length: let each keep its own height. */
+.lp-pair--top {
+  align-items: start;
+}
+
 @media (min-width: 60rem) {
   .lp-pair {
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);

@@ -76,6 +76,7 @@ Features
 Similar software is usually one of two things: a test runner, or a prober that monitors. Most of them speak one protocol. Probe is both, across the protocols a web system is actually made of.
 
 - **One file reaches the whole system.** HTTP, gRPC, MySQL, PostgreSQL, SQLite, SMTP, IMAP, SSH, shell and a real browser are built in. A single run can call an endpoint, query the row it wrote, and read the mail it sent, with no glue between three tools.
+- **Shared steps live in their own file.** A scenario usually starts by logging in, and every scenario after the first repeats it. Put those steps in a job file and any workflow runs it with `uses: embedded`, handing it `vars` and reading its `outputs` back. The job's steps appear nested under the step that called it.
 - **The same file is a test and a monitor.** Add `repeat` to a job and it runs on an interval, reporting `3/3 success (100.0%)`. There is no second, rewritten copy of the workflow for monitoring.
 - **Jobs are a graph, not a list.** `needs` declares only the order that matters, and everything else runs in parallel. `probe dag` prints that graph as ASCII or Mermaid. Scenario runners walk a file from top to bottom.
 - **It behaves the same everywhere.** One Go binary, nothing to install alongside it and no service to keep running, so your terminal, a CI step and a cron entry all do the same thing.
