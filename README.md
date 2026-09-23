@@ -73,18 +73,20 @@ Total workflow time: 0.02s ✓ All jobs succeeded
 
 [Quickstart](https://probe.linyo.ws/guide/introduction/quickstart) goes through this step by step, and [Your First Workflow](https://probe.linyo.ws/guide/introduction/your-first-workflow) grows it into something you can leave running.
 
-What Probe Does
----------------
+What Makes Probe Different
+--------------------------
 
-- **One file, several protocols.** A workflow can call an HTTP endpoint, query the database behind it and check the mail it sent, in the same run.
-- **Jobs run in parallel.** `needs` declares the order where it matters, and the rest runs at once. `probe dag` prints the resulting graph.
-- **Steps share data.** A step publishes `outputs` that later steps and jobs read.
-- **Every step asserts.** `test` is an expression over the response, so a workflow is a test rather than a script that happens to succeed.
-- **Tests become monitors.** `repeat` runs a job on an interval and reports how many passes succeeded.
-- **The awkward cases are covered.** `retry`, `skipif`, `iteration`, `wait` and `timeout` handle what does not pass first time, does not apply everywhere, or must not run forever.
-- **Extensible.** Actions are plugins served over gRPC, so an action you need but Probe does not have is one you can add.
+The tools nearby are usually one of two things: a test runner, or a prober that monitors. Most of them speak one protocol. Probe is both, across the protocols a web system is actually made of.
 
-See [Understanding Probe](https://probe.linyo.ws/guide/introduction/understanding-probe) for how these fit together, and [Comparison](https://probe.linyo.ws/guide/introduction/comparison) for where another tool is the better answer.
+- **One file reaches the whole system.** HTTP, gRPC, MySQL, PostgreSQL, SQLite, SMTP, IMAP, SSH, shell and a real browser are built in. A single run can call an endpoint, query the row it wrote, and read the mail it sent, with no glue between three tools.
+- **The same file is a test and a monitor.** Add `repeat` to a job and it runs on an interval, reporting `3/3 success (100.0%)`. There is no second, rewritten copy of the workflow for monitoring.
+- **Jobs are a graph, not a list.** `needs` declares only the order that matters, and everything else runs in parallel. `probe dag` prints that graph as ASCII or Mermaid. Scenario runners walk a file from top to bottom.
+- **It behaves the same everywhere.** One Go binary, nothing to install alongside it and no service to keep running, so your terminal, a CI step and a cron entry all do the same thing.
+- **Actions are plugins.** Each one is a separate process behind [go-plugin](https://github.com/hashicorp/go-plugin), so a protocol Probe does not cover yet can be added without forking the binary.
+
+Beyond that, a workflow has `outputs` to pass data between steps and jobs, `test` to assert on any response, `retry`, `skipif`, `iteration`, `wait` and `timeout`, `defaults` for settings shared across steps, and merging of several YAML files on one command line.
+
+[Understanding Probe](https://probe.linyo.ws/guide/introduction/understanding-probe) covers how these fit together, and [Comparison](https://probe.linyo.ws/guide/introduction/comparison) says where k6, Hurl, Venom, runn, Blackbox exporter or GitHub Actions is the better answer.
 
 Built-in Actions
 ----------------

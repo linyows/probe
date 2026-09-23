@@ -73,18 +73,20 @@ Total workflow time: 0.02s ✓ All jobs succeeded
 
 [クイックスタート](https://probe.linyo.ws/ja/guide/introduction/quickstart)では同じ手順を順に追い、[最初のワークフロー](https://probe.linyo.ws/ja/guide/introduction/your-first-workflow)では動かし続けられる形まで広げます。
 
-Probeでできること
------------------
+Probeならではの特徴
+-------------------
 
-- **1つのファイルで複数のプロトコルを扱う**: HTTPのエンドポイントを呼び、その背後のデータベースに問い合わせ、送信されたメールを確認するところまでを1回の実行で行えます。
-- **ジョブは並行して実行される**: 順序が必要な箇所だけ`needs`で宣言し、残りは同時に実行されます。できあがるグラフは`probe dag`で出力できます。
-- **ステップ間でデータを渡せる**: ステップが公開した`outputs`を、後続のステップやジョブから参照できます。
-- **すべてのステップが検証を持つ**: `test`は応答に対する式です。そのためワークフローは、たまたま成功するスクリプトではなくテストになります。
-- **テストがそのまま監視になる**: `repeat`はジョブを一定の間隔で繰り返し、何回成功したかを報告します。
-- **例外的な場面にも対応できる**: `retry`、`skipif`、`iteration`、`wait`、`timeout`で、一度で通らない場合、環境によっては実行しない場合、いつまでも待たせたくない場合を扱えます。
-- **拡張できる**: アクションはgRPC経由で提供されるプラグインです。必要なアクションが組み込みにない場合は追加できます。
+近い位置にあるツールは、テストを実行するものか、監視のために繰り返し確認するもののどちらかであることがほとんどです。扱えるプロトコルも1つに限られる場合が多くあります。Probeはその両方を、Webシステムが実際に使っているプロトコルの範囲で扱います。
 
-これらの関係は[Probeの理解](https://probe.linyo.ws/ja/guide/introduction/understanding-probe)で、他のツールを選んだほうがよい範囲は[比較](https://probe.linyo.ws/ja/guide/introduction/comparison)で説明しています。
+- **1つのファイルでシステム全体を対象にできる**: HTTP、gRPC、MySQL、PostgreSQL、SQLite、SMTP、IMAP、SSH、シェル、実際のブラウザが組み込みです。エンドポイントを呼び、書き込まれた行を問い合わせ、送信されたメールを読むところまでを、3つのツールをつなぎ合わせずに1回の実行で行えます。
+- **同じファイルがテストにも監視にもなる**: ジョブに`repeat`を加えると一定の間隔で繰り返し、`3/3 success (100.0%)`のように結果を報告します。監視用に書き直した2つ目のワークフローは要りません。
+- **ジョブは一覧ではなくグラフ**: `needs`で宣言するのは順序が必要な箇所だけで、残りは並行して実行されます。そのグラフは`probe dag`でASCIIまたはMermaidとして出力できます。シナリオを実行するツールはファイルを上から下へ順にたどります。
+- **どこで動かしても同じ**: 単体のGoバイナリで、併せて入れるものも、常駐させるサービスもありません。手元の端末でも、CIのステップでも、cronからでも同じ動作になります。
+- **アクションはプラグイン**: 各アクションは[go-plugin](https://github.com/hashicorp/go-plugin)越しの別プロセスです。組み込みにないプロトコルは、バイナリをフォークせずに追加できます。
+
+このほかワークフローには、ステップやジョブの間でデータを渡す`outputs`、任意の応答を検証する`test`、`retry`、`skipif`、`iteration`、`wait`、`timeout`、ステップ間で共通する設定をまとめる`defaults`、そしてコマンドラインで複数のYAMLをマージする機能があります。
+
+これらの関係は[Probeの理解](https://probe.linyo.ws/ja/guide/introduction/understanding-probe)で、k6、Hurl、Venom、runn、Blackbox exporter、GitHub Actionsのいずれを選んだほうがよいかは[比較](https://probe.linyo.ws/ja/guide/introduction/comparison)で説明しています。
 
 組み込みアクション
 ------------------
