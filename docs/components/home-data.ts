@@ -105,43 +105,31 @@ export const heroReport: ReportLine[] = [
 
 /*
  * The pair below was run the same way: `probe orders.yml` against a stub that
- * answers POST /login with a token and refuses GET /orders without it. Only
- * the API host was swapped for a presentable one.
+ * answers POST /login with a token when the credentials match and refuses
+ * GET /orders without one. Only the API host was swapped for a presentable
+ * one, and the password is an env var here as it would be anywhere.
  */
 
-export const sharedJob = `name: Log in
-
-steps:
-- name: Post credentials
-  id: login
-  uses: http
-  with:
-    url: "{{vars.api}}"
-    post: /login
-    body:
-      email: "{{vars.email}}"
-      password: "{{vars.password}}"
-  test: res.code == 200
-  outputs:
-    token: res.body.access_token`
-
-export const sharedCaller = `name: Orders
+export const sharedWorkflow = `name: Orders
 
 vars:
-  api: https://api.example.com
+  password: "{{PASSWORD}}"
 
 jobs:
 - name: Order history
+  defaults:
+    http:
+      url: https://api.example.com
+
   steps:
   - name: Log in
     id: auth
     uses: embedded
     with:
-      path: ./jobs/login.yml
+      path: ./login-job.yml
       vars:
-        api: "{{vars.api}}"
-        email: ada@example.com
-        password: "{{PASSWORD}}"
+        username: ada
+        password: "{{vars.password}}"
     test: res.code == 0
     outputs:
       token: res.outputs.token
@@ -149,11 +137,31 @@ jobs:
   - name: List orders
     uses: http
     with:
-      url: "{{vars.api}}"
       get: /orders
       headers:
         authorization: "Bearer {{outputs.auth.token}}"
     test: res.code == 200`
+
+export const sharedJob = `name: Log in
+
+defaults:
+  http:
+    url: https://api.example.com
+    headers:
+      content-type: application/json
+
+steps:
+- name: Post credentials
+  id: login
+  uses: http
+  with:
+    post: /login
+    body:
+      username: "{{vars.username}}"
+      password: "{{vars.password}}"
+  test: res.code == 200
+  outputs:
+    token: res.body.access_token`
 
 export const installCommand = 'go install github.com/linyows/probe/cmd/probe@latest'
 
