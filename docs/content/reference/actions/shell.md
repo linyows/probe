@@ -4,6 +4,8 @@ The `shell` action executes shell commands and scripts securely, providing compr
 
 ## Basic Syntax
 
+A shell step needs the command; everything else has a default.
+
 ```yaml
 steps:
   - name: "Execute Build Script"
@@ -14,6 +16,8 @@ steps:
 ```
 
 ## Parameters
+
+A shell step needs a command, and optionally the interpreter, the directory and the environment it runs in, plus a limit on how long it may take.
 
 ### `cmd` (required)
 
@@ -89,6 +93,8 @@ with:
 
 ## Response Format
 
+The result carries the exit code and both output streams.
+
 ```yaml
 res:
   code: 0                    # Exit code (0 = success)
@@ -106,7 +112,11 @@ req:
 
 ## Usage Examples
 
+The examples below go from a single command to a pipeline that builds, tests, deploys per environment, and reports what failed.
+
 ### Basic Command Execution
+
+A single command, with its exit code as the test.
 
 ```yaml
 - name: "System Information"
@@ -117,6 +127,8 @@ req:
 ```
 
 ### Build and Test Pipeline
+
+Each stage is its own step, so a failure names the stage that broke.
 
 ```yaml
 - name: "Install Dependencies"
@@ -140,6 +152,8 @@ req:
 
 ### Environment-specific Deployment
 
+The command itself can be assembled from variables, which is how one step deploys to different targets.
+
 ```yaml
 vars:
   target_env: "{{TARGET_ENV}}"
@@ -159,6 +173,8 @@ vars:
 ```
 
 ### Error Handling and Debugging
+
+When the command's own exit code is not enough, the test reads `res.stdout` and `res.stderr`.
 
 ```yaml
 - name: "Service Health Check"

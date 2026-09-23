@@ -4,6 +4,8 @@ This guide shows you how to build comprehensive monitoring systems using Probe. 
 
 ## Basic Service Monitoring
 
+Monitoring starts with a single health check, then grows to cover several services in one run.
+
 ### Simple Health Check
 
 Start with a basic health check workflow:
@@ -163,7 +165,11 @@ jobs:
 
 ## Database and Infrastructure Monitoring
 
+A service can answer its health endpoint while the database behind it is failing. Checking that layer directly catches what an HTTP probe misses.
+
 ### Database Health Monitoring
+
+A query that returns is the only proof that the database is reachable and answering.
 
 ```yaml
 name: Database Health Monitor
@@ -264,7 +270,11 @@ jobs:
 
 ## Comprehensive System Monitoring
 
+The workflow below puts the previous checks together and covers the stack in one run.
+
 ### Full-Stack Monitoring Workflow
+
+Each layer is its own job, so the report says which layer is down rather than that something is.
 
 ```yaml
 name: Full-Stack System Monitor
@@ -491,7 +501,11 @@ jobs:
 
 ## Alerting and Notification Integration
 
+A check that nobody reads is not monitoring. Adding notification steps makes the result reach someone.
+
 ### Monitoring with Email Alerts
+
+A notification job that depends on the checks runs only when one of them has failed.
 
 ```yaml
 name: Monitoring with Email Alerts
@@ -625,6 +639,8 @@ jobs:
 
 ## Environment-Specific Monitoring
 
+Thresholds and endpoints differ between environments, so one monitoring file has to select them rather than hardcode them.
+
 ### Multi-Environment Configuration
 
 **base-monitoring.yml:**
@@ -725,6 +741,8 @@ probe base-monitoring.yml,production.yml
 
 ## Best Practices
 
+The points below cover what to monitor, how to keep alerts meaningful, what the checks themselves cost, and how they stay maintained.
+
 ### 1. Monitoring Strategy
 
 - **Layer your monitoring**: Infrastructure → Application → Business Logic
@@ -733,6 +751,8 @@ probe base-monitoring.yml,production.yml
 - **Implement gradual alerting**: Info → Warning → Critical
 
 ### 2. Alert Fatigue Prevention
+
+An alert that fires on every blip stops being read, so the condition decides what is worth sending.
 
 ```yaml
 # Good: Conditional alerting
@@ -747,6 +767,8 @@ probe base-monitoring.yml,production.yml
 ```
 
 ### 3. Performance Considerations
+
+Independent checks belong in separate jobs so the whole run takes as long as the slowest one, not their sum.
 
 ```yaml
 # Good: Parallel independent checks
@@ -763,6 +785,8 @@ outputs:
 ```
 
 ### 4. Documentation and Maintenance
+
+The description is where the workflow records what it watches and what a failure means.
 
 ```yaml
 name: Well-Documented Monitor
@@ -790,7 +814,11 @@ description: |
 
 ## Troubleshooting Common Issues
 
+When a monitoring workflow reports a failure that is not real, the cause is usually in how it reaches the service rather than in the service itself.
+
 ### 1. Service Discovery Problems
+
+When the address itself is wrong, the check fails in a way that looks like an outage.
 
 ```yaml
 - name: Service Discovery Check
@@ -806,6 +834,8 @@ description: |
 
 ### 2. Network Connectivity Issues
 
+A short timeout separates a slow response from one that is never coming.
+
 ```yaml
 - name: Network Connectivity Test
   uses: http
@@ -819,6 +849,8 @@ description: |
 ```
 
 ### 3. Authentication Problems
+
+An expired credential produces a failure that has nothing to do with the service's health.
 
 ```yaml
 - name: Authentication Health Check

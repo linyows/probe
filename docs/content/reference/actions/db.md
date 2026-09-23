@@ -4,6 +4,8 @@ The `db` action executes SQL queries on MySQL, PostgreSQL, and SQLite databases,
 
 ## Basic Syntax
 
+A database step gives the connection string and the statement to run.
+
 ```yaml
 steps:
   - name: "Database Query"
@@ -16,6 +18,8 @@ steps:
 ```
 
 ## Parameters
+
+A database step is described by four parameters: where to connect, what to run, the values to bind, and how long to wait.
 
 ### `dsn` (required)
 
@@ -104,7 +108,11 @@ The database action provides a `res` object with the following properties:
 
 ## Response Examples
 
+What the response holds depends on the statement. A `SELECT` returns rows; an `INSERT` or `UPDATE` returns counts instead.
+
 ### SELECT Query Response
+
+Rows come back in `res.rows`, and the count of them in `res.rows_affected`.
 
 ```yaml
 steps:
@@ -124,6 +132,8 @@ steps:
 
 ### INSERT/UPDATE Query Response
 
+A write returns no rows, so the result is in the count of rows it changed.
+
 ```yaml
 steps:
   - name: "Insert User"
@@ -137,7 +147,11 @@ steps:
 
 ## Database-Specific Features
 
+The `dsn` and `query` parameters are the same for every driver, but the syntax inside the query is not. The examples below show what each supported database adds.
+
 ### MySQL Examples
+
+Connection options go in the DSN, and stored procedures are called like any other statement.
 
 ```yaml
 # MySQL with connection options
@@ -159,6 +173,8 @@ steps:
 ```
 
 ### PostgreSQL Examples
+
+PostgreSQL adds JSON and array operators that can be used directly in the query.
 
 ```yaml
 # PostgreSQL with JSON operations
@@ -184,6 +200,8 @@ steps:
 ```
 
 ### SQLite Examples
+
+SQLite takes a file path, or `:memory:` for a database that lasts only as long as the step.
 
 ```yaml
 # SQLite with file creation
@@ -211,7 +229,11 @@ steps:
 
 ## Common Query Patterns
 
+Database steps in a workflow tend to do one of three things: assert that the data is in the state it should be, watch how the database itself is behaving, or write a batch of records for later steps to read.
+
 ### Data Validation Queries
+
+A query that counts what should not exist turns an invariant into a test.
 
 ```yaml
 - name: "Check Data Integrity"
@@ -231,6 +253,8 @@ steps:
 ```
 
 ### Performance Monitoring
+
+The database's own statistics tables report connections and slow queries.
 
 ```yaml
 - name: "Database Performance Check"
@@ -254,6 +278,8 @@ steps:
 ```
 
 ### Batch Operations
+
+Inserting several rows in one statement prepares the data that later steps read.
 
 ```yaml
 - name: "Batch Insert"

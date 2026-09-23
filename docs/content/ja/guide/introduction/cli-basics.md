@@ -14,6 +14,8 @@ $ probe workflow.yml
 
 ### コマンド構文
 
+オプションを先に書き、その後にワークフローファイルを指定します。
+
 ```bash
 $ probe [options] <workflow-file>
 ```
@@ -247,7 +249,11 @@ fi
 
 ## 実用的な例
 
+CI、定期的な監視、手元での開発、負荷の確認のいずれも同じバイナリで行います。異なるのは呼び出し方だけです。
+
 ### 1. CI/CD統合
+
+パイプラインは終了コードで処理を分岐します。
 
 ```bash
 # CI/CDパイプラインで
@@ -262,12 +268,16 @@ fi
 
 ### 2. Cronジョブ監視
 
+同じワークフローを定期的に実行すれば監視になります。
+
 ```bash
 # crontabで - 5分ごとに実行
 */5 * * * * /usr/local/bin/probe /opt/monitoring/health-check.yml >> /var/log/probe.log 2>&1
 ```
 
 ### 3. 開発テスト
+
+開発中は手元の設定を共通の設定に重ね、`-v`で各ステップを確認します。
 
 ```bash
 # 開発中のクイックテスト
@@ -279,6 +289,8 @@ $ probe -v api-tests.yml,local-config.yml
 Probeの出力を理解することで、問題を迅速に特定できます：
 
 ### 成功した実行
+
+ジョブごとに、含まれるステップと所要時間が出力されます。
 
 ```
 My Health Check
@@ -298,6 +310,8 @@ Total workflow time: 0.45s ✔︎ All jobs succeeded
 - **合計時間**: 全体の実行時間
 
 ### 失敗した実行
+
+失敗したステップには印が付き、成立しなかったテストが併記されます。
 
 ```
 My Health Check
@@ -320,6 +334,8 @@ Total workflow time: 1.23s ✘ 1 job(s) failed
 
 ### 部分的成功
 
+ジョブごとに結果が出るため、1つのジョブの失敗で他の成功が埋もれることはありません。
+
 ```
 Multi-Service Check
 Checking multiple services
@@ -336,7 +352,11 @@ Total workflow time: 2.34s ✘ 1 job(s) failed
 
 ## よくある問題のトラブルシューティング
 
+コマンドラインで起きる問題の多くは、ワークフローの内容ではなくファイルに起因します。ファイルの場所、パースできるか、アクセスできるかです。
+
 ### ファイルが見つからない
+
+ファイルを指定していないか、指定したパスが存在しない場合に出ます。
 
 ```
 [ERROR] workflow is required
@@ -349,6 +369,8 @@ $ probe ./workflows/health-check.yml
 
 ### YAML構文エラー
 
+メッセージには、パーサーが処理を止めた行が示されます。
+
 ```
 [ERROR] yaml: line 5: mapping values are not allowed in this context
 ```
@@ -359,6 +381,8 @@ $ probe ./workflows/health-check.yml
 - 特殊文字を含む文字列はクォートで囲む
 
 ### 権限エラー
+
+ファイルは存在するものの、実行中のユーザーが読めない状態です。
 
 ```
 [ERROR] permission denied
@@ -378,7 +402,11 @@ chmod +r workflow.yml
 
 ## ベストプラクティス
 
+以下では、コマンドラインを短く保ち、実行を再現できる状態にするための、ワークフローファイルの命名と配置を扱います。
+
 ### 1. 説明的なファイル名を使用
+
+ファイル名はcronの設定やCIのログに現れます。そのため、何を確認するワークフローかがわかる名前にします。
 
 ```bash
 # 良い
@@ -391,6 +419,8 @@ $ probe workflow.yml
 ```
 
 ### 2. ディレクトリで整理
+
+目的ごとにまとめておけば、マージ時の引数が短くなります。
 
 ```bash
 # 目的別にワークフローを整理

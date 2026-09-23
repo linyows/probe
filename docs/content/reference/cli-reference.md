@@ -4,12 +4,16 @@ This page provides complete documentation for the Probe command-line interface, 
 
 ## Basic Usage
 
+Probe is invoked in one of two forms: a workflow file to run, or a subcommand acting on one.
+
 ```bash
 probe [options] <workflow-file>
 probe <subcommand> [options] <file>
 ```
 
 ## Command Syntax
+
+Every invocation names one or more workflow files. Options come before them, and a subcommand takes their place when you want something other than a run.
 
 ### Basic Command
 
@@ -30,6 +34,8 @@ probe base.yml,environment.yml,overrides.yml
 The files are concatenated from left to right into a single YAML document. A top-level key defined in more than one file takes the value from the last file, and the whole key is replaced rather than merged entry by entry.
 
 ### Positional Arguments
+
+The workflow path is the only positional argument, and it is required.
 
 #### `workflow-path`
 
@@ -52,6 +58,8 @@ probe /home/user/workflows/monitoring.yml
 ```
 
 ## Command-Line Options
+
+The options change how a run reports itself rather than what it does: how much detail is printed, in what format, and whether timings are included.
 
 ### `-v, --verbose`
 
@@ -126,6 +134,8 @@ PROBE_OUTPUT=stream probe workflow.yml
 ```
 
 ## Subcommands
+
+A subcommand replaces the run with something else: `gen` writes a starting workflow, and `dag` prints the dependency graph a workflow describes.
 
 ### `gen`
 
@@ -264,7 +274,11 @@ Workflows read any other environment variable through `vars`, so `API_URL`, `ENV
 
 ## Usage Examples
 
+The examples below start from a single file and build up to merged configurations, containers, CI runs and scheduled monitoring.
+
 ### Basic Workflow Execution
+
+A run needs nothing but the file, and `-v` adds the detail of each step.
 
 ```bash
 # Run a simple health check
@@ -275,6 +289,8 @@ probe -v health-check.yml
 ```
 
 ### Environment-Specific Execution
+
+Listing a second file after a comma merges it over the first, which is how one workflow targets different environments.
 
 ```bash
 # Development environment
@@ -289,12 +305,16 @@ probe workflow.yml,prod.yml
 
 ### Complex Configuration Merging
 
+More than two files can be merged, each one overriding the ones before it.
+
 ```bash
 # Layer multiple configurations
 probe base.yml,region-us.yml,environment-prod.yml,team-overrides.yml
 ```
 
 ### CI/CD Integration
+
+Because the exit status reflects the result, a deployment script can stop on a failed run.
 
 ```bash
 #!/bin/bash
@@ -312,6 +332,8 @@ echo "All tests passed!"
 ```
 
 ### Docker Integration
+
+In a container the workflow is mounted and the credentials are passed as environment variables.
 
 ```bash
 # Run Probe in Docker container
@@ -333,6 +355,8 @@ services:
 ```
 
 ### Scheduled Execution
+
+Running the same workflow on a schedule turns it into monitoring, whether through cron or a systemd timer.
 
 ```bash
 # Crontab entry for regular monitoring
@@ -365,6 +389,8 @@ Probe reports the outcome of a run with two exit codes:
 
 ### Exit Code Examples
 
+The exit status is what a surrounding script branches on.
+
 ```bash
 # Check exit code in scripts
 probe workflow.yml
@@ -380,6 +406,8 @@ probe integration-tests.yml || exit 1
 
 ## Performance and Resource Usage
 
+Probe is a single binary with no runtime to start, so the cost of a run is dominated by what the workflow itself waits on.
+
 ### Memory Usage
 
 - **Base memory:** ~10MB for Probe runtime
@@ -387,6 +415,8 @@ probe integration-tests.yml || exit 1
 - **Per action:** ~0.1-1MB depending on response size
 
 ### Execution Timing
+
+`time` gives the total, and `--timing` breaks it down per step.
 
 ```bash
 # Time workflow execution
@@ -409,7 +439,11 @@ probe -v parallel-workflow.yml
 
 ## Troubleshooting Commands
 
+When a run does not behave as expected, the first step is to see what Probe actually loaded. The commands below print that, and the issues after them are the ones that come up most often.
+
 ### Debug Information
+
+Combining the options prints everything a run knows about itself, and `--version` identifies the binary being used.
 
 ```bash
 # Maximum detail
@@ -447,7 +481,11 @@ yaml-validator workflow.yml
 
 ## Integration Examples
 
+Because Probe is one binary and exits with a meaningful status, running it from CI is a single step. The configurations below show that step in three systems.
+
 ### GitHub Actions
+
+The binary is installed in one step and the workflow is run in the next.
 
 ```yaml
 name: Probe Tests
@@ -473,6 +511,8 @@ jobs:
 
 ### GitLab CI
 
+The same two steps fit into a single job definition.
+
 ```yaml
 stages:
   - test
@@ -491,6 +531,8 @@ probe-test:
 ```
 
 ### Jenkins Pipeline
+
+Credentials come from the Jenkins store and reach Probe as environment variables.
 
 ```groovy
 pipeline {
@@ -529,7 +571,11 @@ pipeline {
 
 ## Advanced Usage Patterns
 
+The patterns below come from running Probe over many workflows and environments rather than a single file at a time.
+
 ### Configuration Templates
+
+The file path itself can be built from the environment, so the command line stays the same across environments.
 
 ```bash
 # Use environment variables in file paths
@@ -543,6 +589,8 @@ probe $WORKFLOW_FILE
 
 ### Batch Execution
 
+A loop over a directory runs every workflow and records which ones failed.
+
 ```bash
 # Run multiple workflows
 for workflow in workflows/*.yml; do
@@ -555,6 +603,8 @@ find workflows/ -name "*.yml" | xargs -P 4 -I {} probe {}
 ```
 
 ### Monitoring Integration
+
+The exit status is what a monitoring system needs, so the result can be forwarded from the surrounding script.
 
 ```bash
 # Integration with monitoring systems

@@ -4,6 +4,8 @@ The SSH Action allows you to connect to remote servers via SSH and execute comma
 
 ## Basic Usage
 
+An SSH step needs a host, a user, a way to authenticate, and the command to run.
+
 ```yaml
 - name: Check server status
   uses: ssh
@@ -17,7 +19,11 @@ The SSH Action allows you to connect to remote servers via SSH and execute comma
 
 ## Parameters
 
+The parameters fall into four groups: the ones every step needs, the authentication parameters of which exactly one must be given, the optional ones that tune the connection, and the environment variables that can supply values instead.
+
 ### Required Parameters
+
+These three have no default and must be given on every step.
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
@@ -27,6 +33,8 @@ The SSH Action allows you to connect to remote servers via SSH and execute comma
 
 ### Authentication Parameters (one required)
 
+Exactly one authentication method is used, and an encrypted key needs its passphrase alongside it.
+
 | Parameter | Type | Description |
 |-----------|------|-------------|
 | `password` | string | Password authentication |
@@ -34,6 +42,8 @@ The SSH Action allows you to connect to remote servers via SSH and execute comma
 | `key_passphrase` | string | Private key passphrase (for encrypted keys) |
 
 ### Optional Parameters
+
+The rest tune the connection and fall back to the defaults below when omitted.
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
@@ -66,7 +76,11 @@ The SSH Action returns the following values:
 
 ## Examples
 
+The examples below cover each authentication method in turn, then the cases that need more than a single command: environment variables, multi-line scripts, and failures you want to inspect.
+
 ### Password Authentication
+
+The simplest form, though the password should come from the environment rather than the file.
 
 ```yaml
 - name: Login with password
@@ -83,6 +97,8 @@ The SSH Action returns the following values:
 
 ### Public Key Authentication
 
+`key_file` points at the private key and expands `~`.
+
 ```yaml
 - name: Login with SSH key
   uses: ssh
@@ -98,6 +114,8 @@ The SSH Action returns the following values:
 
 ### Encrypted Private Key
 
+A key protected by a passphrase needs `key_passphrase` as well as the file.
+
 ```yaml
 - name: Login with passphrase-protected key
   uses: ssh
@@ -111,6 +129,8 @@ The SSH Action returns the following values:
 ```
 
 ### Using Environment Variables
+
+Every parameter accepts a template, so the host and the credentials can come from outside the file.
 
 ```yaml
 - name: Deploy with environment variables
@@ -131,6 +151,8 @@ The SSH Action returns the following values:
 ```
 
 ### Multi-line Commands
+
+A block scalar sends several commands in one session, and the combined output comes back as `res.stdout`.
 
 ```yaml
 - name: Collect system information
@@ -154,6 +176,8 @@ The SSH Action returns the following values:
 ```
 
 ### Error Handling
+
+A remote command can fail after the connection succeeds, so the test examines the exit code and the error output.
 
 ```yaml
 - name: Restart service with error handling
@@ -179,7 +203,11 @@ The SSH Action returns the following values:
 
 ## Security Settings
 
+Host key verification decides whether Probe trusts the server it reaches. It is controlled by `strict_host_check` and `known_hosts`.
+
 ### Host Key Verification
+
+With `strict_host_check` on, the server's key must already be in `known_hosts`.
 
 ```yaml
 - name: Strict host key verification
@@ -196,6 +224,8 @@ The SSH Action returns the following values:
 
 ### Disable Host Key Verification (Development Only)
 
+Turning the check off accepts any key, which is only acceptable against a host you control.
+
 ```yaml
 - name: Development environment connection
   uses: ssh
@@ -209,6 +239,8 @@ The SSH Action returns the following values:
 ```
 
 ## Best Practices
+
+The following points come up whenever an SSH step runs outside a local experiment: which credential to use, how long to wait, what to do with a failure, and what ends up in the log.
 
 ### 1. Authentication Method Selection
 
@@ -233,6 +265,8 @@ timeout: "600s"
 ```
 
 ### 3. Error Handling
+
+A command can exit zero and still have reported a problem, so check `res.stderr` as well.
 
 ```yaml
 test: |
@@ -262,6 +296,8 @@ steps:
 
 ## Limitations
 
+Two things the SSH action deliberately does not do.
+
 ### No SSH Config File Support
 
 To maintain portability and reproducibility, SSH config files (`~/.ssh/config`) are not supported. All connection parameters must be explicitly defined in the workflow.
@@ -271,6 +307,8 @@ To maintain portability and reproducibility, SSH config files (`~/.ssh/config`) 
 Interactive commands that require user input are not supported. All commands must run non-interactively.
 
 ## Troubleshooting
+
+Most SSH failures come from the handshake rather than the command. The symptoms below list what to check first.
 
 ### Connection Errors
 

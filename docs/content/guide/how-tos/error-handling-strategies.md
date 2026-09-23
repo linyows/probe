@@ -4,6 +4,8 @@ This guide shows you how to implement robust error handling in Probe workflows. 
 
 ## Basic Error Handling Patterns
 
+The first decision is what a failure should do to the rest of the run: stop it, or let it continue with a reduced result.
+
 ### Fail Fast vs Continue
 
 Choose the right error handling strategy based on the criticality of operations:
@@ -186,6 +188,8 @@ jobs:
 ```
 
 ## Retry Patterns
+
+Retrying only helps if the failure is temporary. Backing off between attempts and stopping after a run of failures keep it from making things worse.
 
 ### Exponential Backoff Retry
 
@@ -413,6 +417,8 @@ jobs:
 
 ## Error Recovery Strategies
 
+A workflow can do more than report a failure. It can attempt the repair and then confirm that the service came back.
+
 ### Self-Healing Workflows
 
 Implement workflows that can automatically recover from failures:
@@ -639,6 +645,8 @@ jobs:
 
 ## Comprehensive Error Context
 
+What gets collected at the moment of failure decides whether the report is actionable later.
+
 ### Error Information Collection
 
 Collect comprehensive error information for debugging:
@@ -814,7 +822,11 @@ jobs:
 
 ## Best Practices
 
+The points below cover how failures are classified, what is recorded with them, and how the response escalates.
+
 ### 1. Error Classification
+
+What to do about a failure depends on what kind it is, so the kind is derived first.
 
 ```yaml
 # Good: Classify errors by type and severity
@@ -831,6 +843,8 @@ outputs:
 
 ### 2. Contextual Information
 
+Record what identifies the failing request, because that is what makes it findable in the server's logs.
+
 ```yaml
 # Good: Capture comprehensive context
 outputs:
@@ -842,6 +856,8 @@ outputs:
 ```
 
 ### 3. Recovery Strategy Selection
+
+Once the failure is classified, the response follows from the class.
 
 ```yaml
 # Good: Choose recovery strategy based on error type
@@ -857,6 +873,8 @@ outputs:
 
 ### 4. Progressive Error Handling
 
+Each job tries something cheaper than the next, and only the last one gives up.
+
 ```yaml
 # Good: Progressive error handling
 jobs:
@@ -868,7 +886,11 @@ jobs:
 
 ## Common Error Scenarios
 
+Three failures account for most of what a workflow meets in practice, and each calls for a different response.
+
 ### Network Connectivity Issues
+
+A timeout distinguishes an unreachable host from a slow one.
 
 ```yaml
 - name: Network Connectivity Test
@@ -885,6 +907,8 @@ jobs:
 
 ### Authentication Failures
 
+A 401 is rarely transient, so retrying it wastes time that reporting it would not.
+
 ```yaml
 - name: Authentication Error Handler
   echo: |
@@ -895,6 +919,8 @@ jobs:
 ```
 
 ### Rate Limiting
+
+A 429 says when to try again, so the wait comes from the response rather than a guess.
 
 ```yaml
 - name: Rate Limit Handler

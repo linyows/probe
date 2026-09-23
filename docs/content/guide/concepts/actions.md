@@ -30,6 +30,8 @@ The `http` action is the most versatile and commonly used action for making HTTP
 
 #### Basic Usage
 
+A GET request needs nothing but the URL.
+
 ```yaml
 - name: Simple GET Request
   uses: http
@@ -40,6 +42,8 @@ The `http` action is the most versatile and commonly used action for making HTTP
 ```
 
 #### Complete HTTP Action Reference
+
+Every field the action accepts, in one step.
 
 ```yaml
 - name: Comprehensive HTTP Request
@@ -162,6 +166,8 @@ The `shell` action enables secure execution of shell commands and scripts within
 
 #### Basic Usage
 
+A shell step needs nothing but the command.
+
 ```yaml
 - name: Build Application
   uses: shell
@@ -173,6 +179,8 @@ The `shell` action enables secure execution of shell commands and scripts within
 ```
 
 #### Complete Shell Action Reference
+
+Every field the action accepts, in one step.
 
 ```yaml
 - name: Deploy Application
@@ -193,6 +201,8 @@ The `shell` action enables secure execution of shell commands and scripts within
 ```
 
 #### Shell Response Object
+
+The exit code and both output streams are available to the test.
 
 ```yaml
 # Available response properties:
@@ -341,6 +351,8 @@ with:
 ```
 
 ## Advanced Action Usage
+
+Beyond a single call, actions are used in combination: handling their failures, chaining them, and configuring them from values computed during the run.
 
 ### Error Handling in Actions
 
@@ -538,6 +550,8 @@ jobs:
 
 ## Plugin Architecture Deep Dive
 
+Every action is a plugin. How Probe talks to one, when it starts and stops, and how the built-in ones are managed are described below.
+
 ### Plugin Communication
 
 Probe uses gRPC for plugin communication, providing:
@@ -570,6 +584,8 @@ probe workflow.yml  # Automatically loads required plugins
 ```
 
 ## Action Best Practices
+
+Whichever action a step uses, the same questions come up: how long to wait, what to do on failure, where the credentials come from, what to assert, and what to hand to the next step.
 
 ### 1. Timeout Configuration
 
@@ -700,6 +716,8 @@ type Actions interface {
 ```
 
 ### Action Plugin Structure
+
+A plugin implements the interface above and is served over gRPC.
 
 ```go
 // Example custom action plugin

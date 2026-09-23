@@ -11,6 +11,8 @@ Expressions appear in two shapes:
 
 ### Where Expressions Can Be Used
 
+Not every field evaluates expressions, and the ones that do differ in whether they take a template or a boolean expression.
+
 | Level | Field | Template | Boolean | Notes |
 |---|---|:-:|:-:|---|
 | workflow | `vars` | Yes | - | Global variables. Environment variables are referenced by bare name here |
@@ -170,6 +172,8 @@ vars:
 
 ## String Functions
 
+These operate on strings, which is what most response bodies and variables are.
+
 | Function | Description |
 |---|---|
 | `upper(s)` | Uppercase |
@@ -206,6 +210,8 @@ test: |
 
 ## Number Functions
 
+These cover rounding, sign and the comparisons that thresholds are written with.
+
 | Function | Description |
 |---|---|
 | `abs(n)` | Absolute value |
@@ -230,6 +236,8 @@ test: res.body.id % 2 == 0
 
 ## Type Conversion Functions
 
+Values read from the environment are strings, so a numeric comparison needs one of these first.
+
 | Function | Description |
 |---|---|
 | `int(v)` | Convert to an integer |
@@ -240,6 +248,8 @@ test: res.body.id % 2 == 0
 Probe's `parse_int` and `parse_float` differ from `int` and `float` in that they always parse base-10 text and return a 64-bit value.
 
 ## Date and Time Functions
+
+These produce and parse time values, and format them for output.
 
 | Function | Description |
 |---|---|
@@ -260,6 +270,8 @@ test: date(res.body.expires_at) > now()
 ```
 
 ## Array and Map Functions
+
+These inspect and reduce collections, which is what a test on a list of results needs.
 
 | Function | Description |
 |---|---|
@@ -297,6 +309,8 @@ outputs:
 ```
 
 ## JSON and Encoding Functions
+
+These convert between values and their textual encodings, for request bodies and for output.
 
 | Function | Description |
 |---|---|

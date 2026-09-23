@@ -101,6 +101,8 @@ Now that you've run your first workflow, you can:
 
 ## Common Next Steps
 
+Two changes cover most of what a first workflow grows into: running against more than one environment, and deciding what happens when a check fails.
+
 ### Check Multiple Environments
 
 Modify your workflow to check different environments:
@@ -153,7 +155,11 @@ Include steps that handle failures gracefully:
 
 ## Troubleshooting
 
+Three things account for nearly every failure on a first run.
+
 ### Workflow File Not Found
+
+The path given does not point at a file.
 
 ```
 [ERROR] workflow is required
@@ -162,6 +168,8 @@ Include steps that handle failures gracefully:
 Make sure you're providing the correct path to your YAML file.
 
 ### Invalid YAML Syntax
+
+The file was found but could not be parsed.
 
 ```
 [ERROR] yaml: line 5: mapping values are not allowed in this context

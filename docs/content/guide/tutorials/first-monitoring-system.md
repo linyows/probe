@@ -532,7 +532,11 @@ crontab -e
 
 ## Testing and Validation
 
+Before leaving the system to run on its own, check that each part works: the individual jobs, and the alert that is supposed to arrive when one of them fails.
+
 ### Test Individual Components
+
+Running one job at a time confirms each part before the whole workflow is left to run unattended.
 
 ```bash
 # Test health check only
@@ -553,6 +557,8 @@ probe monitoring.yml,development.yml
 4. Restore normal thresholds
 
 ## Troubleshooting
+
+If the monitoring system does not behave as described above, the causes below are the ones to check first.
 
 ### Common Issues
 

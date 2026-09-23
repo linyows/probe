@@ -128,7 +128,11 @@ $ probe my-first-workflow.yml --verbose
 
 ## トラブルシューティング
 
+最初の実行で起きる失敗は、ほぼ3つに集約されます。
+
 ### ワークフローファイルが見つからない
+
+指定したパスがファイルを指していません。
 
 ```
 [ERROR] workflow is required
@@ -137,6 +141,8 @@ $ probe my-first-workflow.yml --verbose
 YAMLファイルへの正しいパスを指定していることを確認してください。
 
 ### 無効なYAML構文
+
+ファイルは見つかったものの、パースできていません。
 
 ```
 [ERROR] yaml: line 5: mapping values are not allowed in this context

@@ -4,6 +4,8 @@ This guide shows you how to build comprehensive API testing workflows with Probe
 
 ## Basic API Testing
 
+API testing starts with a single request and its assertions, then extends to a sequence that creates, reads, updates and deletes a record.
+
 ### Simple GET Request Test
 
 Start with a basic API endpoint test:
@@ -206,7 +208,11 @@ jobs:
 
 ## Authentication Testing
 
+Most APIs require a credential. The workflows below obtain one, carry it between steps, and check that requests without it are rejected.
+
 ### Bearer Token Authentication
+
+The token is obtained by a login step and carried in the authorization header of everything after it.
 
 ```yaml
 name: Bearer Token API Testing
@@ -387,6 +393,8 @@ jobs:
 
 ### API Key Authentication
 
+An API key needs no login step, so it is read from the environment and sent with each request.
+
 ```yaml
 name: API Key Authentication Testing
 description: Test APIs using API key authentication
@@ -475,7 +483,11 @@ jobs:
 
 ## Data Validation and Response Testing
 
+A 200 status does not mean the body is correct. These tests assert on the shape of the response, and on what comes back when the request is invalid.
+
 ### JSON Schema Validation
+
+Probe has no schema language, so the shape of a response is asserted field by field.
 
 ```yaml
 name: JSON Response Validation
@@ -606,6 +618,8 @@ jobs:
 ```
 
 ### Error Response Validation
+
+The error path deserves the same assertions as the successful one: the right status, and a body that explains the failure.
 
 ```yaml
 name: Error Response Validation
@@ -753,7 +767,11 @@ jobs:
 
 ## Advanced API Testing Patterns
 
+A single endpoint is rarely what breaks. The workflow below tests a sequence of calls that depend on each other.
+
 ### Workflow Testing
+
+A user-level flow spans several endpoints, each one depending on what the last returned.
 
 ```yaml
 name: E-commerce Workflow Testing
@@ -1001,7 +1019,11 @@ jobs:
 
 ## Performance and Load Testing
 
+`res.time` is available in every test, so response time can be asserted alongside correctness.
+
 ### Response Time Testing
+
+Adding a bound on `rt.sec` turns an existing test into a performance check.
 
 ```yaml
 name: API Performance Testing
@@ -1110,7 +1132,11 @@ jobs:
 
 ## Best Practices
 
+The points below cover how tests are structured, where their data comes from, what they assert, and how they handle failure.
+
 ### 1. Test Structure
+
+Grouping cases into jobs by what they cover makes a failure locatable.
 
 ```yaml
 # Good: Organized test structure
@@ -1122,6 +1148,8 @@ jobs:
 ```
 
 ### 2. Data Management
+
+Generated data keeps repeated runs from colliding with the records left by the last one.
 
 ```yaml
 # Good: Use random data for isolation
@@ -1141,6 +1169,8 @@ body: |
 
 ### 3. Comprehensive Validation
 
+A response has more than a status code, and the other parts are where regressions hide.
+
 ```yaml
 # Good: Validate multiple aspects
 test: |
@@ -1153,6 +1183,8 @@ test: |
 ```
 
 ### 4. Error Handling
+
+Sending input the API should reject is how its validation gets tested at all.
 
 ```yaml
 # Good: Test error scenarios

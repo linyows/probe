@@ -48,12 +48,16 @@ jobs:
 
 ## Parameters
 
+An embedded step names the job file to run and the variables to hand it.
+
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
 | `path` | String | Yes | - | Path to the job file. Resolved against the current working directory, not the workflow file |
 | `vars` | Object | No | `{}` | Variables passed to the embedded job, read there as `vars.<name>` |
 
 ## Response Object
+
+After the embedded job finishes, `res` carries its result and its outputs.
 
 | Field | Type | Description |
 |-------|------|-------------|

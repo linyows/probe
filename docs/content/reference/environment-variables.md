@@ -66,11 +66,15 @@ Everything else on this page is a variable you define yourself and read from a w
 
 ## Authentication Variables
 
+Credentials do not belong in the workflow file. These variables hold them instead, and the workflow reads them through `env`.
+
 ### API Authentication
 
 Common patterns for API authentication in workflows:
 
 #### `API_TOKEN` / `API_KEY`
+
+A bearer token is exported once and read from the workflow's authorization header.
 
 ```bash
 # Bearer token authentication
@@ -98,6 +102,8 @@ jobs:
 
 #### `USERNAME` / `PASSWORD`
 
+Basic authentication needs both values, and neither should appear in the workflow file.
+
 ```bash
 # Basic authentication credentials
 export API_USERNAME="admin"
@@ -122,7 +128,11 @@ steps:
 
 ### Email Authentication
 
+Mail steps need the server, the port and the account to authenticate with.
+
 #### SMTP Configuration
+
+A mail step needs the host, the port and the account it authenticates with.
 
 ```bash
 # Gmail with app password
@@ -165,7 +175,11 @@ jobs:
 
 ## Application Configuration Variables
 
+These variables carry the values that change between deployments, such as the addresses a workflow targets and the features it expects to find enabled.
+
 ### Service URLs
+
+Addresses change per environment, so the workflow reads them instead of naming them.
 
 ```bash
 # API endpoints
@@ -183,6 +197,8 @@ export MONITORING_URL="https://monitoring.example.com/api/alerts"
 ```
 
 ### Feature Flags
+
+A flag lets one workflow skip the checks that do not apply where it is running.
 
 ```bash
 # Enable/disable features
@@ -227,7 +243,11 @@ jobs:
 
 ## CI/CD Integration Variables
 
+CI systems already expose the branch, commit and run identifiers as environment variables. A workflow can read them to label its results or to decide what to run.
+
 ### GitHub Actions
+
+Secrets are passed into the step's environment, and the run is a single command.
 
 ```yaml
 # .github/workflows/probe.yml
@@ -262,6 +282,8 @@ export GITHUB_ACTOR="username"
 
 ### GitLab CI
 
+Project variables reach the job's environment, so the script itself stays one line.
+
 ```yaml
 # .gitlab-ci.yml
 probe-test:
@@ -287,6 +309,8 @@ export CI_JOB_ID="789012"
 ```
 
 ### Jenkins
+
+The `environment` block pulls each credential from the Jenkins credential store.
 
 ```groovy
 // Jenkinsfile
@@ -319,7 +343,11 @@ export JENKINS_URL="https://jenkins.example.com"
 
 ## Environment-Specific Configuration
 
+One workflow usually has to run against development, staging and production. The setups below select the values per environment rather than duplicating the file.
+
 ### Multi-Environment Setup
+
+The values shared by every environment are set once, and only the ones that differ are selected per environment.
 
 ```bash
 # Base configuration (always set)
@@ -350,6 +378,8 @@ esac
 ```
 
 ### Docker Configuration
+
+Since Probe is a single binary, the image only has to fetch it and pass the variables through at run time.
 
 ```dockerfile
 # Dockerfile
@@ -389,6 +419,8 @@ services:
 
 ## Security Considerations
 
+Environment variables keep secrets out of the workflow file, but they are still readable by the process and anything that inspects it. The points below limit that exposure.
+
 ### Sensitive Variables
 
 **Never commit sensitive values to version control:**
@@ -405,6 +437,8 @@ vars:
 
 ### Variable Management
 
+A secret is better fetched from a secret store at the moment of use than stored in a file that persists.
+
 ```bash
 # Use secure secret management
 export API_TOKEN=$(aws ssm get-parameter --name "/app/api-token" --with-decryption --query 'Parameter.Value' --output text)
@@ -416,6 +450,8 @@ export GOOGLE_APPLICATION_CREDENTIALS=/tmp/gcp-key.json
 ```
 
 ### Environment Isolation
+
+Prefixing variable names per environment keeps a production credential from being picked up by a staging run.
 
 ```bash
 # Prefix variables by environment to avoid conflicts
@@ -430,7 +466,11 @@ export API_TOKEN="${!API_TOKEN}"  # Indirect variable expansion
 
 ## Debugging Environment Variables
 
+When a template resolves to nothing, the variable is usually absent rather than wrong. These commands show what the process actually received.
+
 ### Viewing Available Variables
+
+Before debugging the workflow, confirm which variables the shell is actually exporting.
 
 ```bash
 # List all environment variables
@@ -445,6 +485,8 @@ probe -v workflow.yml 2>&1 | grep -i "environment"
 ```
 
 ### Template Debugging
+
+A workflow that only echoes its variables shows what the templates resolved to.
 
 ```yaml
 # workflow.yml - Debug environment variable expansion
@@ -474,7 +516,11 @@ steps:
 
 ## Common Patterns
 
+The patterns below combine defaults, environment values and conditions so that a single workflow adapts to where it runs.
+
 ### Configuration Cascading
+
+Layering the configuration files lets a more specific one override a more general one without copying it.
 
 ```bash
 # System defaults
@@ -492,6 +538,8 @@ probe ${SYSTEM_CONFIG},${TEAM_CONFIG},${PROJECT_CONFIG},workflow.yml
 
 ### Dynamic Configuration
 
+The file to run can be chosen from the environment, with a fallback when no environment-specific file exists.
+
 ```bash
 # Generate configuration based on environment
 WORKFLOW_FILE="workflow-${ENVIRONMENT}.yml"
@@ -503,6 +551,8 @@ probe "$WORKFLOW_FILE"
 ```
 
 ### Conditional Execution
+
+Deriving a flag in the shell lets the workflow's conditions stay simple comparisons.
 
 ```bash
 # Skip certain jobs based on environment

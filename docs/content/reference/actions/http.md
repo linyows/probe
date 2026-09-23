@@ -4,6 +4,8 @@ The `http` action performs an HTTP request and exposes the response for assertio
 
 ## Basic Syntax
 
+An HTTP step needs a URL and a method, and asserts on the response in `test`.
+
 ```yaml
 steps:
   - name: Check the API
@@ -15,6 +17,8 @@ steps:
 ```
 
 ## Parameters
+
+The fields below describe the request. All of them accept template expressions.
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
@@ -92,6 +96,8 @@ jobs:
 
 ## Response Object
 
+After the request, `res` holds what came back.
+
 | Field | Type | Description |
 |-------|------|-------------|
 | `res.code` | Integer | Status code, such as `200` |
@@ -130,7 +136,11 @@ For a text or HTML response, `res.body` is the string itself:
 
 ## Common HTTP Patterns
 
+The fields above combine into a few shapes that come up in most workflows: carrying a token between steps, asserting on an error response, and retrying a request that is not yet consistent.
+
 ### Authentication
+
+The token is captured as an output of the login step and read by the steps that follow.
 
 ```yaml
   - name: Log in
@@ -160,6 +170,8 @@ For a text or HTML response, `res.body` is the string itself:
 
 ### Checking an Error Response
 
+Here the error is the expected result, so the test asserts on the status and the error body.
+
 ```yaml
   - name: Unknown id returns 404
     uses: http
@@ -170,6 +182,8 @@ For a text or HTML response, `res.body` is the string itself:
 ```
 
 ### Retrying a Flaky Endpoint
+
+`retry` repeats the step until the test passes or the attempts run out.
 
 ```yaml
   - name: Eventually consistent read

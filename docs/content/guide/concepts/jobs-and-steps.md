@@ -13,6 +13,8 @@ A **job** is a logical grouping of related steps that execute together as a unit
 
 ### Job Structure
 
+A job definition takes the properties below.
+
 ```yaml
 jobs:
 - id: job-id
@@ -160,6 +162,8 @@ A **step** is the smallest unit of execution in Probe. Each step performs a spec
 
 ### Step Structure
 
+A step definition takes the properties below.
+
 ```yaml
 steps:
   - name: Step Name          # Required: Descriptive name
@@ -177,6 +181,8 @@ steps:
 ```
 
 ### Step Types
+
+A step either invokes an action, prints something, or does both in one.
 
 #### 1. Action Steps
 
@@ -312,6 +318,8 @@ steps:
 
 
 ## Advanced Patterns
+
+The patterns below go beyond running steps in order: recovering from a failure, collecting results across steps, and configuring a step from values computed earlier.
 
 ### 1. Error Recovery Patterns
 
@@ -499,6 +507,8 @@ jobs:
 
 ## Step and Job Identification
 
+Referring to a result requires naming the thing that produced it. Step IDs and job names are what those references use.
+
 ### Step IDs
 
 Use `id` to reference steps from other parts of the workflow:
@@ -564,6 +574,8 @@ jobs:
 ```
 
 ## Performance Optimization
+
+A run is as slow as its longest chain of dependencies. Shortening that chain, and keeping each step cheap, is where the time is won.
 
 ### 1. Parallel Job Execution
 
@@ -660,6 +672,8 @@ jobs:
 ```
 
 ## Best Practices
+
+The points below cover how much to put in one job, how to name steps, and how failures are handled.
 
 ### 1. Job Granularity
 

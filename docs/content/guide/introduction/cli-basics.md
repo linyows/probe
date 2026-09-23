@@ -20,6 +20,8 @@ This executes the workflow defined in `workflow.yml` and displays the results.
 
 ## Command Syntax
 
+Options come first, then the workflow file.
+
 ```bash
 probe [options] <workflow-file>
 ```
@@ -28,6 +30,8 @@ probe [options] <workflow-file>
 - **`options`**: Various flags to modify behavior (optional)
 
 ## Core Options
+
+The options below change what a run prints and in what form. None of them change which steps run.
 
 ### Help and Information
 
@@ -244,7 +248,11 @@ fi
 
 ## Real-World Examples
 
+The same binary covers CI, scheduled monitoring, local development and load checks. The only difference is how it is invoked.
+
 ### 1. CI/CD Integration
+
+The exit status is what the pipeline branches on.
 
 ```bash
 # In your CI/CD pipeline
@@ -259,6 +267,8 @@ fi
 
 ### 2. Cron Job Monitoring
 
+The same workflow, run on a schedule, becomes monitoring.
+
 ```bash
 # In crontab - run every 5 minutes
 */5 * * * * /usr/local/bin/probe /opt/monitoring/health-check.yml >> /var/log/probe.log 2>&1
@@ -266,12 +276,16 @@ fi
 
 ### 3. Development Testing
 
+During development a local configuration is merged over the shared one, and `-v` shows each step.
+
 ```bash
 # Quick test during development
 probe -v api-tests.yml,local-config.yml
 ```
 
 ### 4. Load Testing
+
+`--timing` is what makes the per-step durations visible.
 
 ```bash
 # Run performance tests with timing
@@ -283,6 +297,8 @@ probe --timing --verbose load-test.yml
 Understanding Probe's output helps you quickly identify issues:
 
 ### Successful Execution
+
+Each job is listed with its steps and the time it took.
 
 ```
 My Health Check
@@ -302,6 +318,8 @@ Total workflow time: 0.45s ✔︎ All jobs succeeded
 - **Total time**: Overall execution time
 
 ### Failed Execution
+
+A failed step is marked, and the test that did not hold is printed with it.
 
 ```
 My Health Check
@@ -324,6 +342,8 @@ Total workflow time: 1.23s ✘ 1 job(s) failed
 
 ### Partial Success
 
+Jobs are reported separately, so one failing job does not hide the ones that passed.
+
 ```
 Multi-Service Check
 Checking multiple services
@@ -340,7 +360,11 @@ Total workflow time: 2.34s ✘ 1 job(s) failed
 
 ## Troubleshooting Common Issues
 
+Most problems at the command line come from the file, not the workflow: where it is, how it parses, and what it is allowed to reach.
+
 ### File Not Found
+
+This appears when no file was given, or the path does not exist.
 
 ```
 [ERROR] workflow is required
@@ -353,6 +377,8 @@ probe ./workflows/health-check.yml
 
 ### YAML Syntax Errors
 
+The message names the line the parser stopped at.
+
 ```
 [ERROR] yaml: line 5: mapping values are not allowed in this context
 ```
@@ -363,6 +389,8 @@ probe ./workflows/health-check.yml
 - Quote strings containing special characters
 
 ### Permission Errors
+
+The file exists but the current user cannot read it.
 
 ```
 [ERROR] permission denied
@@ -382,7 +410,11 @@ If steps hang or timeout:
 
 ## Best Practices
 
+The points below cover naming and arranging workflow files so that the command line stays short and the run is reproducible.
+
 ### 1. Use Descriptive File Names
+
+The file name is what appears in cron entries and CI logs, so it should say what the workflow checks.
 
 ```bash
 # Good
@@ -395,6 +427,8 @@ probe workflow.yml
 ```
 
 ### 2. Organize with Directories
+
+Grouping by purpose keeps the merge arguments short.
 
 ```bash
 # Organize workflows by purpose

@@ -4,6 +4,8 @@ This guide shows you how to implement performance testing and load testing with 
 
 ## Basic Performance Testing
 
+Performance testing starts by measuring response times, then turning the measurements into thresholds the workflow enforces.
+
 ### Response Time Measurement
 
 Start with simple response time measurements:
@@ -295,6 +297,8 @@ jobs:
 ```
 
 ## Load Testing Patterns
+
+Probe runs one request at a time, so load is expressed as repeated requests: a steady sequence, or a sequence pushed until the service degrades.
 
 ### Sequential Load Testing
 
@@ -648,6 +652,8 @@ jobs:
 
 ## Performance Monitoring and Alerting
 
+A one-off measurement says little. Running the same measurement on a schedule is what shows a service getting slower.
+
 ### Continuous Performance Monitoring
 
 Monitor performance continuously and alert on degradation:
@@ -869,6 +875,8 @@ vars:
 
 ## Database Performance Testing
 
+When an endpoint is slow, the query behind it is a common cause. The db action measures that layer directly.
+
 ### Database Query Performance
 
 Test database query performance and optimization:
@@ -1013,7 +1021,11 @@ jobs:
 
 ## Best Practices
 
+The points below cover establishing a baseline, raising load gradually, what to measure, and where to set the thresholds.
+
 ### 1. Baseline Establishment
+
+A measurement means nothing without one taken when the service was known to be healthy.
 
 ```yaml
 # Good: Establish baseline before testing
@@ -1031,6 +1043,8 @@ vars:
 
 ### 2. Gradual Load Increase
 
+Raising the load in stages shows where the response time starts to bend, which a single large run does not.
+
 ```yaml
 # Good: Gradually increase load
 jobs:
@@ -1041,6 +1055,8 @@ jobs:
 ```
 
 ### 3. Comprehensive Metrics
+
+Response time alone does not say whether the service is degrading or merely busy.
 
 ```yaml
 # Good: Capture multiple performance metrics
@@ -1054,6 +1070,8 @@ outputs:
 ```
 
 ### 4. Performance Thresholds
+
+Naming the thresholds keeps them out of the individual tests and in one place.
 
 ```yaml
 # Good: Define clear performance thresholds
