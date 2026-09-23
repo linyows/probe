@@ -1,12 +1,12 @@
 <p align="right"><a href="https://github.com/linyows/probe/blob/main/README.md">English</a> | 日本語</p>
 
-<br><br><br><br><br><br>
+<br><br><br><br><br>
 
 <p align="center">
   <img alt="PROBE" src="https://github.com/linyows/probe/blob/main/misc/probe.svg" width="200">
 </p>
 
-<br><br><br><br><br><br>
+<br><br><br><br><br>
 
 <p align="center">
   <a href="https://github.com/linyows/probe/actions/workflows/build.yml">
@@ -17,9 +17,6 @@
   </a>
   <a href="http://godoc.org/github.com/linyows/probe">
     <img src="http://img.shields.io/badge/go-docs-blue.svg?style=for-the-badge&labelColor=666666&color=DDDDDD" alt="Go Documentation">
-  </a>
-  <a href="https://deepwiki.com/linyows/probe">
-    <img src="http://img.shields.io/badge/deepwiki-docs-purple.svg?style=for-the-badge&labelColor=666666&color=DDDDDD" alt="Deepwiki Documentation">
   </a>
 </p>
 
