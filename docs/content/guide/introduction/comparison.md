@@ -1,6 +1,6 @@
 # Compared with similar tools
 
-Probe is a workflow runner, and testing and monitoring are two things you can do with it. Several tools sit nearby with different goals, and which one fits depends on what you are trying to do.
+Probe is a workflow runner, and testing and monitoring are two things you can do with it. Several similar tools exist with different goals, and which one fits depends on what you are trying to do.
 
 ## At a glance
 
