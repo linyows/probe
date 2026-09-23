@@ -103,6 +103,58 @@ export const heroReport: ReportLine[] = [
   { text: 'Total workflow time: 0.15s ✓ All jobs succeeded', tone: 'total' },
 ]
 
+/*
+ * The pair below was run the same way: `probe orders.yml` against a stub that
+ * answers POST /login with a token and refuses GET /orders without it. Only
+ * the API host was swapped for a presentable one.
+ */
+
+export const sharedJob = `name: Log in
+
+steps:
+- name: Post credentials
+  id: login
+  uses: http
+  with:
+    url: "{{vars.api}}"
+    post: /login
+    body:
+      email: "{{vars.email}}"
+      password: "{{vars.password}}"
+  test: res.code == 200
+  outputs:
+    token: res.body.access_token`
+
+export const sharedCaller = `name: Orders
+
+vars:
+  api: https://api.example.com
+
+jobs:
+- name: Order history
+  steps:
+  - name: Log in
+    id: auth
+    uses: embedded
+    with:
+      path: ./jobs/login.yml
+      vars:
+        api: "{{vars.api}}"
+        email: ada@example.com
+        password: "{{PASSWORD}}"
+    test: res.code == 0
+    outputs:
+      token: res.outputs.token
+
+  - name: List orders
+    uses: http
+    with:
+      url: "{{vars.api}}"
+      get: /orders
+      headers:
+        authorization: "Bearer {{outputs.auth.token}}"
+    test: res.code == 200`
+
 export const installCommand = 'go install github.com/linyows/probe/cmd/probe@latest'
 
 export const sourceCommands = `git clone https://github.com/linyows/probe.git
