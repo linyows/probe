@@ -113,11 +113,13 @@ export const heroReport: ReportLine[] = [
 export const sharedWorkflow = `name: Orders
 
 vars:
-  api: https://api.example.com
   password: "{{PASSWORD}}"
 
 jobs:
 - name: Order history
+  defaults:
+    http:
+      url: https://api.example.com
   steps:
   - name: Log in
     id: auth
@@ -134,7 +136,6 @@ jobs:
   - name: List orders
     uses: http
     with:
-      url: "{{vars.api}}"
       get: /orders
       headers:
         authorization: "Bearer {{outputs.auth.token}}"
