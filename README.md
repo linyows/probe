@@ -1,20 +1,16 @@
 <p align="right">English | <a href="https://github.com/linyows/probe/blob/main/README.ja.md">日本語</a></p>
 
-<br><br><br><br><br>
+<br><br><br><br>
 
 <p align="center">
   <img alt="PROBE" src="https://github.com/linyows/probe/blob/main/misc/probe.svg" width="200">
 </p>
 
-<br><br><br><br><br>
+<br><br><br><br>
 
-Probe runs a YAML workflow against your HTTP APIs, databases, mail servers, browsers and shells, checks every response, and prints a report you can read.
-
-It is a single Go binary with no runtime to install, so the same file runs on your machine, in CI, and from a cron entry. The exit status reflects the result, and a file written as a test becomes a monitor by adding `repeat`.
-
-**Documentation: [probe.linyo.ws](https://probe.linyo.ws/)**
-
-![Architecture](/misc/probe-architecture.svg)
+<p align="center">
+  <strong>Probe</strong> is a powerful YAML-based workflow automation tool designed for testing, monitoring, and automation tasks.
+</p>
 
 <p align="center">
   <a href="https://github.com/linyows/probe/actions/workflows/build.yml">
@@ -27,6 +23,26 @@ It is a single Go binary with no runtime to install, so the same file runs on yo
     <img src="http://img.shields.io/badge/go-docs-blue.svg?style=for-the-badge&labelColor=666666&color=DDDDDD" alt="Go Documentation">
   </a>
 </p>
+
+It is a single Go binary with no runtime to install, so the same file runs on your machine, in CI, and from a cron entry. The exit status reflects the result, and a file written as a test becomes a monitor by adding `repeat`. Probe uses plugin-based actions to execute workflows, making it highly flexible and extensible. Documentation: [probe.linyo.ws](https://probe.linyo.ws/)
+
+![Architecture](/misc/probe-architecture.svg)
+
+Features
+--------
+
+Similar software is usually one of two things: a test runner, or a prober that monitors. Most of them speak one protocol. Probe is both, across the protocols a web system is actually made of.
+
+- **One file reaches the whole system.** HTTP, gRPC, MySQL, PostgreSQL, SQLite, SMTP, IMAP, SSH, shell and a real browser are built in. A single run can call an endpoint, query the row it wrote, and read the mail it sent, with no glue between three tools.
+- **Shared steps live in their own file.** A scenario usually starts by logging in, and every scenario after the first repeats it. Put those steps in a job file with its endpoint in `defaults`, and any workflow runs it with `uses: embedded`, passing the credentials as `vars` and reading the token back from `outputs`. The job's steps appear nested under the step that called it.
+- **The same file is a test and a monitor.** Add `repeat` to a job and it runs on an interval, reporting `3/3 success (100.0%)`. There is no second, rewritten copy of the workflow for monitoring.
+- **Jobs are a graph, not a list.** `needs` declares only the order that matters, and everything else runs in parallel. `probe dag` prints that graph as ASCII or Mermaid. Scenario runners walk a file from top to bottom.
+- **It behaves the same everywhere.** One Go binary, nothing to install alongside it and no service to keep running, so your terminal, a CI step and a cron entry all do the same thing.
+- **Actions are plugins.** Each one is a separate process behind [go-plugin](https://github.com/hashicorp/go-plugin), so a protocol Probe does not cover yet can be added without forking the binary.
+
+Beyond that, a workflow has `outputs` to pass data between steps and jobs, `test` to assert on any response, `retry`, `skipif`, `iteration`, `wait` and `timeout`, `defaults` for settings shared across steps, and merging of several YAML files on one command line.
+
+[Understanding Probe](https://probe.linyo.ws/guide/introduction/understanding-probe) covers how these fit together, and [Comparison](https://probe.linyo.ws/guide/introduction/comparison) says where k6, Hurl, Venom, runn, Blackbox exporter or GitHub Actions is the better answer.
 
 Quick Start
 -----------
@@ -69,22 +85,6 @@ Total workflow time: 0.02s ✓ All jobs succeeded
 ```
 
 [Quickstart](https://probe.linyo.ws/guide/introduction/quickstart) goes through this step by step, and [Your First Workflow](https://probe.linyo.ws/guide/introduction/your-first-workflow) grows it into something you can leave running.
-
-Features
---------
-
-Similar software is usually one of two things: a test runner, or a prober that monitors. Most of them speak one protocol. Probe is both, across the protocols a web system is actually made of.
-
-- **One file reaches the whole system.** HTTP, gRPC, MySQL, PostgreSQL, SQLite, SMTP, IMAP, SSH, shell and a real browser are built in. A single run can call an endpoint, query the row it wrote, and read the mail it sent, with no glue between three tools.
-- **Shared steps live in their own file.** A scenario usually starts by logging in, and every scenario after the first repeats it. Put those steps in a job file with its endpoint in `defaults`, and any workflow runs it with `uses: embedded`, passing the credentials as `vars` and reading the token back from `outputs`. The job's steps appear nested under the step that called it.
-- **The same file is a test and a monitor.** Add `repeat` to a job and it runs on an interval, reporting `3/3 success (100.0%)`. There is no second, rewritten copy of the workflow for monitoring.
-- **Jobs are a graph, not a list.** `needs` declares only the order that matters, and everything else runs in parallel. `probe dag` prints that graph as ASCII or Mermaid. Scenario runners walk a file from top to bottom.
-- **It behaves the same everywhere.** One Go binary, nothing to install alongside it and no service to keep running, so your terminal, a CI step and a cron entry all do the same thing.
-- **Actions are plugins.** Each one is a separate process behind [go-plugin](https://github.com/hashicorp/go-plugin), so a protocol Probe does not cover yet can be added without forking the binary.
-
-Beyond that, a workflow has `outputs` to pass data between steps and jobs, `test` to assert on any response, `retry`, `skipif`, `iteration`, `wait` and `timeout`, `defaults` for settings shared across steps, and merging of several YAML files on one command line.
-
-[Understanding Probe](https://probe.linyo.ws/guide/introduction/understanding-probe) covers how these fit together, and [Comparison](https://probe.linyo.ws/guide/introduction/comparison) says where k6, Hurl, Venom, runn, Blackbox exporter or GitHub Actions is the better answer.
 
 Built-in Actions
 ----------------
