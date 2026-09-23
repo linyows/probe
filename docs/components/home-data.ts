@@ -120,6 +120,7 @@ jobs:
   defaults:
     http:
       url: https://api.example.com
+
   steps:
   - name: Log in
     id: auth
