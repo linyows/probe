@@ -109,23 +109,7 @@ export const heroReport: ReportLine[] = [
  * the API host was swapped for a presentable one.
  */
 
-export const sharedJob = `name: Log in
-
-steps:
-- name: Post credentials
-  id: login
-  uses: http
-  with:
-    url: "{{vars.api}}"
-    post: /login
-    body:
-      email: "{{vars.email}}"
-      password: "{{vars.password}}"
-  test: res.code == 200
-  outputs:
-    token: res.body.access_token`
-
-export const sharedCaller = `name: Orders
+export const sharedWorkflow = `name: Orders
 
 vars:
   api: https://api.example.com
@@ -137,7 +121,7 @@ jobs:
     id: auth
     uses: embedded
     with:
-      path: ./jobs/login.yml
+      path: ./login-job.yml
       vars:
         api: "{{vars.api}}"
         email: ada@example.com
@@ -154,6 +138,22 @@ jobs:
       headers:
         authorization: "Bearer {{outputs.auth.token}}"
     test: res.code == 200`
+
+export const sharedJob = `name: Log in
+
+steps:
+- name: Post credentials
+  id: login
+  uses: http
+  with:
+    url: "{{vars.api}}"
+    post: /login
+    body:
+      email: "{{vars.email}}"
+      password: "{{vars.password}}"
+  test: res.code == 200
+  outputs:
+    token: res.body.access_token`
 
 export const installCommand = 'go install github.com/linyows/probe/cmd/probe@latest'
 

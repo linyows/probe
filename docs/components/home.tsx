@@ -8,8 +8,8 @@ import {
   heroReport,
   heroWorkflow,
   installCommand,
-  sharedCaller,
   sharedJob,
+  sharedWorkflow,
   sourceCommands,
   type ReportLine,
 } from './home-data'
@@ -126,8 +126,8 @@ export function Home({ locale }: { locale: Locale }) {
           <p className="lp-section__body">{t.shared.body}</p>
         </div>
         <div className="lp-pair lp-pair--top">
+          <SourcePanel label={t.shared.workflowLabel} code={sharedWorkflow} />
           <SourcePanel label={t.shared.jobLabel} code={sharedJob} />
-          <SourcePanel label={t.shared.callerLabel} code={sharedCaller} />
         </div>
 
         <Link className="lp-button lp-button--solid lp-section__link" href={t.shared.link.href}>

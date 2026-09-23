@@ -41,8 +41,8 @@ export type HomeCopy = {
   shared: {
     heading: string
     body: string
+    workflowLabel: string
     jobLabel: string
-    callerLabel: string
     link: { label: string; href: string }
   }
   parts: { heading: string; body: string; items: Part[] }
@@ -90,8 +90,8 @@ export const homeCopy: Record<Locale, HomeCopy> = {
     shared: {
       heading: 'Shared steps, in a file of their own',
       body: 'A scenario usually starts by logging in, and every scenario after the first repeats it. Put those steps in a job file and any workflow runs it with uses: embedded, handing it vars and reading its outputs back. The job\'s steps appear nested under the step that called it, so a failure still says which one broke.',
-      jobLabel: 'jobs/login.yml',
-      callerLabel: 'orders.yml',
+      workflowLabel: 'orders.yml',
+      jobLabel: 'login-job.yml',
       link: { label: 'Read the embedded action reference', href: '/reference/actions/embedded' },
     },
     parts: {
@@ -178,8 +178,8 @@ export const homeCopy: Record<Locale, HomeCopy> = {
     shared: {
       heading: '共通処理は別のファイルに',
       body: 'シナリオの多くはログインから始まり、2つ目以降のシナリオでも同じ手順を書くことになります。その手順をジョブファイルに置けば、どのWorkflowからもuses: embeddedで実行でき、varsを渡してoutputsを受け取れます。呼び出したジョブのStepはレポートでも入れ子で表示されるため、失敗したときにどのStepかがわかります。',
-      jobLabel: 'jobs/login.yml',
-      callerLabel: 'orders.yml',
+      workflowLabel: 'orders.yml',
+      jobLabel: 'login-job.yml',
       link: { label: 'embeddedアクションのリファレンスを読む', href: '/ja/reference/actions/embedded' },
     },
     parts: {
