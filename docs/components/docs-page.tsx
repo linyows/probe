@@ -94,7 +94,14 @@ export async function DocsLayout({
           <LocaleSwitch current={locale} hrefs={hrefs} />
         </Navbar>
       }
-      footer={<Footer>Copyright © 2025-present linyows</Footer>}
+      footer={
+        <Footer>
+          Copyright © 2025-present{' '}
+          <a href="https://tomohisaoda.com/projects" target="_blank" rel="noreferrer">
+            linyows
+          </a>
+        </Footer>
+      }
     >
       {children}
     </Layout>
