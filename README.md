@@ -8,6 +8,14 @@
 
 <br><br><br><br><br>
 
+Probe runs a YAML workflow against your HTTP APIs, databases, mail servers, browsers and shells, checks every response, and prints a report you can read.
+
+It is a single Go binary with no runtime to install, so the same file runs on your machine, in CI, and from a cron entry. The exit status reflects the result, and a file written as a test becomes a monitor by adding `repeat`.
+
+**Documentation: [probe.linyo.ws](https://probe.linyo.ws/)**
+
+![Architecture](/misc/probe-architecture.svg)
+
 <p align="center">
   <a href="https://github.com/linyows/probe/actions/workflows/build.yml">
     <img alt="GitHub Workflow Status" src="https://img.shields.io/github/actions/workflow/status/linyows/probe/build.yml?branch=main&style=for-the-badge&labelColor=666666">
@@ -19,14 +27,6 @@
     <img src="http://img.shields.io/badge/go-docs-blue.svg?style=for-the-badge&labelColor=666666&color=DDDDDD" alt="Go Documentation">
   </a>
 </p>
-
-Probe runs a YAML workflow against your HTTP APIs, databases, mail servers, browsers and shells, checks every response, and prints a report you can read.
-
-It is a single Go binary with no runtime to install, so the same file runs on your machine, in CI, and from a cron entry. The exit status reflects the result, and a file written as a test becomes a monitor by adding `repeat`.
-
-**Documentation: [probe.linyo.ws](https://probe.linyo.ws/)**
-
-![Architecture](/misc/probe-architecture.svg)
 
 Quick Start
 -----------
