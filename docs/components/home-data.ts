@@ -114,7 +114,6 @@ export const sharedWorkflow = `name: Orders
 
 vars:
   api: https://api.example.com
-  username: ada
   password: "{{PASSWORD}}"
 
 jobs:
@@ -126,7 +125,7 @@ jobs:
     with:
       path: ./login-job.yml
       vars:
-        username: "{{vars.username}}"
+        username: ada
         password: "{{vars.password}}"
     test: res.code == 0
     outputs:
@@ -143,15 +142,18 @@ jobs:
 
 export const sharedJob = `name: Log in
 
+defaults:
+  http:
+    url: https://api.example.com
+    headers:
+      content-type: application/json
+
 steps:
 - name: Post credentials
   id: login
   uses: http
   with:
-    url: https://api.example.com
     post: /login
-    headers:
-      content-type: application/json
     body:
       username: "{{vars.username}}"
       password: "{{vars.password}}"
