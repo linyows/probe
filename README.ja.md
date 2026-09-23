@@ -8,6 +8,14 @@
 
 <br><br><br><br><br>
 
+ProbeはYAMLで書いたワークフローを、HTTP API、データベース、メールサーバー、ブラウザ、シェルに対して実行し、応答を1つずつ検証して、読めるレポートを出力します。
+
+単体のGoバイナリで、別途用意するランタイムはありません。そのため同じファイルを手元でも、CIでも、cronからでも実行できます。実行結果は終了コードに反映され、`repeat`を加えればテストとして書いたファイルがそのまま監視になります。
+
+**ドキュメント: [probe.linyo.ws/ja](https://probe.linyo.ws/ja)**
+
+![Architecture](/misc/probe-architecture.svg)
+
 <p align="center">
   <a href="https://github.com/linyows/probe/actions/workflows/build.yml">
     <img alt="GitHub Workflow Status" src="https://img.shields.io/github/actions/workflow/status/linyows/probe/build.yml?branch=main&style=for-the-badge&labelColor=666666">
@@ -19,14 +27,6 @@
     <img src="http://img.shields.io/badge/go-docs-blue.svg?style=for-the-badge&labelColor=666666&color=DDDDDD" alt="Go Documentation">
   </a>
 </p>
-
-ProbeはYAMLで書いたワークフローを、HTTP API、データベース、メールサーバー、ブラウザ、シェルに対して実行し、応答を1つずつ検証して、読めるレポートを出力します。
-
-単体のGoバイナリで、別途用意するランタイムはありません。そのため同じファイルを手元でも、CIでも、cronからでも実行できます。実行結果は終了コードに反映され、`repeat`を加えればテストとして書いたファイルがそのまま監視になります。
-
-**ドキュメント: [probe.linyo.ws/ja](https://probe.linyo.ws/ja)**
-
-![Architecture](/misc/probe-architecture.svg)
 
 クイックスタート
 ----------------
