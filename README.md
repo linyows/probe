@@ -73,10 +73,10 @@ Total workflow time: 0.02s ✓ All jobs succeeded
 
 [Quickstart](https://probe.linyo.ws/guide/introduction/quickstart) goes through this step by step, and [Your First Workflow](https://probe.linyo.ws/guide/introduction/your-first-workflow) grows it into something you can leave running.
 
-What Makes Probe Different
---------------------------
+Features
+--------
 
-The tools nearby are usually one of two things: a test runner, or a prober that monitors. Most of them speak one protocol. Probe is both, across the protocols a web system is actually made of.
+Similar software is usually one of two things: a test runner, or a prober that monitors. Most of them speak one protocol. Probe is both, across the protocols a web system is actually made of.
 
 - **One file reaches the whole system.** HTTP, gRPC, MySQL, PostgreSQL, SQLite, SMTP, IMAP, SSH, shell and a real browser are built in. A single run can call an endpoint, query the row it wrote, and read the mail it sent, with no glue between three tools.
 - **The same file is a test and a monitor.** Add `repeat` to a job and it runs on an interval, reporting `3/3 success (100.0%)`. There is no second, rewritten copy of the workflow for monitoring.
