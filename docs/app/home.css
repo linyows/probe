@@ -12,6 +12,7 @@
   --lp-ink: #2e4657;
   --lp-muted: #476b85;
   --lp-rule: #608cab;
+  --lp-stripe: #f1f7fb;
 
   --lp-font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace;
   --lp-font-body: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto,
@@ -35,6 +36,7 @@
   --lp-ink: #d7efff;
   --lp-muted: #9dbed4;
   --lp-rule: #608cab;
+  --lp-stripe: #324b5e;
 }
 
 /* The landing page manages its own gutters and background. */
@@ -288,9 +290,20 @@
   overflow-x: auto;
 }
 
+.lp-source__lines {
+  display: block;
+  width: max-content;
+  min-width: 100%;
+}
+
 .lp-source__line {
   display: block;
   white-space: pre;
+}
+
+/* Banding every other line, to follow one across the width of the panel. */
+.lp-source__line:nth-child(even) {
+  background-color: var(--lp-stripe);
 }
 
 .lp-source__number {
@@ -304,6 +317,10 @@
 
 .lp-source__code {
   color: var(--lp-ink);
+}
+
+.lp-source__field {
+  font-weight: 700;
 }
 
 /* Job graph -------------------------------------------------------------- */
