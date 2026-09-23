@@ -23,14 +23,27 @@
   </a>
 </p>
 
-A powerful YAML-based workflow automation tool designed for testing, monitoring, and automation tasks. Probe uses plugin-based actions to execute workflows, making it highly flexible and extensible.
+Probe runs a YAML workflow against your HTTP APIs, databases, mail servers, browsers and shells, checks every response, and prints a report you can read.
+
+It is a single Go binary with no runtime to install, so the same file runs on your machine, in CI, and from a cron entry. The exit status reflects the result, and a file written as a test becomes a monitor by adding `repeat`.
+
+**Documentation: [probe.linyo.ws](https://probe.linyo.ws/)**
 
 ![Architecture](/misc/probe-architecture.svg)
 
 Quick Start
 -----------
 
+Install the binary:
+
+```bash
+go install github.com/linyows/probe/cmd/probe@latest
+```
+
+Write a workflow:
+
 ```yaml
+# health-check.yml
 name: API Health Check
 jobs:
 - name: Check API Status
@@ -43,666 +56,74 @@ jobs:
     test: res.code == 200
 ```
 
+Run it:
+
 ```bash
 probe health-check.yml
 ```
 
-Features
---------
+```
+API Health Check
 
-- **Simple YAML Syntax**: Easy-to-read workflow definitions
-- **Plugin Architecture**: Built-in HTTP, Database, Browser, Shell, SSH, SMTP, IMAP, and Hello actions with extensibility
-- **Job Dependencies**: Control execution order with `needs`
-- **Step Outputs**: Share data between steps and jobs using `outputs`
-- **Repetition**: Repeat jobs with configurable intervals
-- **Iteration**: Execute steps with different variable sets
-- **Expression Engine**: Powerful templating and condition evaluation
-- **Testing Support**: Built-in assertion system
-- **Timing Controls**: Wait conditions and delays
-- **Rich Output**: Buffered, consistent output formatting
-- **Security**: Safe expression evaluation with timeout protection
+⏺ Check API Status (Completed in 0.02s)
+  ⎿ 0. ✓  Ping API
 
-Installation
-------------
-
-### Using Go
-```bash
-go install github.com/linyows/probe/cmd/probe@latest
+Total workflow time: 0.02s ✓ All jobs succeeded
 ```
 
-### From Source
-```bash
-git clone https://github.com/linyows/probe.git
-cd probe
-go build -o probe ./cmd/probe
-```
+[Quickstart](https://probe.linyo.ws/guide/introduction/quickstart) goes through this step by step, and [Your First Workflow](https://probe.linyo.ws/guide/introduction/your-first-workflow) grows it into something you can leave running.
 
-Usage
------
-
-### Basic Usage
-```bash
-# Run a workflow
-probe ./workflow.yml
-
-# Verbose output
-probe ./workflow.yml --verbose
-
-# Show timing (start time, response time)
-probe ./workflow.yml --timing
-
-# Stream the report incrementally (default on CI and other non-TTY output)
-probe ./workflow.yml --output stream
-
-# Show job dependency graph as ASCII art
-probe dag ./workflow.yml
-
-# Show job dependency graph in Mermaid format
-probe dag --mermaid ./workflow.yml
-```
-
-### CLI Options
-- `<workflow>`: Specify YAML workflow file path
-- `--verbose`: Enable detailed output
-- `--timing`: Show timing (start time, response time)
-- `--output`: Report output mode: `auto` (default), `spinner` or `stream` (env: `PROBE_OUTPUT`)
-- `--help`: Show help information
-
-### Subcommands
-- `probe gen <openapi-file>`: Generate probe workflow YAML from OpenAPI specification
-- `probe dag <workflow-file>`: Display job dependency graph as ASCII art
-- `probe dag --mermaid <workflow-file>`: Display job dependency graph in Mermaid format
-
-Workflow Syntax
+What Probe Does
 ---------------
 
-### Basic Structure
-```yaml
-name: Workflow Name
-description: Optional description
-vars:
-  global_var: value
-jobs:
-- name: Job Name
-  steps:
-  - name: Step Name
-    uses: action_name
-    with:
-      param: value
-```
+- **One file, several protocols.** A workflow can call an HTTP endpoint, query the database behind it and check the mail it sent, in the same run.
+- **Jobs run in parallel.** `needs` declares the order where it matters, and the rest runs at once. `probe dag` prints the resulting graph.
+- **Steps share data.** A step publishes `outputs` that later steps and jobs read.
+- **Every step asserts.** `test` is an expression over the response, so a workflow is a test rather than a script that happens to succeed.
+- **Tests become monitors.** `repeat` runs a job on an interval and reports how many passes succeeded.
+- **The awkward cases are covered.** `retry`, `skipif`, `iteration`, `wait` and `timeout` handle what does not pass first time, does not apply everywhere, or must not run forever.
+- **Extensible.** Actions are plugins served over gRPC, so an action you need but Probe does not have is one you can add.
 
-### Jobs
-Jobs are executed in parallel by default. Use `needs` for dependencies:
-
-```yaml
-jobs:
-- name: Setup
-  id: setup
-  steps:
-  - name: Initialize
-    uses: http
-    with:
-      post: /setup
-
-- name: Test
-  needs: [setup]  # Wait for setup to complete
-  steps:
-  - name: Run test
-    uses: http
-    with:
-      get: /test
-```
-
-### Steps
-Steps within a job execute sequentially:
-
-```yaml
-steps:
-- name: Login
-  id: login
-  uses: http
-  with:
-    post: /auth/login
-    body:
-      username: admin
-      password: secret
-  outputs:
-    token: res.body.token
-
-- name: Get Profile
-  uses: http
-  with:
-    get: /profile
-    headers:
-      authorization: "Bearer {{outputs.login.token}}"
-  test: res.code == 200
-```
-
-### Variables and Expressions
-Use `{{expression}}` syntax for dynamic values:
-
-```yaml
-vars:
-  api_url: https://api.example.com
-  user_id: 123
-
-steps:
-- name: Get User
-  uses: http
-  with:
-    url: "{{vars.api_url}}"
-    get: "/users/{{vars.user_id}}"
-  test: res.body.id == vars.user_id
-```
-
-### Built-in Functions
-```yaml
-test: |
-  res.code == 200 &&
-  match_json(res.body, vars.expected) &&
-  random_int(10) > 5
-```
-
-Available functions:
-- `match_json(actual, expected)`: JSON pattern matching with regex support
-- `diff_json(actual, expected)`: Show differences between JSON objects
-- `parse_json(string)`: Parse JSON string into object/array
-- `random_int(max)`: Generate random integer
-- `random_str(length)`: Generate random string
-- `unixtime()`: Current Unix timestamp
-
-### Output Management
-Share data between steps and jobs:
-
-```yaml
-- name: Get Token
-  id: auth
-  uses: http
-  with:
-    post: /auth
-  outputs:
-    token: res.body.access_token
-    expires: res.body.expires_in
-
-- name: Use Token
-  uses: http
-  with:
-    get: /protected
-    headers:
-      authorization: "Bearer {{outputs.auth.token}}"
-```
-
-### Iteration
-Execute steps with different variable sets:
-
-```yaml
-- name: Test Multiple Users
-  uses: http
-  with:
-    post: /users
-    body:
-      name: "{{vars.name}}"
-      role: "{{vars.role}}"
-  test: res.code == 201
-  iteration:
-  - {name: "Alice", role: "admin"}
-  - {name: "Bob", role: "user"}
-  - {name: "Carol", role: "editor"}
-```
-
-### Job Repetition
-Repeat entire jobs with intervals:
-
-```yaml
-- name: Health Check
-  repeat:
-    count: 10
-    interval: 30s
-  steps:
-  - name: Ping
-    uses: http
-    with:
-      get: /health
-    test: res.code == 200
-```
-
-### Conditional Execution
-Skip steps based on conditions:
-
-```yaml
-- name: Conditional Step
-  uses: http
-  with:
-    get: /api/data
-  skipif: vars.skip_test == true
-  test: res.code == 200
-```
-
-### Timing and Delays
-```yaml
-- name: Wait and Check
-  uses: http
-  with:
-    get: /status
-  wait: 5s  # Wait before execution
-  test: res.code == 200
-```
+See [Understanding Probe](https://probe.linyo.ws/guide/introduction/understanding-probe) for how these fit together, and [Comparison](https://probe.linyo.ws/guide/introduction/comparison) for where another tool is the better answer.
 
 Built-in Actions
 ----------------
 
-### HTTP Action
-```yaml
-- name: HTTP Request
-  uses: http
-  with:
-    url: https://api.example.com
-    # GET, POST, PUT, DELETE, etc.
-    post: /
-    headers:
-      content-type: application/json
-      authorization: Bearer token
-    body:
-      key: value
-    timeout: 30s
-```
+| Action | Use it for |
+|---|---|
+| [`http`](https://probe.linyo.ws/reference/actions/http) | HTTP requests and their responses |
+| [`db`](https://probe.linyo.ws/reference/actions/db) | Queries against MySQL, PostgreSQL and SQLite |
+| [`smtp`](https://probe.linyo.ws/reference/actions/smtp) | Delivering mail |
+| [`imap`](https://probe.linyo.ws/reference/actions/imap) | Reading a mailbox |
+| [`mail-latency`](https://probe.linyo.ws/reference/actions/mail-latency) | Measuring delivery latency from received messages |
+| [`ssh`](https://probe.linyo.ws/reference/actions/ssh) | Commands on a remote host |
+| [`shell`](https://probe.linyo.ws/reference/actions/shell) | Commands on the machine running Probe |
+| [`browser`](https://probe.linyo.ws/reference/actions/browser) | Driving a real browser |
+| [`grpc`](https://probe.linyo.ws/reference/actions/grpc) | gRPC calls |
+| [`embedded`](https://probe.linyo.ws/reference/actions/embedded) | Running another job file from a step |
+| [`hello`](https://probe.linyo.ws/reference/actions/hello) | Printing a report line |
 
-### SMTP Action
-```yaml
-- name: Send Email
-  uses: smtp
-  with:
-    addr: smtp.example.com:587
-    from: sender@example.com
-    to: recipient@example.com
-    subject: Test Email
-    body: Email content
-    my-hostname: localhost
-```
-
-### Database Action
-```yaml
-- name: Database Query
-  uses: db
-  with:
-    dsn: "mysql://user:password@localhost:3306/database"
-    query: "SELECT * FROM users WHERE active = ?"
-    params: [true]
-    timeout: 30s
-  test: res.code == 0 && res.rows_affected > 0
-```
-
-Supported databases:
-- **MySQL**: `mysql://user:pass@host:port/database`
-- **PostgreSQL**: `postgres://user:pass@host:port/database?sslmode=disable`
-- **SQLite**: `file:./testdata/sqlite.db` or `/absolute/path/database`
-
-### Browser Action
-```yaml
-- name: Web Automation
-  uses: browser
-  with:
-    action: navigate
-    url: "https://example.com"
-    headless: true
-    timeout: 30s
-  test: res.success == "true"
-```
-
-Supported actions:
-- **navigate**: Navigate to URL
-- **text**: Extract text content from elements
-- **value**: Get input field values
-- **get_attribute**: Get element attribute values
-- **get_html**: Extract HTML content from elements
-- **click**: Click on elements
-- **double_click**: Double-click on elements
-- **right_click**: Right-click on elements
-- **hover**: Hover over elements
-- **focus**: Set focus to elements
-- **type** / **send_keys**: Type text into input fields
-- **select**: Select dropdown options
-- **submit**: Submit forms
-- **scroll**: Scroll elements into view
-- **screenshot**: Capture element screenshots
-- **capture_screenshot**: Capture full page screenshots
-- **full_screenshot**: Capture full page screenshots with quality settings
-- **wait_visible**: Wait for elements to become visible
-- **wait_not_visible**: Wait for elements to become invisible
-- **wait_ready**: Wait for page to be ready
-- **wait_text**: Wait for specific text to appear
-- **wait_enabled**: Wait for elements to become enabled
-
-### Shell Action
-```yaml
-- name: Run Build Script
-  uses: shell
-  with:
-    cmd: "npm run build"
-    workdir: "/app"
-    shell: "/bin/bash"
-    timeout: "5m"
-    env:
-      NODE_ENV: production
-  test: res.code == 0 && (res.stdout | contains("Build successful"))
-```
-
-### SSH Action
-```yaml
-- name: Deploy Application
-  uses: ssh
-  with:
-    host: "prod.example.com"
-    port: 22
-    user: "deploy"
-    # Authentication methods (use either password or key_file)
-    password: "secure_password"
-    # key_file: "~/.ssh/deploy_key"
-    # key_passphrase: "key_passphrase"  # if key is encrypted
-    cmd: |
-      cd /opt/myapp
-      git pull origin main
-      systemctl restart myapp
-    timeout: "300s"
-    workdir: "/opt/myapp"
-    # Environment variables
-    env:
-      DEPLOY_ENV: production
-      APP_VERSION: v1.2.3
-    # Security settings
-    strict_host_check: true
-    known_hosts: "~/.ssh/known_hosts"
-  test: res.code == 0 && !contains(res.stderr, "error")
-```
-
-### IMAP Action
-```yaml
-- name: Email Operations
-  uses: imap
-  with:
-    host: "imap.example.com"
-    port: 993
-    username: "user@example.com"
-    password: "password"
-    tls: true
-    timeout: 30s
-    strict_host_check: true
-    insecure_skip_tls: false
-    commands:
-    - name: "select"
-      mailbox: "INBOX"
-    - name: "search"
-      criteria:
-        since: "today"
-        flags: ["unseen"]
-    - name: "fetch"
-      sequence: "*"
-      dataitem: "ALL"
-  test: res.code == 0 && res.data.search.count > 0
-```
-
-Supported IMAP commands:
-- **select**: Select a mailbox for read-write operations
-- **examine**: Select a mailbox for read-only operations  
-- **search**: Search messages using criteria
-- **uid search**: Search using UID instead of sequence numbers
-- **list**: List available mailboxes
-- **fetch**: Fetch message data
-- **uid fetch**: Fetch using UID instead of sequence numbers
-- **store**: Store message flags (basic implementation)
-- **uid store**: Store using UID (basic implementation)
-- **copy**: Copy messages to another mailbox (basic implementation)
-- **uid copy**: Copy using UID (basic implementation)
-- **create**: Create a new mailbox
-- **delete**: Delete a mailbox
-- **rename**: Rename a mailbox
-- **subscribe**: Subscribe to a mailbox
-- **unsubscribe**: Unsubscribe from a mailbox
-- **noop**: No operation (keepalive)
-
-Search criteria support:
-- **seq_nums**: Sequence number ranges (e.g., "1:10", "*")
-- **uids**: UID ranges for UID search commands
-- **since**: Messages received since date ("today", "yesterday", "2024-01-01", "1 hour ago")
-- **before**: Messages received before date
-- **sent_since**: Messages sent since date
-- **sent_before**: Messages sent before date
-- **headers**: Header field matches (e.g., {"from": "sender@example.com"})
-- **bodies**: Body text contains
-- **texts**: Text (headers + body) contains
-- **flags**: Message flags (e.g., ["seen", "answered"])
-- **not_flags**: Messages without these flags
-
-### Hello Action (Testing)
-```yaml
-- name: Test Action
-  uses: hello
-  with:
-    name: World
-```
-
-Advanced Examples
------------------
-
-### REST API Testing
-```yaml
-name: User API Test
-vars:
-  base_url: https://api.example.com
-  admin_token: "{{env.ADMIN_TOKEN}}"
-
-jobs:
-- name: User CRUD Operations
-  defaults:
-    http:
-      url: "{{vars.base_url}}"
-      headers:
-        authorization: "Bearer {{vars.admin_token}}"
-        content-type: application/json
-
-  steps:
-  - name: Create User
-    id: create
-    uses: http
-    with:
-      post: /users
-      body:
-        name: Test User
-        email: test@example.com
-    test: res.code == 201
-    outputs:
-      user_id: res.body.id
-
-  - name: Get User
-    uses: http
-    with:
-      get: "/users/{{outputs.create.user_id}}"
-    test: |
-      res.code == 200 &&
-      res.body.name == "Test User"
-
-  - name: Update User
-    uses: http
-    with:
-      put: "/users/{{outputs.create.user_id}}"
-      body:
-        name: Updated User
-    test: res.code == 200
-
-  - name: Delete User
-    uses: http
-    with:
-      delete: "/users/{{outputs.create.user_id}}"
-    test: res.code == 204
-```
-
-### Load Testing with Repetition
-```yaml
-name: Load Test
-jobs:
-- name: Concurrent Requests
-  repeat:
-    count: 100
-    interval: 100ms
-  steps:
-  - name: API Call
-    uses: http
-    with:
-      url: https://api.example.com
-      get: /endpoint
-    test: res.code == 200
-```
-
-### Multi-Service Integration
-```yaml
-name: E2E Test
-jobs:
-- name: Setup Database
-  id: db-setup
-  steps:
-  - name: Initialize
-    uses: http
-    with:
-      post: http://db-service/init
-
-- name: API Tests
-  needs: [db-setup]
-  steps:
-  - name: Test API
-    uses: http
-    with:
-      get: http://api-service/data
-    test: res.code == 200
-
-- name: Cleanup
-  needs: [db-setup]
-  steps:
-  - name: Reset Database
-    uses: http
-    with:
-      post: http://db-service/reset
-```
-
-Expression Reference
---------------------
-
-### Context Variables
-- `vars.*`: Workflow and step variables (including environment variables defined in vars)
-- `res.*`: Previous step response
-- `req.*`: Previous step request  
-- `outputs.*`: Step outputs
-
-### Response Object
-```yaml
-res:
-  code: 200
-  status: "200 OK"
-  headers:
-    content-type: application/json
-  body: {...}  # Parsed JSON or raw string
-  rawbody: "..." # Original response body
-```
-
-### Operators
-- Arithmetic: `+`, `-`, `*`, `/`, `%`
-- Comparison: `==`, `!=`, `<`, `<=`, `>`, `>=`
-- Logical: `&&`, `||`, `!`
-- Ternary: `condition ? true_value : false_value`
-
-Extending Probe
----------------
-
-Probe supports custom actions through Protocol Buffers. Create your own actions to extend functionality beyond the built-in HTTP, SMTP, and Hello actions.
-
-Configuration
+Documentation
 -------------
 
-### Environment Variables
-- Environment variables can be accessed by defining them in the root `vars` section
+- [Guide](https://probe.linyo.ws/guide) — installation, the CLI, and the concepts behind workflows, jobs, steps and data flow
+- [How-tos](https://probe.linyo.ws/guide/how-tos/api-testing) — API testing, monitoring, performance, environments and error handling
+- [Tutorials](https://probe.linyo.ws/guide/tutorials/first-monitoring-system) — building a monitoring system, an API test pipeline, and multi-environment tests
+- [Reference](https://probe.linyo.ws/reference) — YAML configuration, CLI options, built-in functions and environment variables
 
-### Defaults
-Use YAML anchors for common configurations:
-```yaml
-x_defaults: &api_defaults
-  http:
-    url: https://api.example.com
-    headers:
-      authorization: Bearer token
-
-jobs:
-- name: Test Job
-  defaults: *api_defaults
-```
-
-Troubleshooting
----------------
-
-### Common Issues
-
-**Expression Evaluation Errors**
-- Check syntax: `{{expression}}` not `{expression}`
-- Verify variable names and paths
-- Use quotes around string values
-
-**HTTP Action Issues**
-- Verify URL format and accessibility
-- Check headers and authentication
-- Review timeout settings
-
-**Job Dependencies**
-- Ensure job IDs are unique
-- Check `needs` references
-- Avoid circular dependencies
-
-### Debug Output
-Use `--verbose` flag for detailed execution information:
-```bash
-probe test.yml --verbose
-```
-
-Best Practices
---------------
-
-1. **Use descriptive names** for workflows, jobs, and steps
-2. **Leverage outputs** for data sharing between steps
-3. **Implement proper testing** with meaningful assertions
-4. **Use defaults** to reduce repetition
-5. **Structure workflows** logically with clear dependencies
-6. **Handle errors** gracefully with appropriate tests
-7. **Use variables** for configuration management
-
-FAQ
----
-
-Common questions about Probe.
-
-### How is Probe different from Common Workflow Language (CWL) or Workflow Description Language (WDL)?
-
-While CWL and WDL are powerful workflow languages designed for scientific computing and bioinformatics with complex data processing pipelines, Probe takes a different approach by specializing in web-based use cases.
-
-**Key Differences:**
-
-- **Target Use Cases**: CWL focuses on scientific data processing with Docker-based distributed execution, while WDL targets genomics pipelines with strong type systems and cloud-based distributed computing. Probe is designed specifically for API monitoring, test automation, and operational tasks.
-- **Internet Protocol Focus**: Probe specializes in web use cases, providing built-in support for HTTP, SMTP, SSH, IMAP, and browser automation. This specialization allows you to define and execute workflows with minimal configuration for internet protocol-based tasks.
-- **Simplicity vs. Flexibility**: While Probe offers less general-purpose flexibility compared to CWL or WDL, this is an intentional design choice. By focusing on web and internet protocols, Probe dramatically improves productivity in its target domain. The plugin-based architecture using Protocol Buffers still allows for extensibility when needed.
-- **Execution Model**: Unlike CWL and WDL which are designed for distributed computing environments, Probe is optimized for lightweight, local execution with real-time monitoring capabilities.
-- **Syntax**: Probe uses intuitive YAML-based configuration instead of the more complex type systems found in CWL and WDL, making it accessible to operations teams and developers working with web services.
-
-Probe's value lies in providing the most efficient path for web-based automation tasks while maintaining the ability to extend functionality through custom actions when necessary.
-For more examples and advanced usage, check the [examples directory](./examples/).
+Runnable workflows live in [`examples/`](./examples/).
 
 Contributing
 ------------
 
-We welcome contributions! Please feel free to submit issues, feature requests, or pull requests.
+Issues, feature requests and pull requests are all welcome.
 
 License
 -------
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+MIT. See [LICENSE](./LICENSE).
 
 Author
 ------
 
 [linyows](https://github.com/linyows)
-
