@@ -16,6 +16,8 @@ Probe is a lightweight, single-binary tool that can be installed in several ways
 
 ## Installation Methods
 
+Probe is a single binary. Pick whichever of the four methods below fits how the rest of your tooling is installed.
+
 ### 1. Download Pre-built Binaries
 
 The easiest way to install Probe is to download a pre-built binary from the GitHub releases page.
@@ -89,6 +91,8 @@ Now that you have Probe installed, you're ready to:
 3. **[Explore examples](/guide/tutorials/api-testing-pipeline)** - See practical use cases
 
 ## Troubleshooting
+
+Installation problems are almost always about the file's permissions or where the shell looks for it.
 
 ### Permission Denied
 

@@ -78,6 +78,8 @@ jobs:
 
 ## Workflow Design Patterns
 
+The shape of a workflow follows from its dependencies. Four shapes cover most cases: a straight line, independent jobs side by side, jobs grouped into stages, and a fan-out that is gathered back in.
+
 ### 1. Linear Workflow
 
 Steps execute sequentially, each depending on the previous one's success.
@@ -314,6 +316,8 @@ jobs:
 
 ## Workflow Organization Strategies
 
+Once there is more than one workflow, the question is where to draw the file boundaries and how each file adapts to the environment it runs against.
+
 ### 1. Single-Purpose Workflows
 
 Keep workflows focused on a single, well-defined purpose.
@@ -393,6 +397,8 @@ probe base-monitoring.yml,staging.yml
 ```
 
 ## Advanced Workflow Techniques
+
+The techniques below let one file cover cases that would otherwise need several: running jobs conditionally, deriving configuration during the run, and composing workflows from shared parts.
 
 ### 1. Conditional Job Execution
 
@@ -513,6 +519,8 @@ probe common-setup.yml,main-workflow.yml
 ```
 
 ## Best Practices
+
+The points below cover what makes a workflow readable to someone who did not write it, and what keeps it working as it grows.
 
 ### 1. Naming Conventions
 
@@ -646,6 +654,8 @@ jobs:
 ```
 
 ## Common Anti-Patterns
+
+The three shapes below are the ones that make a workflow hard to change, and each has a straightforward fix.
 
 ### 1. Monolithic Workflows
 

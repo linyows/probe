@@ -4,6 +4,8 @@ The `browser` action automates web browsers using ChromeDP, providing comprehens
 
 ## Basic Syntax
 
+A browser step names the operation in `action` and gives it whatever that operation needs.
+
 ```yaml
 steps:
   - name: "Navigate to Website"
@@ -17,6 +19,8 @@ steps:
 ```
 
 ## Parameters
+
+`action` decides which browser operation runs, and the rest of the parameters supply what that operation needs: the target, the value to type, and how the browser is launched.
 
 ### `action` (required)
 
@@ -118,6 +122,8 @@ The browser action provides a `res` object with action-specific properties:
 
 ### Common Properties
 
+Every browser action returns these two fields, whatever it did.
+
 | Property | Type | Description |
 |----------|------|-------------|
 | `code` | Integer | Result code (0 = success, non-zero = error) |
@@ -125,12 +131,16 @@ The browser action provides a `res` object with action-specific properties:
 
 ### Navigation Response
 
+`navigate` reports where it ended up and how long the page took.
+
 | Property | Type | Description |
 |----------|------|-------------|
 | `url` | String | URL that was navigated to |
 | `time_ms` | String | Navigation time in milliseconds |
 
 ### Text/Attribute Response
+
+`text` and `get_attribute` report the selector they used along with what they read.
 
 | Property | Type | Description |
 |----------|------|-------------|
@@ -142,6 +152,8 @@ The browser action provides a `res` object with action-specific properties:
 
 ### Screenshot Response
 
+`screenshot` returns the image itself, encoded as Base64.
+
 | Property | Type | Description |
 |----------|------|-------------|
 | `screenshot` | String | Base64-encoded screenshot |
@@ -149,7 +161,11 @@ The browser action provides a `res` object with action-specific properties:
 
 ## Browser Actions
 
+Each `action` value is shown below with the parameters it reads and what it returns.
+
 ### Navigate to URL
+
+`navigate` opens a page and is the step every other browser action depends on.
 
 ```yaml
 - name: "Open Website"
@@ -164,6 +180,8 @@ The browser action provides a `res` object with action-specific properties:
 ```
 
 ### Extract Text Content
+
+`text` reads the text of the element the selector matches, which can then be asserted on or passed along in `outputs`.
 
 ```yaml
 - name: "Get Page Title"
@@ -196,6 +214,8 @@ The browser action provides a `res` object with action-specific properties:
 
 ### Get Element Attributes
 
+`get_attribute` reads one named attribute rather than the element's text.
+
 ```yaml
 - name: "Extract Links"
   uses: browser
@@ -209,6 +229,8 @@ The browser action provides a `res` object with action-specific properties:
 ```
 
 ### Form Interactions
+
+Filling a form takes one step per action: typing into a field, clicking a control, and submitting.
 
 ```yaml
 # Fill form fields
@@ -239,6 +261,8 @@ The browser action provides a `res` object with action-specific properties:
 
 ### Wait for Elements
 
+A page that renders after loading needs an explicit wait before the next step can address it.
+
 ```yaml
 # Wait for element to appear
 - name: "Wait for Results"
@@ -261,6 +285,8 @@ The browser action provides a `res` object with action-specific properties:
 
 ### Capture Screenshots
 
+`screenshot` records what the page looked like at that point in the run.
+
 ```yaml
 - name: "Take Screenshot"
   uses: browser
@@ -274,7 +300,11 @@ The browser action provides a `res` object with action-specific properties:
 
 ## Advanced Usage Examples
 
+A single action rarely stands alone. The workflows below chain several steps together and carry state between them through `outputs`.
+
 ### Login Flow
+
+Logging in is a sequence: open the form, type the credentials, submit, and confirm the result.
 
 ```yaml
 vars:
@@ -324,6 +354,8 @@ steps:
 
 ### Data Extraction
 
+Navigating and then reading several elements turns a page into values the rest of the workflow can use.
+
 ```yaml
 steps:
   - name: "Navigate to Data Page"
@@ -360,6 +392,8 @@ steps:
 ```
 
 ### E2E Testing
+
+An end-to-end test drives the application the way a user would and asserts on what the page shows.
 
 ```yaml
 steps:
@@ -418,6 +452,8 @@ steps:
 ```
 
 ## Error Handling
+
+A selector that matches nothing returns a non-zero `code`, which the step's test and `continue_on_error` decide what to do with.
 
 ```yaml
 - name: "Browser Action with Error Handling"

@@ -4,6 +4,8 @@ Probe is a workflow runner, and testing and monitoring are two things you can do
 
 ## At a glance
 
+The table places each tool by what it is, how it is written, what it can reach, and what it takes to run.
+
 | | Kind | Written as | Operates on | Runs as |
 |---|---|---|---|---|
 | **Probe** | Workflow runner | YAML | HTTP, DB, SMTP, IMAP, SSH, shell, browser, gRPC | A single Go binary |
@@ -17,6 +19,8 @@ Probe is a workflow runner, and testing and monitoring are two things you can do
 | **CWL / WDL** | Describing computational pipelines | YAML or JSON (CWL), its own DSL (WDL) | Commands in containers, and files | Engines such as cwltool, Cromwell, miniwdl |
 
 ## Where each one differs
+
+The table gives the shape of each tool. This section takes them one at a time and says where Probe overlaps, and where another tool is the better answer.
 
 ### k6
 

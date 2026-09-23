@@ -4,6 +4,8 @@ The `hello` action does nothing but succeed. It is useful as a placeholder, for 
 
 ## Basic Syntax
 
+A hello step takes `echo`, and anything passed in `with` comes back in `res`.
+
 ```yaml
 steps:
   - name: Report
@@ -29,6 +31,8 @@ steps:
 ```
 
 ## Response Object
+
+The step always succeeds, and whatever was passed in comes back unchanged.
 
 | Property | Type | Description |
 |----------|------|-------------|

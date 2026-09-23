@@ -1104,6 +1104,8 @@ done
 
 ## Step 8: Advanced Multi-Environment Patterns
 
+Deployment strategies that run two versions side by side need the tests to know which one they are talking to.
+
 ### Blue-Green Deployment Testing
 
 Create tests for blue-green deployments:
@@ -1164,6 +1166,8 @@ jobs:
 ```
 
 ## Troubleshooting
+
+If the workflows above do not run as described, the causes below are the ones to check first.
 
 ### Common Issues
 

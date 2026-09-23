@@ -14,6 +14,8 @@ Probe uses a structured approach to data flow:
 
 ## Data Sources
 
+The values a workflow works with come from outside it, from the environment and from the configuration files it was given.
+
 ### Environment Variables
 
 Environment variables provide external configuration and runtime context.
@@ -62,6 +64,8 @@ A top-level key defined in more than one file takes the value from the last file
 Steps generate outputs that can be consumed by subsequent steps and jobs.
 
 ### Basic Output Definition
+
+`outputs` names the values a step publishes and the expressions that produce them.
 
 ```yaml
 steps:
@@ -166,6 +170,8 @@ steps:
 Data can flow between jobs through job-level outputs and dependencies.
 
 ### Job Dependencies and Data Sharing
+
+`needs` both orders the jobs and makes the earlier job's outputs readable.
 
 ```yaml
 jobs:
@@ -278,6 +284,8 @@ jobs:
 ```
 
 ## Advanced Data Flow Patterns
+
+Data does not always move straight from one step to the next. It can be transformed along the way, routed by a condition, or accumulated across several steps.
 
 ### Data Transformation Chains
 
@@ -458,6 +466,8 @@ jobs:
 
 ## Data Validation and Quality
 
+An output that is empty or malformed breaks the step that reads it, not the step that produced it. Validating and sanitising outputs keeps that from happening.
+
 ### Output Validation
 
 Ensure data quality in outputs:
@@ -515,6 +525,8 @@ Clean and sanitize data before use:
 ```
 
 ## Performance Considerations
+
+Outputs are held for the length of the run, so what a step stores and how later steps reach it both matter.
 
 ### Efficient Data Access
 
@@ -583,6 +595,8 @@ Extract only needed data:
 ```
 
 ## Best Practices
+
+The points below cover naming outputs, keeping their types stable, reading them safely, and recording which step depends on which.
 
 ### 1. Clear Output Naming
 

@@ -337,6 +337,8 @@ jobs:
 
 ## Running the Workflow
 
+The workflow reads its values from the environment, so those are set first, and the run can then be repeated with more detail when something needs checking.
+
 ### Set Environment Variables
 
 First, set up your environment variables:
@@ -365,6 +367,8 @@ probe -v health-check.yml
 
 ## Making It Production-Ready
 
+Three things separate this workflow from one that can be left running: configuration per environment, tolerance for transient failures, and a schedule.
+
 ### 1. Environment-Specific Configuration
 
 Create environment-specific config files:
@@ -391,6 +395,8 @@ probe health-check.yml,production.yml
 ```
 
 ### 2. Add Retry Logic
+
+A check that runs unattended should tolerate a single transient failure.
 
 ```yaml
 - name: Check Critical Service

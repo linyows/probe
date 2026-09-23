@@ -4,6 +4,8 @@ The `smtp` action delivers mail to an SMTP server. It is built for measuring and
 
 ## Basic Syntax
 
+An SMTP step names the server, the envelope addresses, and what to send.
+
 ```yaml
 steps:
   - name: Send a probe mail
@@ -21,6 +23,8 @@ steps:
 
 ## Parameters
 
+The fields below describe the delivery. All of them accept template expressions.
+
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
 | `addr` | String | Yes | - | SMTP server as `host:port` |
@@ -36,6 +40,8 @@ There are no parameters for authentication, TLS, CC/BCC, a custom body or HTML. 
 
 ## Response Object
 
+After the step, `res` reports how much was delivered.
+
 | Field | Type | Description |
 |-------|------|-------------|
 | `res.code` | Integer | `0` when every message was delivered |
@@ -48,7 +54,11 @@ There are no parameters for authentication, TLS, CC/BCC, a custom body or HTML. 
 
 ## SMTP Examples
 
+The examples below send generated messages and then read the counts back from the step outputs.
+
 ### Several Sessions and Messages
+
+`session` and `message` multiply: each session delivers that many messages.
 
 ```yaml
 steps:
@@ -70,6 +80,8 @@ steps:
 ```
 
 ### Reporting the Result
+
+The counts captured as outputs can be printed by a later step.
 
 ```yaml
   - name: Delivery summary

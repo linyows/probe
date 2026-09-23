@@ -4,6 +4,8 @@ This page documents every key Probe reads from a workflow file, the expression c
 
 ## Workflow Structure
 
+The skeleton below shows every property a workflow file can carry and where each one belongs.
+
 ```yaml
 name: string                  # Required: workflow name
 description: string           # Optional: what the workflow does
@@ -48,6 +50,8 @@ jobs:                         # Required: a list of jobs
 There is no top-level `env` key and no top-level `defaults` key. Environment variables are read through `vars`, and `defaults` belongs to a job.
 
 ## Top-Level Properties
+
+Three properties sit at the root of a workflow file alongside `jobs`: what to call it, what it does, and the values it starts with.
 
 ### `name`
 
@@ -97,7 +101,11 @@ Expressions inside a step cannot read environment variables directly - there is 
 
 ## Jobs
 
+`jobs` is a map from job name to job definition. A job groups the steps that run in sequence, and declares what it depends on.
+
 ### Job Properties
+
+A job definition takes the properties below.
 
 | Property | Type | Required | Description |
 |----------|------|----------|-------------|
@@ -181,6 +189,8 @@ The `http` action requires a method. Either set `method` explicitly, or use the 
 
 #### `repeat`
 
+`repeat` runs the whole job again on an interval, which is what turns a test into a monitor.
+
 | Property | Type | Required | Description |
 |----------|------|----------|-------------|
 | `count` | Integer | Yes | Number of runs. Capped by `PROBE_MAX_REPEAT_COUNT` (default 10000) |
@@ -204,7 +214,11 @@ jobs:
 
 ## Steps
 
+A step is one action invocation plus what surrounds it: the condition that decides whether it runs, the test that decides whether it passed, and the outputs it leaves for later steps.
+
 ### Step Properties
+
+A step definition takes the properties below.
 
 | Property | Type | Required | Description |
 |----------|------|----------|-------------|
@@ -259,6 +273,8 @@ An id containing a hyphen is not a valid identifier in an expression, so it has 
 ```
 
 #### `retry`
+
+`retry` repeats a single step until its test passes or the attempts run out.
 
 | Property | Type | Required | Description |
 |----------|------|----------|-------------|
@@ -315,6 +331,8 @@ There is no `env`, `jobs` or `steps` in this context.
 
 ### The `res` Object for `http`
 
+Each action defines its own `res`. For `http` it holds the following.
+
 | Field | Type | Description |
 |-------|------|-------------|
 | `res.code` | Integer | Status code, such as `200` |
@@ -334,6 +352,8 @@ There is no `env`, `jobs` or `steps` in this context.
 Other actions publish their own `res` fields; see the [Actions Reference](/reference/actions-reference).
 
 ## Data Types
+
+Two kinds of value in a workflow file have their own syntax: durations, and the expressions and templates that read the context.
 
 ### Duration
 

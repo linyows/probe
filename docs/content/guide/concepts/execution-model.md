@@ -15,6 +15,8 @@ Probe follows a structured execution model that processes workflows in a predict
 
 ### Execution Hierarchy
 
+The nesting decides what runs at the same time: jobs side by side, steps in order within each one.
+
 ```
 Workflow
 ├── Job 1 (independent)
@@ -30,6 +32,8 @@ Workflow
 ```
 
 ## Job Execution Model
+
+Jobs without a `needs` declaration run at the same time. Adding `needs` is what turns that set into an ordered graph.
 
 ### Independent Job Execution
 
@@ -216,6 +220,8 @@ Time T4: final-report completes → workflow done
 
 ## Step Execution Model
 
+Within a job, steps run one after another in the order they are written, and a step can be skipped by its condition.
+
 ### Sequential Step Execution
 
 Within a job, steps execute sequentially in the order defined:
@@ -311,6 +317,8 @@ steps:
 
 
 ## State Management
+
+State is what one part of a run leaves for another: a job's status, a step's outputs, and the references that reach across jobs.
 
 ### Job State Tracking
 
@@ -409,6 +417,8 @@ jobs:
 ```
 
 ## Timing and Performance
+
+How long a run takes is decided by three things: when each job starts, how long a step may wait before it is cut off, and how much of the graph can proceed at once.
 
 ### Execution Timing
 
@@ -597,6 +607,8 @@ Time T3-T4: end-to-end-test
 
 ## Error Propagation and Recovery
 
+A failure does not stop at the step that produced it. What happens next is governed by how it propagates through the graph, and by what the workflow does to recover.
+
 ### Error Propagation Model
 
 Understanding how errors propagate through the execution model:
@@ -720,6 +732,8 @@ jobs:
 
 ## Resource Management
 
+Each action runs as a plugin process, so a run has resources to start, reuse and release.
+
 ### Plugin Lifecycle Management
 
 Probe manages action plugins throughout workflow execution:
@@ -810,7 +824,11 @@ jobs:
 
 ## Best Practices
 
+The points below follow from the execution model: how dependencies are shaped, what happens on failure, how much is carried in outputs, and how the flow is made legible.
+
 ### 1. Dependency Design
+
+Declare a dependency only where the data or the ordering actually requires it; every extra one removes parallelism.
 
 ```yaml
 # Good: Logical dependency grouping
@@ -835,6 +853,8 @@ jobs:
 
 ### 2. Error Handling Strategy
 
+Decide per step whether a failure should stop the run or be carried forward.
+
 ```yaml
 # Good: Strategic error handling
 - name: Critical Operation
@@ -845,6 +865,8 @@ jobs:
 ```
 
 ### 3. Output Efficiency
+
+Publish the values later steps read, not the whole response.
 
 ```yaml
 # Good: Efficient outputs
@@ -859,6 +881,8 @@ outputs:
 ```
 
 ### 4. Execution Flow Documentation
+
+The workflow's description is where the order it expects can be stated.
 
 ```yaml
 name: Well-Documented Workflow

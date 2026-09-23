@@ -10,6 +10,8 @@ Probe is a YAML-based workflow automation tool designed for monitoring, testing,
 
 ## Core Concepts
 
+Probe has four building blocks. A workflow contains jobs, a job contains steps, and a step invokes an action.
+
 ### Workflows
 
 A **workflow** is the top-level container that defines what Probe should execute. It consists of:
@@ -76,6 +78,8 @@ steps:
 Actions are implemented as plugins, so you can extend Probe with custom actions.
 
 ## Workflow Execution Model
+
+Jobs run at the same time unless a dependency says otherwise, and the data one job produces is what the next one reads.
 
 ### Parallel Execution
 
@@ -257,7 +261,11 @@ There is no per-step or per-job switch to ignore a failure. If a check is not me
 
 ## Best Practices
 
+The points below cover naming, how steps are grouped, how data is passed, and what the tests assert.
+
 ### 1. Use Descriptive Names
+
+Names appear in the report, so they are what a failure is read by.
 
 ```yaml
 # Good
@@ -273,6 +281,8 @@ There is no per-step or per-job switch to ignore a failure. If a check is not me
 
 ### 2. Group Related Steps into Jobs
 
+Steps that share a subject belong in one job, because that is the unit that runs in order and fails together.
+
 ```yaml
 jobs:
 - id: infrastructure-check
@@ -287,6 +297,8 @@ jobs:
 ```
 
 ### 3. Use Outputs for Data Sharing
+
+A value needed later is published as an output rather than fetched again.
 
 ```yaml
 - name: Fetch Configuration
@@ -306,6 +318,8 @@ jobs:
 ```
 
 ### 4. Add Meaningful Test Conditions
+
+A test should assert what the step was for, not merely that a response arrived.
 
 ```yaml
 # Good - specific test conditions

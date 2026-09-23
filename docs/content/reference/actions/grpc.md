@@ -4,6 +4,8 @@ The `grpc` action calls a gRPC method. The service definition is resolved throug
 
 ## Basic Syntax
 
+A gRPC step names the server, the service, the method, and the request body.
+
 ```yaml
 - name: Get a user
   uses: grpc
@@ -18,6 +20,8 @@ The `grpc` action calls a gRPC method. The service definition is resolved throug
 ```
 
 ## Parameters
+
+The fields below describe the call. All of them accept template expressions.
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
@@ -34,6 +38,8 @@ The `grpc` action calls a gRPC method. The service definition is resolved throug
 | `ca_file` | String | No | - | CA certificate used to verify the server |
 
 ## Response Object
+
+After the call, `res` holds the reply and the gRPC status.
 
 | Field | Type | Description |
 |-------|------|-------------|

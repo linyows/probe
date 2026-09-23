@@ -8,6 +8,8 @@ Every step in Probe can include a `test` condition that validates the action's r
 
 ### Basic Test Structure
 
+A test is one expression on the step, and the step passes when it evaluates to true.
+
 ```yaml
 - name: API Health Check
   uses: http
@@ -36,7 +38,11 @@ test: |
 
 ## HTTP Response Testing
 
+An HTTP response offers four things worth asserting on: the status code, how long it took, how much came back, and the headers.
+
 ### Status Code Validation
+
+`res.code` can be compared to a single value, to a range, or to a set of codes that are all acceptable.
 
 ```yaml
 # Exact status code
@@ -56,6 +62,8 @@ test: res.code >= 500  # Server error
 
 ### Response Time Testing
 
+`rt.sec` holds the round trip in seconds, so a time budget is written as an ordinary comparison.
+
 ```yaml
 # Performance validation
 test: (rt.sec * 1000) < 1000                    # Must respond within 1 second
@@ -73,6 +81,8 @@ test: |
 
 ### Response Size Validation
 
+`res.body_size` catches an empty body and a response that came back far larger than expected.
+
 ```yaml
 # Content presence
 test: res.body_size > 0                    # Has content
@@ -87,6 +97,8 @@ test: |
 ```
 
 ### Header Validation
+
+`res.headers` is indexed by header name, which covers content type and the security headers a response is expected to carry.
 
 ```yaml
 # Content type checking
@@ -114,7 +126,11 @@ test: |
 
 ## JSON Response Testing
 
+When the body is JSON, Probe parses it, so a test can address fields directly instead of matching text.
+
 ### Basic JSON Validation
+
+Once the body is parsed, a test walks into it by field name.
 
 ```yaml
 # JSON structure validation
@@ -134,6 +150,8 @@ test: |
 
 ### Data Type Validation
 
+`typeof` asserts that a field came back as the type the client expects, not merely that it is present.
+
 ```yaml
 # Type checking
 test: |
@@ -151,6 +169,8 @@ test: |
 ```
 
 ### Array and Collection Testing
+
+`len` gives the number of elements, and elements are addressed by index to check their contents.
 
 ```yaml
 # Array validation
@@ -176,6 +196,8 @@ test: |
 
 ### Nested Data Validation
 
+Reaching a nested field means every level above it has to exist, so each one is checked on the way down.
+
 ```yaml
 # Deep object validation
 test: |
@@ -196,7 +218,11 @@ test: |
 
 ## Text Response Testing
 
+When the body is not JSON, it is a string. Tests on it work by substring, by regular expression, or by length.
+
 ### Pattern Matching
+
+`contains`, `startsWith` and `endsWith` work on the body as a string, and `lower` makes the comparison case-insensitive.
 
 ```yaml
 # Simple text matching
@@ -215,6 +241,8 @@ test: |
 ```
 
 ### Regular Expression Testing
+
+`matches` applies a regular expression, which is what to reach for when the value has a format rather than a fixed text.
 
 ```yaml
 # Email validation in response
@@ -235,6 +263,8 @@ test: |
 
 ### Content Length and Quality
 
+`len` on the body bounds how much came back, and the same expression can assert that the content is not an error page.
+
 ```yaml
 # Content length validation
 test: |
@@ -250,7 +280,11 @@ test: |
 
 ## Advanced Testing Patterns
 
+Some checks cannot be written against a single response: they depend on what the run is doing, on an earlier step, or on a rule the application is supposed to enforce.
+
 ### Conditional Testing
+
+A test is an expression, so it can pick its own threshold from the environment it is running against.
 
 ```yaml
 # Environment-specific tests
@@ -271,6 +305,8 @@ test: |
 ```
 
 ### Cross-Step Validation
+
+A step can assert against an earlier step's outputs, which is how two endpoints are checked for agreement.
 
 ```yaml
 jobs:
@@ -312,6 +348,8 @@ jobs:
 
 ### Business Logic Testing
 
+Some rules hold between fields rather than in any one of them, such as a total that has to match its line items.
+
 ```yaml
 - name: E-commerce Business Logic Test
   uses: http
@@ -343,7 +381,11 @@ jobs:
 
 ## Error Testing and Negative Cases
 
+A workflow that only exercises the successful path leaves the error handling untested. The tests below assert that bad input is rejected the way it should be.
+
 ### Expected Error Scenarios
+
+Here the failing response is the expected one, so the test asserts on the error code and the message that comes with it.
 
 ```yaml
 - name: Test Invalid Authentication
@@ -385,6 +427,8 @@ jobs:
 
 ### Boundary Testing
 
+Input at the edge of what is allowed is where validation tends to break, so it is sent deliberately.
+
 ```yaml
 - name: Test Input Boundaries
   uses: http
@@ -407,7 +451,11 @@ jobs:
 
 ## Test Organization Patterns
 
+As a workflow grows, the question becomes what to check where. The patterns below layer the checks and group them into suites.
+
 ### Layered Testing Strategy
+
+Splitting the checks into jobs lets the cheap ones run first and stop the run before the expensive ones start.
 
 ```yaml
 jobs:
@@ -451,6 +499,8 @@ jobs:
 ```
 
 ### Comprehensive Test Suites
+
+A full suite groups the cases by what they cover and carries the credentials obtained at the start through the rest of the run.
 
 ```yaml
 jobs:
@@ -563,7 +613,11 @@ jobs:
 
 ## Performance Testing
 
+`res.time` makes response time an ordinary assertion, so a workflow can hold a service to a time budget as well as a correctness one.
+
 ### Response Time Benchmarks
+
+A benchmark pairs the correctness assertion with the time it is allowed to take.
 
 ```yaml
 - name: Performance Benchmark Test
@@ -590,6 +644,8 @@ jobs:
 ```
 
 ### Load Testing Validation
+
+When load is generated elsewhere, Probe reads the results back and asserts on them.
 
 ```yaml
 - name: Load Test Results Validation
@@ -618,7 +674,11 @@ jobs:
 
 ## Security Testing
 
+Two things are worth asserting on every API: that it refuses a request without valid credentials, and that it rejects input it should not accept.
+
 ### Authentication and Authorization
+
+A request without credentials has to be refused, and the test asserts on that refusal.
 
 ```yaml
 - name: Test Unauthorized Access
@@ -655,6 +715,8 @@ jobs:
 
 ### Input Validation Security
 
+Hostile input should be rejected or neutralised, and either outcome is acceptable as long as it is not executed.
+
 ```yaml
 - name: Test SQL Injection Protection
   uses: http
@@ -686,7 +748,11 @@ jobs:
 
 ## Test Documentation and Reporting
 
+A test that fails is only useful if the output says what was expected. Naming and aggregation do that work.
+
 ### Self-Documenting Tests
+
+The step name and the assertions together should say what the case was, so a failure needs no outside explanation.
 
 ```yaml
 - name: User Registration Flow Test
@@ -724,6 +790,8 @@ jobs:
 
 ### Test Result Aggregation
 
+A final job that depends on the others can read their status and print one summary.
+
 ```yaml
 jobs:
 - id: test-summary
@@ -746,7 +814,11 @@ jobs:
 
 ## Best Practices
 
+The points below keep a growing test suite readable and keep its failures informative.
+
 ### 1. Clear Test Intentions
+
+A test should say what it expects. Asserting only that something is non-null passes for reasons that have nothing to do with the case.
 
 ```yaml
 # Good: Specific, testable conditions
@@ -761,6 +833,8 @@ test: res.code == 200  # What about response content?
 
 ### 2. Comprehensive Error Coverage
 
+Every case worth testing has a failing counterpart, and both belong in the suite.
+
 ```yaml
 # Good: Test both success and failure paths
 - name: Valid Request Test
@@ -771,6 +845,8 @@ test: res.code == 200  # What about response content?
 ```
 
 ### 3. Performance-Aware Testing
+
+Adding a time bound to an existing test costs nothing and catches a regression that correctness checks miss.
 
 ```yaml
 # Good: Include performance validation
@@ -786,6 +862,8 @@ test: |
 ```
 
 ### 4. Maintainable Test Expressions
+
+A long condition is easier to read split across lines, one assertion per line.
 
 ```yaml
 # Good: Readable, well-structured tests

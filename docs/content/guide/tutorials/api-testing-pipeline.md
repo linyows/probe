@@ -1075,6 +1075,8 @@ jobs:
 
 ## Step 10: Advanced Testing Patterns
 
+Two kinds of check go beyond whether an endpoint works: whether it still matches the contract its clients rely on, and whether it rejects what it should.
+
 ### Contract Testing
 
 Add API contract validation:
@@ -1143,6 +1145,8 @@ jobs:
 ```
 
 ## Troubleshooting
+
+If the test suite does not run as described, the causes below are the ones to check first.
 
 ### Common Issues
 

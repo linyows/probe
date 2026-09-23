@@ -4,6 +4,8 @@ This guide shows you how to manage Probe workflows across multiple environments 
 
 ## Basic Environment Configuration
 
+The goal is one workflow file that runs against development, staging and production, with only the values changing.
+
 ### Single Workflow, Multiple Environments
 
 Create a base workflow that works across environments:
@@ -252,6 +254,8 @@ probe base-workflow.yml,production.yml
 ```
 
 ## Advanced Environment Management
+
+Environments differ in more than their addresses: which features are enabled, where the credentials come from, and whether the environment is configured correctly at all.
 
 ### Environment-Specific Feature Flags
 
@@ -560,6 +564,8 @@ jobs:
 
 ## CI/CD Integration
 
+CI already knows which environment a run targets. Passing that through lets the same workflow select its values and its test suite.
+
 ### GitHub Actions Integration
 
 Integrate with CI/CD pipelines for automated environment testing:
@@ -776,6 +782,8 @@ jobs:
 
 ## Environment Monitoring and Alerting
 
+The same environment configuration that drives the tests can drive the monitoring, so each environment is checked on its own terms.
+
 ### Environment Health Monitoring
 
 Monitor the health of each environment continuously:
@@ -895,7 +903,11 @@ jobs:
 
 ## Best Practices
 
+The points below cover keeping environments apart, moving changes through them in order, validating the configuration, and handling secrets.
+
 ### 1. Environment Isolation
+
+One file per environment keeps the values apart and makes the differences visible in a diff.
 
 ```yaml
 # Good: Clear environment separation
@@ -913,6 +925,8 @@ credentials/
 
 ### 2. Progressive Testing
 
+Each environment carries the checks that make sense there, and the heavier ones run before production.
+
 ```yaml
 # Good: Test pipeline progression
 Development → Unit Tests
@@ -921,6 +935,8 @@ Production → Smoke Tests + Monitoring
 ```
 
 ### 3. Configuration Validation
+
+A run against a half-configured environment fails in ways that look like application failures, so the configuration is checked first.
 
 ```yaml
 # Good: Validate before running tests
@@ -937,6 +953,8 @@ vars:
 ```
 
 ### 4. Secure Secret Management
+
+Secrets are read from the environment, so the environment file can be committed while the values are not.
 
 ```yaml
 # Good: Use environment variables for secrets

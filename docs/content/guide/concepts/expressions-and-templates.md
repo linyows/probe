@@ -17,6 +17,8 @@ Template expressions use `{{}}` syntax to insert dynamic values into strings.
 
 ### Basic Template Syntax
 
+Anything inside `{{ }}` is evaluated and replaced by its value, including a path into nested data.
+
 ```yaml
 # Simple variable substitution
 - name: Greet User
@@ -41,6 +43,9 @@ Template expressions use `{{}}` syntax to insert dynamic values into strings.
 Template expressions have access to several data sources:
 
 #### Environment Variables (`env`)
+
+Environment values are read through `vars`, and `||` supplies a fallback when one is absent.
+
 ```yaml
 variables:
   api_url: "{{vars.API_URL}}"                    # Environment variable
@@ -49,6 +54,9 @@ variables:
 ```
 
 #### Step Outputs (`outputs`)
+
+A step that declares `outputs` becomes readable by its `id` from any later step.
+
 ```yaml
 steps:
   - name: Get User Info
@@ -76,6 +84,9 @@ steps:
 ```
 
 #### Job Outputs (Cross-job references)
+
+Across jobs the reference starts with the job, which is why the reading job has to declare `needs` on it.
+
 ```yaml
 jobs:
 - id: setup
@@ -99,7 +110,12 @@ jobs:
 
 ### Advanced Template Patterns
 
+A template is not limited to reading a value. It can choose between values, reshape a string, do arithmetic, and reach into nested data.
+
 #### Conditional Values
+
+The ternary operator picks between two values, and `||` falls back to the second when the first is empty.
+
 ```yaml
 # Ternary operator
 - name: Environment-specific URL
@@ -111,6 +127,9 @@ jobs:
 ```
 
 #### String Manipulation
+
+Templates can be placed next to each other and to literal text, which is how paths and URLs are assembled.
+
 ```yaml
 # String concatenation
 - name: Build File Path
@@ -122,6 +141,9 @@ jobs:
 ```
 
 #### Arithmetic Operations
+
+Numbers read from outputs can be combined inside the template, so a summary step computes its own figures.
+
 ```yaml
 # Mathematical operations
 - name: Calculate Metrics
@@ -133,6 +155,9 @@ jobs:
 ```
 
 #### Complex Data Access
+
+Arrays are indexed and object properties are reached by name, in the same expression.
+
 ```yaml
 # Array access
 - name: Process User List
@@ -148,6 +173,8 @@ jobs:
 Test expressions are boolean conditions used in `test` and `skipif`.
 
 ### Basic Test Syntax
+
+`test` holds a boolean expression evaluated against the result of the step it belongs to.
 
 ```yaml
 # Simple status check
@@ -206,7 +233,12 @@ test: len(res.body) > 100
 
 ### Advanced Test Conditions
 
+Beyond comparing a field to a constant, a test can match a pattern, examine a collection, and combine several checks into one condition.
+
 #### Regular Expressions
+
+`matches` applies a pattern, either to the whole body or to a single field.
+
 ```yaml
 # Pattern matching in response text
 test: res.body matches "user-\\d+@example\\.com"
@@ -216,6 +248,9 @@ test: res.body.user.email matches "[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2
 ```
 
 #### Array and Object Testing
+
+`len` and `contains` work on a collection, and `all` and `any` apply a condition to every element or to at least one.
+
 ```yaml
 # Array testing
 test: len(res.body.users) == 5
@@ -229,6 +264,9 @@ test: res.body.config.database.host != null
 ```
 
 #### Complex Logical Conditions
+
+Grouping with parentheses lets one test accept more than one valid outcome.
+
 ```yaml
 # Multi-condition validation
 test: |
@@ -250,6 +288,8 @@ test: |
 Probe provides several built-in functions for common operations.
 
 ### Random Functions
+
+Random values keep repeated runs from colliding on the same record.
 
 #### `random_int(max)`
 Generate random integers:
@@ -294,6 +334,8 @@ Generate random strings:
 
 ### Time Functions
 
+Time functions supply the current clock value, which is useful for timestamps and for values that must differ between runs.
+
 #### `unixtime()`
 Get current Unix timestamp:
 
@@ -322,7 +364,12 @@ Get current Unix timestamp:
 
 ### Custom Function Usage Patterns
 
+The functions become useful when combined: generating test data that does not collide, and identifiers that tie the steps of one run together.
+
 #### Unique Test Data Generation
+
+Generating the identifier once and reusing it lets the later steps address the record the first step created.
+
 ```yaml
 jobs:
 - id: user-lifecycle-test
@@ -364,6 +411,9 @@ jobs:
 ```
 
 #### Session and Correlation IDs
+
+A value generated at the start and sent with every request ties the requests of one run together in the server's logs.
+
 ```yaml
 jobs:
 - id: distributed-trace-test
@@ -409,6 +459,8 @@ jobs:
 ```
 
 ## Conditional Logic Patterns
+
+An `if` expression decides whether something runs. It can be attached to a single step or to a whole job, and it commonly reads the environment.
 
 ### Step-level Conditions
 
@@ -490,6 +542,8 @@ jobs:
 
 ### Environment-based Conditions
 
+`skipif` reads the environment, so a step meant for one environment is passed over in the others.
+
 ```yaml
 steps:
   - name: Development Setup
@@ -516,6 +570,8 @@ steps:
 
 ## Security Considerations
 
+Expressions are evaluated inside the workflow, so what they can reach and what they print both matter.
+
 ### Expression Security Features
 
 Probe implements several security measures:
@@ -526,6 +582,8 @@ Probe implements several security measures:
 4. **Timeout Protection**: Prevents infinite loops in expressions
 
 ### Safe Expression Patterns
+
+An expression should read values, not construct them from unchecked input.
 
 ```yaml
 # Good: Safe environment variable access
@@ -548,6 +606,8 @@ Probe implements several security measures:
 ```
 
 ### Sensitive Data Handling
+
+A secret belongs in an environment variable, and it should be used without being echoed.
 
 ```yaml
 # Good: Use environment variables for secrets
@@ -574,7 +634,11 @@ Probe implements several security measures:
 
 ## Performance Optimization
 
+Expressions are evaluated for every step, and a repeated workflow evaluates them again on every pass. Keeping them cheap keeps that cost flat.
+
 ### Efficient Expression Writing
+
+`&&` stops at the first false operand, so the cheapest check goes first.
 
 ```yaml
 # Good: Simple, direct expressions
@@ -594,6 +658,8 @@ outputs:
 
 ### Template Optimization
 
+A template that substitutes a value costs almost nothing; one that builds a string out of several operations costs more on every step.
+
 ```yaml
 # Good: Simple template substitution
 echo: "User {{outputs.user.name}} logged in"
@@ -607,9 +673,16 @@ url: "{{vars.BASE_URL}}/users/{{outputs.user.id}}"
 
 ## Debugging Expressions
 
+An expression that fails rarely says why. The symptoms below cover the cases that come up most often.
+
 ### Common Issues and Solutions
 
+Most failures fall into three groups: a template that does not resolve, a test that does not evaluate as expected, and a field that is missing rather than wrong.
+
 #### Template Expression Errors
+
+A template substitutes the raw value, so the quoting around it is the author's responsibility.
+
 ```yaml
 # Error: Missing quotes in JSON
 body: |
@@ -625,6 +698,9 @@ body: |
 ```
 
 #### Test Expression Debugging
+
+When a test fails for no obvious reason, print the values it reads before comparing them.
+
 ```yaml
 # Debug with verbose mode
 probe -v workflow.yml
@@ -640,6 +716,9 @@ probe -v workflow.yml
 ```
 
 #### Null Value Handling
+
+A missing field is null, and comparing it directly gives a result that says nothing. Check for its presence first.
+
 ```yaml
 # Good: Handle potential null values
 test: res.body.user != null && res.body.user.active == true
@@ -653,7 +732,12 @@ test: "data" in res.body && "users" in res.body.data
 
 ## Best Practices
 
+Expressions are read far more often than they are written, and they are the part of a workflow that is hardest to debug. The points below keep them readable.
+
 ### 1. Keep Expressions Simple
+
+An expression that has to be parsed by the reader is one that will be misread when it fails.
+
 ```yaml
 # Good: Simple, readable expressions
 test: res.code == 200 && (rt.sec * 1000) < 1000
@@ -663,6 +747,9 @@ test: res.code == 200 && (rt.sec * 1000) < 1000
 ```
 
 ### 2. Use Meaningful Variable Names
+
+An output name is what later steps read, so it should say what the value is rather than where it came from.
+
 ```yaml
 # Good: Descriptive output names
 outputs:
@@ -677,6 +764,9 @@ outputs:
 ```
 
 ### 3. Handle Edge Cases
+
+Check that each level exists before reading through it, so a missing field fails on its own terms.
+
 ```yaml
 # Good: Defensive programming
 test: |
@@ -690,6 +780,9 @@ echo: "Processing {{outputs.api.item_count || 0}} items"
 ```
 
 ### 4. Document Complex Expressions
+
+When a condition encodes a rule, a comment stating the rule saves the next reader from reconstructing it.
+
 ```yaml
 - name: Complex Business Logic Validation
   uses: http

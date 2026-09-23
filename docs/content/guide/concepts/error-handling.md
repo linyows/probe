@@ -42,6 +42,8 @@ Probe recognizes several types of errors:
 
 ## Step-Level Error Handling
 
+At the level of a single step, there are two choices: let the run go on past the failure, or fall back to something that still produces a usable result.
+
 ### Continue on Error
 
 Control whether workflow execution continues when a step fails:
@@ -132,6 +134,8 @@ jobs:
 ```
 
 ## Job-Level Error Handling
+
+A failing job affects the jobs that declare `needs` on it. Conditions decide whether those jobs still run.
 
 ### Job Dependencies and Failure Propagation
 
@@ -241,6 +245,8 @@ jobs:
 
 
 ## Retry and Resilience Patterns
+
+Some failures clear on their own, and some do not. Retrying suits the first; a circuit breaker keeps the second from being retried indefinitely.
 
 ### Implicit Retries with Fallbacks
 
@@ -382,6 +388,8 @@ jobs:
 ```
 
 ## Error Context and Debugging
+
+A failure is only actionable if the run records what was happening when it occurred, and lets that record be tied back to the request that caused it.
 
 ### Comprehensive Error Information
 
@@ -531,6 +539,8 @@ jobs:
 ```
 
 ## Error Recovery Strategies
+
+Once a failure is detected, the workflow can act on it: run a recovery procedure, then verify step by step that the service is healthy again.
 
 ### Automated Recovery Procedures
 
@@ -698,6 +708,8 @@ jobs:
 
 ## Notification and Alerting
 
+A workflow that runs unattended has to report failures itself. Notification steps run on the error path and carry the context collected there.
+
 ### Error-Driven Notifications
 
 Send notifications based on error severity and context:
@@ -779,7 +791,11 @@ jobs:
 
 ## Best Practices
 
+The points below decide how much a workflow absorbs before it gives up, and what it leaves behind when it does.
+
 ### 1. Fail Fast vs. Resilience Balance
+
+A step on the critical path should stop the run; one that only adds detail should not.
 
 ```yaml
 # Critical path - fail fast
@@ -801,6 +817,8 @@ jobs:
 
 ### 2. Error Context Preservation
 
+Capture what the failing step saw, because the next step no longer has access to it.
+
 ```yaml
 # Good: Preserve error context
 outputs:
@@ -817,6 +835,8 @@ outputs:
 
 ### 3. Graduated Response
 
+The response should match the severity, from a log line to an alert.
+
 ```yaml
 # Good: Different responses for different error types
 - name: Error Response Strategy
@@ -828,6 +848,8 @@ outputs:
 ```
 
 ### 4. Error Recovery Documentation
+
+Printing the recovery procedure with the failure puts it where whoever is paged will see it.
 
 ```yaml
 # Document recovery procedures in workflow

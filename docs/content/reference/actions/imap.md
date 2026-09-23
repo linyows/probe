@@ -4,6 +4,8 @@ The `imap` action connects to IMAP servers to perform email operations such as r
 
 ## Basic Syntax
 
+An IMAP step opens a connection and then runs the commands listed in `commands`.
+
 ```yaml
 vars:
   imap_username: "{{IMAP_USERNAME}}"
@@ -28,6 +30,8 @@ steps:
 ```
 
 ## Parameters
+
+The parameters describe the server to reach, the credentials to present, how the connection is secured, and the list of IMAP commands to run once it is open.
 
 ### `host` (required)
 
@@ -135,6 +139,8 @@ with:
 
 ## IMAP Commands
 
+Each entry in `commands` names one IMAP operation and carries the fields that operation needs. The commands below are the ones the action understands.
+
 ### `select` - Select Mailbox
 
 Select a mailbox for read-write operations.
@@ -211,7 +217,11 @@ The IMAP action provides a `res` object with the following structure:
 
 ## IMAP Examples
 
+Providers differ in port, TLS and credentials. The example below is a working configuration for Gmail.
+
 ### Gmail Configuration
+
+Gmail requires an app password rather than the account password, and TLS on port 993.
 
 ```yaml
 vars:
