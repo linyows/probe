@@ -28,6 +28,9 @@ http_server_tls:
 		-https-cert-file ./e2e/certs/server.crt \
 		-https-key-file ./e2e/certs/server.key
 
+browser_server:
+	python3 -m http.server 8090 --bind 127.0.0.1 --directory e2e/browser
+
 grpc_server:
 	go run grpc/testserver/*.go
 

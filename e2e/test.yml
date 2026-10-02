@@ -574,6 +574,29 @@ jobs:
   id: browser
   needs: [setup]
   steps:
+  # The examples drive a page served here rather than a public site, whose
+  # content can change under the test.
+  - name: Start fixture page server in background
+    uses: shell
+    with:
+      background: true
+      cmd: python3 -m http.server 8090 --bind 127.0.0.1 --directory e2e/browser
+    test: status == -1
+    outputs:
+      page_pid: res.pid
+    echo: |
+      PID: {{ res.pid }}
+      Log: {{ res.log }}
+  - name: Wait for fixture page server to be ready
+    uses: http
+    with:
+      url: http://localhost:8090
+      get: /
+    retry:
+      max_attempts: 10
+      interval: "0.5s"
+      initial_delay: "0.5s"
+    test: res.code == 200
   - name: Start Xvfb in background
     uses: shell
     skipif: vars.ci == ""
@@ -609,4 +632,9 @@ jobs:
     skipif: vars.ci == ""
     with:
       cmd: "kill {{ outputs.xvfb_pid }}"
+    test: status == 0
+  - name: Stop fixture page server
+    uses: shell
+    with: # Use Process Group ID
+      cmd: "kill -TERM -{{ outputs.page_pid }}"
     test: status == 0
