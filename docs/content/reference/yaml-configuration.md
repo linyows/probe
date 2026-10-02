@@ -11,6 +11,8 @@ name: string                  # Required: workflow name
 description: string           # Optional: what the workflow does
 vars:                         # Optional: workflow variables
   key: value
+secrets:                      # Optional: environment variables to hide in output
+  - NAME
 jobs:                         # Required: a list of jobs
   - name: string              # Required: job name
     id: string                # Optional: job id, used by needs
@@ -51,7 +53,7 @@ There is no top-level `env` key and no top-level `defaults` key. Environment var
 
 ## Top-Level Properties
 
-Three properties sit at the root of a workflow file alongside `jobs`: what to call it, what it does, and the values it starts with.
+Four properties sit at the root of a workflow file alongside `jobs`: what to call it, what it does, the values it starts with, and which of those values must not be shown.
 
 ### `name`
 
@@ -98,6 +100,26 @@ vars:
 ```
 
 Expressions inside a step cannot read environment variables directly - there is no `env` in the expression context. Put the variable in `vars` and read `vars.<name>`.
+
+### `secrets`
+
+**Type:** Array of strings (optional)  
+**Description:** Names of environment variables whose values must not appear in anything Probe prints or writes.
+
+```yaml
+secrets:
+  - API_TOKEN
+  - DB_PASSWORD
+vars:
+  api_token: "{{API_TOKEN}}"
+  db_password: "{{DB_PASSWORD}}"
+```
+
+Wherever the value of a listed variable would appear, Probe writes `<secret:NAME>` instead. That covers the report on the terminal, step names, `echo`, the request and response shown for a failed step, `--verbose` output, the log records of actions, and the files written by `--report`. The value is also hidden in the escaped forms it takes when it is quoted in an error message or encoded as JSON. Steps, tests and outputs still see the real value; only what is shown changes.
+
+A name that is not set, or set to an empty string, has nothing to hide and is skipped. A short value is replaced wherever it appears, so a secret such as `1` would hide every `1` in the output.
+
+Independently of `secrets`, the values of the `Authorization`, `Proxy-Authorization`, `Cookie` and `Set-Cookie` headers are always shown as `<redacted>`. A token obtained while the workflow runs, such as one returned by a login step and sent in a later request, is never listed in `secrets`, but it travels in one of these headers. Probe learns these values as an action is about to send or has received them, and hides them from then on, including in the action's own log records.
 
 ## Jobs
 

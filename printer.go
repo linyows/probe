@@ -130,6 +130,23 @@ type Printer struct {
 	// concurrently and report errors as they happen, so without it two
 	// messages could interleave, and a buffer writer would race.
 	writeMu sync.Mutex
+	// masker hides the workflow's secrets in everything written through the
+	// printer. Nil hides nothing.
+	masker *Masker
+}
+
+// SetMasker installs the masker applied to everything the printer writes.
+func (p *Printer) SetMasker(m *Masker) {
+	p.masker = m
+}
+
+// Masker returns the masker the printer applies. It is nil when none was
+// installed, and on a nil Printer, which some contexts run without.
+func (p *Printer) Masker() *Masker {
+	if p == nil {
+		return nil
+	}
+	return p.masker
 }
 
 // NewPrinter creates a new console print writer
@@ -218,31 +235,33 @@ func (p *Printer) AddSpinnerSuffix(txt string) {
 	// Async repeat fans out steps across goroutines; serialize writes to
 	// spinner.Suffix so that probe's own writers don't race each other.
 	p.spinnerMu.Lock()
-	p.spinner.Suffix = fmt.Sprintf(" %s...", txt)
+	p.spinner.Suffix = fmt.Sprintf(" %s...", p.masker.String(txt))
 	p.spinnerMu.Unlock()
 }
 
-func (p *Printer) Fprint(w io.Writer, a ...any) {
+// Every write goes through write, so that secrets are hidden and concurrent
+// jobs do not interleave or race on the writer.
+func (p *Printer) write(w io.Writer, s string) error {
 	p.writeMu.Lock()
 	defer p.writeMu.Unlock()
-	_, err := fmt.Fprint(w, a...)
-	if err != nil {
+	_, err := io.WriteString(w, p.masker.String(s))
+	return err
+}
+
+func (p *Printer) Fprint(w io.Writer, a ...any) {
+	if err := p.write(w, fmt.Sprint(a...)); err != nil {
 		fmt.Printf("Fprint: %v\n", err)
 	}
 }
 
 func (p *Printer) Fprintf(w io.Writer, f string, a ...any) {
-	p.writeMu.Lock()
-	defer p.writeMu.Unlock()
-	_, err := fmt.Fprintf(w, f, a...)
-	if err != nil {
+	if err := p.write(w, fmt.Sprintf(f, a...)); err != nil {
 		fmt.Printf("Fprintf: %v\n", err)
 	}
 }
 
 func (p *Printer) Fprintln(w io.Writer, a ...any) {
-	_, err := fmt.Fprintln(w, a...)
-	if err != nil {
+	if err := p.write(w, fmt.Sprintln(a...)); err != nil {
 		fmt.Printf("Fprintln: %v\n", err)
 	}
 }
@@ -648,8 +667,10 @@ func (p *Printer) generateTestFailure(testExpr string, result any, req, res map[
 		}
 	}
 
-	output := fmt.Sprintf("       %s %#v\n", colorInfo().Sprintf("request:"), req)
-	output += fmt.Sprintf("       %s %#v\n", colorInfo().Sprintf("response:"), res)
+	// Mask the data, not the formatted text: %#v escapes quotes and
+	// backslashes, so a secret containing one would no longer match.
+	output := fmt.Sprintf("       %s %#v\n", colorInfo().Sprintf("request:"), p.masker.Map(req))
+	output += fmt.Sprintf("       %s %#v\n", colorInfo().Sprintf("response:"), p.masker.Map(res))
 	return output
 }
 
@@ -679,6 +700,12 @@ func (p *Printer) PrintTestResult(success bool, testExpr string, context any) {
 	} else {
 		resultStr = colorError().Sprintf("Failure")
 	}
+	// The context holds the request and response; show them masked.
+	if sc, ok := context.(StepContext); ok {
+		sc.Req = p.masker.Map(sc.Req)
+		sc.Res = p.masker.Map(sc.Res)
+		context = sc
+	}
 	p.LogDebug("Test: %s (input: %s, env: %s)", resultStr, testExpr, colorDim().Sprintf("%#v", context))
 }
 
@@ -697,10 +724,10 @@ func (p *Printer) PrintEchoContent(content string) {
 func (p *Printer) PrintRequestResponse(stepIdx int, stepName string, req, res map[string]any, rt string) {
 	p.LogDebug("%s", colorWarning().Sprintf("--- Step %d: %s", stepIdx, stepName))
 	p.LogDebug("Request:")
-	p.PrintMapData(req)
+	p.PrintMapData(p.masker.Map(req))
 
 	p.LogDebug("Response:")
-	p.PrintMapData(res)
+	p.PrintMapData(p.masker.Map(res))
 
 	p.LogDebug("RT: %s", colorInfo().Sprintf("%s", rt))
 }

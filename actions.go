@@ -282,6 +282,8 @@ type RunOptions struct {
 	// being retried, so a failure there would otherwise be reported at error
 	// level even though the step goes on to succeed.
 	Quiet bool
+	// Masker hides the workflow's secrets in the action's log records.
+	Masker *Masker
 }
 
 // logLevel returns the level the action's log records are filtered at.
@@ -310,7 +312,7 @@ func (p *PluginActionRunner) RunActions(name string, with map[string]any, opts R
 	// records are re-filtered here, so this level decides what the user sees.
 	log := hclog.New(&hclog.LoggerOptions{
 		Name:   "actions",
-		Output: os.Stderr,
+		Output: opts.Masker.Writer(os.Stderr),
 		Level:  opts.logLevel(),
 	})
 	cl := plugin.NewClient(&plugin.ClientConfig{

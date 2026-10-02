@@ -283,6 +283,31 @@ func buildStepReport(sr StepResult) StepReport {
 	return step
 }
 
+// Mask hides secrets in every text the report carries, and credential
+// headers in failed steps' requests and responses. It masks the data before
+// it is rendered, because JSON and XML escape quotes, backslashes and
+// ampersands, and a secret containing one would no longer match in the
+// rendered file.
+func (r *Report) Mask(m *Masker) {
+	r.Name = m.String(r.Name)
+	r.Description = m.String(r.Description)
+	for i := range r.Jobs {
+		job := &r.Jobs[i]
+		job.Name = m.String(job.Name)
+		for j := range job.Steps {
+			st := &job.Steps[j]
+			st.Name = m.String(st.Name)
+			st.Test = m.String(st.Test)
+			st.Echo = m.String(st.Echo)
+			if f := st.Failure; f != nil {
+				f.Message = m.String(f.Message)
+				f.Request = m.Map(f.Request)
+				f.Response = m.Map(f.Response)
+			}
+		}
+	}
+}
+
 // unindentEcho strips the indentation the terminal report puts on echo lines.
 func unindentEcho(s string) string {
 	lines := strings.Split(strings.TrimRight(s, "\n"), "\n")

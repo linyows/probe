@@ -940,6 +940,15 @@ vars:
   api_token: "hardcoded_secret_123"  # これは絶対にしない
 ```
 
+あわせて`secrets`にも変数を列挙します。そうすると、CIのログやアップロードしたアーティファクトに残る端末の出力、アクションのログ、レポートファイルで、値が`<secret:NAME>`に置き換わります。
+
+```yaml
+secrets:
+  - PROD_API_TOKEN
+vars:
+  api_token: "{{PROD_API_TOKEN}}"
+```
+
 ## 次のステップ
 
 効果的に環境を管理できるようになったので、次を探索してください：

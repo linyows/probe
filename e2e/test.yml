@@ -6,6 +6,7 @@ description: |
 vars:
   ci: "{{ CI ?? '' }}"
   report_dir: /tmp/probe-e2e-report
+  mask_dir: /tmp/probe-e2e-mask
 
 jobs:
 # ------------------------------------------------------------------------
@@ -283,6 +284,42 @@ jobs:
     uses: shell
     with:
       cmd: rm -rf {{vars.report_dir}}
+    test: res.code == 0
+
+# ------------------------------------------------------------------------
+- name: Secret Masking Tests
+  id: mask
+  needs: [setup]
+  steps:
+  # The value carries a quote and a backslash, which Go, JSON and the log
+  # escape differently, so each escaped form has to be hidden as well.
+  - name: secrets.yml hides the secret and the credential header (expected to fail with an action error)
+    uses: shell
+    with:
+      cmd: |
+        rm -rf {{vars.mask_dir}}
+        E2E_TOKEN='e2e-s3cr"et\v' ./probe e2e/secrets.yml --verbose --report json={{vars.mask_dir}}/report.json,junit={{vars.mask_dir}}/junit.xml,markdown={{vars.mask_dir}}/report.md
+    test: |
+      res.code == 3 &&
+      res.stdout contains "Sends <secret:E2E_TOKEN>" &&
+      res.stdout contains "stdout was <secret:E2E_TOKEN>" &&
+      res.stdout contains "token=<secret:E2E_TOKEN>" &&
+      res.stderr contains "<redacted>" &&
+      !(res.stdout contains "e2e-s3cr") && !(res.stderr contains "e2e-s3cr") &&
+      !(res.stdout contains "e2e-runtime-credential") && !(res.stderr contains "e2e-runtime-credential")
+  - name: The report files hold neither
+    uses: shell
+    with:
+      cmd: cat {{vars.mask_dir}}/report.json {{vars.mask_dir}}/junit.xml {{vars.mask_dir}}/report.md
+    test: |
+      res.code == 0 &&
+      res.stdout contains "<secret:E2E_TOKEN>" &&
+      !(res.stdout contains "e2e-s3cr") &&
+      !(res.stdout contains "e2e-runtime-credential")
+  - name: Remove the output directory
+    uses: shell
+    with:
+      cmd: rm -rf {{vars.mask_dir}}
     test: res.code == 0
 
 # ------------------------------------------------------------------------
