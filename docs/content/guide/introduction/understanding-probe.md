@@ -243,7 +243,7 @@ Use `skipif` to skip a step. The expression sees the outputs of earlier steps, s
 
 ### When a Step Fails
 
-A failing `test` marks the step and its job as failed, but the remaining steps of that job still run. Jobs that declare the failed job in `needs` are skipped, and the workflow exits with status `1`.
+A failing `test` marks the step and its job as failed, but the remaining steps of that job still run. Jobs that declare the failed job in `needs` are skipped, and the workflow exits with status `1`, or `3` when an action itself returned an error.
 
 There is no per-step or per-job switch to ignore a failure. If a check is not meant to fail the workflow, publish its result as an output instead of asserting it:
 

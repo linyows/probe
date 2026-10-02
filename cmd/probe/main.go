@@ -240,7 +240,7 @@ func (c *Cmd) start(args []string) int {
 	// Parse arguments manually to allow options after arguments
 	if err := c.parseArgs(args[1:]); err != nil {
 		_, _ = fmt.Fprintf(c.errWriter, "[ERROR] %v\ntry --help to know more\n", err)
-		return 1
+		return probe.ExitConfigError
 	}
 
 	switch {
@@ -258,11 +258,11 @@ func (c *Cmd) start(args []string) int {
 	case c.DagMermaid:
 		_, _ = fmt.Fprintf(c.errWriter, "[ERROR] --mermaid can only be used with the dag subcommand\n")
 		_, _ = fmt.Fprintf(c.errWriter, "Usage: probe dag [--mermaid] <workflow-file>\n")
-		return 1
+		return probe.ExitConfigError
 
 	case c.WorkflowPath == "":
 		_, _ = fmt.Fprintf(c.errWriter, "[ERROR] workflow is required\n")
-		return 1
+		return probe.ExitConfigError
 
 	default:
 		if !c.mocking {
@@ -280,7 +280,7 @@ func (c *Cmd) runSubCommand() int {
 		return c.runDag()
 	default:
 		_, _ = fmt.Fprintf(c.errWriter, "[ERROR] unknown subcommand: %s\n", c.SubCommand)
-		return 1
+		return probe.ExitConfigError
 	}
 }
 
@@ -288,13 +288,13 @@ func (c *Cmd) runGen() int {
 	if len(c.SubCommandArgs) == 0 {
 		_, _ = fmt.Fprintf(c.errWriter, "[ERROR] OpenAPI spec file is required\n")
 		_, _ = fmt.Fprintf(c.errWriter, "Usage: probe gen <openapi-file>\n")
-		return 1
+		return probe.ExitConfigError
 	}
 
 	output, err := oas.Generate(c.SubCommandArgs[0])
 	if err != nil {
 		_, _ = fmt.Fprintf(c.errWriter, "[ERROR] %v\n", err)
-		return 1
+		return probe.ExitConfigError
 	}
 
 	_, _ = fmt.Fprint(c.outWriter, output)
@@ -315,7 +315,7 @@ func (c *Cmd) runProbe() int {
 	mode, err := probe.ParseOutputMode(outputMode)
 	if err != nil {
 		_, _ = fmt.Fprintf(c.errWriter, "[ERROR] %v\n", err)
-		return 1
+		return probe.ExitConfigError
 	}
 	p.Config.Output = mode
 
@@ -327,13 +327,13 @@ func (c *Cmd) runProbe() int {
 	reports, err := probe.ParseReportTargets(report)
 	if err != nil {
 		_, _ = fmt.Fprintf(c.errWriter, "[ERROR] %v\n", err)
-		return 1
+		return probe.ExitConfigError
 	}
 	p.Config.Reports = reports
 
 	if err := p.Do(); err != nil {
 		_, _ = fmt.Fprintf(c.errWriter, "[ERROR] %v\n", err)
-		return 1
+		return probe.ExitConfigError
 	}
 	return p.ExitStatus()
 }
@@ -342,7 +342,7 @@ func (c *Cmd) runDag() int {
 	if len(c.SubCommandArgs) == 0 {
 		_, _ = fmt.Fprintf(c.errWriter, "[ERROR] workflow file is required\n")
 		_, _ = fmt.Fprintf(c.errWriter, "Usage: probe dag [--mermaid] <workflow-file>\n")
-		return 1
+		return probe.ExitConfigError
 	}
 
 	if c.mocking {
@@ -359,7 +359,7 @@ func (c *Cmd) runDag() int {
 	}
 	if err != nil {
 		_, _ = fmt.Fprintf(c.errWriter, "[ERROR] %v\n", err)
-		return 1
+		return probe.ExitConfigError
 	}
 	_, _ = fmt.Fprint(c.outWriter, graph)
 	return 0

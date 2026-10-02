@@ -3,6 +3,7 @@ package probe
 import (
 	"errors"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -12,6 +13,11 @@ type Workflow struct {
 	Jobs        []Job          `yaml:"jobs" validate:"required"`
 	Vars        map[string]any `yaml:"vars"`
 	exitStatus  int
+	// failed is set to 1 by any job that does not succeed. Jobs run
+	// concurrently, so it is only accessed atomically; exitStatus is derived
+	// from it once every job is done. It is an int32 rather than an
+	// atomic.Bool because a Workflow is copied by value when it is decoded.
+	failed int32
 	env         map[string]string
 	// basePath is the directory containing the workflow file (used for resolving relative paths)
 	basePath string
@@ -69,6 +75,7 @@ func (w *Workflow) Start(c Config) error {
 	}
 
 	reporter.Finish(ctx.Result)
+	w.exitStatus = ctx.Result.exitCode(atomic.LoadInt32(&w.failed) == 1)
 
 	return w.writeReports(c.Reports, ctx.Result, jobIDs, startedAt, time.Now())
 }
@@ -205,7 +212,7 @@ func (w *Workflow) processRunnableJobs(runnableJobs []string, ctx JobContext) {
 
 func (w *Workflow) SetExitStatus(isErr bool) {
 	if isErr {
-		w.exitStatus = 1
+		atomic.StoreInt32(&w.failed, 1)
 	}
 }
 

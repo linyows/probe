@@ -97,11 +97,11 @@ jobs:
       cmd: ./probe examples/echo-literal.yml
     test: res.code == 0
     echo: "{{res.stdout}}"
-  - name: timeout-literal.yml (expected to fail)
+  - name: timeout-literal.yml (expected to fail with an action error)
     uses: shell
     with:
       cmd: ./probe examples/timeout-literal.yml
-    test: res.code == 1
+    test: res.code == 3
     echo: "{{res.stdout}}"
   - name: needs-literal.yml (expected to fail)
     uses: shell
@@ -156,6 +156,16 @@ jobs:
       cmd: ./probe examples/expr-functions.yml
     test: res.code == 0
     echo: "{{res.stdout}}"
+  - name: A missing workflow file is a configuration error
+    uses: shell
+    with:
+      cmd: ./probe examples/does-not-exist.yml
+    test: res.code == 2
+  - name: An unknown flag is a configuration error
+    uses: shell
+    with:
+      cmd: ./probe --no-such-flag examples/shell.yml
+    test: res.code == 2
 
 # ------------------------------------------------------------------------
 - name: Report File Tests
@@ -167,12 +177,12 @@ jobs:
     with:
       cmd: rm -rf {{vars.report_dir}} && mkdir -p {{vars.report_dir}}/default {{vars.report_dir}}/precedence
     test: res.code == 0
-  - name: report.yml writes every format (expected to fail)
+  - name: report.yml writes every format (expected to fail with an action error)
     uses: shell
     with:
       cmd: ./probe e2e/report.yml --report json={{vars.report_dir}}/out/report.json,junit={{vars.report_dir}}/out/junit.xml,markdown={{vars.report_dir}}/out/report.md
     test: |
-      res.code == 1 &&
+      res.code == 3 &&
       res.stdout contains "Report Files"
   - name: JSON holds the summary and every failure kind
     uses: shell
@@ -233,7 +243,7 @@ jobs:
         echo "exit=$?"
         ls
     test: |
-      res.stdout contains "exit=1" &&
+      res.stdout contains "exit=3" &&
       res.stdout contains "probe-report.json" &&
       res.stdout contains "probe-report.md" &&
       !(res.stdout contains "probe-junit.xml")
@@ -247,10 +257,10 @@ jobs:
         echo "exit=$?"
         ls
     test: |
-      res.stdout contains "exit=1" &&
+      res.stdout contains "exit=3" &&
       res.stdout contains "probe-junit.xml" &&
       !(res.stdout contains "probe-report.md")
-  - name: An unwritable report fails the run but the others are written
+  - name: An unwritable report is a configuration error but the others are written
     uses: shell
     with:
       cmd: |
@@ -258,7 +268,7 @@ jobs:
         echo "exit=$?"
         test -s {{vars.report_dir}}/unwritable.md && echo "markdown written"
     test: |
-      res.stdout contains "exit=1" &&
+      res.stdout contains "exit=2" &&
       res.stdout contains "markdown written" &&
       res.stderr contains "failed to create json report"
   - name: An unknown format is rejected before the run
@@ -266,7 +276,7 @@ jobs:
     with:
       cmd: ./probe e2e/report.yml --report html
     test: |
-      res.code == 1 &&
+      res.code == 2 &&
       res.stderr contains "unknown report format: html" &&
       !(res.stdout contains "Report Files")
   - name: Remove the output directory

@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+
+	"github.com/linyows/probe"
 )
 
 func TestCmd_isValid(t *testing.T) {
@@ -136,7 +138,7 @@ func TestCmd_start(t *testing.T) {
 		{
 			name:           "no workflow specified",
 			args:           []string{"probe"},
-			expectCode:     1,
+			expectCode:     probe.ExitConfigError,
 			expectHelp:     false,
 			expectWorkflow: "",
 			expectVerbose:  false,
@@ -156,7 +158,7 @@ func TestCmd_start(t *testing.T) {
 		{
 			name:           "verbose flag without workflow",
 			args:           []string{"probe", "--verbose"},
-			expectCode:     1,
+			expectCode:     probe.ExitConfigError,
 			expectHelp:     false,
 			expectWorkflow: "",
 			expectVerbose:  true,
@@ -166,7 +168,7 @@ func TestCmd_start(t *testing.T) {
 		{
 			name:           "timing flag without workflow",
 			args:           []string{"probe", "--timing"},
-			expectCode:     1,
+			expectCode:     probe.ExitConfigError,
 			expectHelp:     false,
 			expectWorkflow: "",
 			expectVerbose:  false,
@@ -315,13 +317,13 @@ func TestCmd_gen(t *testing.T) {
 		{
 			name:       "gen without file argument",
 			args:       []string{"probe", "gen"},
-			expectCode: 1,
+			expectCode: probe.ExitConfigError,
 			errContain: "OpenAPI spec file is required",
 		},
 		{
 			name:       "gen with nonexistent file",
 			args:       []string{"probe", "gen", "nonexistent.yml"},
-			expectCode: 1,
+			expectCode: probe.ExitConfigError,
 			errContain: "failed to read OpenAPI spec",
 		},
 	}
@@ -421,19 +423,19 @@ func TestCmd_dag(t *testing.T) {
 		{
 			name:       "dag without file argument",
 			args:       []string{"probe", "dag"},
-			expectCode: 1,
+			expectCode: probe.ExitConfigError,
 			errContain: "workflow file is required",
 		},
 		{
 			name:       "mermaid flag without dag subcommand",
 			args:       []string{"probe", "--mermaid", "test.yml"},
-			expectCode: 1,
+			expectCode: probe.ExitConfigError,
 			errContain: "--mermaid can only be used with the dag subcommand",
 		},
 		{
 			name:       "mermaid flag without dag subcommand and without file",
 			args:       []string{"probe", "--mermaid"},
-			expectCode: 1,
+			expectCode: probe.ExitConfigError,
 			errContain: "--mermaid can only be used with the dag subcommand",
 		},
 	}
@@ -482,8 +484,8 @@ func TestCmd_InvalidFlags(t *testing.T) {
 try --help to know more
 `, "\n")
 
-	if n != 1 {
-		t.Errorf("Cmd.start(%v) should return 1 for invalid flags", args)
+	if n != probe.ExitConfigError {
+		t.Errorf("Cmd.start(%v) should return %d for invalid flags", args, probe.ExitConfigError)
 	}
 
 	if expected != output {
@@ -600,8 +602,8 @@ func TestCmd_runProbe_reportEnv(t *testing.T) {
 	c.WorkflowPath = "workflow.yml"
 	code := c.runProbe()
 
-	if code != 1 {
-		t.Errorf("runProbe() = %d, want 1 for an invalid PROBE_REPORT", code)
+	if code != probe.ExitConfigError {
+		t.Errorf("runProbe() = %d, want %d for an invalid PROBE_REPORT", code, probe.ExitConfigError)
 	}
 	errOutput := fmt.Sprintf("%s", c.errWriter)
 	if !strings.Contains(errOutput, "unknown report format: pdf") {
