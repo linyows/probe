@@ -1,0 +1,66 @@
+name: Report Files
+description: |
+  Produces one step of every status and every failure kind, so that e2e/test.yml
+  can check the files written by --report. This workflow is expected to fail.
+jobs:
+- name: Checks
+  id: checks
+  steps:
+  - name: Passes
+    uses: shell
+    with:
+      cmd: echo ok
+    test: res.code == 0
+    echo: "stdout was {{res.stdout}}"
+  - name: False test
+    uses: shell
+    with:
+      cmd: echo ok
+    test: res.code == 1
+  - name: Not a boolean
+    uses: shell
+    with:
+      cmd: echo ok
+    test: res.code
+  - name: Cannot evaluate
+    uses: shell
+    with:
+      cmd: echo ok
+    test: parse_int("not a number") == 1
+  - name: Times out
+    uses: shell
+    with:
+      cmd: sleep 5
+    timeout: 1s
+    test: res.code == 0
+  - name: Skipped
+    uses: shell
+    with:
+      cmd: echo never
+    skipif: "true"
+  - name: No test
+    uses: shell
+    with:
+      cmd: echo ok
+
+- name: Downstream
+  id: downstream
+  needs: [checks]
+  steps:
+  - name: Never runs
+    uses: shell
+    with:
+      cmd: echo never
+    test: res.code == 0
+
+- name: Repeated
+  id: repeated
+  repeat:
+    count: 3
+    interval: 100ms
+  steps:
+  - name: Fails on the second iteration
+    uses: shell
+    with:
+      cmd: echo ok
+    test: repeat_index != 1

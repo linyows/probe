@@ -5,6 +5,7 @@ description: |
 
 vars:
   ci: "{{ CI ?? '' }}"
+  report_dir: /tmp/probe-e2e-report
 
 jobs:
 # ------------------------------------------------------------------------
@@ -155,6 +156,124 @@ jobs:
       cmd: ./probe examples/expr-functions.yml
     test: res.code == 0
     echo: "{{res.stdout}}"
+
+# ------------------------------------------------------------------------
+- name: Report File Tests
+  id: report
+  needs: [setup]
+  steps:
+  - name: Prepare an empty output directory
+    uses: shell
+    with:
+      cmd: rm -rf {{vars.report_dir}} && mkdir -p {{vars.report_dir}}/default {{vars.report_dir}}/precedence
+    test: res.code == 0
+  - name: report.yml writes every format (expected to fail)
+    uses: shell
+    with:
+      cmd: ./probe e2e/report.yml --report json={{vars.report_dir}}/out/report.json,junit={{vars.report_dir}}/out/junit.xml,markdown={{vars.report_dir}}/out/report.md
+    test: |
+      res.code == 1 &&
+      res.stdout contains "Report Files"
+  - name: JSON holds the summary and every failure kind
+    uses: shell
+    with:
+      cmd: cat {{vars.report_dir}}/out/report.json
+    test: |
+      let r = parse_json(res.stdout);
+      let checks = r.jobs[0].steps;
+      res.code == 0 &&
+      r.name == "Report Files" &&
+      r.status == "failed" &&
+      r.summary.jobs.total == 3 && r.summary.jobs.failed == 2 && r.summary.jobs.skipped == 1 &&
+      r.summary.steps.total == 8 && r.summary.steps.passed == 1 && r.summary.steps.failed == 5 &&
+      r.summary.steps.skipped == 1 && r.summary.steps.untested == 1 &&
+      checks[0].status == "passed" && checks[0].echo == "stdout was ok" &&
+      checks[1].failure.kind == "assertion" && checks[1].test == "res.code == 1" &&
+      checks[1].failure.request.cmd == "echo ok" && checks[1].failure.response.code == 0 &&
+      checks[2].failure.kind == "test_type" &&
+      checks[3].failure.kind == "test_error" &&
+      checks[4].failure.kind == "action" && checks[4].failure.message contains "timed out" &&
+      checks[5].status == "skipped" && checks[5].name == "Skipped" &&
+      checks[6].status == "untested" &&
+      r.jobs[1].id == "downstream" && r.jobs[1].status == "skipped" &&
+      r.jobs[2].steps[0].status == "failed" &&
+      r.jobs[2].steps[0].repeat.total == 3 && r.jobs[2].steps[0].repeat.failure == 1
+  - name: JUnit is well-formed XML with the expected totals
+    uses: shell
+    with:
+      cmd: |
+        python3 -c "import sys, xml.etree.ElementTree as E; E.parse(sys.argv[1])" {{vars.report_dir}}/out/junit.xml &&
+        cat {{vars.report_dir}}/out/junit.xml
+    test: |
+      res.code == 0 &&
+      res.stdout contains `<testsuites name="Report Files" tests="9" failures="2" errors="3" skipped="2"` &&
+      res.stdout contains `<failure message="test evaluated to false" type="assertion">` &&
+      res.stdout contains `type="action">` &&
+      res.stdout contains `<skipped message="job skipped">` &&
+      res.stdout contains `<failure message="1 of 3 iterations failed" type="assertion">`
+  - name: Markdown lists the jobs and every failed step
+    uses: shell
+    with:
+      cmd: cat {{vars.report_dir}}/out/report.md
+    test: |
+      res.code == 0 &&
+      res.stdout contains "**Failed** in " &&
+      res.stdout contains "| Checks | failed | 1/7 |" &&
+      res.stdout contains "| Downstream | skipped | 0/0 |" &&
+      res.stdout contains "### Checks / 1. False test" &&
+      res.stdout contains "### Checks / 4. Times out" &&
+      res.stdout contains "### Repeated / 0. Fails on the second iteration"
+  - name: PROBE_REPORT writes to the default file names
+    uses: shell
+    with:
+      cmd: |
+        root=$(pwd)
+        cd {{vars.report_dir}}/default &&
+        PROBE_REPORT=json,markdown "$root/probe" "$root/e2e/report.yml" >/dev/null 2>&1
+        echo "exit=$?"
+        ls
+    test: |
+      res.stdout contains "exit=1" &&
+      res.stdout contains "probe-report.json" &&
+      res.stdout contains "probe-report.md" &&
+      !(res.stdout contains "probe-junit.xml")
+  - name: --report takes precedence over PROBE_REPORT
+    uses: shell
+    with:
+      cmd: |
+        root=$(pwd)
+        cd {{vars.report_dir}}/precedence &&
+        PROBE_REPORT=markdown "$root/probe" "$root/e2e/report.yml" --report junit >/dev/null 2>&1
+        echo "exit=$?"
+        ls
+    test: |
+      res.stdout contains "exit=1" &&
+      res.stdout contains "probe-junit.xml" &&
+      !(res.stdout contains "probe-report.md")
+  - name: An unwritable report fails the run but the others are written
+    uses: shell
+    with:
+      cmd: |
+        ./probe e2e/report.yml --report json={{vars.report_dir}}/default,markdown={{vars.report_dir}}/unwritable.md
+        echo "exit=$?"
+        test -s {{vars.report_dir}}/unwritable.md && echo "markdown written"
+    test: |
+      res.stdout contains "exit=1" &&
+      res.stdout contains "markdown written" &&
+      res.stderr contains "failed to create json report"
+  - name: An unknown format is rejected before the run
+    uses: shell
+    with:
+      cmd: ./probe e2e/report.yml --report html
+    test: |
+      res.code == 1 &&
+      res.stderr contains "unknown report format: html" &&
+      !(res.stdout contains "Report Files")
+  - name: Remove the output directory
+    uses: shell
+    with:
+      cmd: rm -rf {{vars.report_dir}}
+    test: res.code == 0
 
 # ------------------------------------------------------------------------
 - name: HTTP Server Start
