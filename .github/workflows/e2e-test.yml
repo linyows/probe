@@ -69,7 +69,11 @@ jobs:
             content: 'rocket'
           });
 
-    - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+    # A comment event runs on the default branch, so check out the PR head
+    # explicitly. This must stay the only checkout: a later one without a ref
+    # would put the default branch back.
+    - name: Checkout
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       with:
         ref: ${{ steps.pr.outputs.sha || github.sha }}
 
@@ -77,8 +81,6 @@ jobs:
       run: sudo apt-get update && sudo apt-get install -y protobuf-compiler xvfb x11-utils
     - name: Setup Chrome
       uses: browser-actions/setup-chrome@b94431e051d1c52dcbe9a7092a4f10f827795416 # latest
-    - name: Checkout
-      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
     - name: Setup go
       uses: actions/setup-go@4dc6199c7b1a012772edbd06daecab0f50c9053c # v6.1.0
       with:
