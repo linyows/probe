@@ -966,6 +966,15 @@ vars:
   api_token: "hardcoded_secret_123"  # Never do this
 ```
 
+List the variables in `secrets` as well, so that their values are replaced by `<secret:NAME>` in the terminal output, the action logs and the report files, where a CI log or an uploaded artifact would otherwise keep them:
+
+```yaml
+secrets:
+  - PROD_API_TOKEN
+vars:
+  api_token: "{{PROD_API_TOKEN}}"
+```
+
 ## What's Next?
 
 Now that you can manage environments effectively, explore:

@@ -130,8 +130,13 @@ func (st *Step) executeSingleAction(runner ActionRunner, expW map[string]any, jC
 	}
 	resultCh := make(chan result, 1)
 
+	// Learn the credentials the action is about to send before it runs, so
+	// that its own log records already have them hidden.
+	masker := jCtx.Printer.Masker()
+	masker.Learn(expW)
+
 	go func() {
-		ret, err := runner.RunActions(st.Uses, expW, RunOptions{Verbose: jCtx.Verbose, Quiet: quiet})
+		ret, err := runner.RunActions(st.Uses, expW, RunOptions{Verbose: jCtx.Verbose, Quiet: quiet, Masker: masker})
 		resultCh <- result{ret: ret, err: err}
 	}()
 
@@ -271,6 +276,9 @@ func (st *Step) processActionResult(actionResult map[string]any, jCtx *JobContex
 			res["body"] = mustMarshalJSON(body)
 		}
 	}
+
+	// A response can hand out a credential too, such as a session cookie.
+	jCtx.Printer.Masker().Learn(res)
 
 	// Update context with status
 	st.updateCtx(nil, req, res, rt, status)

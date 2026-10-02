@@ -12,13 +12,16 @@ type Workflow struct {
 	Description string         `yaml:"description,omitempty"`
 	Jobs        []Job          `yaml:"jobs" validate:"required"`
 	Vars        map[string]any `yaml:"vars"`
-	exitStatus  int
+	// Secrets names environment variables whose values must not appear in
+	// anything Probe prints or writes.
+	Secrets    []string `yaml:"secrets,omitempty"`
+	exitStatus int
 	// failed is set to 1 by any job that does not succeed. Jobs run
 	// concurrently, so it is only accessed atomically; exitStatus is derived
 	// from it once every job is done. It is an int32 rather than an
 	// atomic.Bool because a Workflow is copied by value when it is decoded.
 	failed int32
-	env         map[string]string
+	env    map[string]string
 	// basePath is the directory containing the workflow file (used for resolving relative paths)
 	basePath string
 	// Shared outputs across all jobs
@@ -49,6 +52,9 @@ func (w *Workflow) Start(c Config) error {
 		// order the report is rendered in.
 		w.printer.SetBufferIDs(jobIDs)
 	}
+
+	// Install the masker before anything is printed, the header included.
+	w.printer.SetMasker(NewMasker(w.Secrets, w.Env()))
 
 	// A reporter tracks how far the report has been emitted, which is state
 	// for this run alone, so every run gets a fresh one.
@@ -88,6 +94,7 @@ func (w *Workflow) writeReports(targets []ReportTarget, rs *Result, order []stri
 	}
 
 	report := BuildReport(w.Name, w.Description, rs, order, startedAt, finishedAt)
+	report.Mask(w.printer.Masker())
 
 	var errs []error
 	for _, t := range targets {
