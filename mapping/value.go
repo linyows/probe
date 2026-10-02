@@ -55,6 +55,68 @@ func HeaderToStringValue(data map[string]any) map[string]any {
 	return data
 }
 
+// envPrefix marks a flat key that names one environment variable, as in
+// env__NODE_ENV. It is accepted alongside a nested env map.
+const envPrefix = "env__"
+
+// EnvToStringValue returns a copy of data whose env entry is a map of
+// strings, ready for a map[string]string field. Flat env__NAME keys are folded
+// into it and removed, and every value is turned into a string, so that a
+// number such as PORT: 8080 is passed on instead of dropped. When a name is
+// given both ways, the nested env map wins. data itself is not modified.
+//
+// Example:
+//
+//	data := map[string]any{
+//	  "cmd": "run",
+//	  "env": map[string]any{"PORT": 8080},
+//	  "env__MODE": "test",
+//	}
+//
+//	result := EnvToStringValue(data)
+//	// result = map[string]any{
+//	//   "cmd": "run",
+//	//   "env": map[string]any{"PORT": "8080", "MODE": "test"},
+//	// }
+func EnvToStringValue(data map[string]any) map[string]any {
+	out := make(map[string]any, len(data))
+	env := make(map[string]any)
+
+	for k, v := range data {
+		name, ok := strings.CutPrefix(k, envPrefix)
+		if !ok || name == "" {
+			out[k] = v
+			continue
+		}
+		env[name] = envString(v)
+	}
+
+	if nested, ok := data["env"].(map[string]any); ok {
+		for name, v := range nested {
+			env[name] = envString(v)
+		}
+	} else if nested, ok := data["env"].(map[string]string); ok {
+		for name, v := range nested {
+			env[name] = v
+		}
+	}
+
+	if len(env) > 0 {
+		out["env"] = env
+	}
+	return out
+}
+
+func envString(v any) string {
+	if v == nil {
+		return ""
+	}
+	if s, ok := AnyToString(v); ok {
+		return s
+	}
+	return fmt.Sprintf("%v", v)
+}
+
 // AnyToString attempts to convert any type to a string.
 // Returns the string representation and a boolean indicating success.
 //

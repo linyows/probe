@@ -55,13 +55,18 @@ SSHのステップには、接続先のホスト、ユーザー、認証方法�
 
 ### 環境変数
 
-`env__`プレフィックスで環境変数を設定できます：
+リモートのコマンドに渡す環境変数は`env`で設定します。
 
 ```yaml
 with:
-  env__NODE_ENV: production
-  env__APP_VERSION: v1.2.3
+  env:
+    NODE_ENV: production
+    APP_VERSION: v1.2.3
 ```
+
+数値や真偽値は文字列として渡します。`env__NODE_ENV: production`という平坦な書き方も受け付けます。同じ名前を両方で指定した場合は`env`の値が優先されます。
+
+環境変数はSSHのセッションを通して送るため、サーバーの`sshd_config`が`AcceptEnv`で許可した名前しか受け付けられません。拒否された名前は無視され、コマンドはその変数なしで実行されます。コマンドが必ず必要とする値は、`cmd`の中で渡すほうが確実です。
 
 ## 戻り値
 
@@ -143,8 +148,9 @@ SSH Actionは以下の値を返します：
       echo "Deploying version: $APP_VERSION"
       echo "Environment: $DEPLOY_ENV"
       ./deploy.sh
-    env__APP_VERSION: "v2.1.0"
-    env__DEPLOY_ENV: "production"
+    env:
+      APP_VERSION: "v2.1.0"
+      DEPLOY_ENV: "production"
     workdir: "/opt/myapp"
     timeout: "600s"
   test: res.code == 0 && contains(res.stdout, "Deploy completed")

@@ -277,3 +277,89 @@ func TestTitleCase(t *testing.T) {
 		})
 	}
 }
+
+func TestEnvToStringValue(t *testing.T) {
+	tests := []struct {
+		name string
+		data map[string]any
+		want map[string]any
+	}{
+		{
+			name: "nested map values become strings",
+			data: map[string]any{
+				"cmd": "run",
+				"env": map[string]any{"PORT": 8080, "RATIO": 0.5, "DEBUG": true, "NAME": "x", "EMPTY": nil},
+			},
+			want: map[string]any{
+				"cmd": "run",
+				"env": map[string]any{"PORT": "8080", "RATIO": "0.5", "DEBUG": "true", "NAME": "x", "EMPTY": ""},
+			},
+		},
+		{
+			name: "flat keys are folded into env",
+			data: map[string]any{"cmd": "run", "env__A": "1", "env__B": 2},
+			want: map[string]any{"cmd": "run", "env": map[string]any{"A": "1", "B": "2"}},
+		},
+		{
+			name: "nested map wins over a flat key",
+			data: map[string]any{"env": map[string]any{"MODE": "nested"}, "env__MODE": "flat"},
+			want: map[string]any{"env": map[string]any{"MODE": "nested"}},
+		},
+		{
+			name: "map of strings is accepted",
+			data: map[string]any{"env": map[string]string{"A": "1"}},
+			want: map[string]any{"env": map[string]any{"A": "1"}},
+		},
+		{
+			name: "a bare prefix is not a variable",
+			data: map[string]any{"env__": "x"},
+			want: map[string]any{"env__": "x"},
+		},
+		{
+			name: "no env at all",
+			data: map[string]any{"cmd": "run"},
+			want: map[string]any{"cmd": "run"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := EnvToStringValue(tt.data)
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("EnvToStringValue() = %#v, want %#v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestEnvToStringValue_LeavesInputAlone(t *testing.T) {
+	data := map[string]any{"env__A": "1", "env": map[string]any{"B": 2}}
+	_ = EnvToStringValue(data)
+
+	if _, ok := data["env__A"]; !ok {
+		t.Error("the flat key should stay in the input")
+	}
+	if data["env"].(map[string]any)["B"] != 2 {
+		t.Error("the nested map in the input should keep its original value")
+	}
+}
+
+// TestEnvToStringValue_MapsOntoStruct checks the result lands in a
+// map[string]string field, numbers included, which is what the shell and ssh
+// requests declare.
+func TestEnvToStringValue_MapsOntoStruct(t *testing.T) {
+	type req struct {
+		Env map[string]string `map:"env"`
+	}
+	r := &req{Env: map[string]string{}}
+	err := MapToStructByTags(EnvToStringValue(map[string]any{
+		"env":      map[string]any{"PORT": 8080},
+		"env__APP": "probe",
+	}), r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := map[string]string{"PORT": "8080", "APP": "probe"}; !reflect.DeepEqual(r.Env, want) {
+		t.Errorf("Env = %v, want %v", r.Env, want)
+	}
+}

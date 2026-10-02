@@ -55,13 +55,18 @@ The rest tune the connection and fall back to the defaults below when omitted.
 
 ### Environment Variables
 
-Set environment variables using the `env__` prefix:
+Set environment variables for the remote command with `env`:
 
 ```yaml
 with:
-  env__NODE_ENV: production
-  env__APP_VERSION: v1.2.3
+  env:
+    NODE_ENV: production
+    APP_VERSION: v1.2.3
 ```
+
+Numbers and booleans are passed as their text. The flat form `env__NODE_ENV: production` is accepted as well; when a name is given both ways, the value in `env` wins.
+
+The variables are sent through the SSH session, and the server accepts only the names its `sshd_config` allows with `AcceptEnv`. A name the server refuses is skipped and the command runs without it, so a value the command depends on is safer passed in `cmd` itself.
 
 ## Return Values
 
@@ -143,8 +148,9 @@ Every parameter accepts a template, so the host and the credentials can come fro
       echo "Deploying version: $APP_VERSION"
       echo "Environment: $DEPLOY_ENV"
       ./deploy.sh
-    env__APP_VERSION: "v2.1.0"
-    env__DEPLOY_ENV: "production"
+    env:
+      APP_VERSION: "v2.1.0"
+      DEPLOY_ENV: "production"
     workdir: "/opt/myapp"
     timeout: "600s"
   test: res.code == 0 && contains(res.stdout, "Deploy completed")

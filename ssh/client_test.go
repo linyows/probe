@@ -1,7 +1,6 @@
 package ssh
 
 import (
-	"maps"
 	"testing"
 	"time"
 )
@@ -176,67 +175,6 @@ func TestValidateKeyFile(t *testing.T) {
 			}
 			if !tt.wantError && err != nil {
 				t.Errorf("Unexpected error: %v", err)
-			}
-		})
-	}
-}
-
-func TestPrepareRequestData(t *testing.T) {
-	tests := []struct {
-		name     string
-		input    map[string]any
-		expected map[string]any
-	}{
-		{
-			name: "with environment variables",
-			input: map[string]any{
-				"host":      "example.com",
-				"user":      "testuser",
-				"env__PATH": "/usr/bin",
-				"env__HOME": "/home/user",
-				"cmd":       "echo $PATH",
-			},
-			expected: map[string]any{
-				"host":      "example.com",
-				"user":      "testuser",
-				"env__PATH": "/usr/bin",
-				"env__HOME": "/home/user",
-				"cmd":       "echo $PATH",
-			},
-		},
-		{
-			name: "without environment variables",
-			input: map[string]any{
-				"host": "example.com",
-				"user": "testuser",
-				"cmd":  "ls -la",
-			},
-			expected: map[string]any{
-				"host": "example.com",
-				"user": "testuser",
-				"cmd":  "ls -la",
-			},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			// Make a copy of input since PrepareRequestData modifies the map
-			data := make(map[string]any)
-			maps.Copy(data, tt.input)
-
-			err := PrepareRequestData(data)
-			if err != nil {
-				t.Errorf("Unexpected error: %v", err)
-			}
-
-			// Verify the result
-			for key, expectedValue := range tt.expected {
-				if actualValue, exists := data[key]; !exists {
-					t.Errorf("Expected key '%s' not found in result", key)
-				} else if actualValue != expectedValue {
-					t.Errorf("Expected value '%s' for key '%s', got '%s'", expectedValue, key, actualValue)
-				}
 			}
 		})
 	}

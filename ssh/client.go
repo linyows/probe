@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"maps"
 	"net"
 	"os"
 	"path/filepath"
@@ -451,43 +450,9 @@ func (r *Req) Do() (re *Result, er error) {
 	return result, nil
 }
 
-// PrepareRequestData prepares SSH request data by extracting environment variables
-func PrepareRequestData(data map[string]any) error {
-	// Extract environment variables from env__ prefixed keys
-	env := make(map[string]string)
-	for key, value := range data {
-		if after, ok := strings.CutPrefix(key, "env__"); ok {
-			envKey := after
-			if strValue, ok := value.(string); ok {
-				env[envKey] = strValue
-			} else {
-				env[envKey] = fmt.Sprintf("%v", value)
-			}
-			delete(data, key)
-		}
-	}
-
-	// Store env as a nested structure if any env vars were found
-	if len(env) > 0 {
-		for key, value := range env {
-			data["env__"+key] = value
-		}
-	}
-
-	return nil
-}
-
 func Execute(data map[string]any, opts ...Option) (map[string]any, error) {
-	// Create a copy to avoid modifying the original data
-	dataCopy := make(map[string]any)
-	maps.Copy(dataCopy, data)
-
-	// Prepare request data
-	if err := PrepareRequestData(dataCopy); err != nil {
-		return map[string]any{}, err
-	}
-
-	m := mapping.HeaderToStringValue(dataCopy)
+	// EnvToStringValue copies data, so the caller's map is left as it was.
+	m := mapping.HeaderToStringValue(mapping.EnvToStringValue(data))
 
 	// Manually handle type conversions BEFORE MapToStructByTags to prevent reflection panics
 	if portInput, exists := m["port"]; exists {

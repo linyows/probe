@@ -18,10 +18,13 @@ jobs:
   - name: Environment variable usage
     uses: shell
     with:
-      cmd: "echo 'Project directory: $PROJECT_DIR'"
+      cmd: 'echo "Project directory: $PROJECT_DIR, port: $PORT"'
       env:
         PROJECT_DIR: "{{vars.project_dir}}"
-    test: res.code == 0
+        PORT: 8080
+    test: |
+      res.code == 0 &&
+      res.stdout == "Project directory: /tmp/probe-shell-demo, port: 8080\n"
 
   - name: Working directory example
     uses: shell
