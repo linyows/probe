@@ -110,6 +110,27 @@ to stderr, so redirecting stdout still gives you a clean report.
 The mode can also be set with the `PROBE_OUTPUT` environment variable; the flag
 takes precedence over it.
 
+### Report Files
+
+The terminal report is for reading. To keep the result for a CI system, a
+script or a later look, write it to files as well:
+
+```bash
+probe --report junit,markdown workflow.yml
+```
+
+- `json`: the whole run, including the request and response of every failed
+  step, written to `probe-report.json`
+- `junit`: JUnit XML that CI systems display as test results, written to
+  `probe-junit.xml`
+- `markdown`: a summary, a table of jobs and a section per failed step, written
+  to `probe-report.md`
+
+Give a path after `=` to write a format somewhere else, for example
+`--report junit=out/junit.xml`. The files are written once every job has
+finished, and the terminal report does not change. The list can also come from
+the `PROBE_REPORT` environment variable; the flag takes precedence over it.
+
 ### Combining Options
 
 You can combine multiple options:

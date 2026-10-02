@@ -1,6 +1,7 @@
 package probe
 
 import (
+	"errors"
 	"sync"
 	"time"
 )
@@ -48,6 +49,7 @@ func (w *Workflow) Start(c Config) error {
 	reporter := newReporter(c.Output, w.printer)
 	w.printer.SetReporter(reporter)
 
+	startedAt := time.Now()
 	reporter.Start(w.Name, w.Description)
 
 	// Initialize shared outputs
@@ -68,7 +70,25 @@ func (w *Workflow) Start(c Config) error {
 
 	reporter.Finish(ctx.Result)
 
-	return nil
+	return w.writeReports(c.Reports, ctx.Result, jobIDs, startedAt, time.Now())
+}
+
+// writeReports writes every requested report file. A file that cannot be
+// written does not stop the others; the errors are returned together.
+func (w *Workflow) writeReports(targets []ReportTarget, rs *Result, order []string, startedAt, finishedAt time.Time) error {
+	if len(targets) == 0 {
+		return nil
+	}
+
+	report := BuildReport(w.Name, w.Description, rs, order, startedAt, finishedAt)
+
+	var errs []error
+	for _, t := range targets {
+		if err := report.Write(t); err != nil {
+			errs = append(errs, err)
+		}
+	}
+	return errors.Join(errs...)
 }
 
 // initJobScheduler creates and sets up the job scheduler with dependencies

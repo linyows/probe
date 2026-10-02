@@ -133,6 +133,41 @@ probe --output=spinner workflow.yml
 PROBE_OUTPUT=stream probe workflow.yml
 ```
 
+### `--report`
+
+**型:** String  
+**値:** `format[=path]`をカンマで区切った並び。`format`は`json`、`junit`、`markdown`のいずれか  
+**デフォルト:** なし（レポートファイルは書き出さない）  
+**説明:** すべてのジョブが終わったあと、実行結果をファイルに書き出します。端末に出るレポートは変わりません。
+
+パスを省いた形式は、カレントディレクトリの既定のファイルに書き出します。パスの親ディレクトリは必要に応じて作成します。同じ形式は一度しか指定できません。
+
+| 形式 | 既定のファイル | 内容 |
+|---|---|---|
+| `json` | `probe-report.json` | 実行全体。状態、所要時間、ジョブとステップの状態ごとの集計、そして各ステップの`test`と、失敗した場合はその理由とリクエスト・レスポンス |
+| `junit` | `probe-junit.xml` | ジョブごとに`testsuite`、ステップごとに`testcase`を持つJUnit XML。テスト結果を読めるCI向け |
+| `markdown` | `probe-report.md` | 要約の1行、ジョブの表、失敗したステップごとの節 |
+
+ステップの状態は`passed`、`failed`、`skipped`、そして`test`なしで実行された場合の`untested`のいずれかです。失敗したステップには次のどれかの理由が記録されます。
+
+| 種類 | 意味 | JUnitの要素 |
+|---|---|---|
+| `assertion` | `test`式がfalseになった | `<failure>` |
+| `test_error` | `test`式を評価できなかった | `<error>` |
+| `test_type` | `test`式の結果が真偽値ではなかった | `<error>` |
+| `action` | 接続の拒否など、アクションがエラーを返した | `<error>` |
+
+`repeat`付きのジョブのステップは、1回でも失敗すれば失敗として扱い、成功した回数も記録します。アクションがレスポンスに`dump: false`を設定した場合は、端末と同じくレポートにもリクエストとレスポンスを含めません。
+
+値は環境変数`PROBE_REPORT`でも指定でき、フラグのほうが優先されます。書き出せないレポートファイルがあっても残りは書き出し、Probeは終了ステータス1で終わります。
+
+**例:**
+```bash
+probe --report junit workflow.yml
+probe --report json=out/report.json,junit=out/junit.xml,markdown=out/summary.md workflow.yml
+PROBE_REPORT=markdown probe workflow.yml
+```
+
 ## サブコマンド
 
 サブコマンドを指定すると、ワークフローの実行の代わりに別の処理を行います。`gen`は雛形のワークフローを生成し、`dag`はワークフローが表す依存関係のグラフを出力します。
@@ -235,6 +270,18 @@ flowchart LR
 
 ```bash
 export PROBE_OUTPUT=stream
+probe workflow.yml
+```
+
+### `PROBE_REPORT`
+
+**型:** String  
+**値:** `format[=path]`をカンマで区切った並び  
+**デフォルト:** なし  
+**説明:** 書き出すレポートファイル。`--report`と同じ値を取り、フラグが指定された場合はそちらが優先されます。
+
+```bash
+export PROBE_REPORT=junit=out/junit.xml
 probe workflow.yml
 ```
 

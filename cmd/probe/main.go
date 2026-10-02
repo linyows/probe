@@ -38,6 +38,7 @@ type Cmd struct {
 	Timing         bool
 	DagMermaid     bool
 	Output         string
+	Report         string
 	validFlags     []string
 	ver            string
 	rev            string
@@ -48,7 +49,7 @@ type Cmd struct {
 
 func newCmd() *Cmd {
 	return &Cmd{
-		validFlags: []string{"help", "h", "version", "timing", "verbose", "v", "mermaid", "output"},
+		validFlags: []string{"help", "h", "version", "timing", "verbose", "v", "mermaid", "output", "report"},
 		ver:        version,
 		rev:        commit,
 		outWriter:  os.Stdout,
@@ -120,6 +121,19 @@ func (c *Cmd) parseArgs(args []string) error {
 					return err
 				}
 				c.Output = flagValue
+			case "report":
+				// Accept both --report=junit and --report junit
+				if !hasValue {
+					if i+1 >= len(args) || strings.HasPrefix(args[i+1], "-") {
+						return fmt.Errorf("flag needs an argument: %s", arg)
+					}
+					flagValue = args[i+1]
+					skipNext = true
+				}
+				if _, err := probe.ParseReportTargets(flagValue); err != nil {
+					return err
+				}
+				c.Report = flagValue
 			}
 		} else {
 			// Non-flag arguments
@@ -205,6 +219,7 @@ func (c *Cmd) printOptions() {
 		{"", "--timing", "Show timing (start time, response time)"},
 		{"-v", "--verbose", "Show verbose log"},
 		{"", "--output", "Report output: auto, spinner or stream (env: PROBE_OUTPUT)"},
+		{"", "--report", "Write report files: json, junit, markdown as format[=path],... (env: PROBE_REPORT)"},
 	}
 
 	for _, opt := range options {
@@ -303,6 +318,18 @@ func (c *Cmd) runProbe() int {
 		return 1
 	}
 	p.Config.Output = mode
+
+	// Likewise the flag wins over PROBE_REPORT.
+	report := c.Report
+	if report == "" {
+		report = os.Getenv("PROBE_REPORT")
+	}
+	reports, err := probe.ParseReportTargets(report)
+	if err != nil {
+		_, _ = fmt.Fprintf(c.errWriter, "[ERROR] %v\n", err)
+		return 1
+	}
+	p.Config.Reports = reports
 
 	if err := p.Do(); err != nil {
 		_, _ = fmt.Fprintf(c.errWriter, "[ERROR] %v\n", err)

@@ -227,6 +227,7 @@ func (e *Executor) appendRepeatStepResults(ctx *JobContext) {
 				Status:        status,
 				HasTest:       hasTest,
 				RepeatCounter: &counter,
+				Test:          step.Test,
 			}
 
 			// Add step result to workflow buffer

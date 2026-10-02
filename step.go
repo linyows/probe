@@ -33,6 +33,7 @@ type Step struct {
 	ctx          StepContext
 	retryAttempt int
 	startedAt    time.Time
+	failure      *StepFailure
 	Idx          int          `yaml:"-"`
 	Expr         *Expr        `yaml:"-"`
 	actionRunner ActionRunner `yaml:"-"`
@@ -309,6 +310,8 @@ func (st *Step) createStepResult(name string, jCtx *JobContext, repeatCounter *S
 		RT:            "",
 		WaitTime:      st.getWaitTimeForDisplay(),
 		RepeatCounter: repeatCounter,
+		Test:          st.Test,
+		Elapsed:       st.elapsed(),
 	}
 
 	if st.Retry != nil && st.retryAttempt > 0 {
@@ -338,6 +341,7 @@ func (st *Step) createStepResult(name string, jCtx *JobContext, repeatCounter *S
 		} else {
 			result.Status = StatusError
 			result.TestOutput = testOutput
+			result.Failure = st.failure
 			jCtx.SetFailed()
 		}
 	} else {
@@ -440,13 +444,20 @@ func (st *Step) evalTest() (any, error) {
 }
 
 func (st *Step) DoTest(printer *Printer) (string, bool) {
+	st.failure = nil
+
 	exprOut, err := st.evalTest()
 	if err != nil {
+		st.failure = &StepFailure{Kind: FailureTestError, Message: err.Error()}
 		return printer.generateTestError(st.Test, err), false
 	}
 
 	boolOutput, boolOk := exprOut.(bool)
 	if !boolOk {
+		st.failure = &StepFailure{
+			Kind:    FailureTestType,
+			Message: fmt.Sprintf("test evaluated to %v (%T), not a boolean", exprOut, exprOut),
+		}
 		return printer.generateTestTypeMismatch(st.Test, exprOut), false
 	}
 
@@ -455,10 +466,31 @@ func (st *Step) DoTest(printer *Printer) (string, bool) {
 	}
 
 	if !boolOutput {
+		st.failure = st.newFailure(FailureAssertion, "test evaluated to false")
 		return printer.generateTestFailure(st.Test, exprOut, st.ctx.Req, st.ctx.Res), false
 	}
 
 	return "", true
+}
+
+// newFailure builds a StepFailure carrying the request and response, unless
+// the action opted out of dumping them with res.dump: false.
+func (st *Step) newFailure(kind, message string) *StepFailure {
+	f := &StepFailure{Kind: kind, Message: message}
+	if dump, ok := st.ctx.Res["dump"].(bool); ok && !dump {
+		return f
+	}
+	f.Request = st.ctx.Req
+	f.Response = st.ctx.Res
+	return f
+}
+
+// elapsed is the time since the action started, or zero if it never did.
+func (st *Step) elapsed() time.Duration {
+	if st.startedAt.IsZero() {
+		return 0
+	}
+	return time.Since(st.startedAt)
 }
 
 func (st *Step) SetCtx(j JobContext, override map[string]any) {
@@ -762,6 +794,8 @@ func (st *Step) createFailedStepResult(name string, jCtx *JobContext, repeatCoun
 		WaitTime:      st.getWaitTimeForDisplay(),
 		HasTest:       st.Test != "",
 		RepeatCounter: repeatCounter,
+		Test:          st.Test,
+		Elapsed:       st.elapsed(),
 	}
 
 	if st.Retry != nil && st.retryAttempt > 0 {
@@ -787,6 +821,7 @@ func (st *Step) createFailedStepResult(name string, jCtx *JobContext, repeatCoun
 	// Include error information if available
 	if st.err != nil {
 		result.TestOutput = st.err.Error()
+		result.Failure = st.newFailure(FailureAction, st.err.Error())
 	}
 
 	return result
