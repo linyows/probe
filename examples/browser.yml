@@ -1,8 +1,11 @@
 name: Browser Examples
-description: Minimal test to verify browser can start
+description: |
+  Minimal test to verify browser can start.
+  Serve the fixture page first: make browser_server
 
 vars:
   ci: "{{ CI ?? '' }}"
+  url: "{{ URL ?? 'http://localhost:8090' }}"
 
 jobs:
 - name: Get element text
@@ -14,13 +17,13 @@ jobs:
       timeout: 1m
       actions:
       - name: navigate
-        url: https://example.com/
+        url: "{{vars.url}}/"
       - name: wait_visible
         selector: h1
       - name: text
         id: heading
         selector: "h1"
-    test: res.code == 0 && res.results.heading != ""
+    test: res.code == 0 && res.results.heading == "Probe Browser Fixture"
     echo: |
       Heading: {{res.results.heading}}
       -----
@@ -29,7 +32,7 @@ jobs:
 
 - name: Capture screenshot
   steps:
-  - name: Get google
+  - name: Fixture page
     uses: browser
     with:
       window_w: 1280
@@ -38,7 +41,7 @@ jobs:
       timeout: 1m
       actions:
       - name: navigate
-        url: https://www.google.com/
+        url: "{{vars.url}}/"
       - name: capture_screenshot
         path: ./e2e/capture_screenshot.png
         quality: 80

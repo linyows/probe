@@ -41,6 +41,30 @@ type StepResult struct {
 	RetryAttempt  int                // Number of attempts made (0 = retry not performed, 1 = succeeded first try)
 	RetryMax      int                // Maximum retry attempts configured
 	RepeatCounter *StepRepeatCounter // For repeat execution information
+	// The fields below feed the report files. Unlike StartedAt and RT they are
+	// recorded whether or not --timing is set, and they carry no terminal styling.
+	Test    string        // The test expression, empty when the step has none
+	Elapsed time.Duration // Wall time from the action's start to the result
+	Failure *StepFailure  // Why the step failed; nil unless Status is StatusError
+}
+
+// Failure kinds recorded on a StepFailure.
+const (
+	FailureAssertion = "assertion"  // The test expression evaluated to false
+	FailureTestError = "test_error" // The test expression could not be evaluated
+	FailureTestType  = "test_type"  // The test expression did not evaluate to a boolean
+	FailureAction    = "action"     // The action itself returned an error
+)
+
+// StepFailure describes a failed step without terminal formatting, so that
+// reports can serialize it.
+type StepFailure struct {
+	Kind    string
+	Message string
+	// Request and Response are what the action sent and received. They are left
+	// nil when the action asked not to be dumped (res.dump: false).
+	Request  map[string]any
+	Response map[string]any
 }
 
 // JobResult stores execution results for a job

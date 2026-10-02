@@ -25,6 +25,8 @@ type Config struct {
 	Timing  bool
 	// Output selects how the report is delivered while jobs run.
 	Output OutputMode
+	// Reports lists the report files written once the run has finished.
+	Reports []ReportTarget
 }
 
 func New(path string, v bool) *Probe {

@@ -133,6 +133,41 @@ probe --output=spinner workflow.yml
 PROBE_OUTPUT=stream probe workflow.yml
 ```
 
+### `--report`
+
+**Type:** String  
+**Values:** a comma separated list of `format[=path]`, where `format` is `json`, `junit` or `markdown`  
+**Default:** none; no report file is written  
+**Description:** Write the result of the run to files once every job has finished. The terminal report is unchanged.
+
+A format without a path is written to its default file in the current directory. Parent directories of a path are created as needed, and each format may be given once.
+
+| Format | Default file | Contents |
+|---|---|---|
+| `json` | `probe-report.json` | The whole run: status, timings, a summary of jobs and steps by status, and every step with its test and, when it failed, the reason and the request and response |
+| `junit` | `probe-junit.xml` | JUnit XML with a `testsuite` per job and a `testcase` per step, for CI systems that read test results |
+| `markdown` | `probe-report.md` | A summary line, a table of jobs, and a section per failed step |
+
+A step's status is `passed`, `failed`, `skipped`, or `untested` when it ran without a `test`. A failed step records one of these reasons:
+
+| Kind | Meaning | JUnit element |
+|---|---|---|
+| `assertion` | The `test` expression evaluated to false | `<failure>` |
+| `test_error` | The `test` expression could not be evaluated | `<error>` |
+| `test_type` | The `test` expression did not evaluate to a boolean | `<error>` |
+| `action` | The action returned an error, such as a refused connection | `<error>` |
+
+A step in a job with `repeat` fails when any iteration fails, and reports how many iterations passed. When an action sets `dump: false` on its response, the request and response are left out of the report as they are left out of the terminal.
+
+The value can also come from the `PROBE_REPORT` environment variable, and the flag wins over it. If a report file cannot be written, the others are still written and Probe exits with status 1.
+
+**Example:**
+```bash
+probe --report junit workflow.yml
+probe --report json=out/report.json,junit=out/junit.xml,markdown=out/summary.md workflow.yml
+PROBE_REPORT=markdown probe workflow.yml
+```
+
 ## Subcommands
 
 A subcommand replaces the run with something else: `gen` writes a starting workflow, and `dag` prints the dependency graph a workflow describes.
@@ -235,6 +270,18 @@ The following environment variables affect Probe's behavior:
 
 ```bash
 export PROBE_OUTPUT=stream
+probe workflow.yml
+```
+
+### `PROBE_REPORT`
+
+**Type:** String  
+**Values:** a comma separated list of `format[=path]`  
+**Default:** none  
+**Description:** Report files to write, same as `--report`. The flag takes precedence.
+
+```bash
+export PROBE_REPORT=junit=out/junit.xml
 probe workflow.yml
 ```
 

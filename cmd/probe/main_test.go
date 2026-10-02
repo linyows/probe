@@ -101,7 +101,7 @@ func TestCmd_usage(t *testing.T) {
 }
 
 func TestCmd_start(t *testing.T) {
-	help := " __  __  __  __  __\n|  ||  ||  ||  || _|\n|  ||  /| |||  /|  |\n| | |  \\| |||  \\| _|\n|_| |_\\_|__||__||__|\n\nProbe - A YAML-based workflow automation tool.\nhttps://github.com/linyows/probe (ver: dev, rev: unknown)\n\nUsage: probe [options] <workflow-file>\n       probe gen <openapi-file>\n       probe dag [--mermaid] <workflow-file>\n\nArguments:\n  workflow-file    Path to YAML workflow file(s). Multiple files can be\n                   specified with comma-separated paths (e.g., \"base.yml,override.yml\")\n                   to merge configurations.\n\nSubcommands:\n  gen <file>       Generate probe workflow YAML from OpenAPI specification\n  dag <file>       Show job dependency graph as ASCII art (default)\n                   Use --mermaid to output in Mermaid format\n\nOptions:\n  -h, --help       Show command usage\n      --version    Show version information\n      --timing     Show timing (start time, response time)\n  -v, --verbose    Show verbose log\n      --output     Report output: auto, spinner or stream (env: PROBE_OUTPUT)\n"
+	help := " __  __  __  __  __\n|  ||  ||  ||  || _|\n|  ||  /| |||  /|  |\n| | |  \\| |||  \\| _|\n|_| |_\\_|__||__||__|\n\nProbe - A YAML-based workflow automation tool.\nhttps://github.com/linyows/probe (ver: dev, rev: unknown)\n\nUsage: probe [options] <workflow-file>\n       probe gen <openapi-file>\n       probe dag [--mermaid] <workflow-file>\n\nArguments:\n  workflow-file    Path to YAML workflow file(s). Multiple files can be\n                   specified with comma-separated paths (e.g., \"base.yml,override.yml\")\n                   to merge configurations.\n\nSubcommands:\n  gen <file>       Generate probe workflow YAML from OpenAPI specification\n  dag <file>       Show job dependency graph as ASCII art (default)\n                   Use --mermaid to output in Mermaid format\n\nOptions:\n  -h, --help       Show command usage\n      --version    Show version information\n      --timing     Show timing (start time, response time)\n  -v, --verbose    Show verbose log\n      --output     Report output: auto, spinner or stream (env: PROBE_OUTPUT)\n      --report     Write report files: json, junit, markdown as format[=path],... (env: PROBE_REPORT)\n"
 
 	tests := []struct {
 		name           string
@@ -285,7 +285,7 @@ func TestCmd_start(t *testing.T) {
 			}
 
 			// Check validFlags
-			expectedFlags := []string{"help", "h", "version", "timing", "verbose", "v", "mermaid", "output"}
+			expectedFlags := []string{"help", "h", "version", "timing", "verbose", "v", "mermaid", "output", "report"}
 			if len(c.validFlags) != len(expectedFlags) {
 				t.Errorf("start(%v) validFlags length = %d, want %d", tt.args, len(c.validFlags), len(expectedFlags))
 			}
@@ -529,5 +529,82 @@ func TestCmd_printVersion(t *testing.T) {
 
 	if got != expected {
 		t.Errorf("printVersion() output = %q, want %q", got, expected)
+	}
+}
+
+func TestCmd_parseArgs_report(t *testing.T) {
+	tests := []struct {
+		name         string
+		args         []string
+		expectReport string
+		expectPath   string
+		expectErr    string
+	}{
+		{
+			name:         "value after equals",
+			args:         []string{"--report=junit=out/junit.xml", "workflow.yml"},
+			expectReport: "junit=out/junit.xml",
+			expectPath:   "workflow.yml",
+		},
+		{
+			name:         "value as next argument",
+			args:         []string{"workflow.yml", "--report", "json,markdown=summary.md"},
+			expectReport: "json,markdown=summary.md",
+			expectPath:   "workflow.yml",
+		},
+		{
+			name:      "missing value",
+			args:      []string{"workflow.yml", "--report"},
+			expectErr: "flag needs an argument: --report",
+		},
+		{
+			name:      "value that is a flag",
+			args:      []string{"--report", "--verbose", "workflow.yml"},
+			expectErr: "flag needs an argument: --report",
+		},
+		{
+			name:      "unknown format",
+			args:      []string{"--report=html", "workflow.yml"},
+			expectErr: "unknown report format: html",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c := newBufferCmd()
+			err := c.parseArgs(tt.args)
+
+			if tt.expectErr != "" {
+				if err == nil || !strings.Contains(err.Error(), tt.expectErr) {
+					t.Fatalf("parseArgs(%v) error = %v, want it to contain %q", tt.args, err, tt.expectErr)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("parseArgs(%v) unexpected error: %v", tt.args, err)
+			}
+			if c.Report != tt.expectReport {
+				t.Errorf("Report = %q, want %q", c.Report, tt.expectReport)
+			}
+			if c.WorkflowPath != tt.expectPath {
+				t.Errorf("WorkflowPath = %q, want %q", c.WorkflowPath, tt.expectPath)
+			}
+		})
+	}
+}
+
+func TestCmd_runProbe_reportEnv(t *testing.T) {
+	t.Setenv("PROBE_REPORT", "pdf")
+
+	c := newBufferCmd()
+	c.WorkflowPath = "workflow.yml"
+	code := c.runProbe()
+
+	if code != 1 {
+		t.Errorf("runProbe() = %d, want 1 for an invalid PROBE_REPORT", code)
+	}
+	errOutput := fmt.Sprintf("%s", c.errWriter)
+	if !strings.Contains(errOutput, "unknown report format: pdf") {
+		t.Errorf("error output should name the bad format, got: %s", errOutput)
 	}
 }

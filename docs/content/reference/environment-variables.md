@@ -30,6 +30,19 @@ export PROBE_OUTPUT=stream
 probe workflow.yml
 ```
 
+### `PROBE_REPORT`
+
+**Type:** String  
+**Values:** a comma separated list of `format[=path]`, where `format` is `json`, `junit` or `markdown`  
+**Default:** none  
+**Description:** Report files to write once the run has finished. A format without a path goes to its default file. The `--report` flag overrides this variable.
+
+```bash
+# Leave JUnit XML for the CI system to pick up
+export PROBE_REPORT=junit=out/junit.xml
+probe workflow.yml
+```
+
 ### `PROBE_MAX_REPEAT_COUNT`
 
 **Type:** Integer  

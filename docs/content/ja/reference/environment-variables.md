@@ -30,6 +30,19 @@ export PROBE_OUTPUT=stream
 probe workflow.yml
 ```
 
+### `PROBE_REPORT`
+
+**型:** String  
+**値:** `format[=path]`をカンマで区切った並び。`format`は`json`、`junit`、`markdown`のいずれか  
+**デフォルト:** なし  
+**説明:** 実行が終わったあとに書き出すレポートファイル。パスを省いた形式は既定のファイルに書き出します。`--report`フラグを指定した場合はそちらが優先されます。
+
+```bash
+# CI が読み取れるように JUnit XML を残す
+export PROBE_REPORT=junit=out/junit.xml
+probe workflow.yml
+```
+
 ### `PROBE_MAX_REPEAT_COUNT`
 
 **型:** Integer  
