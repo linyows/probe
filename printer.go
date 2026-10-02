@@ -126,6 +126,10 @@ type Printer struct {
 	outWriter io.Writer
 	errWriter io.Writer
 	reporter  Reporter
+	// writeMu serializes writes to outWriter and errWriter. Jobs run
+	// concurrently and report errors as they happen, so without it two
+	// messages could interleave, and a buffer writer would race.
+	writeMu sync.Mutex
 }
 
 // NewPrinter creates a new console print writer
@@ -219,6 +223,8 @@ func (p *Printer) AddSpinnerSuffix(txt string) {
 }
 
 func (p *Printer) Fprint(w io.Writer, a ...any) {
+	p.writeMu.Lock()
+	defer p.writeMu.Unlock()
 	_, err := fmt.Fprint(w, a...)
 	if err != nil {
 		fmt.Printf("Fprint: %v\n", err)
@@ -226,6 +232,8 @@ func (p *Printer) Fprint(w io.Writer, a ...any) {
 }
 
 func (p *Printer) Fprintf(w io.Writer, f string, a ...any) {
+	p.writeMu.Lock()
+	defer p.writeMu.Unlock()
 	_, err := fmt.Fprintf(w, f, a...)
 	if err != nil {
 		fmt.Printf("Fprintf: %v\n", err)

@@ -249,10 +249,14 @@ probe workflow.yml
 
 ## Exit Codes
 
-Probe uses standard exit codes to indicate results:
+The exit code tells apart what went wrong:
 
 - **`0`**: Success - all jobs completed successfully
-- **`1`**: Failure - one or more jobs failed or error occurred
+- **`1`**: A test failed
+- **`2`**: The workflow or the command line is wrong, such as a missing file, invalid YAML or an unknown flag
+- **`3`**: An action returned an error, such as a refused connection or a timeout
+
+When several kinds of failure happen in one run, `2` wins over `3`, and `3` over `1`.
 
 This makes Probe perfect for use in scripts and CI/CD pipelines:
 

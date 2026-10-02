@@ -159,7 +159,7 @@ A step's status is `passed`, `failed`, `skipped`, or `untested` when it ran with
 
 A step in a job with `repeat` fails when any iteration fails, and reports how many iterations passed. When an action sets `dump: false` on its response, the request and response are left out of the report as they are left out of the terminal.
 
-The value can also come from the `PROBE_REPORT` environment variable, and the flag wins over it. If a report file cannot be written, the others are still written and Probe exits with status 1.
+The value can also come from the `PROBE_REPORT` environment variable, and the flag wins over it. If a report file cannot be written, the others are still written and Probe exits with status 2.
 
 **Example:**
 ```bash
@@ -427,25 +427,32 @@ WantedBy=multi-user.target
 
 ## Exit Codes
 
-Probe reports the outcome of a run with two exit codes:
+The exit code says not only whether a run failed but what has to be looked at, so a caller can tell a bug in the system under test from a target that cannot be reached or a mistake in the workflow.
 
 | Exit Code | Meaning | Description |
 |-----------|---------|-------------|
 | `0` | Success | Every job completed and every test passed |
-| `1` | Failure | A test failed, an action returned an error, or the workflow could not be loaded (missing file, invalid YAML, unknown flag) |
+| `1` | Test failed | A `test` evaluated to false, could not be evaluated, or did not evaluate to a boolean |
+| `2` | Configuration error | The workflow or the command line is wrong: a missing file, invalid YAML, an unknown `needs`, an invalid step ID, an unknown flag or report format. A report file that cannot be written also exits `2` |
+| `3` | Action error | An action returned an error, such as a refused connection or a timeout, so its test could not be checked |
+
+When a run has more than one kind of failure, the code is the first of `2`, `3`, `1` that applies. A target that is down usually makes the tests against it fail too, so `3` is reported over `1`.
+
+`--help` prints the usage and exits `1`.
 
 ### Exit Code Examples
 
 The exit status is what a surrounding script branches on.
 
 ```bash
-# Check exit code in scripts
+# Branch on what went wrong
 probe workflow.yml
-if [ $? -eq 0 ]; then
-  echo "Workflow succeeded"
-else
-  echo "Workflow failed with exit code $?"
-fi
+case $? in
+  0) echo "Workflow succeeded" ;;
+  1) echo "A test failed: look at the system under test" ;;
+  2) echo "The workflow or command line is wrong" ;;
+  3) echo "An action failed: check that the targets are reachable" ;;
+esac
 
 # Use in CI/CD pipelines
 probe integration-tests.yml || exit 1

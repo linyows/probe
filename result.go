@@ -85,6 +85,10 @@ type Result struct {
 	// reporter is notified as results become final so that the report can be
 	// emitted incrementally. It may be nil, in which case nothing is streamed.
 	reporter Reporter
+	// failures holds the kinds of failure seen during the run, which decide
+	// the exit code. Jobs run concurrently, so access goes through failuresMu.
+	failures   map[string]bool
+	failuresMu sync.Mutex
 }
 
 // SetReporter installs the reporter notified when steps and jobs finish.

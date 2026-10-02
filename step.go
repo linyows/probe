@@ -229,6 +229,7 @@ func (st *Step) handleActionError(err error, name string, jCtx *JobContext) {
 	st.err = actionErr
 	jCtx.Printer.PrintError("Action execution failed: %v", actionErr)
 	jCtx.SetFailed()
+	jCtx.Result.recordFailure(FailureAction)
 
 	// Create and add step result for failed action execution
 	if jCtx.Verbose {
@@ -343,6 +344,7 @@ func (st *Step) createStepResult(name string, jCtx *JobContext, repeatCounter *S
 			result.TestOutput = testOutput
 			result.Failure = st.failure
 			jCtx.SetFailed()
+			jCtx.Result.recordFailure(st.failure.Kind)
 		}
 	} else {
 		result.Status = StatusWarning
@@ -374,6 +376,7 @@ func (st *Step) handleRepeatExecution(jCtx *JobContext, name string, hasError bo
 		testOutput, testResult = st.DoTest(jCtx.Printer)
 		if !testResult {
 			jCtx.SetFailed()
+			jCtx.Result.recordFailure(st.failure.Kind)
 		}
 	}
 

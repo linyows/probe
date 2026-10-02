@@ -26,10 +26,12 @@ func (j *Job) Start(ctx JobContext) error {
 
 	// Validate steps before execution
 	if err := j.validateSteps(); err != nil {
+		ctx.Result.recordFailure(failureConfig)
 		return NewExecutionError("job_start", "step validation failed", err)
 	}
 
 	if err := j.expandJobName(expr, ctxPtr); err != nil {
+		ctx.Result.recordFailure(failureConfig)
 		return NewExecutionError("job_start", "failed to expand job name", err)
 	}
 
