@@ -219,7 +219,6 @@ probe dag --mermaid <workflow-file>
 │         Build         │
 ├───────────────────────┤
 │ ○ Compile             │
-│ ↓                     │
 │ ○ Package             │
 ╰───────────┬───────────╯
             │

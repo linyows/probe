@@ -261,14 +261,8 @@ func (r *DagAsciiRenderer) renderDagAsciiJobNode(node *DagAsciiJobNode) []string
 	// Separator
 	lines = append(lines, nodeTeeRight+strings.Repeat(nodeHorizontal, innerWidth)+nodeTeeLeft)
 
-	// Steps, with an arrow between each and the next, since they run in order.
-	// The arrow sits in the bullet's column, after any embedded steps.
-	for i, step := range node.Job.Steps {
-		if i > 0 {
-			arrowLine := " " + arrowDown
-			arrowLine += strings.Repeat(" ", innerWidth-runeWidth(arrowLine))
-			lines = append(lines, nodeVertical+arrowLine+nodeVertical)
-		}
+	// Steps
+	for _, step := range node.Job.Steps {
 		stepName := step.Name
 		if stepName == "" {
 			stepName = step.Uses
