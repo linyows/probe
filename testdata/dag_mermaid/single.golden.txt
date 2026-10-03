@@ -1,5 +1,6 @@
 flowchart LR
     subgraph build["Build"]
+        direction TB
         build_step0["Compile"]
     end
 

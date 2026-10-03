@@ -51,6 +51,9 @@ func (r *DagMermaidRenderer) Render() string {
 		// Create subgraph for job with steps
 		if len(job.Steps) > 0 {
 			fmt.Fprintf(&sb, "    subgraph %s[\"%s\"]\n", safeID, displayName)
+			// Jobs flow left to right; the steps inside a job run top to
+			// bottom, in the order the edges below link them.
+			sb.WriteString("        direction TB\n")
 			stepIndex := 0
 			for _, step := range job.Steps {
 				stepName := step.Name
@@ -86,6 +89,10 @@ func (r *DagMermaidRenderer) Render() string {
 						}
 					}
 				}
+			}
+			// Link the steps in the order they run, embedded ones included.
+			for i := 1; i < stepIndex; i++ {
+				fmt.Fprintf(&sb, "        %s_step%d --> %s_step%d\n", safeID, i-1, safeID, i)
 			}
 			sb.WriteString("    end\n")
 		} else {

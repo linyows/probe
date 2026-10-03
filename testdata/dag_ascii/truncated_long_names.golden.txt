@@ -2,6 +2,7 @@
 │ Build Application Se… │
 ├───────────────────────┤
 │ ○ Initialize build en…│
+│ ↓                     │
 │ ○ Compile source code │
 ╰───────────┬───────────╯
             │            
@@ -11,5 +12,6 @@
 │ Run Integration Tests │
 ├───────────────────────┤
 │ ○ Setup test database…│
+│ ↓                     │
 │ ○ Execute integration…│
 ╰───────────────────────╯

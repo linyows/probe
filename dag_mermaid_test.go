@@ -540,3 +540,30 @@ func TestDagMermaidRenderer_Golden(t *testing.T) {
 		})
 	}
 }
+
+// TestDagMermaidRenderer_LinksStepsInOrder pins the step edges inside a job.
+func TestDagMermaidRenderer_LinksStepsInOrder(t *testing.T) {
+	w := &Workflow{Jobs: []Job{{
+		ID:   "build",
+		Name: "Build",
+		Steps: []*Step{
+			{Name: "Checkout", Uses: "shell"},
+			{Name: "Compile", Uses: "shell"},
+			{Name: "Package", Uses: "shell"},
+		},
+	}}}
+
+	out := NewDagMermaidRenderer(w).Render()
+	for _, want := range []string{
+		"        direction TB\n",
+		"        build_step0 --> build_step1\n",
+		"        build_step1 --> build_step2\n",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("output should contain %q:\n%s", want, out)
+		}
+	}
+	if strings.Contains(out, "build_step2 -->") {
+		t.Errorf("the last step should not link onward:\n%s", out)
+	}
+}

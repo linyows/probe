@@ -484,9 +484,9 @@ func TestRenderDagAsciiJobNode_EmbeddedAction(t *testing.T) {
 
 	lines := renderer.renderDagAsciiJobNode(box)
 
-	// Should have: top border, name, separator, step1, step2, bottom border
-	if len(lines) != 6 {
-		t.Errorf("expected 6 lines, got %d", len(lines))
+	// Should have: top border, name, separator, step1, arrow, step2, bottom border
+	if len(lines) != 7 {
+		t.Errorf("expected 7 lines, got %d", len(lines))
 	}
 
 	// Check normal step uses ○
@@ -494,9 +494,14 @@ func TestRenderDagAsciiJobNode_EmbeddedAction(t *testing.T) {
 		t.Errorf("expected normal step to have ○ bullet: %s", lines[3])
 	}
 
+	// Check the arrow between the steps
+	if !strings.Contains(lines[4], arrowDown) {
+		t.Errorf("expected an arrow between the steps: %s", lines[4])
+	}
+
 	// Check embedded step uses ↗
-	if !strings.Contains(lines[4], "↗") {
-		t.Errorf("expected embedded step to have ↗ bullet: %s", lines[4])
+	if !strings.Contains(lines[5], "↗") {
+		t.Errorf("expected embedded step to have ↗ bullet: %s", lines[5])
 	}
 }
 
@@ -784,5 +789,32 @@ func TestDagAsciiRenderer_Golden(t *testing.T) {
 				t.Errorf("output does not match golden file %s\n\nExpected:\n%s\n\nActual:\n%s\n\nRun with UPDATE_GOLDEN=1 to update", goldenPath, string(expected), actual)
 			}
 		})
+	}
+}
+
+// TestDagAsciiRenderer_ArrowsBetweenSteps pins that the steps of a job are
+// joined by an arrow in run order: one between each pair, none before the
+// first or after the last.
+func TestDagAsciiRenderer_ArrowsBetweenSteps(t *testing.T) {
+	w := &Workflow{Jobs: []Job{{
+		Name: "Build",
+		Steps: []*Step{
+			{Name: "Checkout", Uses: "shell"},
+			{Name: "Compile", Uses: "shell"},
+			{Name: "Package", Uses: "shell"},
+		},
+	}}}
+
+	out := NewDagAsciiRenderer(w).Render()
+	var body []string
+	for _, line := range strings.Split(out, "\n") {
+		if strings.HasPrefix(line, nodeVertical) {
+			body = append(body, strings.TrimSpace(strings.Trim(line, nodeVertical)))
+		}
+	}
+	// The job name comes first, then the steps and arrows.
+	want := []string{"Build", "○ Checkout", arrowDown, "○ Compile", arrowDown, "○ Package"}
+	if strings.Join(body, "|") != strings.Join(want, "|") {
+		t.Errorf("box body = %q, want %q", body, want)
 	}
 }
