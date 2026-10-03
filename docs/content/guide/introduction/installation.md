@@ -10,7 +10,7 @@ Probe is a lightweight, single-binary tool that can be installed in several ways
 
 ## System Requirements
 
-- **Operating System**: Linux, macOS, Windows
+- **Operating System**: Linux, macOS
 - **Architecture**: amd64, arm64
 - **Dependencies**: None (statically linked binary)
 
@@ -23,26 +23,25 @@ Probe is a single binary. Pick whichever of the four methods below fits how the 
 The easiest way to install Probe is to download a pre-built binary from the GitHub releases page.
 
 1. Visit the [Probe releases page](https://github.com/linyows/probe/releases)
-2. Download the appropriate binary for your system:
-   - **Linux amd64**: `probe-linux-amd64`
-   - **Linux arm64**: `probe-linux-arm64`
-   - **macOS amd64**: `probe-darwin-amd64`
-   - **macOS arm64**: `probe-darwin-arm64`
-   - **Windows amd64**: `probe-windows-amd64.exe`
+2. Download the archive for your system:
+   - **Linux amd64**: `probe_linux_x86_64.tar.gz`
+   - **Linux arm64**: `probe_linux_arm64.tar.gz`
+   - **macOS amd64**: `probe_darwin_x86_64.tar.gz`
+   - **macOS arm64**: `probe_darwin_arm64.tar.gz`
 
-3. Make the binary executable (Linux/macOS):
+3. Extract the `probe` binary from it:
    ```bash
-   chmod +x probe-linux-amd64
+   tar -xzf probe_linux_x86_64.tar.gz
    ```
 
-4. Move to a directory in your PATH:
+4. Move it to a directory in your PATH:
    ```bash
-   sudo mv probe-linux-amd64 /usr/local/bin/probe
+   sudo mv probe /usr/local/bin/probe
    ```
 
 ### 2. Install with Go
 
-If you have Go 1.19 or later installed, you can install Probe directly:
+If you have Go 1.26.6 or later installed, you can install Probe directly:
 
 ```bash
 go install github.com/linyows/probe/cmd/probe@latest
@@ -79,7 +78,7 @@ probe --version
 
 You should see output similar to:
 ```
-Probe Version v1.0.0 (commit: abc123)
+Probe Version 1.13.0 (commit: 2d9d511ce7b4c9eec32ea85e2a25337e40a5e40c)
 ```
 
 ## Next Steps
@@ -113,4 +112,4 @@ which probe
 
 ### ARM64 on Apple Silicon
 
-For Apple Silicon Macs (M1/M2), use the `darwin-arm64` binary for better performance.
+For Apple Silicon Macs (M1/M2), use `probe_darwin_arm64.tar.gz` for better performance.

@@ -385,7 +385,7 @@ Probeは単一のバイナリなので、イメージ側で行うのは取得と
 FROM alpine:latest
 
 # Probeをインストール
-RUN curl -L https://github.com/linyows/probe/releases/latest/download/probe-linux-amd64 -o /usr/local/bin/probe && \
+RUN curl -L https://github.com/linyows/probe/releases/latest/download/probe_linux_x86_64.tar.gz | tar -xz -C /usr/local/bin probe && \
     chmod +x /usr/local/bin/probe
 
 # デフォルト環境変数を設定
