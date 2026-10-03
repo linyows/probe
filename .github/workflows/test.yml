@@ -22,5 +22,9 @@ jobs:
       run: make test
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    - name: Run db test without cgo, as releases are built
+      run: go test ./db/...
+      env:
+        CGO_ENABLED: "0"
     - name: Run octocov
       uses: k1LoW/octocov-action@73d561f65d59e66899ed5c87e4621a913b5d5c20 # v1.5.0

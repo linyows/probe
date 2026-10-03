@@ -16,7 +16,7 @@ import (
 
 	_ "github.com/go-sql-driver/mysql"
 	_ "github.com/lib/pq"
-	_ "github.com/mattn/go-sqlite3"
+	_ "modernc.org/sqlite"
 )
 
 type Req struct {
@@ -152,7 +152,7 @@ func parseDSN(dsn string) (driver, driverDSN string, err error) {
 
 	case "file", "":
 		if strings.Contains(dsn, ":memory:") {
-			return "sqlite3", dsn, nil
+			return "sqlite", dsn, nil
 		}
 
 		abs, err := filepath.Abs(strings.TrimPrefix(dsn, sqliteScheme))
@@ -166,7 +166,7 @@ func parseDSN(dsn string) (driver, driverDSN string, err error) {
 		}
 
 		// SQLite DSN: just the file path
-		return "sqlite3", abs, nil
+		return "sqlite", abs, nil
 
 	default:
 		return "", "", fmt.Errorf("unsupported database scheme: %q (use mysql://, postgres://, postgresql:// or file: for SQLite)", u.Scheme)
