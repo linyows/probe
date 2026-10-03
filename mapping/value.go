@@ -2,9 +2,11 @@ package mapping
 
 import (
 	"fmt"
+	"math"
 	"reflect"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // HeaderToStringValue converts header values to strings for HTTP processing.
@@ -171,4 +173,56 @@ func TitleCase(st string, char string) string {
 		}
 	}
 	return strings.Join(parts, char)
+}
+
+// maxTimeoutSeconds is the most seconds a time.Duration can hold.
+const maxTimeoutSeconds = math.MaxInt64 / int64(time.Second)
+
+// ParseTimeout reads an action's timeout parameter: a duration string such
+// as "30s", a number of seconds, or a numeric string. It refuses anything
+// else, including zero, negative values and values too large for a
+// time.Duration, rather than falling back to a default, so a mistyped
+// timeout is reported instead of silently ignored.
+func ParseTimeout(v any) (time.Duration, error) {
+	invalid := func() error {
+		return fmt.Errorf("invalid timeout %v: use a duration such as 30s, or a number of seconds", v)
+	}
+
+	switch t := v.(type) {
+	case time.Duration:
+		if t <= 0 {
+			return 0, invalid()
+		}
+		return t, nil
+	case string:
+		str := strings.TrimSpace(t)
+		if d, err := time.ParseDuration(str); err == nil {
+			if d <= 0 {
+				return 0, invalid()
+			}
+			return d, nil
+		}
+		secs, err := strconv.ParseFloat(str, 64)
+		if err != nil {
+			return 0, invalid()
+		}
+		return secondsToDuration(secs, invalid)
+	case int:
+		return secondsToDuration(float64(t), invalid)
+	case int64:
+		return secondsToDuration(float64(t), invalid)
+	case float64:
+		return secondsToDuration(t, invalid)
+	default:
+		return 0, invalid()
+	}
+}
+
+// secondsToDuration converts after checking the range, since multiplying
+// first would wrap a huge value around to some other, positive duration.
+func secondsToDuration(secs float64, invalid func() error) (time.Duration, error) {
+	if math.IsNaN(secs) || secs <= 0 || secs > float64(maxTimeoutSeconds) {
+		return 0, invalid()
+	}
+	return time.Duration(secs * float64(time.Second)), nil
 }

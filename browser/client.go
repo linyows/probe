@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"net/http"
 	"os"
 	"strings"
@@ -196,21 +197,52 @@ func (req *Req) parseData(data map[string]any, opts []Option) error {
 	}
 
 	// Use MapToStructByTags to parse all fields including actions
-	err := mapping.MapToStructByTags(data, req)
+	err := mapping.MapToStructByTags(attributesAsLists(data), req)
 	if err != nil {
 		return fmt.Errorf("MapToStructByTags failed: %w", err)
 	}
 
-	// Handle timeout separately as it requires special parsing
+	// timeout takes "30s", 30 or "30", like the other actions. It used to
+	// accept only a duration string and silently keep the default for
+	// anything else, so a step given a number ran with 5 seconds.
 	if timeout, exists := data["timeout"]; exists {
-		if st, ok := timeout.(string); ok {
-			if parsed, err := time.ParseDuration(st); err == nil {
-				req.Timeout = parsed
-			}
+		parsed, err := mapping.ParseTimeout(timeout)
+		if err != nil {
+			return err
 		}
+		req.Timeout = parsed
 	}
 
 	return nil
+}
+
+// attributesAsLists returns data with every action's attribute turned into
+// a list when it was written as a single string, as in "attribute: href".
+// The mapper only fills the []string field from a list, so a string used to
+// leave it empty and get_attribute failed. data itself is not modified.
+func attributesAsLists(data map[string]any) map[string]any {
+	actions, ok := data["actions"].([]any)
+	if !ok {
+		return data
+	}
+
+	out := make(map[string]any, len(data))
+	maps.Copy(out, data)
+	converted := make([]any, len(actions))
+	for i, a := range actions {
+		action, ok := a.(map[string]any)
+		attr, isString := action["attribute"].(string)
+		if !ok || !isString {
+			converted[i] = a
+			continue
+		}
+		copied := make(map[string]any, len(action))
+		maps.Copy(copied, action)
+		copied["attribute"] = []any{attr}
+		converted[i] = copied
+	}
+	out["actions"] = converted
+	return out
 }
 
 func (req *Req) buildChromeDPOptions() []chromedp.ExecAllocatorOption {

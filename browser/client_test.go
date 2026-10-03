@@ -889,3 +889,79 @@ func TestNewChromeDPAction_FullScreenshotIsPNG(t *testing.T) {
 		t.Errorf("quality = %d, want 100 so a constructed action saves PNG", q)
 	}
 }
+
+func TestParseData_Timeout(t *testing.T) {
+	tests := []struct {
+		in      any
+		want    time.Duration
+		wantErr bool
+	}{
+		{"30s", 30 * time.Second, false},
+		{30, 30 * time.Second, false}, // used to be ignored, leaving 5s
+		{"30", 30 * time.Second, false},
+		{1.5, 1500 * time.Millisecond, false},
+		{"soon", 0, true}, // used to be ignored too
+		{0, 0, true},
+	}
+	for _, tt := range tests {
+		req := NewReq()
+		err := req.parseData(map[string]any{
+			"timeout": tt.in,
+			"actions": []any{map[string]any{"name": "navigate", "url": "http://app.test/"}},
+		}, nil)
+		if tt.wantErr {
+			if err == nil {
+				t.Errorf("timeout %#v should be refused", tt.in)
+			}
+			continue
+		}
+		if err != nil {
+			t.Errorf("timeout %#v: %v", tt.in, err)
+			continue
+		}
+		if req.Timeout != tt.want {
+			t.Errorf("timeout %#v = %v, want %v", tt.in, req.Timeout, tt.want)
+		}
+	}
+
+	req := NewReq()
+	if err := req.parseData(map[string]any{"actions": []any{}}, nil); err != nil {
+		t.Fatal(err)
+	}
+	if req.Timeout != defaultTimeout {
+		t.Errorf("without timeout = %v, want the default %v", req.Timeout, defaultTimeout)
+	}
+}
+
+func TestParseData_AttributeAsString(t *testing.T) {
+	action := map[string]any{"name": "get_attribute", "selector": "a", "attribute": "href"}
+	listed := map[string]any{"name": "get_attribute", "selector": "a", "attribute": []any{"title"}}
+	data := map[string]any{"actions": []any{action, listed}}
+
+	req := NewReq()
+	if err := req.parseData(data, nil); err != nil {
+		t.Fatal(err)
+	}
+	if got := req.Actions[0].Attribute; !reflect.DeepEqual(got, []string{"href"}) {
+		t.Errorf("string attribute = %#v, want [href]", got)
+	}
+	if got := req.Actions[1].Attribute; !reflect.DeepEqual(got, []string{"title"}) {
+		t.Errorf("list attribute = %#v, want [title]", got)
+	}
+	if _, err := req.buildActionTasks(); err != nil {
+		t.Errorf("get_attribute with a string attribute should build: %v", err)
+	}
+	if action["attribute"] != "href" {
+		t.Error("the caller's parameters must not be modified")
+	}
+}
+
+func TestRequest_InvalidTimeoutIsAnError(t *testing.T) {
+	_, err := Request(map[string]any{
+		"timeout": "soon",
+		"actions": []any{map[string]any{"name": "navigate", "url": "http://app.test/"}},
+	})
+	if err == nil || !strings.Contains(err.Error(), "invalid timeout") {
+		t.Errorf("error = %v, want the timeout refused before any browser starts", err)
+	}
+}
