@@ -152,7 +152,7 @@ func (c *Cmd) parseArgs(args []string) error {
 	return nil
 }
 
-var subCommands = []string{"gen", "dag"}
+var subCommands = []string{"gen", "dag", "guide"}
 
 func isSubCommand(name string) bool {
 	return slices.Contains(subCommands, name)
@@ -188,6 +188,7 @@ https://github.com/linyows/probe (ver: %s, rev: %s)
 Usage: probe [options] <workflow-file>
        probe gen <openapi-file>
        probe dag [--mermaid] <workflow-file>
+       probe guide [topic]
 
 Arguments:
   workflow-file    Path to YAML workflow file(s). Multiple files can be
@@ -198,6 +199,8 @@ Subcommands:
   gen <file>       Generate probe workflow YAML from OpenAPI specification
   dag <file>       Show job dependency graph as ASCII art (default)
                    Use --mermaid to output in Mermaid format
+  guide [topic]    Print a page of the documentation as Markdown
+                   Without a topic, list the topics
 
 Options:`
 
@@ -278,6 +281,8 @@ func (c *Cmd) runSubCommand() int {
 		return c.runGen()
 	case "dag":
 		return c.runDag()
+	case "guide":
+		return c.runGuide()
 	default:
 		_, _ = fmt.Fprintf(c.errWriter, "[ERROR] unknown subcommand: %s\n", c.SubCommand)
 		return probe.ExitConfigError
@@ -362,6 +367,22 @@ func (c *Cmd) runDag() int {
 		return probe.ExitConfigError
 	}
 	_, _ = fmt.Fprint(c.outWriter, graph)
+	return 0
+}
+
+// runGuide prints the topic list, or the page for the topic given.
+func (c *Cmd) runGuide() int {
+	if len(c.SubCommandArgs) == 0 {
+		_, _ = fmt.Fprint(c.outWriter, probe.GuideIndex())
+		return 0
+	}
+
+	page, err := probe.Guide(c.SubCommandArgs[0])
+	if err != nil {
+		_, _ = fmt.Fprintf(c.errWriter, "[ERROR] %v\n", err)
+		return probe.ExitConfigError
+	}
+	_, _ = fmt.Fprint(c.outWriter, page)
 	return 0
 }
 

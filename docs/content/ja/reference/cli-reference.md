@@ -173,7 +173,7 @@ PROBE_REPORT=markdown probe workflow.yml
 
 ## サブコマンド
 
-サブコマンドを指定すると、ワークフローの実行の代わりに別の処理を行います。`gen`は雛形のワークフローを生成し、`dag`はワークフローが表す依存関係のグラフを出力します。
+サブコマンドを指定すると、ワークフローの実行の代わりに別の処理を行います。`gen`は雛形のワークフローを生成し、`dag`はワークフローが表す依存関係のグラフを出力し、`guide`はこのドキュメントを出力します。
 
 ### `gen`
 
@@ -259,6 +259,30 @@ flowchart LR
 - ジョブ依存関係の設定をデバッグ
 - ドキュメントやダイアグラムの生成
 - Markdownファイルへの埋め込み
+
+### `guide`
+
+リファレンスとコンセプトのドキュメントを、1ページずつMarkdownで出力します。ページはバイナリに組み込まれているため、オフラインでも使え、実行中のProbeのバージョンに対応した内容です。コーディングエージェントは、ワークフローを書いたり直したりする前にこれを読めます。
+
+**使い方:**
+```bash
+probe guide            # トピックの一覧
+probe guide <topic>    # 1ページを出力
+```
+
+| トピック | ページ |
+|---|---|
+| `yaml`、`cli`、`functions`、`env`、`actions` | YAMLの設定、CLI、組み込み関数、環境変数、アクションの概要 |
+| `http`や`shell`などのアクション名 | そのアクションのリファレンス。`actions/http`の形でも指定可能 |
+| `concepts/expressions`や`concepts/testing`などの`concepts/<name>` | コンセプトのガイド |
+
+**例:**
+```bash
+probe guide http | less
+probe guide concepts/expressions > expressions.md
+```
+
+未知のトピックを指定すると終了ステータス2で終わります。
 
 ## 環境変数
 

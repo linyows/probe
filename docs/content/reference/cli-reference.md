@@ -173,7 +173,7 @@ PROBE_REPORT=markdown probe workflow.yml
 
 ## Subcommands
 
-A subcommand replaces the run with something else: `gen` writes a starting workflow, and `dag` prints the dependency graph a workflow describes.
+A subcommand replaces the run with something else: `gen` writes a starting workflow, `dag` prints the dependency graph a workflow describes, and `guide` prints this documentation.
 
 ### `gen`
 
@@ -259,6 +259,30 @@ This is useful for:
 - Debugging job dependency configurations
 - Generating documentation with rendered diagrams
 - Embedding in Markdown files for automatic rendering
+
+### `guide`
+
+Print a page of the reference and concept documentation as Markdown. The pages are built into the binary, so they work offline and describe the version of Probe that is running. A coding agent can read them before it writes or fixes a workflow.
+
+**Usage:**
+```bash
+probe guide            # list the topics
+probe guide <topic>    # print one page
+```
+
+| Topics | Pages |
+|---|---|
+| `yaml`, `cli`, `functions`, `env`, `actions` | The YAML configuration, the CLI, the built-in functions, the environment variables, and the overview of actions |
+| An action name, such as `http` or `shell` | That action's reference. `actions/http` works too |
+| `concepts/<name>`, such as `concepts/expressions` or `concepts/testing` | The concept guides |
+
+**Example:**
+```bash
+probe guide http | less
+probe guide concepts/expressions > expressions.md
+```
+
+An unknown topic exits with status 2.
 
 ## Environment Variables
 

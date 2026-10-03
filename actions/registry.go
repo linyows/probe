@@ -7,6 +7,8 @@
 package actions
 
 import (
+	"sort"
+
 	"github.com/linyows/probe/actions/browser"
 	"github.com/linyows/probe/actions/db"
 	"github.com/linyows/probe/actions/embedded"
@@ -40,4 +42,14 @@ var builtin = map[string]func(){
 func Lookup(name string) (func(), bool) {
 	serve, ok := builtin[name]
 	return serve, ok
+}
+
+// Names returns the names of the built-in actions in alphabetical order.
+func Names() []string {
+	names := make([]string, 0, len(builtin))
+	for name := range builtin {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
 }
