@@ -16,7 +16,7 @@ require (
 	github.com/hashicorp/go-plugin v1.8.0
 	github.com/jarcoal/httpmock v1.4.1
 	github.com/lib/pq v1.12.3
-	github.com/mattn/go-isatty v0.0.22
+	github.com/mattn/go-isatty v0.0.24
 	github.com/mattn/go-sqlite3 v1.14.44
 	github.com/pb33f/libopenapi v0.37.2
 	github.com/stretchr/testify v1.11.1
