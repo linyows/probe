@@ -4,7 +4,6 @@ import (
 	"encoding/base64"
 	"fmt"
 	"math/rand/v2"
-	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -14,10 +13,8 @@ import (
 )
 
 var (
-	// Regular expression to find `{{ ... }}` patterns
-	templateRegexp = regexp.MustCompile(`\{\{([^{}]+)\}\}`)
-	templateStart  = "{{"
-	templateEnd    = "}}"
+	templateStart = "{{"
+	templateEnd   = "}}"
 
 	// Security: Maximum expression length and evaluation timeout
 	maxExpressionLength = 1000000
@@ -327,27 +324,16 @@ func (e *Expr) executeWithTimeout(program *vm.Program, env any) (any, error) {
 // isWholeStringTemplate checks if the input string contains only a single template expression
 func isWholeStringTemplate(input string) bool {
 	trimmed := strings.TrimSpace(input)
-	if !strings.HasPrefix(trimmed, templateStart) || !strings.HasSuffix(trimmed, templateEnd) {
-		return false
-	}
-
-	// Count template markers to ensure there's exactly one pair
-	startCount := strings.Count(trimmed, templateStart)
-	endCount := strings.Count(trimmed, templateEnd)
-
-	return startCount == 1 && endCount == 1
+	spans := findTemplates(trimmed)
+	return len(spans) == 1 && spans[0].start == 0 && spans[0].end == len(trimmed)
 }
 
 // extractTemplateExpression extracts the expression from a whole string template
 func extractTemplateExpression(input string) string {
-	trimmed := strings.TrimSpace(input)
-	if !strings.HasPrefix(trimmed, templateStart) || !strings.HasSuffix(trimmed, templateEnd) {
+	if !isWholeStringTemplate(input) {
 		return ""
 	}
-
-	// Remove template markers and trim whitespace
-	expression := trimmed[len(templateStart) : len(trimmed)-len(templateEnd)]
-	return strings.TrimSpace(expression)
+	return strings.TrimSpace(findTemplates(strings.TrimSpace(input))[0].expr)
 }
 
 func (e *Expr) EvalTemplate(input string, env any) (string, error) {
@@ -356,40 +342,31 @@ func (e *Expr) EvalTemplate(input string, env any) (string, error) {
 		return "", fmt.Errorf("template validation failed: %w", err)
 	}
 
-	re := templateRegexp
-	var evalError error
+	var b strings.Builder
+	last := 0
+	for _, span := range findTemplates(input) {
+		b.WriteString(input[last:span.start])
+		last = span.end
 
-	// Replace matches with evaluated results
-	result := re.ReplaceAllFunc([]byte(input), func(match []byte) []byte {
-		// Security: Check if we've already encountered an error
-		if evalError != nil {
-			return match
-		}
-
-		// Extract the expression inside `{{ ... }}` using submatch
-		submatch := re.FindStringSubmatch(string(match))
-		if len(submatch) < 2 {
-			evalError = fmt.Errorf("invalid template expression: %s", string(match))
-			return []byte("[TemplateError: invalid expression]")
-		}
-		expression := strings.TrimSpace(submatch[1])
+		expression := strings.TrimSpace(span.expr)
 
 		// Security: Validate individual expression
 		if err := e.validateExpression(expression); err != nil {
-			evalError = fmt.Errorf("template expression validation failed: %w", err)
-			return fmt.Appendf(nil, "[SecurityError: %s]", err.Error())
+			return "", fmt.Errorf("template expression validation failed: %w", err)
 		}
 
 		// Evaluate the expression using expr
 		program, err := ex.Compile(expression, e.Options(env)...)
 		if err != nil {
-			return fmt.Appendf(nil, "[CompileError: %s]", err.Error())
+			fmt.Fprintf(&b, "[CompileError: %s]", err.Error())
+			continue
 		}
 
 		// Security: Execute with timeout protection
 		output, err := e.executeWithTimeout(program, env)
 		if err != nil {
-			return fmt.Appendf(nil, "[RuntimeError: %s]", err.Error())
+			fmt.Fprintf(&b, "[RuntimeError: %s]", err.Error())
+			continue
 		}
 
 		// Convert the output to string with size limit
@@ -397,15 +374,11 @@ func (e *Expr) EvalTemplate(input string, env any) (string, error) {
 		if len(outputStr) > maxStringLength {
 			outputStr = outputStr[:maxStringLength] + GetTruncationMessage()
 		}
-
-		return []byte(outputStr)
-	})
-
-	if evalError != nil {
-		return "", evalError
+		b.WriteString(outputStr)
 	}
+	b.WriteString(input[last:])
 
-	return string(result), nil
+	return b.String(), nil
 }
 
 func (e *Expr) EvalTemplateWithTypePreservation(input string, env any) (any, error) {
