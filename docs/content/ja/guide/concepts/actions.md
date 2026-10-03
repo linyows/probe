@@ -194,7 +194,7 @@ jobs:
       DEPLOY_ENV: "production"
       API_KEY: "{{vars.production_api_key}}"
       BUILD_VERSION: "{{vars.version}}"
-  test: res.code == 0 && (res.stdout | contains("Deploy successful"))
+  test: res.code == 0 && res.stdout contains "Deploy successful"
   outputs:
     deploy_time: res.rt
     deploy_log: res.stdout
@@ -365,7 +365,7 @@ Probeは全てのアクションで利用可能な統一されたリトライ機
     method: GET
     url: "http://localhost:8080/health"
   retry:
-    max_attempts: 10      # 最大試行回数 (1-100)
+    max_attempts: 10      # 最大試行回数
     interval: "2s"        # リトライ間隔
     initial_delay: "5s"   # 初回実行前の待機時間（オプション）
   test: res.code == 200
@@ -377,12 +377,12 @@ Probeは全てのアクションで利用可能な統一されたリトライ機
 
 #### `max_attempts` (必須)
 - **型:** Integer
-- **範囲:** 1-100
+- **範囲:** 1-10000 (上限は環境変数`PROBE_MAX_ATTEMPTS`で変更可能)
 - **説明:** リトライする最大試行回数
 
 #### `interval` (オプション)
 - **型:** StringまたはDuration
-- **デフォルト:** `1s`
+- **デフォルト:** `0s` (待たずに次を試行)
 - **形式:** Go duration形式 (`500ms`, `2s`, `1m`) または数値 (秒)
 - **説明:** 各リトライ試行の間隔
 
@@ -394,22 +394,14 @@ Probeは全てのアクションで利用可能な統一されたリトライ機
 
 ### 成功条件
 
-各アクションの成功条件は統一されたステータスシステムに基づいています：
-
-- **成功**: `status`フィールドが`0`の場合
-- **失敗**: `status`フィールドが`0`以外の場合
-
-アクション別の成功条件：
-- **HTTP**: ステータスコード200-299 → `status: 0`
-- **Shell**: 終了コード0 → `status: 0`
-- **DB**: クエリ成功 → `status: 0`
+リトライが成功したかどうかは、ステップの`test`で判定します。`test`が真になった時点で成功として結果を返し、偽のままなら次の試行に進みます。`test`のないステップはリトライせず、1回だけ実行します。
 
 ### 実行フロー
 
 1. `initial_delay`が指定されている場合、その時間だけ待機
 2. アクションを実行
-3. `status`が`0`の場合、成功として結果を返す
-4. `status`が`0`以外で、まだ試行回数に余裕がある場合：
+3. `test`が真なら、成功として結果を返す
+4. アクションがエラーを返したか`test`が偽で、まだ試行回数に余裕がある場合：
    - `interval`の時間だけ待機
    - ステップ2に戻る
 5. 最大試行回数に達した場合、最後の実行結果を返す

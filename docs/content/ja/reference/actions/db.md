@@ -106,6 +106,14 @@ with:
 | `rows` | Array | SELECTステートメントのクエリ結果（オブジェクトとして） |
 | `error` | String | 操作が失敗した場合のエラーメッセージ |
 
+`res`のほかに、テストでは次の値も使えます。
+
+| フィールド | 型 | 説明 |
+|-------|------|-------------|
+| `status` | Integer | クエリが成功すれば`0` |
+| `rt.duration` | String | クエリにかかった時間。`"1.3ms"`など |
+| `rt.sec` | Float | 同じ時間を秒で表した値 |
+
 ## レスポンス例
 
 レスポンスの中身は実行した文によって変わります。`SELECT`では行が返り、`INSERT`や`UPDATE`では件数が返ります。
@@ -117,7 +125,7 @@ with:
 ```yaml
 steps:
   - name: "Fetch Users"
-    id: fetch-users
+    id: fetch_users
     uses: db
     with:
       dsn: "mysql://user:pass@localhost/db"
@@ -248,7 +256,7 @@ SQLiteにはファイルパスを渡します。`:memory:`を指定すると、�
       FROM users
   test: |
     res.code == 0 && 
-    res.rows[0].total_users > 0 && 
+    res.rows[0].total_users > 0 &&
     res.rows[0].missing_emails == 0
 ```
 
@@ -306,27 +314,17 @@ SQLiteにはファイルパスを渡します。`:memory:`を指定すると、�
 
 ## エラーハンドリング
 
-一般的なエラーシナリオと処理パターン：
+データベースがクエリを拒否した場合や接続に失敗した場合も、ステップは止まりません。`res.code`が`1`になり、データベースのメッセージが`res.error`に入るので、想定した失敗かどうかをテストで確かめられます。メッセージはデータベースによって異なり、SQLiteは存在しないテーブルを`no such table`と報告します。
 
 ```yaml
-- name: "Database with Error Handling"
+- name: "Query a Table That Does Not Exist"
   uses: db
   with:
-    dsn: "mysql://user:pass@localhost/db"
-    query: "SELECT * FROM users WHERE id = ?"
-    params: [999999]
-  test: |
-    res.code == 0 ? true :
-    res.error | contains("connection") ? false :
-    res.error | contains("not found") ? true :
-    false
+    dsn: "file:./testdata/app.db"
+    query: "SELECT * FROM missing_table"
+  test: res.code == 1 && res.error contains "no such table"
   outputs:
-    query_success: res.code == 0
-    error_type: |
-      {{res.code == 0 ? "none" :
-        res.error | contains("connection") ? "connection" :
-        res.error | contains("syntax") ? "syntax" :
-        "unknown"}}
+    error: res.error
 ```
 
 ## トランザクション例

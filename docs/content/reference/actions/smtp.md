@@ -29,14 +29,16 @@ The fields below describe the delivery. All of them accept template expressions.
 |-----------|------|----------|---------|-------------|
 | `addr` | String | Yes | - | SMTP server as `host:port` |
 | `from` | String | Yes | - | Envelope sender |
-| `to` | String | Yes | - | Envelope recipient |
+| `to` | String | Yes | - | Envelope recipient. Several recipients are separated by commas without spaces, such as `a@example.com,b@example.com` |
 | `subject` | String | No | `""` | Subject line |
 | `myhostname` | String | No | The machine's host name, or `localhost` if it is unknown | Hostname sent in the `EHLO` / `HELO` command. Many servers refuse a client that greets with `localhost`, so set a name the server accepts |
-| `session` | Integer | No | `1` | Number of SMTP sessions to open |
-| `message` | Integer | No | `1` | Messages to send per session |
-| `length` | Integer | No | `0` | Size of the generated message body in bytes |
+| `session` | Integer | No | `1` | Number of SMTP sessions to open at the same time |
+| `message` | Integer | No | `1` | Messages to send in total, divided among the sessions |
+| `length` | Integer | No | `0` | Number of `*` characters appended to the generated body |
 
 There are no parameters for authentication, TLS, CC/BCC, a custom body or HTML. To include a report in the run output, use the step's `echo`.
+
+The generated message has `From`, `To`, `Date` and `Subject` headers and a body of `This is a test mail.` followed by `length` `*` characters, broken into lines of 80.
 
 ## Response Object
 
@@ -44,13 +46,18 @@ After the step, `res` reports how much was delivered.
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `res.code` | Integer | `0` when every message was delivered |
-| `res.sent` | Integer | Messages delivered |
-| `res.failed` | Integer | Messages that failed |
+| `res.code` | Integer | `0` when no session failed and at least one message was delivered |
+| `res.sent` | Integer | Messages the server accepted, including those a session delivered before it failed |
+| `res.failed` | Integer | Sessions that failed |
 | `res.total` | Integer | Messages attempted |
 | `res.error` | String | Error message, when delivery failed |
 | `res.maildata` | String | The generated message, when it is text |
 | `res.filepath` | String | Path to the generated message, when it is binary |
+| `rt.duration` | String | Time the delivery took, such as `"3.4ms"` |
+| `rt.sec` | Float | Time the delivery took in seconds |
+| `status` | Integer | Same as `res.code` |
+
+When every session fails and nothing is delivered, the step ends with an action error instead, so `res` cannot be tested.
 
 ## SMTP Examples
 
@@ -58,7 +65,7 @@ The examples below send generated messages and then read the counts back from th
 
 ### Several Sessions and Messages
 
-`session` and `message` multiply: each session delivers that many messages.
+`message` is the total, divided among the sessions: here one session delivers 2 messages and the other 1.
 
 ```yaml
 steps:
@@ -74,9 +81,10 @@ steps:
       session: 2
       message: 3
       length: 750
-    test: res.code == 0 && res.sent == 6
+    test: res.code == 0 && res.sent == 3
     outputs:
       sent: res.sent
+      elapsed: rt.duration
 ```
 
 ### Reporting the Result
@@ -88,5 +96,5 @@ The counts captured as outputs can be printed by a later step.
     uses: hello
     echo: |
       Sent: {{outputs.bulk.sent}}
-      Round trip: {{rt.duration}}
+      Took: {{outputs.bulk.elapsed}}
 ```

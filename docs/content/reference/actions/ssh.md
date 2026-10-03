@@ -19,7 +19,7 @@ An SSH step needs a host, a user, a way to authenticate, and the command to run.
 
 ## Parameters
 
-The parameters fall into four groups: the ones every step needs, the authentication parameters of which exactly one must be given, the optional ones that tune the connection, and the environment variables that can supply values instead.
+The parameters fall into four groups: the ones every step needs, the authentication parameters of which at least one must be given, the optional ones that tune the connection, and the environment variables that can supply values instead.
 
 ### Required Parameters
 
@@ -33,7 +33,7 @@ These three have no default and must be given on every step.
 
 ### Authentication Parameters (one required)
 
-Exactly one authentication method is used, and an encrypted key needs its passphrase alongside it.
+Give `password`, `key_file`, or both; with both, the server may accept either. An encrypted key needs its passphrase alongside it.
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
@@ -48,10 +48,10 @@ The rest tune the connection and fall back to the defaults below when omitted.
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `port` | int | 22 | SSH port number |
-| `timeout` | string | "30s" | Command execution timeout |
+| `timeout` | string | "30s" | Limit for connecting and for running the command, as a Go duration such as `"30s"` or `"5m"` (a plain number is rejected) |
 | `workdir` | string | - | Working directory on remote server |
 | `strict_host_check` | bool | true | Strict host key verification |
-| `known_hosts` | string | `~/.ssh/known_hosts` | Known hosts file path |
+| `known_hosts` | string | `~/.ssh/known_hosts` and `/etc/ssh/ssh_known_hosts` | Known hosts file path |
 
 ### Environment Variables
 
@@ -79,7 +79,9 @@ The SSH Action returns the following values:
 | `res.code` | int | Exit code (0 = success) |
 | `res.stdout` | string | Standard output |
 | `res.stderr` | string | Standard error output |
-| `res.status` | int | Execution status (0 = success, 1 = failure) |
+| `status` | int | Execution status (0 = success, 1 = failure) |
+| `rt.duration` | string | How long the step took, such as `"1.2s"` |
+| `rt.sec` | float | The same in seconds |
 
 ## Examples
 
@@ -155,7 +157,7 @@ Every parameter accepts a template, so the host and the credentials can come fro
       DEPLOY_ENV: "production"
     workdir: "/opt/myapp"
     timeout: "600s"
-  test: res.code == 0 && contains(res.stdout, "Deploy completed")
+  test: res.code == 0 && res.stdout contains "Deploy completed"
 ```
 
 ### Multi-line Commands
@@ -205,8 +207,8 @@ A remote command can fail after the connection succeeds, so the test examines th
     timeout: "180s"
   test: |
     res.code == 0 && 
-    contains(res.stdout, "active") &&
-    !contains(res.stderr, "failed")
+    res.stdout contains "active" &&
+    !(res.stderr contains "failed")
 ```
 
 ## Security Settings
@@ -279,8 +281,8 @@ A command can exit zero and still have reported a problem, so check `res.stderr`
 ```yaml
 test: |
   res.code == 0 && 
-  !contains(res.stderr, "error") &&
-  !contains(res.stderr, "failed")
+  !(res.stderr contains "error") &&
+  !(res.stderr contains "failed")
 ```
 
 ### 4. Log Safety

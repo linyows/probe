@@ -25,7 +25,7 @@ steps:
         mailbox: "INBOX"
       - name: "search"
         criteria:
-          flags: ["unseen"]
+          not_flags: ["seen"]
     test: res.code == 0
 ```
 
@@ -55,7 +55,7 @@ with:
 ```yaml
 with:
   port: 993   # IMAPS (SSL/TLS)
-  port: 143   # IMAP (プレーンまたはSTARTTLS)
+  port: 143   # TLSなしのIMAP (tls: false)
 ```
 
 ### `username` (必須)
@@ -102,6 +102,8 @@ with:
   tls: true     # TLSを使う（推奨）
 ```
 
+STARTTLSには対応していません。`tls: false`では、パスワードを含むセッション全体が暗号化されずに送られます。
+
 ### `insecure_skip_tls` (オプション)
 
 **型:** Boolean
@@ -135,6 +137,21 @@ with:
 
 **型:** コマンドオブジェクトの配列  
 **説明:** 順次実行するIMAPコマンド
+
+コマンドは1つのセッションの中で順に実行されます。失敗したコマンドがあるとそこで止まり、`res.code`が`1`になり、`res.error`にそのコマンドが示されます。`res.data`には、それより前のコマンドの結果が残ります。
+
+コマンドオブジェクトは以下のフィールドを取ります。どのコマンドがどのフィールドを読むかは、各コマンドの説明に示します。
+
+| フィールド | 使うコマンド |
+|-----------|-------------|
+| `name` | すべてのコマンド（必須）。実行するコマンドで、大文字と小文字は区別しない |
+| `mailbox` | `select`、`examine`、`copy`、`uid copy`、`create`、`delete`、`subscribe`、`unsubscribe` |
+| `oldmailbox`、`newmailbox` | `rename` |
+| `reference`、`pattern` | `list` |
+| `criteria` | `search`、`uid search` |
+| `sequence` | `fetch`、`uid fetch`、`store`、`uid store`、`copy`、`uid copy` |
+| `dataitem` | `fetch`、`uid fetch`、`store`、`uid store` |
+| `value` | `store`、`uid store` |
 
 ```yaml
 with:
@@ -173,6 +190,60 @@ with:
 - **unsubscribe**: メールボックスの購読解除
 - **noop**: 操作なし（キープアライブ）
 
+#### fetchとuid fetch
+
+メッセージを、`fetch`はシーケンス番号で、`uid fetch`はUIDで取得します。`sequence`を省くと、最新の検索で見つかったメッセージを取得します。ただし種類が合っている場合に限り、`fetch`には`search`、`uid fetch`には`uid search`が必要です。`fetch`には`dataitem`が必要で、`uid fetch`は省くと`ALL`を取得します。どちらも結果を`res.data.fetch`に入れます。
+
+```yaml
+- name: "fetch"
+  sequence: "1:5"       # シーケンス範囲。省くと直前の検索結果
+  dataitem: "ALL"       # 取得するデータ項目
+- name: "fetch"
+  sequence: "*"         # 最新のメッセージ
+  dataitem: "ENVELOPE FLAGS"
+- name: "uid search"
+  criteria:
+    not_flags: ["seen"]
+- name: "uid fetch"     # 直前に見つかったUIDをALLで取得
+```
+
+`dataitem`には、マクロの`ALL`、`FAST`、`FULL`のいずれか、または`ENVELOPE`、`FLAGS`、`INTERNALDATE`、`RFC822.SIZE`、`UID`、`BODYSTRUCTURE`と、`BODY[...]`か`BODY.PEEK[...]`のセクションを空白で区切って並べます。`ENVELOPE`は`from`、`to`、`subject`を、`RFC822.SIZE`は`size`を埋めます。セクションはメッセージの以下のフィールドを埋めます。
+
+| セクション | 埋めるフィールド |
+|-----------|----------------|
+| `BODY[]` | `body`にヘッダーを含むメッセージ全体 |
+| `BODY[TEXT]` | `body`に本文だけ |
+| `BODY[HEADER]` | `headers`にすべてのヘッダーフィールド |
+| `BODY[HEADER.FIELDS (SUBJECT FROM)]` | `headers`に指定したフィールド |
+
+`BODY[...]`で取得したメッセージは既読になり、`BODY.PEEK[...]`ではフラグは変わりません。`headers`のヘッダー名は`headers.subject`のように小文字です。本文に`<html`が含まれていれば、`html_body`にも入ります。
+
+#### create、delete、rename、subscribe、unsubscribe
+
+メールボックスの作成、削除、名前の変更、購読への追加と解除を行います。`rename`は現在の名前を`oldmailbox`に、新しい名前を`newmailbox`に取り、ほかのコマンドは`mailbox`を取ります。名前がないとコマンドは失敗します。
+
+```yaml
+- name: "create"
+  mailbox: "Work"
+- name: "rename"
+  oldmailbox: "Work"
+  newmailbox: "Projects"
+- name: "subscribe"
+  mailbox: "Projects"
+- name: "unsubscribe"
+  mailbox: "Projects"
+- name: "delete"
+  mailbox: "Projects"
+```
+
+#### noop
+
+サーバーに何も依頼しません。セッションがまだ生きていることを確かめ、選択中のメールボックスの変化をサーバーに報告させます。
+
+```yaml
+- name: "noop"
+```
+
 #### storeとuid store
 
 メッセージのフラグを設定、追加、削除します。`dataitem`は、置き換えるなら`FLAGS`、追加するなら`+FLAGS`、削除するなら`-FLAGS`です。末尾に`.SILENT`を付けると、サーバーは新しいフラグを返しません。`value`にはフラグを括弧付きか括弧なしで並べます。`FLAGS`に空の値か`()`を指定するとフラグをすべて消し、片方だけの括弧はエラーになります。`uid store`は`sequence`にUIDを取ります。`sequence`を省くと、`fetch`と同じく最新の検索の結果を対象にします。ただし種類が合っている場合に限ります。`store`には`search`、`uid store`には`uid search`が必要です。検索のたびに、種類を問わずそれ以前の検索結果は置き換わるため、古い検索が使われることはありません。
@@ -208,18 +279,47 @@ with:
 
 ### 検索条件
 
-`search`の絞り込みは`criteria`で指定します。日付とフラグを組み合わせられます。
+`search`と`uid search`の絞り込みは`criteria`で指定します。`search`はシーケンス番号を、`uid search`はUIDを返し、どちらも結果を`res.data.search`に入れるため、後の検索が前の検索の結果を置き換えます。この結果は、`sequence`を省いた後続の`fetch`、`store`、`copy`の対象にもなります。
 
 ```yaml
 criteria:
-  since: "today"              # 日付ベースの検索
-  flags: ["unseen"]           # フラグベースの検索
-  headers:                    # ヘッダーベースの検索
+  since: "today"              # 今日以降に届いた
+  not_flags: ["seen"]         # 未読
+  headers:                    # ヘッダーフィールドがテキストを含む
     from: "sender@example.com"
     subject: "件名"
-  bodies: ["重要"]            # 本文テキスト検索
-  texts: ["会議"]             # 全文検索
+  bodies: ["重要"]            # 本文がテキストを含む
+  texts: ["会議"]             # ヘッダーか本文がテキストを含む
 ```
+
+指定した条件はすべて満たす必要があります。条件は以下のとおりです。
+
+| 条件 | 型 | 一致するメッセージ |
+|------|----|------------------|
+| `seq_nums` | 文字列の配列 | シーケンス番号が`"2:3"`、`"5"`、`"10:*"`などに含まれる |
+| `uids` | 文字列の配列 | UIDが同じ形式の範囲に含まれる |
+| `since` | 日付 | その日以降に届いた |
+| `before` | 日付 | その日より前に届いた |
+| `sent_since` | 日付 | `Date`ヘッダーがその日以降 |
+| `sent_before` | 日付 | `Date`ヘッダーがその日より前 |
+| `headers` | Object | キーのヘッダーフィールドが値を含む |
+| `bodies` | 文字列の配列 | 本文がすべての文字列を含む |
+| `texts` | 文字列の配列 | ヘッダーか本文がすべての文字列を含む |
+| `flags` | 文字列の配列 | すべてのフラグを持つ |
+| `not_flags` | 文字列の配列 | どのフラグも持たない |
+
+フラグは`seen`、`answered`、`flagged`、`deleted`、`draft`のようにバックスラッシュなしで書くか、`'\Seen'`のようにバックスラッシュ付きで書きます。`unseen`というフラグはないため、未読のメッセージは`not_flags: ["seen"]`で指定します。
+
+日付には以下のいずれかを書きます。
+
+- `today`または`yesterday`
+- `2 hours ago`のような`N hours ago`または`N minutes ago`
+- `2006-01-02`、`2006/01/02`、`02/01/2006`（日が先）
+- `2006-01-02T15:04:05+09:00`のようなRFC 3339、または`02 Jan 06 15:04 JST`のようなRFC 822
+
+IMAPは時刻を除いた日付で比較するため、日付のうち日だけが意味を持ちます。`2 hours ago`は、その日の始まりからのメッセージに一致します。
+
+一致するメッセージがなければ、`count`は`0`、`all`は空になります。
 
 ## レスポンスオブジェクト
 
@@ -227,9 +327,26 @@ IMAPアクションは以下の構造を持つ`res`オブジェクトを提供�
 
 | プロパティ | 型 | 説明 |
 |----------|------|-------------|
-| `code` | Integer | 操作結果 (0 = 成功、非ゼロ = エラー) |
+| `code` | Integer | すべてのコマンドが成功すれば`0`、失敗したコマンドがあれば`1`、コマンドは成功したがログアウトに失敗すれば`2` |
 | `data` | Object | コマンドタイプ別に整理されたコマンド結果 |
 | `error` | String | 操作が失敗した場合のエラーメッセージ |
+
+トップレベルの`status`は`res.code`と同じ値です。`rt.duration`（例: `"12ms"`）と`rt.sec`には、接続からログアウトまでのセッション全体にかかった時間が入ります。接続、ログイン、タイムアウトの失敗は`res.code`にはならず、アクションのエラーとしてステップが失敗します。
+
+`res.data`には、コマンドごとにその名前のエントリーがあります。実行されなかったコマンドのエントリーはゼロ値のままです。`uid search`、`uid fetch`、`uid store`、`uid copy`は、`uid`の付かないコマンドのエントリーを共有します。
+
+| エントリー | フィールド |
+|-----------|-----------|
+| `select`、`examine` | `exists`（メールボックス内のメッセージ数）、`recent`、`first_unseen`（最初の未読メッセージのシーケンス番号。サーバーが示さなければ`0`）、`uid_next`、`flags`、`permanent_flags` |
+| `search` | `all`（`2:3`のような集合で表した一致した番号）、`min`、`max`、`count` |
+| `list` | `mailboxes`（それぞれ`name`、`attributes`、`delimiter`を持つ）、`count` |
+| `fetch` | `messages`、`count` |
+| `store`、`copy` | `success`、`count` |
+| `create`、`delete`、`subscribe`、`unsubscribe` | `success`、`mailbox` |
+| `rename` | `success`、`old_mailbox`、`new_mailbox` |
+| `noop` | `success` |
+
+`res.data.fetch.messages`の各要素は`uid`、`flags`、`from`、`to`、`subject`、`size`、`body`、`html_body`、`headers`を持ち、取得したデータ項目に応じて埋まります。`from`と`to`は最初のアドレスだけです。メッセージには`res.data.fetch.messages[0].from`のように添字でアクセスします。
 
 ## 使用例
 
@@ -258,7 +375,7 @@ steps:
         mailbox: "INBOX"
       - name: "search"
         criteria:
-          flags: ["unseen"]
+          not_flags: ["seen"]
           since: "today"
       - name: "fetch"
         sequence: "*"
@@ -266,7 +383,7 @@ steps:
     test: res.code == 0
     outputs:
       unread_count: res.data.search.count
-      latest_sender: res.data.fetch.messages__0__from
+      latest_sender: res.data.fetch.messages[0].from
 ```
 
 ### メール監視ワークフロー
@@ -299,8 +416,8 @@ jobs:
         criteria:
           headers:
             subject: "重要"
-          flags: ["unseen"]
-          since: "5分前"
+          not_flags: ["seen"]
+          since: "today"
     test: res.code == 0
     outputs:
       critical_count: res.data.search.count

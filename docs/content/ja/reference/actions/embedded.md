@@ -65,9 +65,11 @@ jobs:
 | `res.outputs` | Object | 埋め込みジョブのステップが公開したoutputs。出力名がキーになります |
 | `res.report` | String | 埋め込みジョブのレポート。親のレポートにもネストして表示されます |
 | `res.error` | String | 失敗時のエラーメッセージ |
+| `res.dump` | Boolean | 常に`false` |
+| `status` | Integer | `res.code`と同じ値 |
 | `rt` | Object | 埋め込みジョブの実行時間 |
 
-`res.outputs`のキーは出力名なので、`mytoken`として公開した値は`res.outputs.mytoken`で読みます。
+`res.outputs`のキーは出力名なので、`mytoken`として公開した値は`res.outputs.mytoken`で読みます。同じ値は公開したステップのidの下にも`res.outputs.get_token.mytoken`として入っているため、同じ名前を公開する2つのステップを区別できます。
 
 ## 関連項目
 

@@ -38,4 +38,7 @@ The step always succeeds, and whatever was passed in comes back unchanged.
 |----------|------|-------------|
 | `res.<key>` | Any | Every key passed in `with` |
 | `res.status` | Integer | Always `0` |
+| `res.dump` | Boolean | Always `false` |
 | `status` | Integer | Always `0` |
+
+`status` and `dump` are set by the action, so a key of either name in `with` does not come back.

@@ -30,6 +30,8 @@ The fields below describe the request. All of them accept template expressions.
 
 There are no parameters for redirects or TLS verification. Redirects are followed by default.
 
+Every request sends `Accept: */*` and `User-Agent: probe-http/1.0.0` unless `headers` sets them. Header names are compared without regard to case, so `user-agent: my-agent` replaces the default.
+
 ### `timeout`
 
 `timeout` accepts a duration string such as `10s` or `1m30s`, or a plain number of seconds. `0` removes the limit.

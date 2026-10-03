@@ -50,7 +50,7 @@ with:
 ### `workdir` (オプション)
 
 **型:** String  
-**説明:** コマンド実行用の作業ディレクトリ（絶対パス必須）  
+**説明:** コマンド実行用の作業ディレクトリ  
 **サポート:** テンプレート式
 
 ```yaml
@@ -59,6 +59,8 @@ with:
   workdir: "/app/src"
   workdir: "{{vars.project_path}}"
 ```
+
+相対パスは、ワークフローファイルのディレクトリではなく、Probeを実行したディレクトリを基準に解決されます。ディレクトリは存在している必要があります。
 
 ### `timeout` (オプション)
 
@@ -123,13 +125,13 @@ shellアクションは統一されたステップレベルのリトライ機能
   with:
     cmd: "curl -f http://localhost:8080/health"
   retry:
-    max_attempts: 30      # 最大試行回数 (1-100)
+    max_attempts: 30      # 最大試行回数
     interval: "2s"        # リトライ間隔
     initial_delay: "5s"   # 初回実行前の待機時間（オプション）
   test: res.code == 0
 ```
 
-shellアクションでは、**終了コード0**が成功条件となります。リトライ機能の詳細については[アクションガイド](/ja/guide/concepts/actions#リトライ機能)を参照してください。
+リトライするかどうかは`test`の結果で決まり、`test`が真になった時点で終わります。`test`のないステップはリトライしません。リトライ機能の詳細については[アクションガイド](/ja/guide/concepts/actions#リトライ機能)を参照してください。
 
 ## レスポンス形式
 
@@ -162,6 +164,14 @@ res:
   pid: 12345                 # シェルのプロセスID
   log: "/tmp/probe-shell-action.1234567890.log" # 標準出力と標準エラー出力のログファイル
 ```
+
+`res`と`req`のほかに、テストでは次の値も使えます。
+
+| フィールド | 型 | 説明 |
+|-------|------|-------------|
+| `status` | Integer | 終了コードが`0`なら`0`、それ以外は`1`、backgroundのコマンドは`-1` |
+| `rt.duration` | String | コマンドにかかった時間。`"4.7ms"`など |
+| `rt.sec` | Float | 同じ時間を秒で表した値 |
 
 ## 使用例
 
@@ -200,7 +210,7 @@ res:
     env:
       NODE_ENV: "test"
       CI: "true"
-  test: res.code == 0 && (res.stdout | contains("All tests passed"))
+  test: res.code == 0 && res.stdout contains "All tests passed"
 ```
 
 ### 環境固有のデプロイ
@@ -265,8 +275,8 @@ backgroundで起動したサーバーは、後続のステップのために動�
 - name: "Service Health Check"
   uses: shell
   with:
-    cmd: "curl -f http://localhost:8080/health || echo 'Service down'"
-  test: res.code == 0 || (res.stderr | contains("Service down"))
+    cmd: "curl -sS http://localhost:8080/health"
+  test: res.code == 0 && res.stdout contains "ok" && res.stderr == ""
 
 - name: "Debug Failed Build"
   uses: shell
@@ -323,10 +333,10 @@ backgroundで起動したサーバーは、後続のステップのために動�
 シェルアクションはいくつかのセキュリティ対策を実装しています：
 
 - **シェルパス制限**: 承認されたシェル実行ファイルのみを許可
-- **作業ディレクトリ検証**: 絶対パスとディレクトリの存在を確保
-- **タイムアウト保護**: 無限実行を防止
-- **環境変数フィルタリング**: 環境変数の受け渡しを安全に処理
-- **出力サニタイゼーション**: コマンド出力を安全にキャプチャして返す
+- **作業ディレクトリ検証**: 存在しないディレクトリを拒否
+- **タイムアウト保護**: `timeout`を超えて動くコマンドを停止
+
+コマンドはProbe自身の環境変数に`env`を加えた環境で動き、出力はそのまま返されます。
 
 ## エラーハンドリング
 
@@ -347,6 +357,6 @@ backgroundで起動したサーバーは、後続のステップのために動�
     cmd: "some_command_that_might_fail"
   test: |
     res.code == 0 ? true :
-    res.code == 127 ? (res.stderr | contains("not found")) :
+    res.code == 127 ? res.stderr contains "not found" :
     res.code < 128
 ```

@@ -29,9 +29,9 @@ steps:
 | `addr` | String | 必須 | - | gRPCサーバーのホストとポート |
 | `service` | String | 必須 | - | 完全修飾のサービス名 |
 | `method` | String | 必須 | - | メソッド名 |
-| `body` | String | 任意 | `""` | リクエストメッセージ（JSON） |
+| `body` | StringまたはObject | 任意 | `""` | リクエストメッセージ（JSON）。オブジェクトはJSONにシリアライズされます |
 | `metadata` | Object | 任意 | `{}` | リクエストメタデータ（HTTPのヘッダーに相当） |
-| `timeout` | String | 任意 | - | タイムアウト（`"10s"`など） |
+| `timeout` | String | 任意 | `30s` | 接続とリフレクションによる解決を含めた、呼び出しの制限時間。`"10s"`のようなGoのduration形式 |
 | `tls` | Boolean | 任意 | `false` | TLSを使う |
 | `insecure` | Boolean | 任意 | `false` | 証明書の検証をスキップする |
 | `cert_file` | String | 任意 | - | mTLS用のクライアント証明書 |
@@ -44,11 +44,14 @@ steps:
 
 | プロパティ | 型 | 説明 |
 |---|---|---|
-| `res.body` | String | レスポンスメッセージ（JSON） |
+| `res.body` | Any | レスポンスメッセージ。JSON形式から解析したオブジェクトで、フィールド名は`createdAt`のようなlowerCamelCase |
+| `res.rawbody` | String | 解析前のJSON形式のレスポンスメッセージ |
 | `res.status_code` | String | gRPCのステータスコード（`OK`、`NOT_FOUND`など） |
 | `res.status_message` | String | ステータスメッセージ |
 | `res.metadata` | Object | レスポンスメタデータ |
-| `rt` | Object | レスポンスタイム |
+| `rt.duration` | String | ラウンドトリップ時間（例: `"1.2ms"`） |
+| `rt.sec` | Float | ラウンドトリップ時間（秒） |
+| `status` | Integer | 呼び出しが成功したとき`0` |
 | `req` | Object | 送信したリクエスト |
 
 ## 使用例

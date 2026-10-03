@@ -50,7 +50,7 @@ with:
 ### `workdir` (optional)
 
 **Type:** String  
-**Description:** Working directory for command execution (must be absolute path)  
+**Description:** Working directory for command execution  
 **Supports:** Template expressions
 
 ```yaml
@@ -59,6 +59,8 @@ with:
   workdir: "/app/src"
   workdir: "{{vars.project_path}}"
 ```
+
+A relative path is resolved against the directory Probe is run from, not the directory of the workflow file. The directory must exist.
 
 ### `timeout` (optional)
 
@@ -145,6 +147,14 @@ res:
   log: "/tmp/probe-shell-action.1234567890.log" # Log file for stdout and stderr
 ```
 
+Besides `res` and `req`, the step can test these:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `status` | Integer | `0` when the exit code is `0`, `1` otherwise, `-1` for a background command |
+| `rt.duration` | String | How long the command took, such as `"4.7ms"` |
+| `rt.sec` | Float | The same in seconds |
+
 ## Usage Examples
 
 The examples below go from a single command to a pipeline that builds, tests, deploys per environment, and reports what failed.
@@ -182,7 +192,7 @@ Each stage is its own step, so a failure names the stage that broke.
     env:
       NODE_ENV: "test"
       CI: "true"
-  test: res.code == 0 && (res.stdout | contains("All tests passed"))
+  test: res.code == 0 && res.stdout contains "All tests passed"
 ```
 
 ### Environment-specific Deployment
@@ -247,8 +257,8 @@ When the command's own exit code is not enough, the test reads `res.stdout` and 
 - name: "Service Health Check"
   uses: shell
   with:
-    cmd: "curl -f http://localhost:8080/health || echo 'Service down'"
-  test: res.code == 0 || (res.stderr | contains("Service down"))
+    cmd: "curl -sS http://localhost:8080/health"
+  test: res.code == 0 && res.stdout contains "ok" && res.stderr == ""
 
 - name: "Debug Failed Build"
   uses: shell
@@ -264,10 +274,10 @@ When the command's own exit code is not enough, the test reads `res.stdout` and 
 The shell action implements several security measures:
 
 - **Shell Path Restriction**: Only allows approved shell executables
-- **Working Directory Validation**: Ensures absolute paths and directory existence
-- **Timeout Protection**: Prevents infinite execution
-- **Environment Variable Filtering**: Safely handles environment variable passing
-- **Output Sanitization**: Safely captures and returns command output
+- **Working Directory Validation**: Rejects a directory that does not exist
+- **Timeout Protection**: Stops a command that runs longer than `timeout`
+
+The command runs with Probe's own environment plus `env`, and its output is returned as it is.
 
 ## Error Handling
 
@@ -288,6 +298,6 @@ Common exit codes and their meanings:
     cmd: "some_command_that_might_fail"
   test: |
     res.code == 0 ? true :
-    res.code == 127 ? (res.stderr | contains("not found")) :
+    res.code == 127 ? res.stderr contains "not found" :
     res.code < 128
 ```

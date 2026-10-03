@@ -4,6 +4,7 @@ import (
 	"io"
 	"log"
 	"net"
+	"reflect"
 	"testing"
 	"time"
 )
@@ -188,5 +189,32 @@ func TestBulkSend(t *testing.T) {
 				t.Errorf("Expected count between 1 and %d, got %d", tt.expectedCount, count)
 			}
 		})
+	}
+}
+
+func TestCalcMessageNumEachSessionTotal(t *testing.T) {
+	// However the messages divide, the sessions together get exactly
+	// message of them.
+	tests := []struct {
+		session, message int
+		want             []int
+	}{
+		{session: 5, message: 1, want: []int{1, 0, 0, 0, 0}},
+		{session: 4, message: 2, want: []int{1, 1, 0, 0}},
+		{session: 3, message: 7, want: []int{3, 3, 1}},
+		{session: 2, message: 3, want: []int{2, 1}},
+		{session: 3, message: 3, want: []int{1, 1, 1}},
+		{session: 2, message: 0, want: []int{0, 0}},
+	}
+
+	for _, tt := range tests {
+		b := &Bulk{Session: tt.session, Message: tt.message}
+		var got []int
+		for i := 0; i < tt.session; i++ {
+			got = append(got, b.calcMessageNumEachSession())
+		}
+		if !reflect.DeepEqual(got, tt.want) {
+			t.Errorf("session %d, message %d: got %v, want %v", tt.session, tt.message, got, tt.want)
+		}
 	}
 }
