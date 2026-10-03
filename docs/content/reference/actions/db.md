@@ -87,13 +87,15 @@ with:
 
 **Type:** Duration  
 **Default:** `30s`  
-**Description:** Query execution timeout
+**Description:** Time limit for connecting and running the query. A Go duration such as `"60s"`, or a number of seconds; it must be above zero
 
 ```yaml
 with:
   query: "SELECT COUNT(*) FROM large_table"
   timeout: "60s"
 ```
+
+A query that runs out of time is stopped, and the step goes on to its test with `res.code` set to `1` and `res.error` starting with `timed out after 60s`.
 
 ## Response Object
 

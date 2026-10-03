@@ -1,6 +1,7 @@
 package db
 
 import (
+	"context"
 	"database/sql"
 	"database/sql/driver"
 	"errors"
@@ -450,5 +451,67 @@ func TestExecuteCloseFailure(t *testing.T) {
 				t.Errorf("status = %v, want 1", ret["status"])
 			}
 		})
+	}
+}
+
+func TestExecuteQueryTimeout(t *testing.T) {
+	// A query that would run for minutes is cut off at the timeout, and the
+	// step gets a result that says so.
+	dsn := "file:" + filepath.Join(t.TempDir(), "test.db")
+	start := time.Now()
+	ret, err := ExecuteQuery(map[string]any{
+		"dsn":     dsn,
+		"query":   "WITH RECURSIVE c(x) AS (SELECT 1 UNION ALL SELECT x + 1 FROM c WHERE x < 1000000000) SELECT count(*) FROM c",
+		"timeout": "200ms",
+	})
+	elapsed := time.Since(start)
+	if err != nil {
+		t.Fatalf("ExecuteQuery() error: %v", err)
+	}
+	if elapsed > 5*time.Second {
+		t.Errorf("query ran for %v, want it stopped at the 200ms timeout", elapsed)
+	}
+	res, _ := ret["res"].(map[string]any)
+	if msg, _ := res["error"].(string); !strings.Contains(msg, "timed out after 200ms") {
+		t.Errorf("error = %q, want it to name the timeout", msg)
+	}
+	if ret["status"] != 1 {
+		t.Errorf("status = %v, want 1", ret["status"])
+	}
+}
+
+func TestParseRequestTimeoutAboveZero(t *testing.T) {
+	for _, v := range []string{"0", "0s", "-1s"} {
+		if _, _, _, err := ParseRequest(map[string]any{"dsn": "file:x.db", "query": "SELECT 1", "timeout": v}); err == nil {
+			t.Errorf("timeout %q was accepted", v)
+		}
+	}
+}
+
+func TestParseRequestTimeoutSeconds(t *testing.T) {
+	_, _, timeout, err := ParseRequest(map[string]any{"dsn": "file:x.db", "query": "SELECT 1", "timeout": "45"})
+	if err != nil || timeout != 45*time.Second {
+		t.Errorf("timeout 45 = %v, %v, want 45s", timeout, err)
+	}
+
+	// Too many seconds for a duration used to wrap around to about 290ms.
+	if _, _, timeout, err := ParseRequest(map[string]any{"dsn": "file:x.db", "query": "SELECT 1", "timeout": "18446744074"}); err == nil {
+		t.Errorf("timeout 18446744074 was accepted as %v", timeout)
+	}
+}
+
+func TestTimeoutErrorFromContext(t *testing.T) {
+	// A driver can report the cancelled query in its own words; the context
+	// still says the deadline passed.
+	expired, cancel := context.WithTimeout(context.Background(), time.Nanosecond)
+	defer cancel()
+	<-expired.Done()
+	driverErr := errors.New("pq: canceling statement due to user request")
+
+	if got := timeoutError(expired, driverErr, time.Second); !strings.HasPrefix(got.Error(), "timed out after 1s") || !errors.Is(got, driverErr) {
+		t.Errorf("timeoutError() = %v, want the timeout named and the driver's error kept", got)
+	}
+	if got := timeoutError(context.Background(), driverErr, time.Second); got != driverErr {
+		t.Errorf("timeoutError() = %v, want the error unchanged before the deadline", got)
 	}
 }
