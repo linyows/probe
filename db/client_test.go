@@ -1,7 +1,9 @@
 package db
 
 import (
+	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 )
@@ -313,5 +315,72 @@ func TestWithAfter(t *testing.T) {
 	}
 	if capturedResult != testResult {
 		t.Error("after callback did not receive correct result")
+	}
+}
+
+func TestExecuteQueryFailureIsResult(t *testing.T) {
+	// The database answering with an error, or not answering at all, is a
+	// result the step's test can check, not an error that ends the step.
+	dsn := "file:" + filepath.Join(t.TempDir(), "test.db")
+
+	tests := []struct {
+		name      string
+		data      map[string]any
+		wantError string
+	}{
+		{
+			name:      "missing table",
+			data:      map[string]any{"dsn": dsn, "query": "SELECT * FROM missing_table"},
+			wantError: "no such table",
+		},
+		{
+			name:      "syntax error",
+			data:      map[string]any{"dsn": dsn, "query": "SELEC 1"},
+			wantError: "syntax error",
+		},
+		{
+			name:      "unreachable server",
+			data:      map[string]any{"dsn": "mysql://user:pass@127.0.0.1:1/db", "query": "SELECT 1"},
+			wantError: "failed to connect to database",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ret, err := ExecuteQuery(tt.data)
+			if err != nil {
+				t.Fatalf("ExecuteQuery() error: %v", err)
+			}
+			res, _ := ret["res"].(map[string]any)
+			if res["code"] != 1 || ret["status"] != 1 {
+				t.Errorf("code = %v, status = %v, want 1 and 1", res["code"], ret["status"])
+			}
+			if msg, _ := res["error"].(string); !strings.Contains(msg, tt.wantError) {
+				t.Errorf("error = %q, want it to contain %q", msg, tt.wantError)
+			}
+		})
+	}
+}
+
+func TestExecuteQuerySuccess(t *testing.T) {
+	dsn := "file:" + filepath.Join(t.TempDir(), "test.db")
+	ret, err := ExecuteQuery(map[string]any{"dsn": dsn, "query": "SELECT 1 AS one"})
+	if err != nil {
+		t.Fatalf("ExecuteQuery() error: %v", err)
+	}
+	res, _ := ret["res"].(map[string]any)
+	if res["code"] != 0 || ret["status"] != 0 {
+		t.Errorf("code = %v, status = %v, want 0 and 0", res["code"], ret["status"])
+	}
+}
+
+func TestParseDSNUnsupportedScheme(t *testing.T) {
+	_, _, err := parseDSN("sqlite3://test.db")
+	if err == nil {
+		t.Fatal("parseDSN() accepted an unsupported scheme")
+	}
+	// The message has to name a scheme that works.
+	if !strings.Contains(err.Error(), "file:") {
+		t.Errorf("error = %q, want it to name the file: scheme", err)
 	}
 }

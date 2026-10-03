@@ -157,7 +157,7 @@ func parseDSN(dsn string) (driver, driverDSN string, err error) {
 		return "sqlite3", abs, nil
 
 	default:
-		return "", "", fmt.Errorf("unsupported database driver: %s (supported: mysql, postgres, sqlite3)", u.Scheme)
+		return "", "", fmt.Errorf("unsupported database scheme: %q (use mysql://, postgres://, postgresql:// or file: for SQLite)", u.Scheme)
 	}
 }
 
@@ -175,7 +175,9 @@ func (r *Req) Execute(driverDSN string, timeout time.Duration) (res map[string]a
 		return r.createErrorResult(start, fmt.Errorf("failed to open database: %w", err))
 	}
 	defer func() {
-		err = db.Close()
+		if closeErr := db.Close(); closeErr != nil && err == nil {
+			err = closeErr
+		}
 	}()
 
 	// Test connection
@@ -308,6 +310,9 @@ func (r *Req) executeNonSelectQuery(db *sql.DB, start time.Time) (*Result, error
 	}, nil
 }
 
+// createErrorResult reports a query the database refused, or a database that
+// could not be reached, as a result rather than an error, so that the step's
+// test can check for the failure it expects.
 func (r *Req) createErrorResult(start time.Time, err error) (map[string]any, error) {
 	duration := time.Since(start)
 
@@ -329,7 +334,7 @@ func (r *Req) createErrorResult(start time.Time, err error) (map[string]any, err
 		return map[string]any{}, fmt.Errorf("failed to convert error result to map: %w", mapErr)
 	}
 
-	return mapResult, err
+	return mapResult, nil
 }
 
 type Option func(*Callback)

@@ -14,10 +14,12 @@ import (
 
 	"github.com/linyows/probe/mapping"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/reflection/grpc_reflection_v1alpha"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protodesc"
@@ -159,6 +161,9 @@ func (r *Req) Do() (re *Result, er error) {
 
 	result.Res = *res
 	result.Status = 0 // success
+	if res.StatusCode != "OK" {
+		result.Status = 1
+	}
 
 	// Callback after response
 	if r.cb != nil && r.cb.after != nil {
@@ -224,13 +229,62 @@ func (r *Req) invokeMethod(ctx context.Context, conn *grpc.ClientConn, reflectio
 		Metadata:      metadataMap,
 	}
 
+	// A status the call ended with is the server's answer, which a test can
+	// check like an HTTP status code; only a call that never produced one is
+	// an error.
 	if err != nil {
-		res.StatusCode = "ERROR"
-		res.StatusMessage = err.Error()
-		return res, err
+		st, ok := status.FromError(err)
+		if !ok {
+			return nil, err
+		}
+		res.StatusCode = statusCodeName(st.Code())
+		res.StatusMessage = st.Message()
 	}
 
 	return res, nil
+}
+
+// statusCodeName returns the canonical name of a gRPC status code, such as
+// NOT_FOUND, which is how the gRPC specification and other tools spell it.
+func statusCodeName(c codes.Code) string {
+	switch c {
+	case codes.OK:
+		return "OK"
+	case codes.Canceled:
+		return "CANCELLED"
+	case codes.Unknown:
+		return "UNKNOWN"
+	case codes.InvalidArgument:
+		return "INVALID_ARGUMENT"
+	case codes.DeadlineExceeded:
+		return "DEADLINE_EXCEEDED"
+	case codes.NotFound:
+		return "NOT_FOUND"
+	case codes.AlreadyExists:
+		return "ALREADY_EXISTS"
+	case codes.PermissionDenied:
+		return "PERMISSION_DENIED"
+	case codes.ResourceExhausted:
+		return "RESOURCE_EXHAUSTED"
+	case codes.FailedPrecondition:
+		return "FAILED_PRECONDITION"
+	case codes.Aborted:
+		return "ABORTED"
+	case codes.OutOfRange:
+		return "OUT_OF_RANGE"
+	case codes.Unimplemented:
+		return "UNIMPLEMENTED"
+	case codes.Internal:
+		return "INTERNAL"
+	case codes.Unavailable:
+		return "UNAVAILABLE"
+	case codes.DataLoss:
+		return "DATA_LOSS"
+	case codes.Unauthenticated:
+		return "UNAUTHENTICATED"
+	default:
+		return c.String()
+	}
 }
 
 func (r *Req) getServiceDescriptor(ctx context.Context, client grpc_reflection_v1alpha.ServerReflectionClient) (re protoreflect.ServiceDescriptor, er error) {
