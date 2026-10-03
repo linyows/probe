@@ -77,8 +77,15 @@ func ParseRequest(with map[string]any) (*Req, string, time.Duration, error) {
 	if req.Timeout != "" {
 		if parsedTimeout, err := time.ParseDuration(req.Timeout); err == nil {
 			timeout = parsedTimeout
-		} else if seconds, errInt := strconv.Atoi(req.Timeout); errInt == nil {
-			timeout = time.Duration(seconds) * time.Second
+		} else if _, errInt := strconv.Atoi(req.Timeout); errInt == nil {
+			// Parsed as a duration of seconds, so that a number too large
+			// for one is an error rather than wrapping around to a short,
+			// positive limit.
+			parsedTimeout, err := time.ParseDuration(req.Timeout + "s")
+			if err != nil {
+				return nil, "", 0, fmt.Errorf("invalid timeout: %s (%w)", req.Timeout, err)
+			}
+			timeout = parsedTimeout
 		} else {
 			return nil, "", 0, fmt.Errorf("invalid timeout format: %s (use duration string like '30s' or integer seconds)", req.Timeout)
 		}
@@ -199,7 +206,7 @@ func (r *Req) Execute(driverDSN string, timeout time.Duration) (res map[string]a
 	defer cancel()
 
 	if err = db.PingContext(ctx); err != nil {
-		return r.createErrorResult(start, timeoutError(fmt.Errorf("failed to connect to database: %w", err), timeout))
+		return r.createErrorResult(start, timeoutError(ctx, fmt.Errorf("failed to connect to database: %w", err), timeout))
 	}
 
 	// Determine query type
@@ -219,7 +226,7 @@ func (r *Req) Execute(driverDSN string, timeout time.Duration) (res map[string]a
 	}
 
 	if err != nil {
-		return r.createErrorResult(start, timeoutError(err, timeout))
+		return r.createErrorResult(start, timeoutError(ctx, err, timeout))
 	}
 
 	// After callback on success
@@ -329,8 +336,12 @@ func (r *Req) executeNonSelectQuery(ctx context.Context, db *sql.DB, start time.
 
 // timeoutError names the timeout when it is what ended the work, since the
 // driver's own message only says that a context ran out.
-func timeoutError(err error, timeout time.Duration) error {
-	if errors.Is(err, context.DeadlineExceeded) {
+//
+// The context is checked as well as the error, since some drivers report a
+// query cancelled at the deadline in their own words; lib/pq returns the
+// server's cancellation error.
+func timeoutError(ctx context.Context, err error, timeout time.Duration) error {
+	if errors.Is(err, context.DeadlineExceeded) || errors.Is(ctx.Err(), context.DeadlineExceeded) {
 		return fmt.Errorf("timed out after %s: %w", timeout, err)
 	}
 	return err
