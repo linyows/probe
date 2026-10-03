@@ -309,3 +309,29 @@ func TestWorkflow_GitHubSummaryFull(t *testing.T) {
 		t.Errorf("expected a warning, got:\n%s", stderr)
 	}
 }
+
+func TestReport_WriteGitHubSummary_RefusesSymlinkedPath(t *testing.T) {
+	root := t.TempDir()
+	target := filepath.Join(root, "outside.txt")
+	if err := os.WriteFile(target, []byte("keep me"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(root, "summary.md")
+	if err := os.Symlink(target, link); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+
+	err := newTestReport().Write(ReportTarget{Format: ReportGitHubSummary, Path: link})
+	if err == nil || !strings.Contains(err.Error(), "path escapes") {
+		t.Errorf("error = %v, want the link out of its directory refused", err)
+	}
+	if data, _ := os.ReadFile(target); string(data) != "keep me" {
+		t.Errorf("the file the link pointed at was changed to %.40q", data)
+	}
+
+	// The path GitHub Actions hands over is trusted, link or not.
+	t.Setenv("GITHUB_STEP_SUMMARY", link)
+	if err := newTestReport().Write(ReportTarget{Format: ReportGitHubSummary}); err != nil {
+		t.Errorf("GITHUB_STEP_SUMMARY should be used as given: %v", err)
+	}
+}

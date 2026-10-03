@@ -619,3 +619,81 @@ func TestStep_DoTestRecordsFailure(t *testing.T) {
 		})
 	}
 }
+
+// TestReport_WriteDoesNotFollowSymlink covers a project that ships a report
+// path as a symlink to a file elsewhere: writing the report must replace the
+// link, not overwrite the file it points to.
+func TestReport_WriteDoesNotFollowSymlink(t *testing.T) {
+	r := newTestReport()
+
+	for _, format := range []ReportFormat{ReportJSON, ReportJUnit, ReportMarkdown} {
+		t.Run(string(format), func(t *testing.T) {
+			root := t.TempDir()
+			target := filepath.Join(root, "outside.txt")
+			if err := os.WriteFile(target, []byte("keep me"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			dir := filepath.Join(root, "project")
+			if err := os.Mkdir(dir, 0o755); err != nil {
+				t.Fatal(err)
+			}
+			link := filepath.Join(dir, "report")
+			if err := os.Symlink(target, link); err != nil {
+				t.Skipf("symlinks unavailable: %v", err)
+			}
+
+			if err := r.Write(ReportTarget{Format: format, Path: link}); err != nil {
+				t.Fatal(err)
+			}
+
+			if data, _ := os.ReadFile(target); string(data) != "keep me" {
+				t.Errorf("the file the link pointed at was changed to %.40q", data)
+			}
+			info, err := os.Lstat(link)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if info.Mode()&os.ModeSymlink != 0 {
+				t.Error("the report should now be a regular file, not the link")
+			}
+			if info.Mode().Perm() != umaskMode(t) {
+				t.Errorf("mode = %v, want %v as the umask allows", info.Mode().Perm(), umaskMode(t))
+			}
+			if data, _ := os.ReadFile(link); !strings.Contains(string(data), "Demo") {
+				t.Errorf("the report was not written: %.60q", data)
+			}
+			leftovers, _ := filepath.Glob(filepath.Join(dir, ".report.*"))
+			if len(leftovers) != 0 {
+				t.Errorf("temporary files left behind: %v", leftovers)
+			}
+		})
+	}
+}
+
+func TestReport_WriteReplacesExistingFile(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "report.md")
+	if err := os.WriteFile(path, []byte("an older, much longer report than the new one\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	r := &Report{Name: "New", Status: ReportPassed}
+	if err := r.Write(ReportTarget{Format: ReportMarkdown, Path: path}); err != nil {
+		t.Fatal(err)
+	}
+	data, _ := os.ReadFile(path)
+	if !strings.HasPrefix(string(data), "# New\n") || strings.Contains(string(data), "older") {
+		t.Errorf("the old report should be replaced entirely, got:\n%s", data)
+	}
+}
+
+// TestReport_WriteRefusesLinkedDirectory covers a report path whose directory
+// is a symlink out of the project, as in --report json=out/report.json with a
+// checked-out "out" link.
+func TestReport_WriteRefusesLinkedDirectory(t *testing.T) {
+	victim := checkout(t)
+
+	err := newTestReport().Write(ReportTarget{Format: ReportJSON, Path: "out/victim"})
+	if err == nil || !strings.Contains(err.Error(), "failed to create json report") {
+		t.Errorf("error = %v, want the report refused", err)
+	}
+	unchanged(t, victim)
+}
