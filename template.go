@@ -11,15 +11,17 @@ type templateSpan struct {
 
 // findTemplates returns the templates in s, in order. It reads each one up
 // to the "}}" that closes it rather than to the first "}}" or brace it meets:
-// braces of a map literal nest, and a string literal is skipped whole, so
-// {{ {'a': {'b': 1}}['a']['b'] }} and {{ "}}" }} are single templates. A
+// braces of a map literal nest, and a string literal or a comment is skipped
+// whole, so {{ {'a': {'b': 1}}['a']['b'] }} and {{ "}}" }} are single
+// templates. A
 // pattern used to stop at any brace, which left such templates unevaluated,
 // as text, without an error.
 //
 // As before, "{{{" is read as a literal "{" followed by a template, so
 // {{{vars.name}}} still renders the value in braces; an expression that
 // starts with a map literal is written with a space, as in {{ {...} }}.
-// A "{{" that is never closed is left as text.
+// A "{{" that is never closed is left as text, and the search goes on after
+// it, so a later template in the same string is still found.
 func findTemplates(s string) []templateSpan {
 	var spans []templateSpan
 	i := 0
@@ -36,7 +38,8 @@ func findTemplates(s string) []templateSpan {
 		}
 		end, ok := templateClose(s, start+2)
 		if !ok {
-			return spans
+			i = start + 2
+			continue
 		}
 		spans = append(spans, templateSpan{start: start, end: end + 2, expr: s[start+2 : end]})
 		i = end + 2
@@ -55,6 +58,28 @@ func templateClose(s string, from int) (int, bool) {
 				return 0, false
 			}
 			i = j
+		case '/':
+			if i+1 >= len(s) {
+				continue
+			}
+			switch s[i+1] {
+			case '*':
+				// A block comment runs to "*/", like a string.
+				j := strings.Index(s[i+2:], "*/")
+				if j < 0 {
+					return 0, false
+				}
+				i += 2 + j + 1
+			case '/':
+				// A line comment runs to the end of the line, but the
+				// template still ends at its "}}", since the expression
+				// is cut there before it is compiled.
+				j := i + 2
+				for j < len(s) && s[j] != '\n' && !strings.HasPrefix(s[j:], templateEnd) {
+					j++
+				}
+				i = j - 1
+			}
 		case '{':
 			depth++
 		case '}':

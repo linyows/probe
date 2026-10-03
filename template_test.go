@@ -25,6 +25,14 @@ func TestFindTemplates(t *testing.T) {
 		{"unterminated after a template", "{{ x }} {{ y", []string{"{{ x }}"}},
 		{"unterminated string", `{{ "}} }}`, nil},
 		{"single braces", "{x}", nil},
+		{"template after an unterminated one", "prefix {{ incomplete; value={{x}}", []string{"{{x}}"}},
+		{"template after an unterminated string", `{{ "oops }} and {{ y }}`, []string{"{{ y }}"}},
+		{"quote in a block comment", "{{ 1 /* don't */ }}", []string{"{{ 1 /* don't */ }}"}},
+		{"closing braces in a block comment", "{{ 1 /* }} */ }}", []string{"{{ 1 /* }} */ }}"}},
+		{"unterminated block comment", "{{ 1 /* }}", nil},
+		{"line comment ends at the closing braces", "{{ 1 // don't }} b", []string{"{{ 1 // don't }}"}},
+		{"line comment ends at a newline", "{{ 1 // '\n }}", []string{"{{ 1 // '\n }}"}},
+		{"division", "{{ 4 / 2 }}", []string{"{{ 4 / 2 }}"}},
 	}
 
 	for _, tt := range tests {
@@ -55,6 +63,10 @@ func TestEvalTemplateWithBraces(t *testing.T) {
 		{"triple braces", "{{{vars.name}}}", "{probe}"},
 		{"unterminated stays as text", "{{ vars.name", "{{ vars.name"},
 		{"text after an unterminated template", "{{ vars.name }} and {{ vars", "probe and {{ vars"},
+		{"template after an unterminated one", "prefix {{ incomplete; value={{vars.name}}", "prefix {{ incomplete; value=probe"},
+		{"block comment", "{{ 1 /* don't */ }}", "1"},
+		{"closing braces in a block comment", "{{ 1 /* }} */ }}", "1"},
+		{"line comment", "{{ 1 // note }}", "1"},
 	}
 
 	e := &Expr{}
