@@ -221,6 +221,39 @@ Retrieve message data using sequence numbers.
   dataitem: "ENVELOPE FLAGS"
 ```
 
+### `store` and `uid store` - Change Flags
+
+Set, add or remove flags on messages. `dataitem` is `FLAGS` to replace the flags, `+FLAGS` to add, or `-FLAGS` to remove, optionally followed by `.SILENT` so the server does not send the new flags back. `value` lists the flags, with or without parentheses; an empty value or `()` with `FLAGS` clears every flag, and a lone parenthesis is refused. `uid store` takes UIDs in `sequence`. Without `sequence`, both act on the messages the latest search found, as `fetch` does, provided it was the matching kind: `search` for `store`, `uid search` for `uid store`. Each search replaces the previous one of either kind, so an older search is never used.
+
+In `sequence`, a lone `*` is the last message, and every number has to be from `1` to `4294967295`; `0` or a larger value is refused rather than read as `*`. A `select` or `examine` forgets the last search result, since numbers belong to one mailbox, so a command without `sequence` after switching mailboxes fails instead of acting on the wrong messages.
+
+```yaml
+- name: "select"
+  mailbox: "INBOX"
+- name: "store"
+  sequence: "1:3"
+  dataitem: "+FLAGS"
+  value: '\Seen \Flagged'
+```
+
+`res.data.store.count` is the number of messages the server reported with their new flags, which is `0` with `.SILENT`. Only flags can be stored; another data item fails the command.
+
+### `copy` and `uid copy` - Copy Messages
+
+Copy messages into another mailbox, which has to exist. `uid copy` takes UIDs in `sequence`, and without `sequence` both act on the last search result.
+
+```yaml
+- name: "select"
+  mailbox: "INBOX"
+- name: "copy"
+  sequence: "1:2"
+  mailbox: "Archive"
+```
+
+`res.data.copy.count` is the number of messages copied when the server reports it, which it does when it supports UIDPLUS; otherwise it is `0`.
+
+A command that fails, such as a `copy` into a mailbox that does not exist, sets `res.code` to `1` and puts the reason in `res.error`, as every IMAP command does.
+
 ## Response Object
 
 The IMAP action provides a `res` object with the following structure:

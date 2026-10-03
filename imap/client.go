@@ -339,19 +339,24 @@ func (r *Req) ExecCommands() (*Data, error) {
 				return &data, fmt.Errorf("failed to execute command %d (%s): %w", i+1, cmd.Name, err)
 			}
 			data.Select = *selectData
+			r.forgetSearch()
 		case "examine":
 			examineData, err := r.Examine(cmd.Mailbox)
 			if err != nil {
 				return &data, fmt.Errorf("failed to execute command %d (%s): %w", i+1, cmd.Name, err)
 			}
 			data.Examine = *examineData
+			r.forgetSearch()
 		case "search":
 			searchData, err := r.Search(&cmd.Criteria)
 			if err != nil {
 				return &data, fmt.Errorf("failed to execute command %d (%s): %w", i+1, cmd.Name, err)
 			}
 			data.Search = *searchData
+			// Only the latest search counts: a command without a sequence
+			// must not fall back to an older search of the other kind.
 			r.latestSeqSet = data.Search.All
+			r.latestUidSet = ""
 		case "uid search":
 			searchData, err := r.UIDSearch(&cmd.Criteria)
 			if err != nil {
@@ -359,6 +364,7 @@ func (r *Req) ExecCommands() (*Data, error) {
 			}
 			data.Search = *searchData
 			r.latestUidSet = data.Search.All
+			r.latestSeqSet = ""
 		case "list":
 			listData, err := r.List(cmd.Reference, cmd.Pattern)
 			if err != nil {
@@ -384,13 +390,21 @@ func (r *Req) ExecCommands() (*Data, error) {
 			}
 			data.Fetch = *fetchData
 		case "store", "uid store":
-			storeData, err := r.Store(cmd.Sequence, cmd.Dataitem, cmd.Value)
+			uid := strings.HasPrefix(strings.ToLower(cmd.Name), "uid")
+			if cmd.Sequence == "" {
+				cmd.Sequence = r.latestSet(uid)
+			}
+			storeData, err := r.Store(cmd.Sequence, cmd.Dataitem, cmd.Value, uid)
 			if err != nil {
 				return &data, fmt.Errorf("failed to execute command %d (%s): %w", i+1, cmd.Name, err)
 			}
 			data.Store = *storeData
 		case "copy", "uid copy":
-			copyData, err := r.Copy(cmd.Sequence, cmd.Mailbox)
+			uid := strings.HasPrefix(strings.ToLower(cmd.Name), "uid")
+			if cmd.Sequence == "" {
+				cmd.Sequence = r.latestSet(uid)
+			}
+			copyData, err := r.Copy(cmd.Sequence, cmd.Mailbox, uid)
 			if err != nil {
 				return &data, fmt.Errorf("failed to execute command %d (%s): %w", i+1, cmd.Name, err)
 			}
@@ -920,7 +934,7 @@ func (r *Req) Noop() (*NoopData, error) {
 // Fetch implements FETCH command
 func (r *Req) Fetch(sequence, dataitem string) (*FetchData, error) {
 	if sequence == "" {
-		return nil, fmt.Errorf("sequence is required for FETCH command")
+		return nil, fmt.Errorf("sequence is required for FETCH command: give one, or run a search of the same kind (search, or uid search for a uid command) just before it in this mailbox")
 	}
 	if dataitem == "" {
 		return nil, fmt.Errorf("dataitem is required for FETCH command")
@@ -1021,7 +1035,7 @@ func (r *Req) Fetch(sequence, dataitem string) (*FetchData, error) {
 
 func (r *Req) UIDFetch(sequence, dataitem string) (*FetchData, error) {
 	if sequence == "" {
-		return nil, fmt.Errorf("sequence is required for UID FETCH")
+		return nil, fmt.Errorf("sequence is required for UID FETCH: give one, or run a search of the same kind (search, or uid search for a uid command) just before it in this mailbox")
 	}
 	if dataitem == "" {
 		dataitem = "ALL"
@@ -1132,145 +1146,223 @@ func (r *Req) UIDFetch(sequence, dataitem string) (*FetchData, error) {
 	return &fd, nil
 }
 
-// Store implements STORE command
-func (r *Req) Store(sequence, dataitem, value string) (*StoreData, error) {
+// Store implements STORE and UID STORE: it changes the flags of the given
+// messages. dataitem is FLAGS, +FLAGS or -FLAGS, optionally followed by
+// .SILENT, and value lists the flags, as in "\Seen \Flagged" or "(\Seen)".
+func (r *Req) Store(sequence, dataitem, value string, uid bool) (*StoreData, error) {
 	if sequence == "" {
-		return nil, fmt.Errorf("sequence is required for STORE command")
+		return nil, fmt.Errorf("sequence is required for STORE command: give one, or run a search of the same kind (search, or uid search for a uid command) just before it in this mailbox")
 	}
 	if dataitem == "" {
 		return nil, fmt.Errorf("dataitem is required for STORE command")
 	}
 
-	// For now, return a basic successful response until we have proper API usage
-	// TODO: Implement proper STORE command when API is clarified
-	return &StoreData{
-		Success: true,
-		Count:   1, // Placeholder implementation
-	}, nil
+	numSet, err := r.parseNumSet(sequence, uid)
+	if err != nil {
+		return nil, err
+	}
+	store, err := parseStoreFlags(dataitem, value)
+	if err != nil {
+		return nil, err
+	}
+
+	messages, err := r.cl.Store(numSet, store, nil).Collect()
+	if err != nil {
+		return nil, fmt.Errorf("failed to Store: %w", err)
+	}
+
+	// With .SILENT the server does not answer with the new flags, so no
+	// message is counted.
+	return &StoreData{Success: true, Count: len(messages)}, nil
 }
 
-// Copy implements COPY command
-func (r *Req) Copy(sequence, mailbox string) (*CopyData, error) {
+// parseStoreFlags turns a STORE data item and its flag list into the flags
+// to send.
+func parseStoreFlags(dataitem, value string) (*imap.StoreFlags, error) {
+	item := strings.ToUpper(strings.TrimSpace(dataitem))
+	store := &imap.StoreFlags{}
+
+	if rest, ok := strings.CutSuffix(item, ".SILENT"); ok {
+		store.Silent = true
+		item = rest
+	}
+	switch {
+	case strings.HasPrefix(item, "+"):
+		store.Op = imap.StoreFlagsAdd
+		item = item[1:]
+	case strings.HasPrefix(item, "-"):
+		store.Op = imap.StoreFlagsDel
+		item = item[1:]
+	default:
+		store.Op = imap.StoreFlagsSet
+	}
+	if item != "FLAGS" {
+		return nil, fmt.Errorf("unsupported STORE data item %q: use FLAGS, +FLAGS or -FLAGS, optionally with .SILENT", dataitem)
+	}
+
+	list := strings.TrimSpace(value)
+	open, closed := strings.HasPrefix(list, "("), strings.HasSuffix(list, ")")
+	if open != closed {
+		// A lone parenthesis would leave an empty list, and FLAGS with no
+		// flags clears them all; only "" or "()" may ask for that.
+		return nil, fmt.Errorf("unbalanced parentheses in flags %q", value)
+	}
+	if open {
+		list = list[1 : len(list)-1]
+	}
+	for _, f := range strings.Fields(list) {
+		store.Flags = append(store.Flags, imap.Flag(f))
+	}
+	if len(store.Flags) == 0 && store.Op != imap.StoreFlagsSet {
+		return nil, fmt.Errorf("value must list the flags to add or remove, such as \\Seen")
+	}
+	return store, nil
+}
+
+// Copy implements COPY and UID COPY: it copies the given messages into
+// mailbox. Count is the number of messages the server reports copied, which
+// it does when it supports UIDPLUS; otherwise it is 0.
+func (r *Req) Copy(sequence, mailbox string, uid bool) (*CopyData, error) {
 	if sequence == "" {
-		return nil, fmt.Errorf("sequence is required for COPY command")
+		return nil, fmt.Errorf("sequence is required for COPY command: give one, or run a search of the same kind (search, or uid search for a uid command) just before it in this mailbox")
 	}
 	if mailbox == "" {
 		return nil, fmt.Errorf("mailbox is required for COPY command")
 	}
 
-	// For now, return a basic successful response until we have proper API usage
-	// TODO: Implement proper COPY command when API is clarified
-	return &CopyData{
-		Success: true,
-		Count:   1, // Placeholder implementation
-	}, nil
+	numSet, err := r.parseNumSet(sequence, uid)
+	if err != nil {
+		return nil, err
+	}
+
+	copied, err := r.cl.Copy(numSet, mailbox).Wait()
+	if err != nil {
+		return nil, fmt.Errorf("failed to Copy: %w", err)
+	}
+
+	count := 0
+	if copied != nil {
+		if uids, ok := copied.SourceUIDs.Nums(); ok {
+			count = len(uids)
+		}
+	}
+	return &CopyData{Success: true, Count: count}, nil
+}
+
+// parseNumSet parses sequence as sequence numbers, or as UIDs for the UID
+// form of a command.
+func (r *Req) parseNumSet(sequence string, uid bool) (imap.NumSet, error) {
+	if uid {
+		uidset, err := r.parseUIDSet(sequence)
+		if err != nil {
+			return nil, fmt.Errorf("invalid UID set %s: %w", sequence, err)
+		}
+		return *uidset, nil
+	}
+	seqset, err := r.parseSequenceSet(sequence)
+	if err != nil {
+		return nil, fmt.Errorf("invalid sequence set %s: %w", sequence, err)
+	}
+	return *seqset, nil
+}
+
+// forgetSearch drops the last search result. Sequence numbers and UIDs
+// belong to one mailbox, so after another is selected the result would
+// point at unrelated messages.
+func (r *Req) forgetSearch() {
+	r.latestSeqSet = ""
+	r.latestUidSet = ""
+}
+
+// latestSet returns the messages the last SEARCH or UID SEARCH found, which
+// a command without a sequence acts on, as FETCH does.
+func (r *Req) latestSet(uid bool) string {
+	if uid {
+		return r.latestUidSet
+	}
+	return r.latestSeqSet
+}
+
+// numRange is one element of a sequence or UID set. 0 stands for "*", the
+// last message, as it does in go-imap.
+type numRange struct{ start, stop uint32 }
+
+// parseNumRanges parses a set such as "1:3,5,9:*" or "*". Every number must
+// be from 1 to 4294967295: 0 would turn into "*" and a larger value would
+// wrap around, so "1:0" used to mean the whole mailbox. A lone "*" is the
+// last message, not "1:*".
+func parseNumRanges(sequence, what string) ([]numRange, error) {
+	var ranges []numRange
+	for part := range strings.SplitSeq(sequence, ",") {
+		part = strings.TrimSpace(part)
+		lo, hi, isRange := strings.Cut(part, ":")
+		if !isRange {
+			n, err := parseNumOrStar(lo, what)
+			if err != nil {
+				return nil, err
+			}
+			ranges = append(ranges, numRange{n, n})
+			continue
+		}
+		if strings.TrimSpace(lo) == "*" {
+			return nil, fmt.Errorf("start of range cannot be *: %s", part)
+		}
+		start, err := parseNumOrStar(lo, what)
+		if err != nil {
+			return nil, err
+		}
+		stop, err := parseNumOrStar(hi, what)
+		if err != nil {
+			return nil, err
+		}
+		ranges = append(ranges, numRange{start, stop})
+	}
+	return ranges, nil
+}
+
+func parseNumOrStar(s, what string) (uint32, error) {
+	s = strings.TrimSpace(s)
+	if s == "*" {
+		return 0, nil
+	}
+	n, err := strconv.ParseUint(s, 10, 32)
+	if err != nil || n == 0 {
+		return 0, fmt.Errorf("invalid %s %q: use a number from 1 to 4294967295, or *", what, s)
+	}
+	return uint32(n), nil
 }
 
 // parseSequenceSet parses a sequence set string into an imap.SeqSet
 func (r *Req) parseSequenceSet(sequence string) (*imap.SeqSet, error) {
-	seqset := new(imap.SeqSet)
-
-	if sequence == "*" {
-		seqset.AddRange(1, 0)
-		return seqset, nil
+	ranges, err := parseNumRanges(sequence, "sequence number")
+	if err != nil {
+		return nil, err
 	}
-
-	// Split by comma for multiple ranges/numbers
-	parts := strings.SplitSeq(sequence, ",")
-	for part := range parts {
-		part = strings.TrimSpace(part)
-		if strings.Contains(part, ":") {
-			// Range
-			rangeParts := strings.Split(part, ":")
-			if len(rangeParts) != 2 {
-				return nil, fmt.Errorf("invalid range format: %s", part)
-			}
-
-			var start, end uint32
-			if rangeParts[0] == "*" {
-				return nil, fmt.Errorf("start of range cannot be *")
-			}
-			startNum, err := strconv.Atoi(rangeParts[0])
-			if err != nil {
-				return nil, fmt.Errorf("invalid start number: %s", rangeParts[0])
-			}
-			start = uint32(startNum)
-
-			if rangeParts[1] == "*" {
-				end = 0 // 0 means "largest sequence number"
-			} else {
-				endNum, err := strconv.Atoi(rangeParts[1])
-				if err != nil {
-					return nil, fmt.Errorf("invalid end number: %s", rangeParts[1])
-				}
-				end = uint32(endNum)
-			}
-
-			seqset.AddRange(start, end)
+	seqset := new(imap.SeqSet)
+	for _, rg := range ranges {
+		if rg.start == rg.stop {
+			seqset.AddNum(rg.start)
 		} else {
-			// Single number
-			num, err := strconv.Atoi(part)
-			if err != nil {
-				return nil, fmt.Errorf("invalid sequence number: %s", part)
-			}
-			seqset.AddNum(uint32(num))
+			seqset.AddRange(rg.start, rg.stop)
 		}
 	}
-
 	return seqset, nil
 }
 
 // parseUIDSet parses a UID set string into an imap.UIDSet
 func (r *Req) parseUIDSet(sequence string) (*imap.UIDSet, error) {
-	uidset := new(imap.UIDSet)
-
-	if sequence == "*" {
-		uidset.AddRange(1, 0)
-		return uidset, nil
+	ranges, err := parseNumRanges(sequence, "UID")
+	if err != nil {
+		return nil, err
 	}
-
-	// Split by comma for multiple ranges/numbers
-	parts := strings.SplitSeq(sequence, ",")
-	for part := range parts {
-		part = strings.TrimSpace(part)
-		if strings.Contains(part, ":") {
-			// Range
-			rangeParts := strings.Split(part, ":")
-			if len(rangeParts) != 2 {
-				return nil, fmt.Errorf("invalid range format: %s", part)
-			}
-
-			var start, end imap.UID
-			if rangeParts[0] == "*" {
-				return nil, fmt.Errorf("start of range cannot be *")
-			}
-			startNum, err := strconv.Atoi(rangeParts[0])
-			if err != nil {
-				return nil, fmt.Errorf("invalid start UID: %s", rangeParts[0])
-			}
-			start = imap.UID(startNum)
-
-			if rangeParts[1] == "*" {
-				end = 0 // 0 means "largest UID"
-			} else {
-				endNum, err := strconv.Atoi(rangeParts[1])
-				if err != nil {
-					return nil, fmt.Errorf("invalid end UID: %s", rangeParts[1])
-				}
-				end = imap.UID(endNum)
-			}
-
-			uidset.AddRange(start, end)
+	uidset := new(imap.UIDSet)
+	for _, rg := range ranges {
+		if rg.start == rg.stop {
+			uidset.AddNum(imap.UID(rg.start))
 		} else {
-			// Single UID
-			num, err := strconv.Atoi(part)
-			if err != nil {
-				return nil, fmt.Errorf("invalid UID: %s", part)
-			}
-			uidset.AddNum(imap.UID(num))
+			uidset.AddRange(imap.UID(rg.start), imap.UID(rg.stop))
 		}
 	}
-
 	return uidset, nil
 }
 

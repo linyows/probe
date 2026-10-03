@@ -67,6 +67,48 @@ jobs:
     echo: |
       INBOX Count: {{res.data.select.exists}}
 
+  # The two steps below change the mailbox, so they run only against the
+  # test mail server that the setup step filled, never against a real inbox.
+  - name: Flag the first message
+    uses: imap
+    skipif: vars.mail_setup == ''
+    with:
+      commands:
+      - name: select
+        mailbox: INBOX
+      - name: store
+        sequence: "1"
+        dataitem: +FLAGS
+        value: '\Flagged'
+      - name: fetch
+        sequence: "1"
+        dataitem: FLAGS
+    test: res.code == 0 && "\\Flagged" in res.data.fetch.messages[0].flags
+    echo: |
+      Flags: {{res.data.fetch.messages[0].flags}}
+
+  - name: Copy two messages into a new mailbox
+    uses: imap
+    skipif: vars.mail_setup == ''
+    with:
+      commands:
+      - name: create
+        mailbox: Probe-Copy
+      - name: select
+        mailbox: INBOX
+      - name: copy
+        sequence: "1:2"
+        mailbox: Probe-Copy
+      - name: examine
+        mailbox: Probe-Copy
+      - name: select
+        mailbox: INBOX
+      - name: delete
+        mailbox: Probe-Copy
+    test: res.code == 0 && res.data.examine.exists == 2
+    echo: |
+      Copied: {{res.data.examine.exists}}
+
   - name: UID Search on INBOX
     uses: imap
     with:
