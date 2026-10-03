@@ -38,6 +38,16 @@ Anything inside `{{ }}` is evaluated and replaced by its value, including a path
   echo: "Environment: {{vars.NODE_ENV || 'development'}}, Users: {{outputs.api.user_count || 0}}"
 ```
 
+A template ends at the `}}` that closes it, not at the first `}}` in the text. The braces of a map literal nest, and a quoted string is read whole, so these are single templates:
+
+```yaml
+- name: Braces inside a template
+  uses: hello
+  echo: "port={{ {'db': {'port': 5432}}.db.port }}, id={{ parse_json('{\"user\": {\"id\": 1}}').user.id }}"
+```
+
+`{{{` is read as a literal `{` followed by a template, so `{{{vars.name}}}` prints the value in braces. A template that starts with a map literal therefore needs a space after `{{`, as in `{{ {'a': 1} }}`. A `{{` that is never closed is left as text.
+
 ### Template Expression Context
 
 Template expressions have access to several data sources:
