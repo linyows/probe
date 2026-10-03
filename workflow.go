@@ -75,6 +75,9 @@ func (w *Workflow) Start(c Config) error {
 	}
 
 	ctx := w.newJobContext(c, vars, scheduler)
+	// A process a step started in the background lives on after its step,
+	// for later steps and jobs to use, but not after the workflow.
+	defer ctx.background.stop()
 
 	if err := w.startJobsWithDependencies(ctx); err != nil {
 		return err
@@ -274,6 +277,7 @@ func (w *Workflow) newJobContext(c Config, vars map[string]any, scheduler *JobSc
 		JobScheduler: scheduler,
 		Outputs:      w.outputs,
 		countersMu:   &sync.Mutex{},
+		background:   newBackgroundProcs(),
 	}
 }
 

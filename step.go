@@ -143,6 +143,9 @@ func (st *Step) executeSingleAction(runner ActionRunner, expW map[string]any, jC
 	// Wait for either completion or timeout
 	select {
 	case res := <-resultCh:
+		if res.err == nil {
+			jCtx.background.track(st.Uses, res.ret)
+		}
 		return res.ret, res.err
 	case <-ctx.Done():
 		return nil, errors.New("action execution timed out after " + timeout.String())

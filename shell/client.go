@@ -2,7 +2,6 @@ package shell
 
 import (
 	"context"
-	"crypto/md5"
 	"fmt"
 	"io"
 	"os"
@@ -217,18 +216,14 @@ func (r *Req) Do() (*Result, error) {
 
 	// For background execution, setup log file and start process
 	if r.Background {
-		// Use tmp directory for log file
-		tmpDir := os.TempDir()
-
-		// Generate hash from command for unique log filename
-		hash := fmt.Sprintf("%x", md5.Sum([]byte(params.cmd)))[:8]
-		logPath := filepath.Join(tmpDir, fmt.Sprintf("probe-shell-action.%s.log", hash))
-
-		// Create log file
-		logFile, err := os.Create(logPath)
+		// Every run gets a file of its own: naming it after the command made
+		// two runs of the same command write into one file. The workflow
+		// removes it once the run is over.
+		logFile, err := os.CreateTemp("", "probe-shell-action.*.log")
 		if err != nil {
 			return result, fmt.Errorf("failed to create log file: %w", err)
 		}
+		logPath := logFile.Name()
 
 		// Redirect both stdout and stderr to the same log file
 		cmd.Stdout = logFile

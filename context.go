@@ -66,6 +66,9 @@ type JobContext struct {
 	JobScheduler *JobScheduler
 	// Shared outputs across all jobs (accessible via expressions as "outputs")
 	Outputs *Outputs `expr:"outputs"`
+	// Processes that steps left running in the background, stopped once the
+	// workflow is over
+	background *backgroundProcs
 }
 
 // SetFailed marks the job context as failed
