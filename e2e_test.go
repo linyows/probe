@@ -67,6 +67,7 @@ func TestEndToEndBackgroundStoppedAfterWorkflow(t *testing.T) {
 	dir := t.TempDir()
 	pidFile := filepath.Join(dir, "pid")
 	logFile := filepath.Join(dir, "log")
+	cleanupRecorded(t, pidFile, logFile)
 	workflow := filepath.Join(dir, "workflow.yml")
 	yml := fmt.Sprintf(`name: background
 jobs:
@@ -103,7 +104,6 @@ jobs:
 	if err != nil {
 		t.Fatalf("pid file = %q: %v", pidData, err)
 	}
-	t.Cleanup(func() { _ = syscall.Kill(-pid, syscall.SIGKILL) })
 	if syscall.Kill(pid, 0) == nil {
 		t.Errorf("background process %d is still running after the workflow", pid)
 	}
@@ -134,6 +134,7 @@ func TestEndToEndBackgroundStoppedOnInterrupt(t *testing.T) {
 
 	pidFile := filepath.Join(dir, "pid")
 	logFile := filepath.Join(dir, "log")
+	cleanupRecorded(t, pidFile, logFile)
 	workflow := filepath.Join(dir, "workflow.yml")
 	yml := fmt.Sprintf(`name: interrupted
 jobs:
@@ -203,7 +204,6 @@ jobs:
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { _ = syscall.Kill(-pid, syscall.SIGKILL) })
 	if !waitGroupGone(pid) {
 		t.Errorf("background process %d is still running after the interrupt", pid)
 	}
@@ -218,4 +218,24 @@ jobs:
 			t.Errorf("log %s was left behind: %v", log, err)
 		}
 	}
+}
+
+// cleanupRecorded stops the background command whose pid the workflow wrote
+// to pidFile, and removes the log whose path it wrote to logFile, however the
+// test ends. Those live outside the test's directory, and a test that fails
+// early must not leave behind what it was checking for.
+func cleanupRecorded(t *testing.T, pidFile, logFile string) {
+	t.Helper()
+	t.Cleanup(func() {
+		if data, err := os.ReadFile(pidFile); err == nil {
+			if pid, err := strconv.Atoi(strings.TrimSpace(string(data))); err == nil && pid > 0 {
+				_ = syscall.Kill(-pid, syscall.SIGKILL)
+			}
+		}
+		if data, err := os.ReadFile(logFile); err == nil {
+			if log := strings.TrimSpace(string(data)); log != "" {
+				_ = os.Remove(log)
+			}
+		}
+	})
 }

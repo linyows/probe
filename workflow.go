@@ -76,11 +76,12 @@ func (w *Workflow) Start(c Config) error {
 
 	ctx := w.newJobContext(c, vars, scheduler)
 	// A process a step started in the background lives on after its step,
-	// for later steps and jobs to use, but not after the workflow.
-	defer ctx.background.stop()
-	// Interrupting probe has to stop them too.
+	// for later steps and jobs to use, but not after the workflow, and not
+	// after probe is interrupted. The watch for signals is deferred first so
+	// that it ends last, still on while the processes are being stopped.
 	endWatch := ctx.background.stopOnSignal()
 	defer endWatch()
+	defer ctx.background.stop()
 
 	if err := w.startJobsWithDependencies(ctx); err != nil {
 		return err
