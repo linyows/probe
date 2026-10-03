@@ -123,12 +123,38 @@ func (l *Latencies) getSentTimeWithParse(s string) (time.Time, error) {
 	return time.Parse(mailDateFormat, strings.TrimPrefix(s, "Date: "))
 }
 
+// getReceivedTimeWithParse reads the date of a Received header, which follows
+// its last ";". Comments are dropped first: they may hold a ";" of their own,
+// as in "; Wed, 8 Oct 2025 07:12:00 +0000 (metadata; cached)".
 func (l *Latencies) getReceivedTimeWithParse(s string) (time.Time, error) {
-	parts := strings.Split(s, ";")
+	parts := strings.Split(stripComments(s), ";")
 	if len(parts) < 2 {
 		return time.Time{}, fmt.Errorf("malformed Received header")
 	}
-	return time.Parse(mailDateFormat, strings.TrimSpace(strings.Split(parts[len(parts)-1], "(")[0]))
+	return time.Parse(mailDateFormat, strings.TrimSpace(parts[len(parts)-1]))
+}
+
+// stripComments removes the parenthesized comments of a header (RFC 5322
+// section 3.2.2), which can nest and can escape a parenthesis with "\\".
+func stripComments(s string) string {
+	var b strings.Builder
+	depth := 0
+	escaped := false
+	for _, c := range s {
+		switch {
+		case escaped:
+			escaped = false
+		case depth > 0 && c == '\\':
+			escaped = true
+		case c == '(':
+			depth++
+		case c == ')' && depth > 0:
+			depth--
+		case depth == 0:
+			b.WriteRune(c)
+		}
+	}
+	return b.String()
 }
 
 func (l *Latencies) ParseMail(p string) error {
