@@ -339,12 +339,14 @@ func (r *Req) ExecCommands() (*Data, error) {
 				return &data, fmt.Errorf("failed to execute command %d (%s): %w", i+1, cmd.Name, err)
 			}
 			data.Select = *selectData
+			r.forgetSearch()
 		case "examine":
 			examineData, err := r.Examine(cmd.Mailbox)
 			if err != nil {
 				return &data, fmt.Errorf("failed to execute command %d (%s): %w", i+1, cmd.Name, err)
 			}
 			data.Examine = *examineData
+			r.forgetSearch()
 		case "search":
 			searchData, err := r.Search(&cmd.Criteria)
 			if err != nil {
@@ -1252,6 +1254,14 @@ func (r *Req) parseNumSet(sequence string, uid bool) (imap.NumSet, error) {
 	return *seqset, nil
 }
 
+// forgetSearch drops the last search result. Sequence numbers and UIDs
+// belong to one mailbox, so after another is selected the result would
+// point at unrelated messages.
+func (r *Req) forgetSearch() {
+	r.latestSeqSet = ""
+	r.latestUidSet = ""
+}
+
 // latestSet returns the messages the last SEARCH or UID SEARCH found, which
 // a command without a sequence acts on, as FETCH does.
 func (r *Req) latestSet(uid bool) string {
@@ -1261,111 +1271,86 @@ func (r *Req) latestSet(uid bool) string {
 	return r.latestSeqSet
 }
 
+// numRange is one element of a sequence or UID set. 0 stands for "*", the
+// last message, as it does in go-imap.
+type numRange struct{ start, stop uint32 }
+
+// parseNumRanges parses a set such as "1:3,5,9:*" or "*". Every number must
+// be from 1 to 4294967295: 0 would turn into "*" and a larger value would
+// wrap around, so "1:0" used to mean the whole mailbox. A lone "*" is the
+// last message, not "1:*".
+func parseNumRanges(sequence, what string) ([]numRange, error) {
+	var ranges []numRange
+	for part := range strings.SplitSeq(sequence, ",") {
+		part = strings.TrimSpace(part)
+		lo, hi, isRange := strings.Cut(part, ":")
+		if !isRange {
+			n, err := parseNumOrStar(lo, what)
+			if err != nil {
+				return nil, err
+			}
+			ranges = append(ranges, numRange{n, n})
+			continue
+		}
+		if strings.TrimSpace(lo) == "*" {
+			return nil, fmt.Errorf("start of range cannot be *: %s", part)
+		}
+		start, err := parseNumOrStar(lo, what)
+		if err != nil {
+			return nil, err
+		}
+		stop, err := parseNumOrStar(hi, what)
+		if err != nil {
+			return nil, err
+		}
+		ranges = append(ranges, numRange{start, stop})
+	}
+	return ranges, nil
+}
+
+func parseNumOrStar(s, what string) (uint32, error) {
+	s = strings.TrimSpace(s)
+	if s == "*" {
+		return 0, nil
+	}
+	n, err := strconv.ParseUint(s, 10, 32)
+	if err != nil || n == 0 {
+		return 0, fmt.Errorf("invalid %s %q: use a number from 1 to 4294967295, or *", what, s)
+	}
+	return uint32(n), nil
+}
+
 // parseSequenceSet parses a sequence set string into an imap.SeqSet
 func (r *Req) parseSequenceSet(sequence string) (*imap.SeqSet, error) {
-	seqset := new(imap.SeqSet)
-
-	if sequence == "*" {
-		seqset.AddRange(1, 0)
-		return seqset, nil
+	ranges, err := parseNumRanges(sequence, "sequence number")
+	if err != nil {
+		return nil, err
 	}
-
-	// Split by comma for multiple ranges/numbers
-	parts := strings.SplitSeq(sequence, ",")
-	for part := range parts {
-		part = strings.TrimSpace(part)
-		if strings.Contains(part, ":") {
-			// Range
-			rangeParts := strings.Split(part, ":")
-			if len(rangeParts) != 2 {
-				return nil, fmt.Errorf("invalid range format: %s", part)
-			}
-
-			var start, end uint32
-			if rangeParts[0] == "*" {
-				return nil, fmt.Errorf("start of range cannot be *")
-			}
-			startNum, err := strconv.Atoi(rangeParts[0])
-			if err != nil {
-				return nil, fmt.Errorf("invalid start number: %s", rangeParts[0])
-			}
-			start = uint32(startNum)
-
-			if rangeParts[1] == "*" {
-				end = 0 // 0 means "largest sequence number"
-			} else {
-				endNum, err := strconv.Atoi(rangeParts[1])
-				if err != nil {
-					return nil, fmt.Errorf("invalid end number: %s", rangeParts[1])
-				}
-				end = uint32(endNum)
-			}
-
-			seqset.AddRange(start, end)
+	seqset := new(imap.SeqSet)
+	for _, rg := range ranges {
+		if rg.start == rg.stop {
+			seqset.AddNum(rg.start)
 		} else {
-			// Single number
-			num, err := strconv.Atoi(part)
-			if err != nil {
-				return nil, fmt.Errorf("invalid sequence number: %s", part)
-			}
-			seqset.AddNum(uint32(num))
+			seqset.AddRange(rg.start, rg.stop)
 		}
 	}
-
 	return seqset, nil
 }
 
 // parseUIDSet parses a UID set string into an imap.UIDSet
 func (r *Req) parseUIDSet(sequence string) (*imap.UIDSet, error) {
-	uidset := new(imap.UIDSet)
-
-	if sequence == "*" {
-		uidset.AddRange(1, 0)
-		return uidset, nil
+	ranges, err := parseNumRanges(sequence, "UID")
+	if err != nil {
+		return nil, err
 	}
-
-	// Split by comma for multiple ranges/numbers
-	parts := strings.SplitSeq(sequence, ",")
-	for part := range parts {
-		part = strings.TrimSpace(part)
-		if strings.Contains(part, ":") {
-			// Range
-			rangeParts := strings.Split(part, ":")
-			if len(rangeParts) != 2 {
-				return nil, fmt.Errorf("invalid range format: %s", part)
-			}
-
-			var start, end imap.UID
-			if rangeParts[0] == "*" {
-				return nil, fmt.Errorf("start of range cannot be *")
-			}
-			startNum, err := strconv.Atoi(rangeParts[0])
-			if err != nil {
-				return nil, fmt.Errorf("invalid start UID: %s", rangeParts[0])
-			}
-			start = imap.UID(startNum)
-
-			if rangeParts[1] == "*" {
-				end = 0 // 0 means "largest UID"
-			} else {
-				endNum, err := strconv.Atoi(rangeParts[1])
-				if err != nil {
-					return nil, fmt.Errorf("invalid end UID: %s", rangeParts[1])
-				}
-				end = imap.UID(endNum)
-			}
-
-			uidset.AddRange(start, end)
+	uidset := new(imap.UIDSet)
+	for _, rg := range ranges {
+		if rg.start == rg.stop {
+			uidset.AddNum(imap.UID(rg.start))
 		} else {
-			// Single UID
-			num, err := strconv.Atoi(part)
-			if err != nil {
-				return nil, fmt.Errorf("invalid UID: %s", part)
-			}
-			uidset.AddNum(imap.UID(num))
+			uidset.AddRange(imap.UID(rg.start), imap.UID(rg.stop))
 		}
 	}
-
 	return uidset, nil
 }
 

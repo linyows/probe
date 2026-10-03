@@ -225,6 +225,8 @@ Retrieve message data using sequence numbers.
 
 Set, add or remove flags on messages. `dataitem` is `FLAGS` to replace the flags, `+FLAGS` to add, or `-FLAGS` to remove, optionally followed by `.SILENT` so the server does not send the new flags back. `value` lists the flags, with or without parentheses. `uid store` takes UIDs in `sequence`. Without `sequence`, both act on the messages the last `search` or `uid search` found, as `fetch` does.
 
+In `sequence`, a lone `*` is the last message, and every number has to be from `1` to `4294967295`; `0` or a larger value is refused rather than read as `*`. A `select` or `examine` forgets the last search result, since numbers belong to one mailbox, so a command without `sequence` after switching mailboxes fails instead of acting on the wrong messages.
+
 ```yaml
 - name: "select"
   mailbox: "INBOX"

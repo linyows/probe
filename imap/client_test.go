@@ -1068,3 +1068,124 @@ func TestParseStoreFlags(t *testing.T) {
 		assert.Equal(t, tt.flags, got.Flags, tt.dataitem)
 	}
 }
+
+func TestParseNumRanges(t *testing.T) {
+	tests := []struct {
+		in      string
+		want    []numRange
+		wantErr bool
+	}{
+		{"*", []numRange{{0, 0}}, false}, // the last message, not 1:*
+		{"1:3,5,9:*", []numRange{{1, 3}, {5, 5}, {9, 0}}, false},
+		{" 2 ", []numRange{{2, 2}}, false},
+		{"1,*", []numRange{{1, 1}, {0, 0}}, false},
+		{"4294967295", []numRange{{4294967295, 4294967295}}, false},
+		{"0", nil, true},          // would become "*"
+		{"1:0", nil, true},        // would become 1:*, the whole mailbox
+		{"-1", nil, true},         // would wrap to a huge number
+		{"4294967296", nil, true}, // overflows 32 bits, wrapping to "*"
+		{"1:4294967296", nil, true},
+		{"*:5", nil, true},
+		{"1,,2", nil, true},
+		{"a", nil, true},
+	}
+	for _, tt := range tests {
+		got, err := parseNumRanges(tt.in, "sequence number")
+		if tt.wantErr {
+			assert.Error(t, err, "%q", tt.in)
+			continue
+		}
+		require.NoError(t, err, "%q", tt.in)
+		assert.Equal(t, tt.want, got, "%q", tt.in)
+	}
+}
+
+func TestStoreAndCopy_StarIsTheLastMessage(t *testing.T) {
+	host, port := plainIMAPServer(t, 3)
+
+	ret, err := runCommands(t, host, port,
+		map[string]any{"name": "select", "mailbox": "INBOX"},
+		map[string]any{"name": "store", "sequence": "*", "dataitem": "+FLAGS", "value": `\Flagged`},
+		map[string]any{"name": "uid store", "sequence": "*", "dataitem": "+FLAGS", "value": `\Seen`},
+		map[string]any{"name": "fetch", "sequence": "1:3", "dataitem": "FLAGS"},
+	)
+	require.NoError(t, err)
+	flags := fetchedFlags(t, ret)
+	assert.Empty(t, flags[0], "message 1 must be untouched")
+	assert.Empty(t, flags[1], "message 2 must be untouched")
+	assert.ElementsMatch(t, []string{`\Flagged`, `\Seen`}, flags[2], "only the last message")
+
+	ret, err = runCommands(t, host, port,
+		map[string]any{"name": "select", "mailbox": "INBOX"},
+		map[string]any{"name": "copy", "sequence": "*", "mailbox": "Archive"},
+		map[string]any{"name": "uid copy", "sequence": "*", "mailbox": "Archive"},
+		map[string]any{"name": "examine", "mailbox": "Archive"},
+	)
+	require.NoError(t, err)
+	data := ret["res"].(map[string]any)["data"].(map[string]any)
+	assert.Equal(t, 2, data["examine"].(map[string]any)["exists"], "one message per copy, not the whole mailbox")
+}
+
+func TestStore_RejectsOutOfRangeNumbers(t *testing.T) {
+	host, port := plainIMAPServer(t, 2)
+
+	for _, seq := range []string{"0", "1:0", "-1", "4294967296", "1:4294967296"} {
+		ret, err := runCommands(t, host, port,
+			map[string]any{"name": "select", "mailbox": "INBOX"},
+			map[string]any{"name": "store", "sequence": seq, "dataitem": "+FLAGS", "value": `\Deleted`},
+		)
+		require.NoError(t, err, seq)
+		res := ret["res"].(map[string]any)
+		assert.Equal(t, 1, res["code"], "sequence %q must be refused", seq)
+		assert.Contains(t, res["error"], "use a number from 1 to 4294967295", seq)
+	}
+
+	// And nothing was flagged on the way.
+	ret, err := runCommands(t, host, port,
+		map[string]any{"name": "select", "mailbox": "INBOX"},
+		map[string]any{"name": "fetch", "sequence": "1:2", "dataitem": "FLAGS"},
+	)
+	require.NoError(t, err)
+	for _, f := range fetchedFlags(t, ret) {
+		assert.Empty(t, f)
+	}
+}
+
+func TestStore_ForgetsSearchAfterSwitchingMailbox(t *testing.T) {
+	host, port := plainIMAPServer(t, 3)
+
+	// Put a message in Archive, so a stale INBOX result could hit it.
+	_, err := runCommands(t, host, port,
+		map[string]any{"name": "select", "mailbox": "INBOX"},
+		map[string]any{"name": "copy", "sequence": "1:3", "mailbox": "Archive"},
+	)
+	require.NoError(t, err)
+
+	for _, cmd := range []map[string]any{
+		{"name": "store", "dataitem": "+FLAGS", "value": `\Deleted`},
+		{"name": "uid store", "dataitem": "+FLAGS", "value": `\Deleted`},
+		{"name": "copy", "mailbox": "INBOX"},
+	} {
+		ret, err := runCommands(t, host, port,
+			map[string]any{"name": "select", "mailbox": "INBOX"},
+			map[string]any{"name": "search", "criteria": map[string]any{"headers": map[string]any{"Subject": "message 2"}}},
+			map[string]any{"name": "uid search", "criteria": map[string]any{"headers": map[string]any{"Subject": "message 2"}}},
+			map[string]any{"name": "select", "mailbox": "Archive"},
+			cmd,
+		)
+		require.NoError(t, err)
+		res := ret["res"].(map[string]any)
+		assert.Equal(t, 1, res["code"], "%s must not reuse the INBOX search in Archive", cmd["name"])
+		assert.Contains(t, res["error"], "sequence is required", cmd["name"])
+	}
+
+	ret, err := runCommands(t, host, port,
+		map[string]any{"name": "examine", "mailbox": "Archive"},
+		map[string]any{"name": "fetch", "sequence": "1:3", "dataitem": "FLAGS"},
+	)
+	require.NoError(t, err)
+	for _, f := range fetchedFlags(t, ret) {
+		assert.Empty(t, f, "no message in Archive was touched")
+	}
+	assert.Equal(t, 3, ret["res"].(map[string]any)["data"].(map[string]any)["examine"].(map[string]any)["exists"])
+}
