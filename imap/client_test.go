@@ -1189,3 +1189,80 @@ func TestStore_ForgetsSearchAfterSwitchingMailbox(t *testing.T) {
 	}
 	assert.Equal(t, 3, ret["res"].(map[string]any)["data"].(map[string]any)["examine"].(map[string]any)["exists"])
 }
+
+// TestStore_UsesOnlyTheLatestSearch covers a search of one kind followed by
+// one of the other kind with a different result: a command without a
+// sequence must not fall back to the older search.
+func TestStore_UsesOnlyTheLatestSearch(t *testing.T) {
+	subject := func(s string) map[string]any {
+		return map[string]any{"headers": map[string]any{"Subject": s}}
+	}
+
+	tests := []struct {
+		name    string
+		first   map[string]any
+		second  map[string]any
+		command map[string]any
+		wantErr string
+		flagged int // 1-based message flagged, 0 for none
+	}{
+		{
+			name:    "store after search then uid search",
+			first:   map[string]any{"name": "search", "criteria": subject("message 1")},
+			second:  map[string]any{"name": "uid search", "criteria": subject("message 2")},
+			command: map[string]any{"name": "store", "dataitem": "+FLAGS", "value": `\Flagged`},
+			wantErr: "sequence is required",
+		},
+		{
+			name:    "uid store after uid search then search",
+			first:   map[string]any{"name": "uid search", "criteria": subject("message 1")},
+			second:  map[string]any{"name": "search", "criteria": subject("message 2")},
+			command: map[string]any{"name": "uid store", "dataitem": "+FLAGS", "value": `\Flagged`},
+			wantErr: "sequence is required",
+		},
+		{
+			name:    "uid store after search then uid search uses the latest",
+			first:   map[string]any{"name": "search", "criteria": subject("message 1")},
+			second:  map[string]any{"name": "uid search", "criteria": subject("message 2")},
+			command: map[string]any{"name": "uid store", "dataitem": "+FLAGS", "value": `\Flagged`},
+			flagged: 2,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			host, port := plainIMAPServer(t, 3)
+			ret, err := runCommands(t, host, port,
+				map[string]any{"name": "select", "mailbox": "INBOX"},
+				tt.first, tt.second, tt.command,
+				map[string]any{"name": "fetch", "sequence": "1:3", "dataitem": "FLAGS"},
+			)
+			require.NoError(t, err)
+			res := ret["res"].(map[string]any)
+			if tt.wantErr != "" {
+				assert.Equal(t, 1, res["code"])
+				assert.Contains(t, res["error"], tt.wantErr)
+				return
+			}
+			require.Equal(t, 0, res["code"], res["error"])
+			for i, f := range fetchedFlags(t, ret) {
+				if i+1 == tt.flagged {
+					assert.ElementsMatch(t, []string{`\Flagged`}, f, "message %d", i+1)
+				} else {
+					assert.Empty(t, f, "message %d", i+1)
+				}
+			}
+		})
+	}
+}
+
+func TestParseStoreFlags_Parentheses(t *testing.T) {
+	for _, bad := range []string{"(", ")", `(\Seen`, `\Seen)`, " ( "} {
+		_, err := parseStoreFlags("FLAGS", bad)
+		assert.Error(t, err, "%q must be refused, not read as clearing every flag", bad)
+	}
+	for _, clear := range []string{"", "()", " ( ) "} {
+		got, err := parseStoreFlags("FLAGS", clear)
+		require.NoError(t, err, "%q", clear)
+		assert.Empty(t, got.Flags, "%q clears the flags on purpose", clear)
+	}
+}

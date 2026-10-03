@@ -353,7 +353,10 @@ func (r *Req) ExecCommands() (*Data, error) {
 				return &data, fmt.Errorf("failed to execute command %d (%s): %w", i+1, cmd.Name, err)
 			}
 			data.Search = *searchData
+			// Only the latest search counts: a command without a sequence
+			// must not fall back to an older search of the other kind.
 			r.latestSeqSet = data.Search.All
+			r.latestUidSet = ""
 		case "uid search":
 			searchData, err := r.UIDSearch(&cmd.Criteria)
 			if err != nil {
@@ -361,6 +364,7 @@ func (r *Req) ExecCommands() (*Data, error) {
 			}
 			data.Search = *searchData
 			r.latestUidSet = data.Search.All
+			r.latestSeqSet = ""
 		case "list":
 			listData, err := r.List(cmd.Reference, cmd.Pattern)
 			if err != nil {
@@ -930,7 +934,7 @@ func (r *Req) Noop() (*NoopData, error) {
 // Fetch implements FETCH command
 func (r *Req) Fetch(sequence, dataitem string) (*FetchData, error) {
 	if sequence == "" {
-		return nil, fmt.Errorf("sequence is required for FETCH command")
+		return nil, fmt.Errorf("sequence is required for FETCH command: give one, or run a search of the same kind (search, or uid search for a uid command) just before it in this mailbox")
 	}
 	if dataitem == "" {
 		return nil, fmt.Errorf("dataitem is required for FETCH command")
@@ -1031,7 +1035,7 @@ func (r *Req) Fetch(sequence, dataitem string) (*FetchData, error) {
 
 func (r *Req) UIDFetch(sequence, dataitem string) (*FetchData, error) {
 	if sequence == "" {
-		return nil, fmt.Errorf("sequence is required for UID FETCH")
+		return nil, fmt.Errorf("sequence is required for UID FETCH: give one, or run a search of the same kind (search, or uid search for a uid command) just before it in this mailbox")
 	}
 	if dataitem == "" {
 		dataitem = "ALL"
@@ -1147,7 +1151,7 @@ func (r *Req) UIDFetch(sequence, dataitem string) (*FetchData, error) {
 // .SILENT, and value lists the flags, as in "\Seen \Flagged" or "(\Seen)".
 func (r *Req) Store(sequence, dataitem, value string, uid bool) (*StoreData, error) {
 	if sequence == "" {
-		return nil, fmt.Errorf("sequence is required for STORE command")
+		return nil, fmt.Errorf("sequence is required for STORE command: give one, or run a search of the same kind (search, or uid search for a uid command) just before it in this mailbox")
 	}
 	if dataitem == "" {
 		return nil, fmt.Errorf("dataitem is required for STORE command")
@@ -1197,7 +1201,15 @@ func parseStoreFlags(dataitem, value string) (*imap.StoreFlags, error) {
 	}
 
 	list := strings.TrimSpace(value)
-	list = strings.TrimSuffix(strings.TrimPrefix(list, "("), ")")
+	open, closed := strings.HasPrefix(list, "("), strings.HasSuffix(list, ")")
+	if open != closed {
+		// A lone parenthesis would leave an empty list, and FLAGS with no
+		// flags clears them all; only "" or "()" may ask for that.
+		return nil, fmt.Errorf("unbalanced parentheses in flags %q", value)
+	}
+	if open {
+		list = list[1 : len(list)-1]
+	}
 	for _, f := range strings.Fields(list) {
 		store.Flags = append(store.Flags, imap.Flag(f))
 	}
@@ -1212,7 +1224,7 @@ func parseStoreFlags(dataitem, value string) (*imap.StoreFlags, error) {
 // it does when it supports UIDPLUS; otherwise it is 0.
 func (r *Req) Copy(sequence, mailbox string, uid bool) (*CopyData, error) {
 	if sequence == "" {
-		return nil, fmt.Errorf("sequence is required for COPY command")
+		return nil, fmt.Errorf("sequence is required for COPY command: give one, or run a search of the same kind (search, or uid search for a uid command) just before it in this mailbox")
 	}
 	if mailbox == "" {
 		return nil, fmt.Errorf("mailbox is required for COPY command")
