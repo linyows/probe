@@ -152,7 +152,7 @@ func (c *Cmd) parseArgs(args []string) error {
 	return nil
 }
 
-var subCommands = []string{"gen", "dag", "guide"}
+var subCommands = []string{"gen", "dag", "guide", "skill"}
 
 func isSubCommand(name string) bool {
 	return slices.Contains(subCommands, name)
@@ -189,6 +189,7 @@ Usage: probe [options] <workflow-file>
        probe gen <openapi-file>
        probe dag [--mermaid] <workflow-file>
        probe guide [topic]
+       probe skill [install [dir]]
 
 Arguments:
   workflow-file    Path to YAML workflow file(s). Multiple files can be
@@ -201,6 +202,8 @@ Subcommands:
                    Use --mermaid to output in Mermaid format
   guide [topic]    Print a page of the documentation as Markdown
                    Without a topic, list the topics
+  skill            Print the skill that teaches coding agents to use Probe
+                   install [dir] writes it to dir (.claude/skills/probe)
 
 Options:`
 
@@ -283,6 +286,8 @@ func (c *Cmd) runSubCommand() int {
 		return c.runDag()
 	case "guide":
 		return c.runGuide()
+	case "skill":
+		return c.runSkill()
 	default:
 		_, _ = fmt.Fprintf(c.errWriter, "[ERROR] unknown subcommand: %s\n", c.SubCommand)
 		return probe.ExitConfigError
@@ -384,6 +389,35 @@ func (c *Cmd) runGuide() int {
 	}
 	_, _ = fmt.Fprint(c.outWriter, page)
 	return 0
+}
+
+// runSkill prints the agent skill, or installs it with "install [dir]".
+func (c *Cmd) runSkill() int {
+	args := c.SubCommandArgs
+	switch {
+	case len(args) == 0:
+		_, _ = fmt.Fprint(c.outWriter, probe.Skill())
+		return 0
+	case args[0] == "install" && len(args) <= 2:
+		dir := ""
+		if len(args) == 2 {
+			dir = args[1]
+		}
+		if c.mocking && dir == "" {
+			return 0
+		}
+		path, err := probe.InstallSkill(dir)
+		if err != nil {
+			_, _ = fmt.Fprintf(c.errWriter, "[ERROR] %v\n", err)
+			return probe.ExitConfigError
+		}
+		_, _ = fmt.Fprintf(c.outWriter, "Wrote %s\n", path)
+		return 0
+	default:
+		_, _ = fmt.Fprintf(c.errWriter, "[ERROR] unknown skill arguments: %s\n", strings.Join(args, " "))
+		_, _ = fmt.Fprintf(c.errWriter, "Usage: probe skill [install [dir]]\n")
+		return probe.ExitConfigError
+	}
 }
 
 func (c *Cmd) printVersion() {

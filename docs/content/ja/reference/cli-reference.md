@@ -173,7 +173,7 @@ PROBE_REPORT=markdown probe workflow.yml
 
 ## サブコマンド
 
-サブコマンドを指定すると、ワークフローの実行の代わりに別の処理を行います。`gen`は雛形のワークフローを生成し、`dag`はワークフローが表す依存関係のグラフを出力し、`guide`はこのドキュメントを出力します。
+サブコマンドを指定すると、ワークフローの実行の代わりに別の処理を行います。`gen`は雛形のワークフローを生成し、`dag`はワークフローが表す依存関係のグラフを出力し、`guide`はこのドキュメントを出力し、`skill`はコーディングエージェントがProbeを使えるように準備します。
 
 ### `gen`
 
@@ -283,6 +283,19 @@ probe guide concepts/expressions > expressions.md
 ```
 
 未知のトピックを指定すると終了ステータス2で終わります。
+
+### `skill`
+
+Claude Codeなどのコーディングエージェントに、Probeのワークフローの書き方、実行の仕方、失敗の調べ方を教えるエージェントスキルを出力またはインストールします。スキルは、YAMLを書く前に`probe guide`を読むこと、間違えやすい規則、そして失敗した実行を終了コードとレポートから読み解く方法をエージェントに伝えます。
+
+**使い方:**
+```bash
+probe skill                    # SKILL.mdを出力
+probe skill install            # .claude/skills/probe/SKILL.mdに書き出す
+probe skill install <dir>      # <dir>/SKILL.mdに書き出す
+```
+
+`install`はディレクトリを作成し、既存の`SKILL.md`を置き換えます。Probeを更新したあとにもう一度実行すれば、スキルも最新になります。別の場所からスキルを読むエージェントには、`probe skill install .agents/skills/probe`のようにそのディレクトリを指定します。リポジトリからスキルをインストールするツール向けに、同じファイルをリポジトリの`skills/probe/SKILL.md`にも置いています。
 
 ## 環境変数
 

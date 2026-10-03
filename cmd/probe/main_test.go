@@ -2,6 +2,8 @@ package main
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -104,7 +106,7 @@ func TestCmd_usage(t *testing.T) {
 }
 
 func TestCmd_start(t *testing.T) {
-	help := " __  __  __  __  __\n|  ||  ||  ||  || _|\n|  ||  /| |||  /|  |\n| | |  \\| |||  \\| _|\n|_| |_\\_|__||__||__|\n\nProbe - A YAML-based workflow automation tool.\nhttps://github.com/linyows/probe (ver: dev, rev: unknown)\n\nUsage: probe [options] <workflow-file>\n       probe gen <openapi-file>\n       probe dag [--mermaid] <workflow-file>\n       probe guide [topic]\n\nArguments:\n  workflow-file    Path to YAML workflow file(s). Multiple files can be\n                   specified with comma-separated paths (e.g., \"base.yml,override.yml\")\n                   to merge configurations.\n\nSubcommands:\n  gen <file>       Generate probe workflow YAML from OpenAPI specification\n  dag <file>       Show job dependency graph as ASCII art (default)\n                   Use --mermaid to output in Mermaid format\n  guide [topic]    Print a page of the documentation as Markdown\n                   Without a topic, list the topics\n\nOptions:\n  -h, --help       Show command usage\n      --version    Show version information\n      --timing     Show timing (start time, response time)\n  -v, --verbose    Show verbose log\n      --output     Report output: auto, spinner or stream (env: PROBE_OUTPUT)\n      --report     Write reports: json, junit, markdown, github-summary as format[=path],... (env: PROBE_REPORT)\n"
+	help := " __  __  __  __  __\n|  ||  ||  ||  || _|\n|  ||  /| |||  /|  |\n| | |  \\| |||  \\| _|\n|_| |_\\_|__||__||__|\n\nProbe - A YAML-based workflow automation tool.\nhttps://github.com/linyows/probe (ver: dev, rev: unknown)\n\nUsage: probe [options] <workflow-file>\n       probe gen <openapi-file>\n       probe dag [--mermaid] <workflow-file>\n       probe guide [topic]\n       probe skill [install [dir]]\n\nArguments:\n  workflow-file    Path to YAML workflow file(s). Multiple files can be\n                   specified with comma-separated paths (e.g., \"base.yml,override.yml\")\n                   to merge configurations.\n\nSubcommands:\n  gen <file>       Generate probe workflow YAML from OpenAPI specification\n  dag <file>       Show job dependency graph as ASCII art (default)\n                   Use --mermaid to output in Mermaid format\n  guide [topic]    Print a page of the documentation as Markdown\n                   Without a topic, list the topics\n  skill            Print the skill that teaches coding agents to use Probe\n                   install [dir] writes it to dir (.claude/skills/probe)\n\nOptions:\n  -h, --help       Show command usage\n      --version    Show version information\n      --timing     Show timing (start time, response time)\n  -v, --verbose    Show verbose log\n      --output     Report output: auto, spinner or stream (env: PROBE_OUTPUT)\n      --report     Write reports: json, junit, markdown, github-summary as format[=path],... (env: PROBE_REPORT)\n"
 
 	tests := []struct {
 		name           string
@@ -649,5 +651,41 @@ func TestGuide_EveryActionHasAPage(t *testing.T) {
 		if _, err := probe.Guide(name); err != nil {
 			t.Errorf("built-in action %q has no guide page: %v", name, err)
 		}
+	}
+}
+
+func TestCmd_skill(t *testing.T) {
+	dir := t.TempDir()
+
+	tests := []struct {
+		name       string
+		args       []string
+		expectCode int
+		contains   string
+		errContain string
+	}{
+		{"print", []string{"probe", "skill"}, 0, "name: probe", ""},
+		{"install into a directory", []string{"probe", "skill", "install", dir}, 0, "Wrote " + dir, ""},
+		{"unknown argument", []string{"probe", "skill", "bogus"}, probe.ExitConfigError, "", "unknown skill arguments: bogus"},
+		{"too many arguments", []string{"probe", "skill", "install", "a", "b"}, probe.ExitConfigError, "", "Usage: probe skill"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c := newBufferCmd()
+			if code := c.start(tt.args); code != tt.expectCode {
+				t.Errorf("start(%v) = %d, want %d", tt.args, code, tt.expectCode)
+			}
+			if out := fmt.Sprintf("%s", c.outWriter); tt.contains != "" && !strings.Contains(out, tt.contains) {
+				t.Errorf("output should contain %q, got: %.200s", tt.contains, out)
+			}
+			if errOut := fmt.Sprintf("%s", c.errWriter); tt.errContain != "" && !strings.Contains(errOut, tt.errContain) {
+				t.Errorf("error output should contain %q, got: %s", tt.errContain, errOut)
+			}
+		})
+	}
+
+	if _, err := os.Stat(filepath.Join(dir, "SKILL.md")); err != nil {
+		t.Errorf("install should have written SKILL.md: %v", err)
 	}
 }

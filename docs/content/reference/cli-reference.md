@@ -173,7 +173,7 @@ PROBE_REPORT=markdown probe workflow.yml
 
 ## Subcommands
 
-A subcommand replaces the run with something else: `gen` writes a starting workflow, `dag` prints the dependency graph a workflow describes, and `guide` prints this documentation.
+A subcommand replaces the run with something else: `gen` writes a starting workflow, `dag` prints the dependency graph a workflow describes, `guide` prints this documentation, and `skill` sets up a coding agent to use Probe.
 
 ### `gen`
 
@@ -283,6 +283,19 @@ probe guide concepts/expressions > expressions.md
 ```
 
 An unknown topic exits with status 2.
+
+### `skill`
+
+Print or install the agent skill that teaches a coding agent, such as Claude Code, to write, run and debug Probe workflows. The skill tells the agent to read `probe guide` before writing YAML, lists the rules that are easy to get wrong, and explains how to read a failed run from its exit code and report.
+
+**Usage:**
+```bash
+probe skill                    # print SKILL.md
+probe skill install            # write .claude/skills/probe/SKILL.md
+probe skill install <dir>      # write <dir>/SKILL.md
+```
+
+`install` creates the directory and replaces an existing `SKILL.md`, so running it again after upgrading Probe brings the skill up to date. For an agent that reads skills from another place, give that directory, for example `probe skill install .agents/skills/probe`. The same file is in the repository at `skills/probe/SKILL.md` for tools that install skills from a repository.
 
 ## Environment Variables
 
