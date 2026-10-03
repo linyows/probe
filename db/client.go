@@ -1,7 +1,9 @@
 package db
 
 import (
+	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"net/url"
 	"os"
@@ -79,6 +81,9 @@ func ParseRequest(with map[string]any) (*Req, string, time.Duration, error) {
 			timeout = time.Duration(seconds) * time.Second
 		} else {
 			return nil, "", 0, fmt.Errorf("invalid timeout format: %s (use duration string like '30s' or integer seconds)", req.Timeout)
+		}
+		if timeout <= 0 {
+			return nil, "", 0, fmt.Errorf("invalid timeout: %s (must be above zero)", req.Timeout)
 		}
 	}
 	req.Timeout = timeout.String()
@@ -189,8 +194,12 @@ func (r *Req) Execute(driverDSN string, timeout time.Duration) (res map[string]a
 	}()
 
 	// Test connection
-	if err = db.Ping(); err != nil {
-		return r.createErrorResult(start, fmt.Errorf("failed to connect to database: %w", err))
+	// The timeout covers connecting as well as the query.
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	if err = db.PingContext(ctx); err != nil {
+		return r.createErrorResult(start, timeoutError(fmt.Errorf("failed to connect to database: %w", err), timeout))
 	}
 
 	// Determine query type
@@ -204,13 +213,13 @@ func (r *Req) Execute(driverDSN string, timeout time.Duration) (res map[string]a
 	var result *Result
 
 	if isSelect {
-		result, err = r.executeSelectQuery(db, start)
+		result, err = r.executeSelectQuery(ctx, db, start)
 	} else {
-		result, err = r.executeNonSelectQuery(db, start)
+		result, err = r.executeNonSelectQuery(ctx, db, start)
 	}
 
 	if err != nil {
-		return r.createErrorResult(start, err)
+		return r.createErrorResult(start, timeoutError(err, timeout))
 	}
 
 	// After callback on success
@@ -227,8 +236,8 @@ func (r *Req) Execute(driverDSN string, timeout time.Duration) (res map[string]a
 	return mapResult, nil
 }
 
-func (r *Req) executeSelectQuery(db *sql.DB, start time.Time) (res *Result, err error) {
-	rows, err := db.Query(r.Query, r.Params...)
+func (r *Req) executeSelectQuery(ctx context.Context, db *sql.DB, start time.Time) (res *Result, err error) {
+	rows, err := db.QueryContext(ctx, r.Query, r.Params...)
 	if err != nil {
 		return nil, err
 	}
@@ -293,8 +302,8 @@ func (r *Req) executeSelectQuery(db *sql.DB, start time.Time) (res *Result, err 
 	}, nil
 }
 
-func (r *Req) executeNonSelectQuery(db *sql.DB, start time.Time) (*Result, error) {
-	result, err := db.Exec(r.Query, r.Params...)
+func (r *Req) executeNonSelectQuery(ctx context.Context, db *sql.DB, start time.Time) (*Result, error) {
+	result, err := db.ExecContext(ctx, r.Query, r.Params...)
 	if err != nil {
 		return nil, err
 	}
@@ -316,6 +325,15 @@ func (r *Req) executeNonSelectQuery(db *sql.DB, start time.Time) (*Result, error
 		RT:     duration,
 		Status: 0, // success
 	}, nil
+}
+
+// timeoutError names the timeout when it is what ended the work, since the
+// driver's own message only says that a context ran out.
+func timeoutError(err error, timeout time.Duration) error {
+	if errors.Is(err, context.DeadlineExceeded) {
+		return fmt.Errorf("timed out after %s: %w", timeout, err)
+	}
+	return err
 }
 
 // createErrorResult reports a query the database refused, or a database that

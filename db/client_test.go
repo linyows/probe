@@ -452,3 +452,37 @@ func TestExecuteCloseFailure(t *testing.T) {
 		})
 	}
 }
+
+func TestExecuteQueryTimeout(t *testing.T) {
+	// A query that would run for minutes is cut off at the timeout, and the
+	// step gets a result that says so.
+	dsn := "file:" + filepath.Join(t.TempDir(), "test.db")
+	start := time.Now()
+	ret, err := ExecuteQuery(map[string]any{
+		"dsn":     dsn,
+		"query":   "WITH RECURSIVE c(x) AS (SELECT 1 UNION ALL SELECT x + 1 FROM c WHERE x < 1000000000) SELECT count(*) FROM c",
+		"timeout": "200ms",
+	})
+	elapsed := time.Since(start)
+	if err != nil {
+		t.Fatalf("ExecuteQuery() error: %v", err)
+	}
+	if elapsed > 5*time.Second {
+		t.Errorf("query ran for %v, want it stopped at the 200ms timeout", elapsed)
+	}
+	res, _ := ret["res"].(map[string]any)
+	if msg, _ := res["error"].(string); !strings.Contains(msg, "timed out after 200ms") {
+		t.Errorf("error = %q, want it to name the timeout", msg)
+	}
+	if ret["status"] != 1 {
+		t.Errorf("status = %v, want 1", ret["status"])
+	}
+}
+
+func TestParseRequestTimeoutAboveZero(t *testing.T) {
+	for _, v := range []string{"0", "0s", "-1s"} {
+		if _, _, _, err := ParseRequest(map[string]any{"dsn": "file:x.db", "query": "SELECT 1", "timeout": v}); err == nil {
+			t.Errorf("timeout %q was accepted", v)
+		}
+	}
+}

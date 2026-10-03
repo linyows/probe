@@ -87,13 +87,15 @@ with:
 
 **型:** Duration  
 **デフォルト:** `30s`  
-**説明:** クエリ実行タイムアウト
+**説明:** 接続とクエリの実行にかける制限時間。`"60s"`のようなGoのduration形式か秒数で、0より大きい値
 
 ```yaml
 with:
   query: "SELECT COUNT(*) FROM large_table"
   timeout: "60s"
 ```
+
+制限時間を過ぎたクエリは止められ、ステップはそのままテストに進みます。このとき`res.code`は`1`になり、`res.error`は`timed out after 60s`で始まります。
 
 ## レスポンスオブジェクト
 
