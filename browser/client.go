@@ -2,7 +2,9 @@ package browser
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"net/http"
 	"os"
 	"strings"
 	"sync"
@@ -247,6 +249,25 @@ func (req *Req) createBrowserContext(browserDeadline time.Time) (context.Context
 	return ctx, cancelFunc, nil
 }
 
+// jsString returns s as a JavaScript string literal. A selector such as
+// a[href='/x'] used to be pasted between single quotes, which broke the
+// script; JSON's string syntax is valid JavaScript and escapes it safely.
+func jsString(s string) string {
+	b, _ := json.Marshal(s)
+	return string(b)
+}
+
+// fullScreenshotQuality maps the quality a full_screenshot asks for to the
+// one chromedp takes, which returns PNG only at exactly 100 and JPEG below.
+// An action read from YAML has quality 0 when none is given; that, and
+// anything out of range, means PNG rather than a quality-0 JPEG.
+func fullScreenshotQuality(q int) int {
+	if q <= 0 || q > 100 {
+		return 100
+	}
+	return q
+}
+
 func (req *Req) buildActionTasks() (chromedp.Tasks, error) {
 	tasks := chromedp.Tasks{}
 
@@ -271,7 +292,8 @@ func (req *Req) buildActionTasks() (chromedp.Tasks, error) {
 			tasks = append(tasks, chromedp.SendKeys(action.Selector, action.Value, chromedp.NodeVisible))
 		case "full_screenshot":
 			var buf []byte
-			tasks = append(tasks, chromedp.FullScreenshot(&buf, action.Quality))
+			tasks = append(tasks, chromedp.FullScreenshot(&buf, fullScreenshotQuality(action.Quality)))
+			action.reBuf = &buf
 		case "capture_screenshot":
 			var buf []byte
 			tasks = append(tasks, chromedp.CaptureScreenshot(&buf))
@@ -305,8 +327,11 @@ func (req *Req) buildActionTasks() (chromedp.Tasks, error) {
 			tasks = append(tasks, chromedp.Text(action.Selector, &text, chromedp.ByQuery))
 			action.reText = &text
 		case "hover":
-			tasks = append(tasks, chromedp.EvaluateAsDevTools(fmt.Sprintf(`
-				const el = document.querySelector('%s');
+			// The script runs in the page's global scope, so it is wrapped
+			// in a function: a top-level const would clash with the next
+			// hover or right_click on the same page.
+			tasks = append(tasks, chromedp.EvaluateAsDevTools(fmt.Sprintf(`(() => {
+				const el = document.querySelector(%s);
 				if (el) {
 					const event = new MouseEvent('mouseover', {
 						view: window,
@@ -315,7 +340,7 @@ func (req *Req) buildActionTasks() (chromedp.Tasks, error) {
 					});
 					el.dispatchEvent(event);
 				}
-			`, action.Selector), nil))
+			})()`, jsString(action.Selector)), nil))
 		case "focus":
 			tasks = append(tasks, chromedp.Focus(action.Selector, chromedp.NodeVisible))
 		case "get_html":
@@ -327,8 +352,8 @@ func (req *Req) buildActionTasks() (chromedp.Tasks, error) {
 		case "double_click":
 			tasks = append(tasks, chromedp.DoubleClick(action.Selector, chromedp.NodeVisible))
 		case "right_click":
-			tasks = append(tasks, chromedp.EvaluateAsDevTools(fmt.Sprintf(`
-				const el = document.querySelector('%s');
+			tasks = append(tasks, chromedp.EvaluateAsDevTools(fmt.Sprintf(`(() => {
+				const el = document.querySelector(%s);
 				if (el) {
 					const event = new MouseEvent('contextmenu', {
 						view: window,
@@ -338,7 +363,7 @@ func (req *Req) buildActionTasks() (chromedp.Tasks, error) {
 					});
 					el.dispatchEvent(event);
 				}
-			`, action.Selector), nil))
+			})()`, jsString(action.Selector)), nil))
 		default:
 			return nil, fmt.Errorf("unsupported action type: %s", action.Name)
 		}
@@ -363,8 +388,10 @@ func (req *Req) collectResults() (map[string]string, map[string]string, error) {
 			}
 		case "full_screenshot", "capture_screenshot", "screenshot":
 			if action.reBuf != nil && len(*action.reBuf) > 0 {
-				// Save screenshot to temporary file using our binary utility
-				filePath, err := binary.SaveBinaryToTempFile(*action.reBuf, "image/png")
+				// Save screenshot to temporary file using our binary utility.
+				// full_screenshot is JPEG below quality 100, so the type, and
+				// with it the extension, comes from the bytes.
+				filePath, err := binary.SaveBinaryToTempFile(*action.reBuf, http.DetectContentType(*action.reBuf))
 				if err != nil {
 					return nil, nil, fmt.Errorf("failed to save screenshot: %w", err)
 				}
