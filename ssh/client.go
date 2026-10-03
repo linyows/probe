@@ -2,8 +2,10 @@ package ssh
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"net"
 	"os"
 	"path/filepath"
@@ -189,6 +191,27 @@ func validateKnownHostsFile(knownHostsFile string) error {
 	return nil
 }
 
+// systemKnownHosts is the machine-wide known_hosts file, replaced in tests.
+var systemKnownHosts = "/etc/ssh/ssh_known_hosts"
+
+// existingFiles returns those of the default known_hosts files that exist.
+// Either is enough, as with OpenSSH; only having neither is an error, since
+// no host could then be verified.
+func existingFiles(paths ...string) ([]string, error) {
+	var found []string
+	for _, p := range paths {
+		if _, err := os.Stat(p); err == nil {
+			found = append(found, p)
+		} else if !errors.Is(err, fs.ErrNotExist) {
+			return nil, fmt.Errorf("failed to read known hosts file: %w", err)
+		}
+	}
+	if len(found) == 0 {
+		return nil, fmt.Errorf("no known hosts file: %s missing; set known_hosts, or strict_host_check: false to skip the check", strings.Join(paths, " and "))
+	}
+	return found, nil
+}
+
 func createSSHConfig(params *sshParams) (*ssh.ClientConfig, error) {
 	config := &ssh.ClientConfig{
 		User:    params.user,
@@ -260,10 +283,11 @@ func createSSHConfig(params *sshParams) (*ssh.ClientConfig, error) {
 				return nil, fmt.Errorf("failed to get home directory: %w", err)
 			}
 
-			hostKeyCallback, err := knownhosts.New(
-				filepath.Join(homeDir, ".ssh", "known_hosts"),
-				"/etc/ssh/ssh_known_hosts",
-			)
+			files, err := existingFiles(filepath.Join(homeDir, ".ssh", "known_hosts"), systemKnownHosts)
+			if err != nil {
+				return nil, err
+			}
+			hostKeyCallback, err := knownhosts.New(files...)
 			if err != nil {
 				return nil, fmt.Errorf("failed to create known hosts callback: %w", err)
 			}

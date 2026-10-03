@@ -51,7 +51,7 @@ SSHのステップには、接続先のホスト、ユーザー、認証方法�
 | `timeout` | string | "30s" | 接続とコマンド実行の制限時間。`"30s"`や`"5m"`のようなGoのduration形式で指定し、数値だけの指定は受け付けない |
 | `workdir` | string | - | リモートでの作業ディレクトリ |
 | `strict_host_check` | bool | true | Host Keyの厳密検証 |
-| `known_hosts` | string | `~/.ssh/known_hosts`と`/etc/ssh/ssh_known_hosts` | Known Hostsファイルのパス |
+| `known_hosts` | string | `~/.ssh/known_hosts`と`/etc/ssh/ssh_known_hosts` | Known Hostsファイルのパス。既定では2つのうち存在するファイルを読み、どちらもなければホストの検証に失敗する |
 
 ### 環境変数
 
