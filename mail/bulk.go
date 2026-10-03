@@ -1,7 +1,9 @@
 package mail
 
 import (
+	"errors"
 	"fmt"
+	"net/textproto"
 	"strings"
 	"sync"
 	"time"
@@ -37,6 +39,9 @@ type DeliveryResult struct {
 	Total    int
 	Sessions int
 	Error    string
+	// Rejected is set when a failed session got a reply from the server,
+	// such as a 550 to RCPT TO, rather than failing to reach it.
+	Rejected bool
 }
 
 func (b *Bulk) Deliver() {
@@ -75,7 +80,10 @@ func (b *Bulk) DeliverWithResult() DeliveryResult {
 	totalSent := 0
 	sessionsSuccess := 0
 	sessionsFailed := 0
-	var lastError string
+	// Sessions finish in any order, so the outcome cannot depend on which
+	// failure is read last: one reply from the server is enough to say it
+	// answered, and that reply is the error worth reporting.
+	var lastError, rejection string
 	for result := range resultCh {
 		if result.err != nil {
 			fmt.Printf("[ERROR] Send failed: %v\n", result.err)
@@ -84,19 +92,28 @@ func (b *Bulk) DeliverWithResult() DeliveryResult {
 			// the same.
 			totalSent += result.count
 			lastError = result.err.Error()
+			var reply *textproto.Error
+			if errors.As(result.err, &reply) {
+				rejection = result.err.Error()
+			}
 		} else {
 			sessionsSuccess++
 			totalSent += result.count
 		}
 	}
 
-	return DeliveryResult{
+	result := DeliveryResult{
 		Sent:     totalSent,
 		Failed:   sessionsFailed,
 		Total:    totalSent,
 		Sessions: sessionsSuccess + sessionsFailed,
 		Error:    lastError,
+		Rejected: rejection != "",
 	}
+	if rejection != "" {
+		result.Error = rejection
+	}
+	return result
 }
 
 func (b *Bulk) Send() (int, error) {

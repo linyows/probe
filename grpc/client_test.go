@@ -1,8 +1,20 @@
 package grpc
 
 import (
+	"context"
+	"fmt"
+	"net"
 	"reflect"
+	"strings"
 	"testing"
+	"time"
+
+	grpclib "google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/health"
+	healthpb "google.golang.org/grpc/health/grpc_health_v1"
+	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/reflection"
 )
 
 func TestConvertMetadataToMap(t *testing.T) {
@@ -234,5 +246,178 @@ func TestRequest_StructureValidation(t *testing.T) {
 	} else {
 		// Expected - connection will fail in unit test environment
 		t.Logf("Request() failed as expected in unit test: %v", err)
+	}
+}
+
+// startHealthServer serves the standard health service with reflection, which
+// answers NOT_FOUND for a service it does not know. Every reply carries the
+// header x-test-header and the trailer x-test-trailer. A check of the service
+// "slow" takes a second before it is answered, and one of "drop" stops the
+// server without answering.
+func startHealthServer(t *testing.T) string {
+	t.Helper()
+	lis, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var s *grpclib.Server
+	s = grpclib.NewServer(grpclib.UnaryInterceptor(func(ctx context.Context, req any, _ *grpclib.UnaryServerInfo, handler grpclib.UnaryHandler) (any, error) {
+		_ = grpclib.SetHeader(ctx, metadata.Pairs("x-test-header", "from-header"))
+		_ = grpclib.SetTrailer(ctx, metadata.Pairs("x-test-trailer", "from-trailer"))
+		if r, ok := req.(*healthpb.HealthCheckRequest); ok {
+			switch r.Service {
+			case "slow":
+				time.Sleep(time.Second)
+			case "drop":
+				go s.Stop()
+				<-ctx.Done()
+				return nil, ctx.Err()
+			}
+		}
+		return handler(ctx, req)
+	}))
+	healthpb.RegisterHealthServer(s, health.NewServer())
+	reflection.Register(s)
+	go func() { _ = s.Serve(lis) }()
+	t.Cleanup(s.Stop)
+	return lis.Addr().String()
+}
+
+func TestRequestStatus(t *testing.T) {
+	addr := startHealthServer(t)
+
+	tests := []struct {
+		name       string
+		body       string
+		wantCode   string
+		wantStatus int
+	}{
+		{name: "ok", body: `{"service": ""}`, wantCode: "OK", wantStatus: 0},
+		// The server answering with an error status is a result to test, not a
+		// failure to make the call.
+		{name: "not found", body: `{"service": "unknown"}`, wantCode: "NOT_FOUND", wantStatus: 1},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ret, err := Request(map[string]any{
+				"addr":    addr,
+				"service": "grpc.health.v1.Health",
+				"method":  "Check",
+				"body":    tt.body,
+			})
+			if err != nil {
+				t.Fatalf("Request() error: %v", err)
+			}
+			res, _ := ret["res"].(map[string]any)
+			if res["status_code"] != tt.wantCode {
+				t.Errorf("status_code = %v, want %s", res["status_code"], tt.wantCode)
+			}
+			if ret["status"] != tt.wantStatus {
+				t.Errorf("status = %v, want %d", ret["status"], tt.wantStatus)
+			}
+			if tt.wantCode != "OK" && res["status_message"] == "" {
+				t.Error("status_message is empty")
+			}
+		})
+	}
+}
+
+func TestRequestUnreachable(t *testing.T) {
+	// Nothing listens there, so no status ever comes back: that is an error.
+	lis, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	addr := lis.Addr().String()
+	_ = lis.Close()
+
+	_, err = Request(map[string]any{
+		"addr":    addr,
+		"service": "grpc.health.v1.Health",
+		"method":  "Check",
+		"timeout": "2s",
+	})
+	if err == nil {
+		t.Fatal("Request() to a closed port succeeded")
+	}
+}
+
+func TestRequestNoAnswer(t *testing.T) {
+	// Every failed call ends with a status, but these were made up on this
+	// side: the server never sent one, so they are errors, not results.
+	tests := []struct {
+		name    string
+		service string
+		timeout string
+	}{
+		{name: "timeout runs out", service: "slow", timeout: "300ms"},
+		{name: "connection lost", service: "drop", timeout: "5s"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			addr := startHealthServer(t)
+			ret, err := Request(map[string]any{
+				"addr":    addr,
+				"service": "grpc.health.v1.Health",
+				"method":  "Check",
+				"body":    fmt.Sprintf(`{"service": %q}`, tt.service),
+				"timeout": tt.timeout,
+			})
+			if err == nil {
+				t.Fatalf("Request() returned %v, want an error", ret)
+			}
+		})
+	}
+}
+
+func TestStatusCodeName(t *testing.T) {
+	tests := map[codes.Code]string{
+		codes.OK:                 "OK",
+		codes.Canceled:           "CANCELLED",
+		codes.NotFound:           "NOT_FOUND",
+		codes.DeadlineExceeded:   "DEADLINE_EXCEEDED",
+		codes.FailedPrecondition: "FAILED_PRECONDITION",
+		codes.Unauthenticated:    "UNAUTHENTICATED",
+	}
+	for c, want := range tests {
+		if got := statusCodeName(c); got != want {
+			t.Errorf("statusCodeName(%v) = %s, want %s", c, got, want)
+		}
+	}
+}
+
+func TestRequestMetadata(t *testing.T) {
+	addr := startHealthServer(t)
+
+	// The status does not matter: headers and trailers come back either way.
+	for _, body := range []string{`{"service": ""}`, `{"service": "unknown"}`} {
+		ret, err := Request(map[string]any{
+			"addr":    addr,
+			"service": "grpc.health.v1.Health",
+			"method":  "Check",
+			"body":    body,
+		})
+		if err != nil {
+			t.Fatalf("Request() error: %v", err)
+		}
+		res, _ := ret["res"].(map[string]any)
+		md, _ := res["metadata"].(map[string]string)
+		if md["x-test-header"] != "from-header" || md["x-test-trailer"] != "from-trailer" {
+			t.Errorf("body %s: metadata = %v, want the header and the trailer", body, res["metadata"])
+		}
+	}
+}
+
+func TestRequestInvalidTimeout(t *testing.T) {
+	_, err := Request(map[string]any{
+		"addr":    "127.0.0.1:1",
+		"service": "grpc.health.v1.Health",
+		"method":  "Check",
+		"timeout": "soon",
+	})
+	if err == nil || !strings.Contains(err.Error(), "invalid timeout") {
+		t.Fatalf("Request() error = %v, want an invalid timeout error", err)
 	}
 }

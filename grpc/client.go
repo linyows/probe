@@ -10,14 +10,18 @@ import (
 	"io"
 	"maps"
 	"os"
+	"sync/atomic"
 	"time"
 
 	"github.com/linyows/probe/mapping"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/reflection/grpc_reflection_v1alpha"
+	"google.golang.org/grpc/stats"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protodesc"
@@ -78,7 +82,7 @@ func (r *Req) Do() (re *Result, er error) {
 	// Setup timeout
 	timeout, err := time.ParseDuration(r.Timeout)
 	if err != nil {
-		timeout = 30 * time.Second
+		return nil, fmt.Errorf("invalid timeout %q: use a duration such as 30s", r.Timeout)
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
@@ -123,7 +127,8 @@ func (r *Req) Do() (re *Result, er error) {
 	}
 
 	// Establish connection
-	conn, err := grpc.NewClient(r.Addr, grpc.WithTransportCredentials(creds))
+	answer := &answerHandler{}
+	conn, err := grpc.NewClient(r.Addr, grpc.WithTransportCredentials(creds), grpc.WithStatsHandler(answer))
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to gRPC server: %w", err)
 	}
@@ -149,7 +154,7 @@ func (r *Req) Do() (re *Result, er error) {
 
 	// Use reflection to get service descriptor
 	reflectionClient := grpc_reflection_v1alpha.NewServerReflectionClient(conn)
-	res, err := r.invokeMethod(ctx, conn, reflectionClient)
+	res, err := r.invokeMethod(ctx, conn, reflectionClient, answer)
 	result.RT = time.Since(start)
 
 	if err != nil {
@@ -159,6 +164,9 @@ func (r *Req) Do() (re *Result, er error) {
 
 	result.Res = *res
 	result.Status = 0 // success
+	if res.StatusCode != "OK" {
+		result.Status = 1
+	}
 
 	// Callback after response
 	if r.cb != nil && r.cb.after != nil {
@@ -168,7 +176,7 @@ func (r *Req) Do() (re *Result, er error) {
 	return result, nil
 }
 
-func (r *Req) invokeMethod(ctx context.Context, conn *grpc.ClientConn, reflectionClient grpc_reflection_v1alpha.ServerReflectionClient) (*Res, error) {
+func (r *Req) invokeMethod(ctx context.Context, conn *grpc.ClientConn, reflectionClient grpc_reflection_v1alpha.ServerReflectionClient, answer *answerHandler) (*Res, error) {
 	// Get service descriptor using reflection
 	serviceDesc, err := r.getServiceDescriptor(ctx, reflectionClient)
 	if err != nil {
@@ -194,17 +202,17 @@ func (r *Req) invokeMethod(ctx context.Context, conn *grpc.ClientConn, reflectio
 
 	// Invoke the method
 	fullMethodName := fmt.Sprintf("/%s/%s", serviceDesc.FullName(), methodDesc.Name())
-	err = conn.Invoke(ctx, fullMethodName, requestMsg, responseMsg)
+	var header, trailer metadata.MD
+	err = conn.Invoke(answer.mark(ctx), fullMethodName, requestMsg, responseMsg, grpc.Header(&header), grpc.Trailer(&trailer))
 
-	// Extract response metadata
-	var responseMD metadata.MD
-	responseMD, _ = metadata.FromIncomingContext(ctx)
-
-	// Convert metadata to map
+	// The server's metadata arrives as headers before the reply and trailers
+	// after it; a trailer wins over a header of the same name.
 	metadataMap := make(map[string]string)
-	for key, values := range responseMD {
-		if len(values) > 0 {
-			metadataMap[key] = values[0] // Take first value
+	for _, md := range []metadata.MD{header, trailer} {
+		for key, values := range md {
+			if len(values) > 0 {
+				metadataMap[key] = values[0] // Take first value
+			}
 		}
 	}
 
@@ -224,13 +232,93 @@ func (r *Req) invokeMethod(ctx context.Context, conn *grpc.ClientConn, reflectio
 		Metadata:      metadataMap,
 	}
 
+	// A status the server sent is its answer, which a test can check like an
+	// HTTP status code. Every error from a call is a status, but one made up
+	// on this side, such as the timeout running out or the connection
+	// failing, arrives without the server's trailers and stays an error.
 	if err != nil {
-		res.StatusCode = "ERROR"
-		res.StatusMessage = err.Error()
-		return res, err
+		st, ok := status.FromError(err)
+		if !ok || !answer.answered.Load() {
+			return nil, err
+		}
+		res.StatusCode = statusCodeName(st.Code())
+		res.StatusMessage = st.Message()
 	}
 
 	return res, nil
+}
+
+// answerHandler records whether the server sent the trailers that carry the
+// status of the call marked with mark. It ignores the reflection lookup that
+// goes over the same connection.
+type answerHandler struct {
+	answered atomic.Bool
+}
+
+type answerKey struct{}
+
+// mark returns the context to make the call with.
+func (h *answerHandler) mark(ctx context.Context) context.Context {
+	return context.WithValue(ctx, answerKey{}, true)
+}
+
+func (h *answerHandler) TagRPC(ctx context.Context, _ *stats.RPCTagInfo) context.Context {
+	return ctx
+}
+
+func (h *answerHandler) HandleRPC(ctx context.Context, s stats.RPCStats) {
+	if _, ok := s.(*stats.InTrailer); ok && ctx.Value(answerKey{}) != nil {
+		h.answered.Store(true)
+	}
+}
+
+func (h *answerHandler) TagConn(ctx context.Context, _ *stats.ConnTagInfo) context.Context {
+	return ctx
+}
+
+func (h *answerHandler) HandleConn(context.Context, stats.ConnStats) {}
+
+// statusCodeName returns the canonical name of a gRPC status code, such as
+// NOT_FOUND, which is how the gRPC specification and other tools spell it.
+func statusCodeName(c codes.Code) string {
+	switch c {
+	case codes.OK:
+		return "OK"
+	case codes.Canceled:
+		return "CANCELLED"
+	case codes.Unknown:
+		return "UNKNOWN"
+	case codes.InvalidArgument:
+		return "INVALID_ARGUMENT"
+	case codes.DeadlineExceeded:
+		return "DEADLINE_EXCEEDED"
+	case codes.NotFound:
+		return "NOT_FOUND"
+	case codes.AlreadyExists:
+		return "ALREADY_EXISTS"
+	case codes.PermissionDenied:
+		return "PERMISSION_DENIED"
+	case codes.ResourceExhausted:
+		return "RESOURCE_EXHAUSTED"
+	case codes.FailedPrecondition:
+		return "FAILED_PRECONDITION"
+	case codes.Aborted:
+		return "ABORTED"
+	case codes.OutOfRange:
+		return "OUT_OF_RANGE"
+	case codes.Unimplemented:
+		return "UNIMPLEMENTED"
+	case codes.Internal:
+		return "INTERNAL"
+	case codes.Unavailable:
+		return "UNAVAILABLE"
+	case codes.DataLoss:
+		return "DATA_LOSS"
+	case codes.Unauthenticated:
+		return "UNAUTHENTICATED"
+	default:
+		return c.String()
+	}
 }
 
 func (r *Req) getServiceDescriptor(ctx context.Context, client grpc_reflection_v1alpha.ServerReflectionClient) (re protoreflect.ServiceDescriptor, er error) {

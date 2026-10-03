@@ -57,7 +57,7 @@ After the step, `res` reports how much was delivered.
 | `rt.sec` | Float | Time the delivery took in seconds |
 | `status` | Integer | Same as `res.code` |
 
-When every session fails and nothing is delivered, the step ends with an action error instead, so `res` cannot be tested.
+A server that refuses the mail, for example with `550` to `RCPT TO`, has answered, so the step goes on to its test with `res.code` set to `1` and the reply in `res.error`. When no session can reach the server at all, the step ends with an error.
 
 ## SMTP Examples
 

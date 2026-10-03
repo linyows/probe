@@ -1,6 +1,8 @@
 package mail
 
 import (
+	"net"
+	"net/textproto"
 	"reflect"
 	"strings"
 	"testing"
@@ -395,6 +397,133 @@ func TestSend_MyHostname(t *testing.T) {
 	for _, g := range got {
 		if g != "EHLO probe-client.local" {
 			t.Errorf("greeting = %q, want EHLO probe-client.local", g)
+		}
+	}
+}
+
+// startRejectingServer runs an SMTP server that refuses every recipient.
+func startRejectingServer(t *testing.T) string {
+	return startSMTPServer(t, func(int) bool { return true })
+}
+
+// startSMTPServer runs an SMTP server that refuses every recipient on the
+// connections answer reports true for, counting from 0. The others are
+// dropped without a word after a moment, so that they finish last.
+func startSMTPServer(t *testing.T, answer func(n int) bool) string {
+	t.Helper()
+	lis, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = lis.Close() })
+
+	go func() {
+		for n := 0; ; n++ {
+			conn, err := lis.Accept()
+			if err != nil {
+				return
+			}
+			if !answer(n) {
+				go func(conn net.Conn) {
+					time.Sleep(100 * time.Millisecond)
+					_ = conn.Close()
+				}(conn)
+				continue
+			}
+			go func(conn net.Conn) {
+				defer func() { _ = conn.Close() }()
+				text := textproto.NewConn(conn)
+				_ = text.PrintfLine("220 test ESMTP")
+				for {
+					line, err := text.ReadLine()
+					if err != nil {
+						return
+					}
+					switch cmd := strings.ToUpper(strings.SplitN(line, " ", 2)[0]); cmd {
+					case "RCPT":
+						_ = text.PrintfLine("550 5.1.1 No such user")
+					case "QUIT":
+						_ = text.PrintfLine("221 bye")
+						return
+					default:
+						_ = text.PrintfLine("250 ok")
+					}
+				}
+			}(conn)
+		}
+	}()
+
+	return lis.Addr().String()
+}
+
+func TestReqDo_Rejected(t *testing.T) {
+	// The server answered, so the step gets a result to test rather than an
+	// error.
+	req := &Req{
+		Addr:    startRejectingServer(t),
+		From:    "from@example.com",
+		To:      "nobody@example.com",
+		Subject: "test",
+		Session: 1,
+		Message: 1,
+	}
+	result, err := req.Do()
+	if err != nil {
+		t.Fatalf("Do() error: %v", err)
+	}
+	if result.Status != 1 || result.Res.Code != 1 {
+		t.Errorf("status = %d, code = %d, want 1 and 1", result.Status, result.Res.Code)
+	}
+	if !strings.Contains(result.Res.Error, "550") {
+		t.Errorf("error = %q, want the server's reply", result.Res.Error)
+	}
+}
+
+func TestReqDo_Unreachable(t *testing.T) {
+	// Nothing listens there, so there is no answer to test.
+	lis, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	addr := lis.Addr().String()
+	_ = lis.Close()
+
+	req := &Req{
+		Addr:    addr,
+		From:    "from@example.com",
+		To:      "nobody@example.com",
+		Subject: "test",
+		Session: 1,
+		Message: 1,
+	}
+	if _, err := req.Do(); err == nil {
+		t.Fatal("Do() to a closed port succeeded")
+	}
+}
+
+func TestReqDo_RejectedAndDropped(t *testing.T) {
+	// One session is refused and the other loses its connection, after the
+	// refusal. The server answered once, so the outcome is a result whichever
+	// session finishes last.
+	for i := 0; i < 5; i++ {
+		addr := startSMTPServer(t, func(n int) bool { return n%2 == 0 })
+		req := &Req{
+			Addr:    addr,
+			From:    "from@example.com",
+			To:      "nobody@example.com",
+			Subject: "test",
+			Session: 2,
+			Message: 2,
+		}
+		result, err := req.Do()
+		if err != nil {
+			t.Fatalf("run %d: Do() error: %v", i, err)
+		}
+		if result.Res.Failed != 2 {
+			t.Errorf("run %d: failed = %d, want 2", i, result.Res.Failed)
+		}
+		if !strings.Contains(result.Res.Error, "550") {
+			t.Errorf("run %d: error = %q, want the server's reply", i, result.Res.Error)
 		}
 	}
 }

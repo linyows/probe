@@ -139,8 +139,9 @@ func (r *Req) Do() (*Result, error) {
 		r.cb.after(result)
 	}
 
-	// Return error if all deliveries failed
-	if deliveryResult.Failed > 0 && deliveryResult.Sent == 0 && deliveryResult.Error != "" {
+	// A server that refused the mail answered, which is a result a test can
+	// check; only failing to reach it at all is an error.
+	if deliveryResult.Failed > 0 && deliveryResult.Sent == 0 && deliveryResult.Error != "" && !deliveryResult.Rejected {
 		return result, fmt.Errorf("mail delivery failed: %s", deliveryResult.Error)
 	}
 
