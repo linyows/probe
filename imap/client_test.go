@@ -117,7 +117,7 @@ func TestBuildSearchCriteria(t *testing.T) {
 				Since: "today",
 			},
 			want: func(t *testing.T, sc *imap.SearchCriteria) {
-				today := time.Now().Truncate(24 * time.Hour)
+				today := startOfDay(time.Now())
 				assert.Equal(t, today, sc.Since)
 			},
 			wantErr: false,
@@ -128,7 +128,7 @@ func TestBuildSearchCriteria(t *testing.T) {
 				Since: "yesterday",
 			},
 			want: func(t *testing.T, sc *imap.SearchCriteria) {
-				yesterday := time.Now().AddDate(0, 0, -1).Truncate(24 * time.Hour)
+				yesterday := startOfDay(time.Now().AddDate(0, 0, -1))
 				assert.Equal(t, yesterday, sc.Since)
 			},
 			wantErr: false,
@@ -302,13 +302,15 @@ func TestBuildSearchCriteria(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name: "flags - custom flag without backslash",
+			// A flag IMAP does not define is a keyword, which has no
+			// backslash; \Custom would be a system flag no server knows.
+			name: "flags - keyword",
 			criteria: Criteria{
 				Flags: []string{"Custom"},
 			},
 			want: func(t *testing.T, sc *imap.SearchCriteria) {
 				require.Len(t, sc.Flag, 1)
-				assert.Equal(t, imap.Flag("\\Custom"), sc.Flag[0])
+				assert.Equal(t, imap.Flag("Custom"), sc.Flag[0])
 			},
 			wantErr: false,
 		},
@@ -321,7 +323,7 @@ func TestBuildSearchCriteria(t *testing.T) {
 				assert.Len(t, sc.Flag, 3)
 				assert.Contains(t, sc.Flag, imap.FlagSeen)
 				assert.Contains(t, sc.Flag, imap.Flag("\\Answered"))
-				assert.Contains(t, sc.Flag, imap.Flag("\\Important"))
+				assert.Contains(t, sc.Flag, imap.Flag("Important"))
 			},
 			wantErr: false,
 		},
@@ -359,7 +361,7 @@ func TestBuildSearchCriteria(t *testing.T) {
 			},
 			want: func(t *testing.T, sc *imap.SearchCriteria) {
 				// Since
-				today := time.Now().Truncate(24 * time.Hour)
+				today := startOfDay(time.Now())
 				assert.Equal(t, today, sc.Since)
 
 				// Flags
@@ -422,7 +424,7 @@ func TestParseDate(t *testing.T) {
 			name:  "today",
 			input: "today",
 			check: func(t *testing.T, result time.Time) {
-				today := time.Now().Truncate(24 * time.Hour)
+				today := startOfDay(time.Now())
 				assert.Equal(t, today, result)
 			},
 		},
@@ -430,7 +432,7 @@ func TestParseDate(t *testing.T) {
 			name:  "yesterday",
 			input: "yesterday",
 			check: func(t *testing.T, result time.Time) {
-				yesterday := time.Now().AddDate(0, 0, -1).Truncate(24 * time.Hour)
+				yesterday := startOfDay(time.Now().AddDate(0, 0, -1))
 				assert.Equal(t, yesterday, result)
 			},
 		},
@@ -1433,6 +1435,128 @@ func TestSearchNoMatch(t *testing.T) {
 		search := data["search"].(map[string]any)
 		if search["count"] != 0 || search["all"] != "" {
 			t.Errorf("%s: search = %v, want count 0 and an empty all", name, search)
+		}
+	}
+}
+
+func TestStartOfDayLocal(t *testing.T) {
+	// 08:00 in Tokyo is still the day before in UTC; the day has to start at
+	// Tokyo's midnight, not UTC's.
+	tokyo, err := time.LoadLocation("Asia/Tokyo")
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := startOfDay(time.Date(2026, 10, 3, 8, 0, 0, 0, tokyo))
+	want := time.Date(2026, 10, 3, 0, 0, 0, 0, tokyo)
+	if !got.Equal(want) {
+		t.Errorf("startOfDay() = %v, want %v", got, want)
+	}
+}
+
+func TestParseDateDayMonthYear(t *testing.T) {
+	// The day comes first: 10-Oct is the tenth, and 13-Oct is a day too.
+	r := NewReq()
+	for in, want := range map[string]time.Time{
+		"10-Oct-2026": time.Date(2026, 10, 10, 0, 0, 0, 0, time.UTC),
+		"13-Oct-2026": time.Date(2026, 10, 13, 0, 0, 0, 0, time.UTC),
+	} {
+		got, err := r.parseDate(in)
+		if err != nil {
+			t.Errorf("parseDate(%q) error: %v", in, err)
+			continue
+		}
+		if !got.Equal(want) {
+			t.Errorf("parseDate(%q) = %v, want %v", in, got, want)
+		}
+	}
+}
+
+func TestSelectPermanentFlags(t *testing.T) {
+	// select and examine read the same mailbox, so they report the same
+	// permanent flags; select used to append them to the plain flags.
+	host, port := plainIMAPServer(t, 1)
+	get := func(name string) any {
+		ret, err := runCommands(t, host, port, map[string]any{"name": name, "mailbox": "INBOX"})
+		if err != nil {
+			t.Fatalf("%s: Request() error: %v", name, err)
+		}
+		data := ret["res"].(map[string]any)["data"].(map[string]any)
+		return data[name].(map[string]any)["permanent_flags"]
+	}
+	s, e := get("select"), get("examine")
+	if !reflect.DeepEqual(s, e) {
+		t.Errorf("select permanent_flags = %v, examine = %v, want them equal", s, e)
+	}
+}
+
+func TestFetchDate(t *testing.T) {
+	// The envelope date used to come back as an empty map.
+	host, port := plainIMAPServer(t, 0)
+	c, err := imapclient.DialInsecure(fmt.Sprintf("%s:%d", host, port), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := c.Login("user", "pass").Wait(); err != nil {
+		t.Fatal(err)
+	}
+	msg := "From: a@example.test\r\nDate: Wed, 08 Oct 2025 07:11:55 +0000\r\nSubject: dated\r\n\r\nbody\r\n"
+	cmd := c.Append("INBOX", int64(len(msg)), nil)
+	if _, err := cmd.Write([]byte(msg)); err != nil {
+		t.Fatal(err)
+	}
+	if err := cmd.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := cmd.Wait(); err != nil {
+		t.Fatal(err)
+	}
+	_ = c.Close()
+
+	ret, err := runCommands(t, host, port,
+		map[string]any{"name": "select", "mailbox": "INBOX"},
+		map[string]any{"name": "fetch", "sequence": "1", "dataitem": "ENVELOPE"},
+	)
+	if err != nil {
+		t.Fatalf("Request() error: %v", err)
+	}
+	data := ret["res"].(map[string]any)["data"].(map[string]any)
+	messages := data["fetch"].(map[string]any)["messages"].([]any)
+	if got := messages[0].(map[string]any)["date"]; got != "2025-10-08T07:11:55Z" {
+		t.Errorf("date = %#v, want 2025-10-08T07:11:55Z", got)
+	}
+}
+
+func TestSearchFlag(t *testing.T) {
+	tests := map[string]imap.Flag{
+		"seen":       imap.FlagSeen,
+		"Flagged":    imap.FlagFlagged,
+		`\Answered`:  imap.FlagAnswered,
+		"recent":     `\Recent`,
+		"$Important": "$Important",
+		"NonJunk":    "NonJunk",
+	}
+	for in, want := range tests {
+		if got := searchFlag(in); got != want {
+			t.Errorf("searchFlag(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+func TestSearchSeveralNumbers(t *testing.T) {
+	// Every number in seq_nums or uids counts, not only the first.
+	host, port := plainIMAPServer(t, 3)
+	for _, key := range []string{"seq_nums", "uids"} {
+		ret, err := runCommands(t, host, port,
+			map[string]any{"name": "select", "mailbox": "INBOX"},
+			map[string]any{"name": "search", "criteria": map[string]any{key: []any{"1", "3"}}},
+		)
+		if err != nil {
+			t.Fatalf("%s: Request() error: %v", key, err)
+		}
+		data := ret["res"].(map[string]any)["data"].(map[string]any)
+		search := data["search"].(map[string]any)
+		if search["count"] != 2 {
+			t.Errorf("%s [1 3]: search = %v, want two matches", key, search)
 		}
 	}
 }

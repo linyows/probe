@@ -92,9 +92,12 @@ type Command struct {
 
 // Message represents an email message
 type Message struct {
-	UID      int               `map:"uid"`
-	Flags    []string          `map:"flags"`
-	Date     time.Time         `map:"date"`
+	UID   int      `map:"uid"`
+	Flags []string `map:"flags"`
+	// Date is the envelope's Date in RFC 3339, such as
+	// 2025-10-08T07:11:55Z. A time.Time came out of the result as an empty
+	// map.
+	Date     string            `map:"date"`
 	From     string            `map:"from"`
 	To       string            `map:"to"`
 	Subject  string            `map:"subject"`
@@ -517,7 +520,7 @@ func (r *Req) Select(mb string) (*SelectData, error) {
 	}
 
 	for _, flag := range data.PermanentFlags {
-		sd.PermanentFlags = append(sd.Flags, string(flag))
+		sd.PermanentFlags = append(sd.PermanentFlags, string(flag))
 	}
 
 	return &sd, nil
@@ -598,15 +601,32 @@ func (r *Req) UIDSearch(cr *Criteria) (*SearchData, error) {
 	return &sd, nil
 }
 
+// startOfDay returns midnight at the start of t's day, in t's time zone.
+func startOfDay(t time.Time) time.Time {
+	y, m, d := t.Date()
+	return time.Date(y, m, d, 0, 0, 0, 0, t.Location())
+}
+
+// formatDate formats a message date, leaving a missing one empty.
+func formatDate(t time.Time) string {
+	if t.IsZero() {
+		return ""
+	}
+	return t.Format(time.RFC3339)
+}
+
 func (r *Req) parseDate(st string) (time.Time, error) {
 	original := strings.TrimSpace(st)
 	lower := strings.ToLower(original)
 
+	// A day starts at midnight local time. Truncating to 24 hours gave
+	// midnight UTC, which is the day before for half the world in the
+	// hours after their midnight.
 	switch lower {
 	case "today":
-		return time.Now().Truncate(24 * time.Hour), nil
+		return startOfDay(time.Now()), nil
 	case "yesterday":
-		return time.Now().AddDate(0, 0, -1).Truncate(24 * time.Hour), nil
+		return startOfDay(time.Now().AddDate(0, 0, -1)), nil
 	}
 
 	// Handle relative time expressions
@@ -629,7 +649,7 @@ func (r *Req) parseDate(st string) (time.Time, error) {
 
 	formats := []string{
 		"2006-01-02",
-		"01-Jan-2006",
+		"02-Jan-2006",
 		"2006/01/02",
 		"02/01/2006",
 		time.RFC3339,
@@ -682,8 +702,11 @@ func (r *Req) buildSearchCriteria(cr Criteria) (*imap.SearchCriteria, error) {
 					}
 				}
 			}
-			res.SeqNum = append(res.SeqNum, *seqset)
 		}
+		// One set holds them all. Adding it once per value made a criterion
+		// for every partial set, and the server matches all of them, so only
+		// the first value counted.
+		res.SeqNum = append(res.SeqNum, *seqset)
 	}
 
 	if len(cr.UIDs) > 0 {
@@ -717,8 +740,8 @@ func (r *Req) buildSearchCriteria(cr Criteria) (*imap.SearchCriteria, error) {
 					}
 				}
 			}
-			res.UID = append(res.UID, *uidset)
 		}
+		res.UID = append(res.UID, *uidset)
 	}
 
 	if cr.Since != "" {
@@ -771,33 +794,37 @@ func (r *Req) buildSearchCriteria(cr Criteria) (*imap.SearchCriteria, error) {
 		res.Text = cr.Texts
 	}
 
-	flagPrefx := "\\"
-
-	if len(cr.Flags) > 0 {
-		for _, flag := range cr.Flags {
-			if strings.ToLower(flag) == "seen" {
-				res.Flag = append(res.Flag, imap.FlagSeen)
-			} else if strings.HasPrefix(flag, flagPrefx) {
-				res.Flag = append(res.Flag, imap.Flag(flag))
-			} else {
-				res.Flag = append(res.Flag, imap.Flag(flagPrefx+flag))
-			}
-		}
+	for _, flag := range cr.Flags {
+		res.Flag = append(res.Flag, searchFlag(flag))
 	}
-
-	if len(cr.NotFlags) > 0 {
-		for _, flag := range cr.NotFlags {
-			if strings.ToLower(flag) == "seen" {
-				res.NotFlag = append(res.NotFlag, imap.FlagSeen)
-			} else if strings.HasPrefix(flag, flagPrefx) {
-				res.NotFlag = append(res.NotFlag, imap.Flag(flag))
-			} else {
-				res.NotFlag = append(res.NotFlag, imap.Flag(flagPrefx+flag))
-			}
-		}
+	for _, flag := range cr.NotFlags {
+		res.NotFlag = append(res.NotFlag, searchFlag(flag))
 	}
 
 	return &res, nil
+}
+
+// systemFlags are the flags IMAP defines, which are written with a backslash.
+var systemFlags = map[string]imap.Flag{
+	"seen":     imap.FlagSeen,
+	"answered": imap.FlagAnswered,
+	"flagged":  imap.FlagFlagged,
+	"deleted":  imap.FlagDeleted,
+	"draft":    imap.FlagDraft,
+	"recent":   "\\Recent",
+}
+
+// searchFlag turns a flag as written in a workflow into the IMAP flag. A
+// system flag can be given without its backslash, as in seen; anything else
+// is a keyword such as $Important, which has none and is passed as it is.
+func searchFlag(flag string) imap.Flag {
+	if strings.HasPrefix(flag, "\\") {
+		return imap.Flag(flag)
+	}
+	if f, ok := systemFlags[strings.ToLower(flag)]; ok {
+		return f
+	}
+	return imap.Flag(flag)
 }
 
 // Examine implements EXAMINE command (read-only SELECT)
@@ -1021,7 +1048,7 @@ func (r *Req) Fetch(sequence, dataitem string) (*FetchData, error) {
 		}
 
 		if msg.Envelope != nil {
-			message.Date = msg.Envelope.Date
+			message.Date = formatDate(msg.Envelope.Date)
 			if len(msg.Envelope.From) > 0 {
 				message.From = fmt.Sprintf("%s@%s", msg.Envelope.From[0].Mailbox, msg.Envelope.From[0].Host)
 			}
@@ -1121,7 +1148,7 @@ func (r *Req) UIDFetch(sequence, dataitem string) (*FetchData, error) {
 
 		if msg.Envelope != nil {
 			if !msg.Envelope.Date.IsZero() {
-				message.Date = msg.Envelope.Date
+				message.Date = formatDate(msg.Envelope.Date)
 			}
 			if len(msg.Envelope.From) > 0 {
 				message.From = fmt.Sprintf("%s@%s", msg.Envelope.From[0].Mailbox, msg.Envelope.From[0].Host)

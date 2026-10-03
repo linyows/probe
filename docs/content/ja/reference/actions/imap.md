@@ -308,13 +308,13 @@ criteria:
 | `flags` | 文字列の配列 | すべてのフラグを持つ |
 | `not_flags` | 文字列の配列 | どのフラグも持たない |
 
-フラグは`seen`、`answered`、`flagged`、`deleted`、`draft`のようにバックスラッシュなしで書くか、`'\Seen'`のようにバックスラッシュ付きで書きます。`unseen`というフラグはないため、未読のメッセージは`not_flags: ["seen"]`で指定します。
+フラグは`seen`、`answered`、`flagged`、`deleted`、`draft`のようにバックスラッシュなしで書くか、`'\Seen'`のようにバックスラッシュ付きで書きます。それ以外の名前は`$Important`のようなキーワードとして、そのまま渡します。`unseen`というフラグはないため、未読のメッセージは`not_flags: ["seen"]`で指定します。
 
 日付には以下のいずれかを書きます。
 
-- `today`または`yesterday`
+- `today`または`yesterday`。probeを実行しているマシンのローカルタイムゾーンの0時から
 - `2 hours ago`のような`N hours ago`または`N minutes ago`
-- `2006-01-02`、`2006/01/02`、`02/01/2006`（日が先）
+- `2006-01-02`、`2006/01/02`、`02/01/2006`（日が先）、`02-Jan-2006`
 - `2006-01-02T15:04:05+09:00`のようなRFC 3339、または`02 Jan 06 15:04 JST`のようなRFC 822
 
 IMAPは時刻を除いた日付で比較するため、日付のうち日だけが意味を持ちます。`2 hours ago`は、その日の始まりからのメッセージに一致します。
@@ -346,7 +346,7 @@ IMAPアクションは以下の構造を持つ`res`オブジェクトを提供�
 | `rename` | `success`、`old_mailbox`、`new_mailbox` |
 | `noop` | `success` |
 
-`res.data.fetch.messages`の各要素は`uid`、`flags`、`from`、`to`、`subject`、`size`、`body`、`html_body`、`headers`を持ち、取得したデータ項目に応じて埋まります。`from`と`to`は最初のアドレスだけです。メッセージには`res.data.fetch.messages[0].from`のように添字でアクセスします。
+`res.data.fetch.messages`の各要素は`uid`、`flags`、`date`、`from`、`to`、`subject`、`size`、`body`、`html_body`、`headers`を持ち、取得したデータ項目に応じて埋まります。`date`はエンベロープの`Date`をRFC 3339で表したもので（例: `2025-10-08T07:11:55Z`）、メッセージにない場合は空です。`from`と`to`は最初のアドレスだけです。メッセージには`res.data.fetch.messages[0].from`のように添字でアクセスします。
 
 ## 使用例
 
