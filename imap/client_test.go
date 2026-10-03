@@ -1271,7 +1271,8 @@ func TestParseStoreFlags_Parentheses(t *testing.T) {
 
 // stallingIMAPServer accepts connections and answers like an IMAP server up
 // to the point given, then goes silent: "greeting" never sends the greeting,
-// and "select" logs the client in but never answers SELECT.
+// "select" logs the client in but never answers SELECT, and "logout" refuses
+// SELECT and then never answers LOGOUT.
 func stallingIMAPServer(t *testing.T, stallAt string) (string, int) {
 	t.Helper()
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
@@ -1304,9 +1305,13 @@ func stallingIMAPServer(t *testing.T, stallAt string) (string, int) {
 						continue
 					}
 					tag, cmd := fields[0], strings.ToUpper(fields[1])
-					switch cmd {
-					case "LOGIN", "LOGOUT", "CAPABILITY", "NOOP":
+					switch {
+					case cmd == "LOGOUT" && stallAt == "logout":
+						// Never answer: the session has to be cut off.
+					case cmd == "LOGIN" || cmd == "LOGOUT" || cmd == "CAPABILITY" || cmd == "NOOP":
 						_, _ = c.Write([]byte(tag + " OK done\r\n"))
+					case cmd == "SELECT" && stallAt == "logout":
+						_, _ = c.Write([]byte(tag + " NO no such mailbox\r\n"))
 					default:
 						// Never answer: the session has to be cut off.
 					}
@@ -1326,6 +1331,8 @@ func TestRequest_TimeoutBoundsTheSession(t *testing.T) {
 	}{
 		{"greeting", "IMAP session timed out after 300ms while logging in"},
 		{"select", "IMAP session timed out after 300ms while running commands"},
+		// The command fails first; the session then runs out on LOGOUT.
+		{"logout", "IMAP session timed out after 300ms while logging out"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.stallAt, func(t *testing.T) {
@@ -1382,6 +1389,14 @@ func TestParseTimeout(t *testing.T) {
 		{0, 0, true},
 		{"-1s", 0, true},
 		{true, 0, true},
+		{20_000_000_000, 0, true}, // would wrap to about 49 years
+		{int64(maxTimeoutSeconds) + 1, 0, true},
+		{1e20, 0, true},
+		{"1e20", 0, true},
+		{"NaN", 0, true},
+		{-5, 0, true},
+		{time.Duration(0), 0, true},
+		{int64(maxTimeoutSeconds), time.Duration(maxTimeoutSeconds) * time.Second, false},
 	}
 	for _, tt := range tests {
 		got, err := parseTimeout(tt.in)
@@ -1392,4 +1407,17 @@ func TestParseTimeout(t *testing.T) {
 		require.NoError(t, err, "%#v", tt.in)
 		assert.Equal(t, tt.want, got, "%#v", tt.in)
 	}
+}
+
+func TestRequest_TimeoutWhileLoggingOutKeepsTheCommandError(t *testing.T) {
+	host, port := stallingIMAPServer(t, "logout")
+	_, err := Request(map[string]any{
+		"host": host, "port": port, "username": "user", "password": "pass",
+		"tls": false, "timeout": "300ms",
+		"commands": []any{map[string]any{"name": "select", "mailbox": "Nowhere"}},
+	})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "while logging out")
+	assert.Contains(t, err.Error(), "after the command failed")
+	assert.Contains(t, err.Error(), "no such mailbox")
 }

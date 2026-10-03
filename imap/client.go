@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"maps"
+	"math"
 	"mime"
 	"net"
 	"regexp"
@@ -286,36 +287,53 @@ func (r *Req) timeoutError(doing string, err error) error {
 	return fmt.Errorf("IMAP session timed out after %s while %s: %w", r.Timeout, doing, err)
 }
 
+// maxTimeoutSeconds is the most seconds a time.Duration can hold.
+const maxTimeoutSeconds = math.MaxInt64 / int64(time.Second)
+
 // parseTimeout reads timeout as a duration string such as "30s", or as a
 // number of seconds. A number used to be taken as nanoseconds.
 func parseTimeout(v any) (time.Duration, error) {
-	var d time.Duration
+	invalid := func() error {
+		return fmt.Errorf("invalid timeout %v: use a duration such as 30s, or a number of seconds", v)
+	}
+
 	switch t := v.(type) {
 	case time.Duration:
-		d = t
-	case string:
-		parsed, err := time.ParseDuration(strings.TrimSpace(t))
-		if err != nil {
-			secs, nerr := strconv.ParseFloat(strings.TrimSpace(t), 64)
-			if nerr != nil {
-				return 0, fmt.Errorf("invalid timeout %q: use a duration such as 30s, or a number of seconds", t)
-			}
-			parsed = time.Duration(secs * float64(time.Second))
+		if t <= 0 {
+			return 0, invalid()
 		}
-		d = parsed
+		return t, nil
+	case string:
+		str := strings.TrimSpace(t)
+		if d, err := time.ParseDuration(str); err == nil {
+			if d <= 0 {
+				return 0, invalid()
+			}
+			return d, nil
+		}
+		secs, err := strconv.ParseFloat(str, 64)
+		if err != nil {
+			return 0, invalid()
+		}
+		return secondsToDuration(secs, invalid)
 	case int:
-		d = time.Duration(t) * time.Second
+		return secondsToDuration(float64(t), invalid)
 	case int64:
-		d = time.Duration(t) * time.Second
+		return secondsToDuration(float64(t), invalid)
 	case float64:
-		d = time.Duration(t * float64(time.Second))
+		return secondsToDuration(t, invalid)
 	default:
-		return 0, fmt.Errorf("invalid timeout %v: use a duration such as 30s, or a number of seconds", v)
+		return 0, invalid()
 	}
-	if d <= 0 {
-		return 0, fmt.Errorf("invalid timeout %v: it must be greater than zero", v)
+}
+
+// secondsToDuration converts after checking the range, since multiplying
+// first would wrap a huge value around to some other, positive duration.
+func secondsToDuration(secs float64, invalid func() error) (time.Duration, error) {
+	if math.IsNaN(secs) || secs <= 0 || secs > float64(maxTimeoutSeconds) {
+		return 0, invalid()
 	}
-	return d, nil
+	return time.Duration(secs * float64(time.Second)), nil
 }
 
 func (r *Req) runImap() (*Res, error) {
@@ -380,7 +398,11 @@ func (r *Req) runImap() (*Res, error) {
 	if err != nil {
 		res.Code = 1
 		res.Error = err.Error()
-		_ = r.cl.Logout().Wait()
+		// The session can still run out while logging out; that is a
+		// timeout like any other, with the command's failure kept in it.
+		if logoutErr := r.cl.Logout().Wait(); timedOut.Load() {
+			return nil, fmt.Errorf("%w (after the command failed: %v)", r.timeoutError("logging out", logoutErr), err)
+		}
 		return &res, nil
 	}
 
