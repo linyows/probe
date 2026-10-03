@@ -343,6 +343,7 @@ func TestCreateSSHConfigDefaultKnownHosts(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			home := t.TempDir()
 			t.Setenv("HOME", home)
+			t.Setenv("USERPROFILE", home) // what os.UserHomeDir reads on Windows
 			if tt.home {
 				if err := os.MkdirAll(filepath.Join(home, ".ssh"), 0o700); err != nil {
 					t.Fatal(err)
