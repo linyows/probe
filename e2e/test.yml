@@ -182,6 +182,18 @@ jobs:
     test: |
       res.code == 0 &&
       res.stdout startsWith "# HTTP Action"
+  - name: skill install writes the skill built into the binary
+    uses: shell
+    with:
+      cmd: |
+        dir=$(mktemp -d)
+        ./probe skill install "$dir/skills/probe" &&
+          cmp "$dir/skills/probe/SKILL.md" skills/probe/SKILL.md && echo same
+        rm -rf "$dir"
+    test: |
+      res.code == 0 &&
+      res.stdout contains "Wrote " &&
+      res.stdout contains "same"
 
 # ------------------------------------------------------------------------
 - name: Report File Tests
