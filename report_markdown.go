@@ -19,7 +19,18 @@ func (r *Report) WriteMarkdown(w io.Writer) error {
 // request and response, which is what keeps a page with large responses
 // within a size limit.
 func (r *Report) markdown(payloads bool) string {
+	page, _ := r.markdownWithCuts(payloads)
+	return page
+}
+
+// markdownWithCuts renders the page and also returns the offsets where it
+// can be cut short without leaving a block half written: before the job
+// table, before the failures heading, and before each failure section. They
+// are recorded while rendering rather than searched for afterwards, because
+// a test or a message can itself contain a line that looks like a heading.
+func (r *Report) markdownWithCuts(payloads bool) (string, []int) {
 	var b strings.Builder
+	var cuts []int
 
 	fmt.Fprintf(&b, "# %s\n\n", r.Name)
 	if r.Description != "" {
@@ -30,6 +41,7 @@ func (r *Report) markdown(payloads bool) string {
 		markdownStatus(r.Status), msToSec(r.DurationMs),
 		countPhrase(r.Summary.Jobs), countPhrase(r.Summary.Steps))
 
+	cuts = append(cuts, b.Len())
 	b.WriteString("| Job | Status | Steps | Duration |\n")
 	b.WriteString("|---|---|---|---|\n")
 	for _, job := range r.Jobs {
@@ -50,15 +62,17 @@ func (r *Report) markdown(payloads bool) string {
 				continue
 			}
 			if !failures {
+				cuts = append(cuts, b.Len())
 				b.WriteString("\n## Failures\n\n")
 				failures = true
 			}
+			cuts = append(cuts, b.Len())
 			writeMarkdownFailure(&b, job, st, payloads)
 		}
 	}
 
 	// Every block ends in a blank line; the page itself ends in one newline.
-	return strings.TrimRight(b.String(), "\n") + "\n"
+	return strings.TrimRight(b.String(), "\n") + "\n", cuts
 }
 
 func writeMarkdownFailure(b *strings.Builder, job JobReport, st StepReport, payloads bool) {

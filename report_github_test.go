@@ -3,6 +3,7 @@ package probe
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -118,23 +119,23 @@ func TestFitStepSummary(t *testing.T) {
 	compact := r.markdown(false)
 
 	t.Run("fits as is", func(t *testing.T) {
-		if got := fitStepSummary(r, len(full)+1); got != full {
+		if got := fitStepSummary(r, len(full)); got != full {
 			t.Error("a page within the budget should be written unchanged")
 		}
 	})
 
 	t.Run("drops payloads", func(t *testing.T) {
-		got := fitStepSummary(r, len(full))
+		got := fitStepSummary(r, len(full)-1)
 		if got != compact+payloadsOmittedNote {
 			t.Errorf("got:\n%s", got)
 		}
 	})
 
-	t.Run("truncates at a section", func(t *testing.T) {
-		budget := len(compact) - 20
+	t.Run("cuts at a section", func(t *testing.T) {
+		budget := len(compact) + len(payloadsOmittedNote) - 1
 		got := fitStepSummary(r, budget)
-		if len(got) > budget-1 {
-			t.Errorf("page is %d bytes, over the budget of %d", len(got), budget-1)
+		if len(got) > budget {
+			t.Errorf("page is %d bytes, over the budget of %d", len(got), budget)
 		}
 		if !strings.HasSuffix(got, truncatedNote) {
 			t.Errorf("a cut page should say so, got:\n%s", got)
@@ -143,8 +144,8 @@ func TestFitStepSummary(t *testing.T) {
 		if strings.Count(body, "```")%2 != 0 {
 			t.Errorf("the cut left a code fence open:\n%s", body)
 		}
-		if !strings.HasSuffix(body, "\n") {
-			t.Error("the cut should end on a line break")
+		if !strings.HasPrefix(compact, body) {
+			t.Error("a cut page should be a prefix of the compact page")
 		}
 	})
 
@@ -155,16 +156,105 @@ func TestFitStepSummary(t *testing.T) {
 	})
 }
 
-func TestCutMarkdown(t *testing.T) {
-	page := "# T\n\nline\n\n### A\n\n```\nx\n```\n\n### B\n\n```\ny\n```\n"
-	if got := cutMarkdown(page, len(page)-3); got != "# T\n\nline\n\n### A\n\n```\nx\n```\n\n" {
-		t.Errorf("should cut before the last section, got %q", got)
+// TestFitStepSummary_HeadingInsideFence covers a test and a message that
+// contain lines looking like a failure heading. The page must only be cut at
+// the boundaries the renderer recorded, never at one of those lines.
+func TestFitStepSummary_HeadingInsideFence(t *testing.T) {
+	failed := func(i int) StepReport {
+		return StepReport{
+			Index:  i,
+			Name:   fmt.Sprintf("step %d", i),
+			Status: ReportFailed,
+			Test:   "res.code == 200 &&\n### not a heading\nres.body != \"\"",
+			Failure: &FailureReport{
+				Kind:    FailureTestError,
+				Message: "cannot evaluate\n### also not a heading",
+			},
+		}
 	}
-	if got := cutMarkdown("# T\n\nline one\nline two", 15); got != "# T\n\nline one\n" {
-		t.Errorf("without a section should cut at a line break, got %q", got)
+	r := &Report{
+		Name:   "Fenced",
+		Status: ReportFailed,
+		Jobs: []JobReport{{
+			Name:   "job",
+			Status: ReportFailed,
+			Steps:  []StepReport{failed(0), failed(1), failed(2)},
+		}},
 	}
-	if got := cutMarkdown("no newline at all", 5); got != "" {
-		t.Errorf("got %q, want empty", got)
+
+	page, cuts := r.markdownWithCuts(false)
+	for budget := len(truncatedNote) + 1; budget < len(page)+len(payloadsOmittedNote); budget++ {
+		got := fitStepSummary(r, budget)
+		if got == "" {
+			continue
+		}
+		if len(got) > budget {
+			t.Fatalf("budget %d: page is %d bytes", budget, len(got))
+		}
+		body := strings.TrimSuffix(got, truncatedNote)
+		if body == got {
+			continue // written whole, with only the payloads note
+		}
+		if strings.Count(body, "```")%2 != 0 {
+			t.Fatalf("budget %d: the cut left a code fence open:\n%s", budget, body)
+		}
+		onCut := false
+		for _, c := range cuts {
+			if c == len(body) {
+				onCut = true
+			}
+		}
+		if !onCut {
+			t.Fatalf("budget %d: cut at %d, which is not a recorded boundary %v", budget, len(body), cuts)
+		}
+	}
+}
+
+func TestReport_WriteGitHubSummary_CreatesParentDirectory(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "out", "new", "summary.md")
+	if err := newTestReport().Write(ReportTarget{Format: ReportGitHubSummary, Path: path}); err != nil {
+		t.Fatalf("Write: %v", err)
+	}
+	if info, err := os.Stat(path); err != nil || info.Size() == 0 {
+		t.Errorf("summary not written: %v", err)
+	}
+}
+
+func TestReport_WriteGitHubSummary_Full(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "summary.md")
+	if err := os.WriteFile(path, bytes.Repeat([]byte("x"), maxStepSummaryBytes), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	err := newTestReport().Write(ReportTarget{Format: ReportGitHubSummary, Path: path})
+	if !errors.Is(err, ErrStepSummaryFull) {
+		t.Errorf("error = %v, want ErrStepSummaryFull", err)
+	}
+	if info, _ := os.Stat(path); info.Size() != maxStepSummaryBytes {
+		t.Errorf("size = %d, want it left at %d; not even the separator may be added", info.Size(), maxStepSummaryBytes)
+	}
+}
+
+func TestReport_WriteGitHubSummary_StaysUnderLimit(t *testing.T) {
+	r := newTestReport()
+	compact := r.markdown(false)
+
+	// Leave less room than the compact page needs, so the page is cut.
+	existing := maxStepSummaryBytes - len(compact) - 1
+	path := filepath.Join(t.TempDir(), "summary.md")
+	if err := os.WriteFile(path, bytes.Repeat([]byte("x"), existing), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := r.Write(ReportTarget{Format: ReportGitHubSummary, Path: path}); err != nil {
+		t.Fatalf("Write: %v", err)
+	}
+	info, _ := os.Stat(path)
+	if info.Size() > maxStepSummaryBytes {
+		t.Errorf("summary is %d bytes, over the %d limit", info.Size(), maxStepSummaryBytes)
+	}
+	if info.Size() == int64(existing) {
+		t.Error("a shortened page should still have been written")
 	}
 }
 
@@ -196,6 +286,26 @@ func TestWorkflow_GitHubSummaryOutsideActions(t *testing.T) {
 	}
 	stderr := w.printer.errWriter.(*bytes.Buffer).String()
 	if !strings.Contains(stderr, "[WARN] GITHUB_STEP_SUMMARY is not set") {
+		t.Errorf("expected a warning, got:\n%s", stderr)
+	}
+}
+
+func TestWorkflow_GitHubSummaryFull(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "summary.md")
+	if err := os.WriteFile(path, bytes.Repeat([]byte("x"), maxStepSummaryBytes), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	w := &Workflow{
+		Name:    "full",
+		Jobs:    []Job{{Name: "job", Steps: []*Step{}}},
+		printer: newBufferPrinter(),
+	}
+	if err := w.Start(Config{Reports: []ReportTarget{{Format: ReportGitHubSummary, Path: path}}}); err != nil {
+		t.Fatalf("a full summary should not fail the run: %v", err)
+	}
+	stderr := w.printer.errWriter.(*bytes.Buffer).String()
+	if !strings.Contains(stderr, "[WARN] the job summary has no room left") {
 		t.Errorf("expected a warning, got:\n%s", stderr)
 	}
 }
