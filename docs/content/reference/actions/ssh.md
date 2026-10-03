@@ -66,7 +66,9 @@ with:
 
 Numbers and booleans are passed as their text. The flat form `env__NODE_ENV: production` is accepted as well; when a name is given both ways, the value in `env` wins.
 
-The variables are sent through the SSH session, and the server accepts only the names its `sshd_config` allows with `AcceptEnv`. A name the server refuses is skipped and the command runs without it, so a value the command depends on is safer passed in `cmd` itself.
+The variables are sent through the SSH session, and the server accepts only the names its `sshd_config` allows with `AcceptEnv`. A name the server refuses is skipped without an error, and the command runs without it. Add the names the command needs to `AcceptEnv` on the server.
+
+Do not work around a refusal by writing the value into `cmd`. The remote shell interprets whatever is embedded in the command, so a value from an untrusted source, such as a response, can inject commands, and a secret there is visible in the remote host's process list.
 
 ## Return Values
 
