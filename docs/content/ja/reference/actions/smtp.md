@@ -29,14 +29,16 @@ steps:
 |---|---|---|---|---|
 | `addr` | String | 必須 | - | SMTPサーバー（`host:port`） |
 | `from` | String | 必須 | - | エンベロープの送信者 |
-| `to` | String | 必須 | - | エンベロープの受信者 |
+| `to` | String | 必須 | - | エンベロープの受信者。複数の受信者は`a@example.com,b@example.com`のように空白を入れずにカンマで区切る |
 | `subject` | String | 任意 | `""` | 件名 |
 | `myhostname` | String | 任意 | 実行マシンのホスト名。取得できなければ`localhost` | `EHLO` / `HELO`で名乗るホスト名。`localhost`を名乗るクライアントを拒否するサーバーが多いため、サーバーが受け付ける名前を指定する |
-| `session` | Integer | 任意 | `1` | 開くSMTPセッション数 |
-| `message` | Integer | 任意 | `1` | 1セッションあたりの送信通数 |
-| `length` | Integer | 任意 | `0` | 生成する本文のバイト数 |
+| `session` | Integer | 任意 | `1` | 同時に開くSMTPセッション数 |
+| `message` | Integer | 任意 | `1` | 全セッション合計の送信通数。セッションに振り分けて送る |
+| `length` | Integer | 任意 | `0` | 生成する本文の末尾に付ける`*`の文字数 |
 
 認証、TLS、CC/BCC、任意の本文やHTMLを指定するパラメータはありません。実行結果にレポートを出したい場合はステップの`echo`を使います。
+
+生成するメッセージには`From`、`To`、`Date`、`Subject`のヘッダーが付きます。本文は`This is a test mail.`の後に`length`個の`*`を続けたもので、80文字ごとに改行します。
 
 ## レスポンスオブジェクト
 
@@ -44,13 +46,16 @@ steps:
 
 | フィールド | 型 | 説明 |
 |---|---|---|
-| `res.code` | Integer | すべて配送できたとき`0` |
+| `res.code` | Integer | 失敗したセッションがなく、1通以上配送できたとき`0` |
 | `res.sent` | Integer | 配送できた通数 |
-| `res.failed` | Integer | 失敗した通数 |
+| `res.failed` | Integer | 失敗したセッション数。失敗したセッションでは、そのセッションの通数をすべて配送しない |
 | `res.total` | Integer | 試行した通数 |
 | `res.error` | String | 失敗時のエラーメッセージ |
 | `res.maildata` | String | 生成したメール（テキストの場合） |
 | `res.filepath` | String | 生成したメールのパス（バイナリの場合） |
+| `rt.duration` | String | 配送にかかった時間（例: `"3.4ms"`） |
+| `rt.sec` | Float | 配送にかかった時間（秒） |
+| `status` | Integer | `res.code`と同じ値 |
 
 ## 使用例
 
@@ -58,7 +63,7 @@ steps:
 
 ### 複数セッション・複数通の配送
 
-`session`と`message`は掛け合わせになり、各セッションでその通数を配送します。
+`message`は合計の通数で、セッションに振り分けられます。この例では、一方のセッションが2通、もう一方が1通を配送します。
 
 ```yaml
 steps:
@@ -74,9 +79,10 @@ steps:
       session: 2
       message: 3
       length: 750
-    test: res.code == 0 && res.sent == 6
+    test: res.code == 0 && res.sent == 3
     outputs:
       sent: res.sent
+      elapsed: rt.duration
 ```
 
 ### 結果をレポートする
@@ -88,7 +94,7 @@ steps:
     uses: hello
     echo: |
       Sent: {{outputs.bulk.sent}}
-      Round trip: {{rt.duration}}
+      Took: {{outputs.bulk.elapsed}}
 ```
 
 ## 関連項目

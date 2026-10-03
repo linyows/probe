@@ -194,7 +194,7 @@ Every field the action accepts, in one step.
       DEPLOY_ENV: "production"
       API_KEY: "{{vars.production_api_key}}"
       BUILD_VERSION: "{{vars.version}}"
-  test: res.code == 0 && (res.stdout | contains("Deploy successful"))
+  test: res.code == 0 && res.stdout contains "Deploy successful"
   outputs:
     deploy_time: res.rt
     deploy_log: res.stdout

@@ -191,7 +191,7 @@ jobs:
       test: |
         res.code == 401 &&
         res.body.error != null &&
-        res.body.message | contains("Invalid credentials")
+        res.body.message contains "Invalid credentials"
 
     - name: "Test Token Validation"
       id: token-validation
@@ -241,7 +241,7 @@ jobs:
           Authorization: "Bearer {{outputs.refresh.new_token}}"
       test: |
         res.code == 200 &&
-        res.body.message | contains("logged out")
+        res.body.message contains "logged out"
 
     - name: "Test Using Token After Logout"
       uses: http
@@ -304,9 +304,9 @@ jobs:
       test: |
         res.code == 201 &&
         res.body.id != null &&
-        res.body.name | contains(vars.TEST_PRODUCT_NAME) &&
+        res.body.name contains vars.TEST_PRODUCT_NAME &&
         res.body.price == 29.99 &&
-        res.body.sku | hasPrefix("TEST-") &&
+        res.body.sku startsWith "TEST-" &&
         res.body.stock == 100
       outputs:
         product_id: res.body.id
@@ -351,7 +351,7 @@ jobs:
       test: |
         res.code == 200 &&
         res.body.id == outputs['create-product'].product_id &&
-        res.body.name | hasSuffix("UPDATED") &&
+        res.body.name endsWith "UPDATED" &&
         res.body.price == 39.99 &&
         res.body.stock == 75 &&
         len(res.body.tags) == 4
@@ -459,7 +459,7 @@ jobs:
       test: |
         res.code == 200 &&
         len(res.body.products) >= 3 &&
-        res.body.products[0].name | contains("Search Test")
+        res.body.products[0].name contains "Search Test"
 
     - name: "Test Product Filter by Category"
       id: product-search-tests
@@ -677,7 +677,7 @@ jobs:
       test: |
         res.code == 400 &&
         res.body.error != null &&
-        res.body.message | contains("price")
+        res.body.message contains "price"
 
     - name: "Test Required Field Validation"
       uses: http
@@ -693,7 +693,7 @@ jobs:
       test: |
         res.code == 400 &&
         res.body.error != null &&
-        res.body.message | contains("name")
+        res.body.message contains "name"
 
     - name: "Test Email Format Validation"
       uses: http
@@ -708,7 +708,7 @@ jobs:
       test: |
         res.code == 400 &&
         res.body.error != null &&
-        res.body.message | contains("email")
+        res.body.message contains "email"
 
     - name: "Test Numeric Range Validation"
       uses: http
@@ -726,7 +726,7 @@ jobs:
       test: |
         res.code == 400 &&
         res.body.error != null &&
-        res.body.message | contains("price")
+        res.body.message contains "price"
 ```
 
 ## Step 6: Integration Testing

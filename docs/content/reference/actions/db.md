@@ -106,6 +106,14 @@ The database action provides a `res` object with the following properties:
 | `rows` | Array | Query results for SELECT statements (as objects) |
 | `error` | String | Error message if operation failed |
 
+Besides `res`, the step can test these:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `status` | Integer | `0` when the query succeeds |
+| `rt.duration` | String | How long the query took, such as `"1.3ms"` |
+| `rt.sec` | Float | The same in seconds |
+
 ## Response Examples
 
 What the response holds depends on the statement. A `SELECT` returns rows; an `INSERT` or `UPDATE` returns counts instead.
@@ -117,7 +125,7 @@ Rows come back in `res.rows`, and the count of them in `res.rows_affected`.
 ```yaml
 steps:
   - name: "Fetch Users"
-    id: fetch-users
+    id: fetch_users
     uses: db
     with:
       dsn: "mysql://user:pass@localhost/db"
@@ -126,8 +134,8 @@ steps:
     test: res.code == 0 && res.rows_affected > 0
     outputs:
       user_count: res.rows_affected
-      first_user_id: res.rows__0__id
-      first_user_name: res.rows__0__name
+      first_user_id: res.rows[0].id
+      first_user_name: res.rows[0].name
 ```
 
 ### INSERT/UPDATE Query Response
@@ -248,8 +256,8 @@ A query that counts what should not exist turns an invariant into a test.
       FROM users
   test: |
     res.code == 0 && 
-    res.rows__0__total_users > 0 && 
-    res.rows__0__missing_emails == 0
+    res.rows[0].total_users > 0 &&
+    res.rows[0].missing_emails == 0
 ```
 
 ### Performance Monitoring
@@ -306,27 +314,17 @@ The database action implements several security measures:
 
 ## Error Handling
 
-Common error scenarios and handling patterns:
+A query the database rejects, or a connection that fails, does not stop the step: `res.code` is `1` and the database's message is in `res.error`, so the test can check for the failure it expects. The message depends on the database; SQLite reports a missing table as `no such table`.
 
 ```yaml
-- name: "Database with Error Handling"
+- name: "Query a Table That Does Not Exist"
   uses: db
   with:
-    dsn: "mysql://user:pass@localhost/db"
-    query: "SELECT * FROM users WHERE id = ?"
-    params: [999999]
-  test: |
-    res.code == 0 ? true :
-    res.error | contains("connection") ? false :
-    res.error | contains("not found") ? true :
-    false
+    dsn: "file:./testdata/app.db"
+    query: "SELECT * FROM missing_table"
+  test: res.code == 1 && res.error contains "no such table"
   outputs:
-    query_success: res.code == 0
-    error_type: |
-      {{res.code == 0 ? "none" :
-        res.error | contains("connection") ? "connection" :
-        res.error | contains("syntax") ? "syntax" :
-        "unknown"}}
+    error: res.error
 ```
 
 ## Transaction Examples

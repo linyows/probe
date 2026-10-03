@@ -25,7 +25,7 @@ steps:
         mailbox: "INBOX"
       - name: "search"
         criteria:
-          flags: ["unseen"]
+          not_flags: ["seen"]
     test: res.code == 0
 ```
 
@@ -55,7 +55,7 @@ with:
 ```yaml
 with:
   port: 993   # IMAPS (SSL/TLS)
-  port: 143   # IMAP (plain or STARTTLS)
+  port: 143   # IMAP without TLS (tls: false)
 ```
 
 ### `username` (required)
@@ -100,12 +100,14 @@ with:
   host: "imap.example.com"
   port: 993
   tls: true     # Use TLS (recommended)
-  
+
 with:
   host: "imap.example.com" 
   port: 143
   tls: false    # Plain connection (not recommended)
 ```
+
+STARTTLS is not supported: with `tls: false` the whole session, the password included, is sent unencrypted.
 
 ### `insecure_skip_tls` (optional)
 
@@ -140,6 +142,21 @@ A server that does not answer in time is cut off, and the step fails with an act
 
 **Type:** Array of command objects  
 **Description:** IMAP commands to execute sequentially
+
+The commands run in order in one session. The first command that fails stops the rest: `res.code` becomes `1`, `res.error` names the command, and `res.data` keeps what the commands before it returned.
+
+Each command object takes these fields; which of them a command reads is described with the command below.
+
+| Field | Used by |
+|-------|---------|
+| `name` | Every command (required): the command to run, case-insensitive |
+| `mailbox` | `select`, `examine`, `copy`, `uid copy`, `create`, `delete`, `subscribe`, `unsubscribe` |
+| `oldmailbox`, `newmailbox` | `rename` |
+| `reference`, `pattern` | `list` |
+| `criteria` | `search`, `uid search` |
+| `sequence` | `fetch`, `uid fetch`, `store`, `uid store`, `copy`, `uid copy` |
+| `dataitem` | `fetch`, `uid fetch`, `store`, `uid store` |
+| `value` | `store`, `uid store` |
 
 ```yaml
 with:
@@ -180,21 +197,50 @@ Select a mailbox for read-only operations.
   mailbox: "INBOX"      # Required: mailbox name
 ```
 
-### `search` - Search Messages
+### `search` and `uid search` - Search Messages
 
-Search messages using various criteria.
+Search the selected mailbox. `search` returns sequence numbers and `uid search` returns UIDs; both put the result in `res.data.search`, so a later search replaces an earlier one there. The result is also what a following `fetch`, `store` or `copy` without `sequence` acts on, as described under each of them.
 
 ```yaml
 - name: "search"
   criteria:
-    since: "today"           # Date-based search
-    flags: ["unseen"]        # Flag-based search  
-    headers:                 # Header-based search
+    since: "today"           # Arrived today or later
+    not_flags: ["seen"]      # Not read yet
+    headers:                 # Header fields containing the text
       from: "sender@example.com"
       subject: "urgent"
-    bodies: ["important"]    # Body text search
-    texts: ["meeting"]       # Full-text search
+    bodies: ["important"]    # Body containing the text
+    texts: ["meeting"]       # Headers or body containing the text
 ```
+
+Every criterion given has to match. The criteria are:
+
+| Criterion | Type | Matches messages |
+|-----------|------|------------------|
+| `seq_nums` | Array of strings | With these sequence numbers, such as `"2:3"`, `"5"` or `"10:*"` |
+| `uids` | Array of strings | With these UIDs, in the same form |
+| `since` | Date | That arrived on or after the date |
+| `before` | Date | That arrived before the date |
+| `sent_since` | Date | Whose `Date` header is on or after the date |
+| `sent_before` | Date | Whose `Date` header is before the date |
+| `headers` | Object | Whose header field, the key, contains the value |
+| `bodies` | Array of strings | Whose body contains every string |
+| `texts` | Array of strings | Whose headers or body contain every string |
+| `flags` | Array of strings | That have every flag |
+| `not_flags` | Array of strings | That have none of the flags |
+
+A flag is given without its backslash, as in `seen`, `answered`, `flagged`, `deleted` or `draft`, or with it, as in `'\Seen'`. There is no `unseen` flag: unread messages are `not_flags: ["seen"]`.
+
+A date is one of:
+
+- `today` or `yesterday`
+- `N hours ago` or `N minutes ago`, such as `2 hours ago`
+- `2006-01-02`, `2006/01/02` or `02/01/2006` (day first)
+- RFC 3339, such as `2006-01-02T15:04:05+09:00`, or RFC 822, such as `02 Jan 06 15:04 JST`
+
+IMAP compares dates without the time, so only the day of a date counts: `2 hours ago` matches everything from the start of that day.
+
+With no message matching, `count` is `0` and `all` is empty.
 
 ### `list` - List Mailboxes
 
@@ -209,17 +255,58 @@ List available mailboxes.
   pattern: "INBOX/*"
 ```
 
-### `fetch` - Fetch Message Data
+### `fetch` and `uid fetch` - Fetch Message Data
 
-Retrieve message data using sequence numbers.
+Retrieve messages by sequence number, or by UID with `uid fetch`. Without `sequence`, they fetch the messages the latest search found, provided it was the matching kind: `search` for `fetch`, `uid search` for `uid fetch`. `fetch` needs `dataitem`; `uid fetch` fetches `ALL` without it. Both put the messages in `res.data.fetch`.
 
 ```yaml
 - name: "fetch"
-  sequence: "1:5"       # Required: sequence range
-  dataitem: "ALL"       # Required: data items to fetch
+  sequence: "1:5"       # Sequence range; the last search result if omitted
+  dataitem: "ALL"       # Data items to fetch
 - name: "fetch"
   sequence: "*"         # Latest message
   dataitem: "ENVELOPE FLAGS"
+- name: "uid search"
+  criteria:
+    not_flags: ["seen"]
+- name: "uid fetch"     # The UIDs just found, with ALL
+```
+
+`dataitem` is one of the macros `ALL`, `FAST` and `FULL`, or a space-separated list of `ENVELOPE`, `FLAGS`, `INTERNALDATE`, `RFC822.SIZE`, `UID`, `BODYSTRUCTURE` and `BODY[...]` or `BODY.PEEK[...]` sections. `ENVELOPE` fills `from`, `to` and `subject`; `RFC822.SIZE` fills `size`. A section fills these fields of the message:
+
+| Section | Fills |
+|---------|-------|
+| `BODY[]` | `body` with the whole message, headers included |
+| `BODY[TEXT]` | `body` with the body only |
+| `BODY[HEADER]` | `headers` with every header field |
+| `BODY[HEADER.FIELDS (SUBJECT FROM)]` | `headers` with the listed fields |
+
+`BODY[...]` marks the messages read; `BODY.PEEK[...]` leaves their flags alone. Header names in `headers` are lower case, as in `headers.subject`. A body containing `<html` is also put in `html_body`.
+
+### `create`, `delete`, `rename`, `subscribe` and `unsubscribe` - Manage Mailboxes
+
+Create a mailbox, delete one, rename one, or add one to or remove it from the subscribed mailboxes. `rename` takes the current name in `oldmailbox` and the new one in `newmailbox`; the others take `mailbox`. A missing name fails the command.
+
+```yaml
+- name: "create"
+  mailbox: "Work"
+- name: "rename"
+  oldmailbox: "Work"
+  newmailbox: "Projects"
+- name: "subscribe"
+  mailbox: "Projects"
+- name: "unsubscribe"
+  mailbox: "Projects"
+- name: "delete"
+  mailbox: "Projects"
+```
+
+### `noop` - Do Nothing
+
+Ask the server for nothing. It checks that the session is still alive, and lets the server report changes to the selected mailbox.
+
+```yaml
+- name: "noop"
 ```
 
 ### `store` and `uid store` - Change Flags
@@ -261,9 +348,26 @@ The IMAP action provides a `res` object with the following structure:
 
 | Property | Type | Description |
 |----------|------|-------------|
-| `code` | Integer | Operation result (0 = success, non-zero = error) |
+| `code` | Integer | `0` when every command succeeded, `1` when a command failed, `2` when every command succeeded but logging out failed |
 | `data` | Object | Command results organized by command type |
 | `error` | String | Error message if operation failed |
+
+The top-level `status` is the same as `res.code`. A connection, login or timeout failure is not a `res.code`: it fails the step as an action error.
+
+`res.data` has one entry per command, named after it. A command that did not run leaves its entry at zero values. `uid search`, `uid fetch`, `uid store` and `uid copy` share the entry of the command without `uid`.
+
+| Entry | Fields |
+|-------|--------|
+| `select`, `examine` | `exists` (messages in the mailbox), `recent`, `first_unseen` (sequence number of the first unread message, `0` if the server does not say), `uid_next`, `flags`, `permanent_flags` |
+| `search` | `all` (the matching numbers as a set, such as `2:3`), `min`, `max`, `count` |
+| `list` | `mailboxes` (each with `name`, `attributes` and `delimiter`), `count` |
+| `fetch` | `messages`, `count` |
+| `store`, `copy` | `success`, `count` |
+| `create`, `delete`, `subscribe`, `unsubscribe` | `success`, `mailbox` |
+| `rename` | `success`, `old_mailbox`, `new_mailbox` |
+| `noop` | `success` |
+
+Each entry of `res.data.fetch.messages` has `uid`, `flags`, `from`, `to`, `subject`, `size`, `body`, `html_body` and `headers`, filled as the data items asked for. `from` and `to` are the first address only. Index the list to reach a message, as in `res.data.fetch.messages[0].from`.
 
 ## IMAP Examples
 
@@ -292,7 +396,7 @@ steps:
         mailbox: "INBOX"
       - name: "search"
         criteria:
-          flags: ["unseen"]
+          not_flags: ["seen"]
           since: "today"
       - name: "fetch"
         sequence: "*"
@@ -300,5 +404,5 @@ steps:
     test: res.code == 0
     outputs:
       unread_count: res.data.search.count
-      latest_sender: res.data.fetch.messages__0__from
+      latest_sender: res.data.fetch.messages[0].from
 ```

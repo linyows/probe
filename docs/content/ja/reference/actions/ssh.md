@@ -19,7 +19,7 @@ SSHのステップには、接続先のホスト、ユーザー、認証方法�
 
 ## パラメータ
 
-パラメータは4つに分かれます。どのステップでも必要なもの、いずれか1つを指定する認証用のもの、接続を調整するオプション、そして値を環境変数から与えるためのものです。
+パラメータは4つに分かれます。どのステップでも必要なもの、少なくとも1つを指定する認証用のもの、接続を調整するオプション、そして値を環境変数から与えるためのものです。
 
 ### 必須パラメータ
 
@@ -33,7 +33,7 @@ SSHのステップには、接続先のホスト、ユーザー、認証方法�
 
 ### 認証パラメータ（いずれか必須）
 
-認証方法は1つだけ使います。暗号化された鍵の場合は、あわせてパスフレーズを指定します。
+`password`と`key_file`のどちらか、または両方を指定します。両方を指定した場合、サーバーはどちらでも受け付けられます。暗号化された鍵の場合は、あわせてパスフレーズを指定します。
 
 | パラメータ | 型 | 説明 |
 |-----------|---|------|
@@ -48,10 +48,10 @@ SSHのステップには、接続先のホスト、ユーザー、認証方法�
 | パラメータ | 型 | デフォルト | 説明 |
 |-----------|---|-----------|------|
 | `port` | int | 22 | SSHポート番号 |
-| `timeout` | string | "30s" | コマンド実行のタイムアウト |
+| `timeout` | string | "30s" | 接続とコマンド実行の制限時間。`"30s"`や`"5m"`のようなGoのduration形式で指定し、数値だけの指定は受け付けない |
 | `workdir` | string | - | リモートでの作業ディレクトリ |
 | `strict_host_check` | bool | true | Host Keyの厳密検証 |
-| `known_hosts` | string | `~/.ssh/known_hosts` | Known Hostsファイルのパス |
+| `known_hosts` | string | `~/.ssh/known_hosts`と`/etc/ssh/ssh_known_hosts` | Known Hostsファイルのパス |
 
 ### 環境変数
 
@@ -79,7 +79,9 @@ SSH Actionは以下の値を返します：
 | `res.code` | int | 終了コード（0 = 成功） |
 | `res.stdout` | string | 標準出力 |
 | `res.stderr` | string | 標準エラー出力 |
-| `res.status` | int | 実行ステータス（0 = 成功、1 = 失敗） |
+| `status` | int | 実行ステータス（0 = 成功、1 = 失敗） |
+| `rt.duration` | string | ステップにかかった時間。`"1.2s"`など |
+| `rt.sec` | float | 同じ時間を秒で表した値 |
 
 ## 使用例
 
@@ -155,7 +157,7 @@ SSH Actionは以下の値を返します：
       DEPLOY_ENV: "production"
     workdir: "/opt/myapp"
     timeout: "600s"
-  test: res.code == 0 && contains(res.stdout, "Deploy completed")
+  test: res.code == 0 && res.stdout contains "Deploy completed"
 ```
 
 ### 複数行コマンド
@@ -205,8 +207,8 @@ SSH Actionは以下の値を返します：
     timeout: "180s"
   test: |
     res.code == 0 && 
-    contains(res.stdout, "active") &&
-    !contains(res.stderr, "failed")
+    res.stdout contains "active" &&
+    !(res.stderr contains "failed")
 ```
 
 ## セキュリティ設定
@@ -279,8 +281,8 @@ timeout: "600s"
 ```yaml
 test: |
   res.code == 0 && 
-  !contains(res.stderr, "error") &&
-  !contains(res.stderr, "failed")
+  !(res.stderr contains "error") &&
+  !(res.stderr contains "failed")
 ```
 
 ### 4. ログの安全性
