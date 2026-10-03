@@ -4,7 +4,7 @@ Probeは軽量でシングルバイナリのツールで、複数の方法でイ
 
 ## システム要件
 
-- **オペレーティングシステム**: Linux、macOS、Windows
+- **オペレーティングシステム**: Linux、macOS
 - **アーキテクチャ**: amd64、arm64
 - **依存関係**: なし（静的リンクされたバイナリ）
 
@@ -17,26 +17,25 @@ Probeは単一のバイナリです。以下の4つから、他のツールの�
 Probeをインストールする最も簡単な方法は、GitHubのリリースページからプリビルドバイナリをダウンロードすることです。
 
 1. [Probeリリースページ](https://github.com/linyows/probe/releases)にアクセス
-2. お使いのシステムに適したバイナリをダウンロード：
-   - **Linux amd64**: `probe-linux-amd64`
-   - **Linux arm64**: `probe-linux-arm64`
-   - **macOS amd64**: `probe-darwin-amd64`
-   - **macOS arm64**: `probe-darwin-arm64`
-   - **Windows amd64**: `probe-windows-amd64.exe`
+2. お使いのシステムに適したアーカイブをダウンロード：
+   - **Linux amd64**: `probe_linux_x86_64.tar.gz`
+   - **Linux arm64**: `probe_linux_arm64.tar.gz`
+   - **macOS amd64**: `probe_darwin_x86_64.tar.gz`
+   - **macOS arm64**: `probe_darwin_arm64.tar.gz`
 
-3. バイナリを実行可能にする（Linux/macOS）：
+3. アーカイブから`probe`バイナリを取り出す：
    ```bash
-   chmod +x probe-linux-amd64
+   tar -xzf probe_linux_x86_64.tar.gz
    ```
 
 4. PATHが通ったディレクトリに移動：
    ```bash
-   sudo mv probe-linux-amd64 /usr/local/bin/probe
+   sudo mv probe /usr/local/bin/probe
    ```
 
 ### 2. Goでインストール
 
-Go 1.19以降がインストールされている場合、Probeを直接インストールできます：
+Go 1.26.6以降がインストールされている場合、Probeを直接インストールできます：
 
 ```bash
 go install github.com/linyows/probe/cmd/probe@latest
@@ -73,7 +72,7 @@ probe --version
 
 以下のような出力が表示されるはずです：
 ```
-Probe Version v1.0.0 (commit: abc123)
+Probe Version 1.13.0 (commit: 2d9d511ce7b4c9eec32ea85e2a25337e40a5e40c)
 ```
 
 ## 次のステップ
@@ -107,4 +106,4 @@ which probe
 
 ### Apple Silicon上のARM64
 
-Apple Silicon Mac（M1/M2）では、パフォーマンス向上のため`darwin-arm64`バイナリを使用してください。
+Apple Silicon Mac（M1/M2）では、パフォーマンス向上のため`probe_darwin_arm64.tar.gz`を使用してください。

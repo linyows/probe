@@ -1022,7 +1022,7 @@ jobs:
       
       - name: Install Probe
         run: |
-          curl -L https://github.com/linyows/probe/releases/latest/download/probe-linux-amd64 -o probe
+          curl -L https://github.com/linyows/probe/releases/latest/download/probe_linux_x86_64.tar.gz | tar -xz probe
           chmod +x probe
           sudo mv probe /usr/local/bin/
       
