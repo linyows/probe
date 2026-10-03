@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"runtime/debug"
 	"slices"
 	"strings"
 
@@ -48,10 +49,12 @@ type Cmd struct {
 }
 
 func newCmd() *Cmd {
+	info, ok := debug.ReadBuildInfo()
+	ver, rev := resolveVersion(version, commit, info, ok)
 	return &Cmd{
 		validFlags: []string{"help", "h", "version", "timing", "verbose", "v", "mermaid", "output", "report"},
-		ver:        version,
-		rev:        commit,
+		ver:        ver,
+		rev:        rev,
 		outWriter:  os.Stdout,
 		errWriter:  os.Stderr,
 		mocking:    false,
