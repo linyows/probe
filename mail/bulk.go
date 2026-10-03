@@ -99,6 +99,7 @@ func (b *Bulk) Send() (int, error) {
 
 	m := &Mail{
 		Addr:             b.Addr,
+		LocalName:        b.MyHostname,
 		MailFrom:         b.From,
 		RcptTo:           strings.Split(b.To, ","),
 		Data:             b.makeData(),

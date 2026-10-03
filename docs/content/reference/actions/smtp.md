@@ -31,7 +31,7 @@ The fields below describe the delivery. All of them accept template expressions.
 | `from` | String | Yes | - | Envelope sender |
 | `to` | String | Yes | - | Envelope recipient |
 | `subject` | String | No | `""` | Subject line |
-| `myhostname` | String | No | - | Hostname used in the `HELO` / `EHLO` command |
+| `myhostname` | String | No | The machine's host name, or `localhost` if it is unknown | Hostname sent in the `EHLO` / `HELO` command. Many servers refuse a client that greets with `localhost`, so set a name the server accepts |
 | `session` | Integer | No | `1` | Number of SMTP sessions to open |
 | `message` | Integer | No | `1` | Messages to send per session |
 | `length` | Integer | No | `0` | Size of the generated message body in bytes |
