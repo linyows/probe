@@ -224,5 +224,11 @@ func secondsToDuration(secs float64, invalid func() error) (time.Duration, error
 	if math.IsNaN(secs) || secs <= 0 || secs > float64(maxTimeoutSeconds) {
 		return 0, invalid()
 	}
-	return time.Duration(secs * float64(time.Second)), nil
+	// A positive value below a nanosecond truncates to zero, which the
+	// browser would take as an immediate deadline and imap as no limit.
+	d := time.Duration(secs * float64(time.Second))
+	if d <= 0 {
+		return 0, invalid()
+	}
+	return d, nil
 }
