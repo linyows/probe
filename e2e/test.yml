@@ -167,6 +167,21 @@ jobs:
     with:
       cmd: ./probe --no-such-flag examples/shell.yml
     test: res.code == 2
+  - name: guide lists the topics
+    uses: shell
+    with:
+      cmd: ./probe guide
+    test: |
+      res.code == 0 &&
+      res.stdout contains "Usage: probe guide <topic>" &&
+      res.stdout contains "concepts/expressions"
+  - name: guide prints a page built into the binary
+    uses: shell
+    with:
+      cmd: ./probe guide actions/http
+    test: |
+      res.code == 0 &&
+      res.stdout startsWith "# HTTP Action"
 
 # ------------------------------------------------------------------------
 - name: Report File Tests
