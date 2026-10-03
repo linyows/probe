@@ -3,6 +3,7 @@ package hello
 import (
 	"maps"
 	"os"
+	"time"
 
 	"github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/go-plugin"
@@ -14,6 +15,7 @@ type Action struct {
 }
 
 func (a *Action) Run(with map[string]any) (map[string]any, error) {
+	start := time.Now()
 	a.log.Info("Hello!")
 
 	// Create response data
@@ -26,7 +28,7 @@ func (a *Action) Run(with map[string]any) (map[string]any, error) {
 	result := map[string]any{
 		"req":    with,
 		"res":    res,
-		"rt":     "",
+		"rt":     time.Since(start).String(),
 		"status": 0,
 	}
 

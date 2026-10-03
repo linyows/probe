@@ -39,6 +39,8 @@ steps:
 | `res.<key>` | 任意 | `with`に渡したキーがそのまま入ります |
 | `res.status` | Integer | 常に`0` |
 | `res.dump` | Boolean | 常に`false` |
+| `rt.duration` | String | アクションにかかった時間（例: `"15µs"`） |
+| `rt.sec` | Float | アクションにかかった時間（秒） |
 | `status` | Integer | 常に`0` |
 
 `status`と`dump`はアクションが設定するため、`with`に同じ名前のキーを渡しても、その値は返りません。
