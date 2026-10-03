@@ -368,3 +368,33 @@ func TestReqFieldMapping(t *testing.T) {
 		t.Errorf("Expected Length 1000, got %d", req.Length)
 	}
 }
+
+// TestSend_MyHostname follows the myhostname parameter from the action's
+// input through Bulk to the EHLO line, the path that dropped it before.
+func TestSend_MyHostname(t *testing.T) {
+	stubHostname(t, "machine-a", nil)
+	srv := newGreetingRecorder(t)
+
+	_, err := Send(map[string]any{
+		"addr":       srv.addr(),
+		"from":       "from@example.com",
+		"to":         "to@example.com",
+		"subject":    "hi",
+		"myhostname": "probe-client.local",
+		"session":    2,
+		"message":    2,
+	})
+	if err != nil {
+		t.Fatalf("Send: %v", err)
+	}
+
+	got := srv.greetings()
+	if len(got) != 2 {
+		t.Fatalf("greetings = %q, want one per session", got)
+	}
+	for _, g := range got {
+		if g != "EHLO probe-client.local" {
+			t.Errorf("greeting = %q, want EHLO probe-client.local", g)
+		}
+	}
+}

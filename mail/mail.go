@@ -11,7 +11,10 @@ import (
 )
 
 type Mail struct {
-	Addr             string
+	Addr string
+	// LocalName is the host name sent in EHLO and HELO. When it is empty the
+	// machine's host name is used, falling back to "localhost".
+	LocalName        string
 	MailFrom         string
 	RcptTo           []string
 	Data             []byte
@@ -19,6 +22,22 @@ type Mail struct {
 	StartTLSDisabled bool
 	MessageCount     int
 }
+
+// localName returns the name to greet the server with. Many servers refuse
+// "localhost" in EHLO as not a real host name, so the machine's own name is
+// the default, as a mail server would use.
+func (m *Mail) localName() string {
+	if m.LocalName != "" {
+		return m.LocalName
+	}
+	if name, err := osHostname(); err == nil && name != "" {
+		return name
+	}
+	return "localhost"
+}
+
+// osHostname is os.Hostname, replaced in tests.
+var osHostname = os.Hostname
 
 func (m *Mail) Send() error {
 	if err := validateLine(m.MailFrom); err != nil {
@@ -34,7 +53,7 @@ func (m *Mail) Send() error {
 		return fmt.Errorf("tcp dial error: %w", err)
 	}
 	defer func() { _ = c.Close() }()
-	if err = c.hello(); err != nil {
+	if err = c.Hello(m.localName()); err != nil {
 		return fmt.Errorf("smtp hello error: %w", err)
 	}
 	if !m.StartTLSDisabled {

@@ -31,7 +31,7 @@ steps:
 | `from` | String | 必須 | - | エンベロープの送信者 |
 | `to` | String | 必須 | - | エンベロープの受信者 |
 | `subject` | String | 任意 | `""` | 件名 |
-| `myhostname` | String | 任意 | - | `HELO` / `EHLO`で名乗るホスト名 |
+| `myhostname` | String | 任意 | 実行マシンのホスト名。取得できなければ`localhost` | `EHLO` / `HELO`で名乗るホスト名。`localhost`を名乗るクライアントを拒否するサーバーが多いため、サーバーが受け付ける名前を指定する |
 | `session` | Integer | 任意 | `1` | 開くSMTPセッション数 |
 | `message` | Integer | 任意 | `1` | 1セッションあたりの送信通数 |
 | `length` | Integer | 任意 | `0` | 生成する本文のバイト数 |
