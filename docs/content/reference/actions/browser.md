@@ -27,7 +27,7 @@ These go directly under `with`.
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `actions` | List | required | The actions to run, in order. See [Actions](#actions) |
-| `timeout` | Duration string | `5s` | Limit for the whole step: starting the browser and every action. Write it as a string such as `30s`; a plain number is ignored and the default applies |
+| `timeout` | Duration string or number of seconds | `5s` | Limit for the whole step: starting the browser and every action. `30s`, `30` and `"30"` all mean 30 seconds; any other value, zero or less, is refused |
 | `headless` | Boolean | `true` | Run Chrome without a window |
 | `window_w` | Integer | `1920` | Window width in pixels |
 | `window_h` | Integer | `1080` | Window height in pixels |
@@ -46,7 +46,7 @@ Each entry of `actions` names its action in `name` and takes these fields:
 | `url` | `navigate` | The address to open |
 | `selector` | actions on an element | A CSS selector |
 | `value` | `type`, `send_keys`, `select` | The text to use |
-| `attribute` | `get_attribute` | The attribute to read, as a list: `[href]`. Only the first entry is read, and a plain string is rejected |
+| `attribute` | `get_attribute` | The attribute to read, as `href` or `[href]`. Of a list, only the first entry is read |
 | `quality` | `full_screenshot` | `1` to `99` saves JPEG at that quality. Anything else, including unset, `0`, `100` and above, or a negative number, saves PNG |
 | `path` | screenshots | Deprecated: also write the image to this path. Use `res.filepaths` instead |
 

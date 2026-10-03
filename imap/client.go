@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"maps"
-	"math"
 	"mime"
 	"net"
 	"regexp"
@@ -220,7 +219,7 @@ func Request(data map[string]any, opts ...Option) (map[string]any, error) {
 	}
 
 	if timeoutInput, exists := m["timeout"]; exists {
-		timeout, err := parseTimeout(timeoutInput)
+		timeout, err := mapping.ParseTimeout(timeoutInput)
 		if err != nil {
 			return map[string]any{}, err
 		}
@@ -285,55 +284,6 @@ func (r *Req) timeoutError(doing string, err error) error {
 		return fmt.Errorf("IMAP session timed out after %s while %s", r.Timeout, doing)
 	}
 	return fmt.Errorf("IMAP session timed out after %s while %s: %w", r.Timeout, doing, err)
-}
-
-// maxTimeoutSeconds is the most seconds a time.Duration can hold.
-const maxTimeoutSeconds = math.MaxInt64 / int64(time.Second)
-
-// parseTimeout reads timeout as a duration string such as "30s", or as a
-// number of seconds. A number used to be taken as nanoseconds.
-func parseTimeout(v any) (time.Duration, error) {
-	invalid := func() error {
-		return fmt.Errorf("invalid timeout %v: use a duration such as 30s, or a number of seconds", v)
-	}
-
-	switch t := v.(type) {
-	case time.Duration:
-		if t <= 0 {
-			return 0, invalid()
-		}
-		return t, nil
-	case string:
-		str := strings.TrimSpace(t)
-		if d, err := time.ParseDuration(str); err == nil {
-			if d <= 0 {
-				return 0, invalid()
-			}
-			return d, nil
-		}
-		secs, err := strconv.ParseFloat(str, 64)
-		if err != nil {
-			return 0, invalid()
-		}
-		return secondsToDuration(secs, invalid)
-	case int:
-		return secondsToDuration(float64(t), invalid)
-	case int64:
-		return secondsToDuration(float64(t), invalid)
-	case float64:
-		return secondsToDuration(t, invalid)
-	default:
-		return 0, invalid()
-	}
-}
-
-// secondsToDuration converts after checking the range, since multiplying
-// first would wrap a huge value around to some other, positive duration.
-func secondsToDuration(secs float64, invalid func() error) (time.Duration, error) {
-	if math.IsNaN(secs) || secs <= 0 || secs > float64(maxTimeoutSeconds) {
-		return 0, invalid()
-	}
-	return time.Duration(secs * float64(time.Second)), nil
 }
 
 func (r *Req) runImap() (*Res, error) {
