@@ -16,7 +16,7 @@ Probe is a lightweight, single-binary tool that can be installed in several ways
 
 ## Installation Methods
 
-Probe is a single binary. Pick whichever of the four methods below fits how the rest of your tooling is installed.
+Probe is a single binary. Pick whichever of the three methods below fits how the rest of your tooling is installed.
 
 ### 1. Download Pre-built Binaries
 
@@ -58,14 +58,6 @@ git clone https://github.com/linyows/probe.git
 cd probe
 go build -o probe ./cmd/probe
 sudo mv probe /usr/local/bin/
-```
-
-### 4. Docker
-
-Run Probe in a Docker container:
-
-```bash
-docker run --rm -v $(pwd):/workspace linyows/probe:latest /workspace/workflow.yml
 ```
 
 ## Verify Installation

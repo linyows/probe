@@ -418,29 +418,6 @@ probe smoke-tests.yml,${ENVIRONMENT}.yml
 echo "All tests passed!"
 ```
 
-### Docker Integration
-
-In a container the workflow is mounted and the credentials are passed as environment variables.
-
-```bash
-# Run Probe in Docker container
-docker run --rm -v $(pwd):/workspace \
-  -e API_TOKEN=$API_TOKEN \
-  probe:latest workflow.yml
-
-# Docker Compose service
-version: '3.8'
-services:
-  probe:
-    image: probe:latest
-    volumes:
-      - ./workflows:/workflows
-    environment:
-      - API_TOKEN
-      - ENVIRONMENT=production
-    command: /workflows/monitoring.yml,/workflows/production.yml
-```
-
 ### Scheduled Execution
 
 Running the same workflow on a schedule turns it into monitoring, whether through cron or a systemd timer.

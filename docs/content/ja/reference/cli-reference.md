@@ -418,29 +418,6 @@ probe smoke-tests.yml,${ENVIRONMENT}.yml
 echo "All tests passed!"
 ```
 
-### Docker統合
-
-コンテナではワークフローをマウントし、認証情報を環境変数として渡します。
-
-```bash
-# ProbeをDockerコンテナで実行
-docker run --rm -v $(pwd):/workspace \
-  -e API_TOKEN=$API_TOKEN \
-  probe:latest workflow.yml
-
-# Docker Composeサービス
-version: '3.8'
-services:
-  probe:
-    image: probe:latest
-    volumes:
-      - ./workflows:/workflows
-    environment:
-      - API_TOKEN
-      - ENVIRONMENT=production
-    command: /workflows/monitoring.yml,/workflows/production.yml
-```
-
 ### スケジュール実行
 
 同じワークフローを定期的に実行すれば監視になります。cronでもsystemdのタイマーでも構いません。
