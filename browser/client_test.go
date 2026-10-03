@@ -881,3 +881,11 @@ func TestJSString(t *testing.T) {
 		}
 	}
 }
+
+// TestNewChromeDPAction_FullScreenshotIsPNG keeps the constructor and an
+// action read from YAML on the same format for full_screenshot.
+func TestNewChromeDPAction_FullScreenshotIsPNG(t *testing.T) {
+	if q := fullScreenshotQuality(NewChromeDPAction().Quality); q != 100 {
+		t.Errorf("quality = %d, want 100 so a constructed action saves PNG", q)
+	}
+}

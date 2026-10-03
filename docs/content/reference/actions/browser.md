@@ -47,7 +47,7 @@ Each entry of `actions` names its action in `name` and takes these fields:
 | `selector` | actions on an element | A CSS selector |
 | `value` | `type`, `send_keys`, `select` | The text to use |
 | `attribute` | `get_attribute` | The attribute to read, as a list: `[href]`. Only the first entry is read, and a plain string is rejected |
-| `quality` | `full_screenshot` | `1` to `99` saves JPEG at that quality; unset or `100` saves PNG |
+| `quality` | `full_screenshot` | `1` to `99` saves JPEG at that quality. Anything else, including unset, `0`, `100` and above, or a negative number, saves PNG |
 | `path` | screenshots | Deprecated: also write the image to this path. Use `res.filepaths` instead |
 
 An action that looks for an element waits until the element appears, and the step fails when `timeout` runs out first. Most of them also wait for it to be visible.
@@ -58,7 +58,7 @@ These open a page or hold the step until the page is in the state the next actio
 
 | Action | What it does |
 |--------|--------------|
-| `navigate` | Opens `url` and waits for the page to load. An address that cannot be reached fails at once |
+| `navigate` | Opens `url` and waits for the page to load. A network error the browser reports, such as `net::ERR_CONNECTION_REFUSED`, fails it at once; an address that never answers keeps it waiting until `timeout` |
 | `wait_visible` | Waits until `selector` is visible |
 | `wait_not_visible` | Waits until `selector` is not visible |
 | `wait_enabled` | Waits until `selector` is visible and enabled |
@@ -208,7 +208,7 @@ The path of the saved image is in `res.filepaths`, ready to print or pass on.
 
 ## Error Handling
 
-An action that cannot finish makes the whole step fail with an action error, which exits the run with status `3`. A selector that matches nothing is not an empty result: `wait_visible`, `text`, `click` and the other actions that look for an element keep waiting until the step's `timeout`. A navigation that cannot reach its URL fails at once. In both cases there is no `res` to test, and the failure message carries the browser's error.
+An action that cannot finish makes the whole step fail with an action error, which exits the run with status `3`. A selector that matches nothing is not an empty result: `wait_visible`, `text`, `click` and the other actions that look for an element keep waiting until the step's `timeout`. A navigation fails as soon as the browser reports a network error, such as a refused connection, while an address that never answers also waits until `timeout`. In every case there is no `res` to test, and the failure message carries the browser's error.
 
 ### Page at failure
 
@@ -234,7 +234,7 @@ The files go to the system's temporary directory unless `evidence_dir` names ano
       selector: "#pay"
 ```
 
-The browser is kept for up to 10 seconds after the timeout so that the page can still be read. If it cannot be, for example because the browser never started, the message says so and nothing is saved.
+The browser is kept for up to 10 seconds after the timeout so that the page can still be read. If it cannot be, for example because the browser never started or the page was still loading when time ran out, the message says so and nothing is saved.
 
 ## Running in CI
 

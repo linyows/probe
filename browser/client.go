@@ -24,7 +24,9 @@ const (
 	defaultWindowWidth  = 1920
 	defaultWindowHeight = 1080
 	// Actions
-	defaultQuality = 90
+	// defaultQuality is 100 because chromedp's FullScreenshot gives PNG only
+	// at 100; NewChromeDPAction and an action read from YAML then agree.
+	defaultQuality = 100
 )
 
 // BrowserRunner defines the interface for running browser actions

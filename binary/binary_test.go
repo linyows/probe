@@ -234,3 +234,19 @@ func TestGetExtensionFromMimeType(t *testing.T) {
 		})
 	}
 }
+
+func TestSaveBinaryToTempFile_OwnerOnly(t *testing.T) {
+	path, err := SaveBinaryToTempFile([]byte("private screenshot"), "image/png")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Remove(path) })
+
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Mode().Perm() != 0o600 {
+		t.Errorf("mode = %v, want 0600: the temporary directory is shared", info.Mode().Perm())
+	}
+}
