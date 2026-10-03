@@ -372,10 +372,21 @@ func (r *Report) Write(t ReportTarget) error {
 		}
 	}
 
-	f, err := os.Create(t.Path)
+	// A directory where the file should go is refused up front, as creating
+	// it there would be.
+	if info, err := os.Stat(t.Path); err == nil && info.IsDir() {
+		return fmt.Errorf("failed to create %s report: %s is a directory", t.Format, t.Path)
+	}
+
+	// The report is written next to its destination and renamed over it. A
+	// rename replaces the directory entry, so when a checked-out project
+	// carries, say, probe-report.json as a symlink to a file elsewhere, that
+	// file is left alone instead of being overwritten through the link.
+	f, err := os.CreateTemp(filepath.Dir(t.Path), "."+filepath.Base(t.Path)+".*")
 	if err != nil {
 		return fmt.Errorf("failed to create %s report: %w", t.Format, err)
 	}
+	tmp := f.Name()
 
 	switch t.Format {
 	case ReportJSON:
@@ -391,8 +402,17 @@ func (r *Report) Write(t ReportTarget) error {
 	if cerr := f.Close(); err == nil {
 		err = cerr
 	}
+	if err == nil {
+		// CreateTemp makes the file private; keep the mode a report had.
+		err = os.Chmod(tmp, 0o644)
+	}
 	if err != nil {
+		_ = os.Remove(tmp)
 		return fmt.Errorf("failed to write %s report to %s: %w", t.Format, t.Path, err)
+	}
+	if err := os.Rename(tmp, t.Path); err != nil {
+		_ = os.Remove(tmp)
+		return fmt.Errorf("failed to create %s report: %w", t.Format, err)
 	}
 	return nil
 }

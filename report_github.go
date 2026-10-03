@@ -27,7 +27,15 @@ var ErrStepSummaryFull = errors.New("the job summary has no room left under GitH
 // leaves out the requests and responses, and if that is still too large it
 // cuts the page short and says so.
 func (r *Report) writeGitHubSummary(path string) error {
-	if path == "" {
+	if path != "" {
+		// An explicit path can sit in a checked-out project, where a symlink
+		// would make the append land in a file elsewhere. The summary is
+		// appended to, so it cannot be replaced by a rename; refuse instead.
+		// The path GitHub Actions provides is trusted.
+		if info, err := os.Lstat(path); err == nil && info.Mode()&os.ModeSymlink != 0 {
+			return fmt.Errorf("refusing to append the job summary to %s: it is a symlink", path)
+		}
+	} else {
 		path = os.Getenv("GITHUB_STEP_SUMMARY")
 	}
 	if path == "" {
