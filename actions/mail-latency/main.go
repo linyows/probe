@@ -3,7 +3,10 @@ package maillatency
 import (
 	"bytes"
 	"errors"
+	"fmt"
+	"io/fs"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/hashicorp/go-hclog"
@@ -49,14 +52,9 @@ func (a *Action) Run(with map[string]any) (map[string]any, error) {
 
 	csvContent := csvBuffer.String()
 
-	// Generate filename with timestamp
-	timestamp := time.Now().Format("20060102-150405")
-	filename := "mail-latency." + timestamp + ".csv"
-	outputFile := outputDir + "/" + filename
-
-	// Write to file
-	if err := os.WriteFile(outputFile, []byte(csvContent), 0644); err != nil {
-		a.log.Error("failed to write output file", "error", err, "file", outputFile)
+	outputFile, err := writeNewFile(outputDir, time.Now().Format("20060102-150405"), []byte(csvContent))
+	if err != nil {
+		a.log.Error("failed to write output file", "error", err, "dir", outputDir)
 		return map[string]any{}, err
 	}
 	a.log.Debug("CSV written to file", "file", outputFile)
@@ -78,6 +76,32 @@ func (a *Action) Run(with map[string]any) (map[string]any, error) {
 	}
 
 	return result, nil
+}
+
+// writeNewFile writes data to mail-latency.<timestamp>.csv in dir. The name
+// only goes down to the second, so a run in the same second as another gets
+// a numbered name instead of overwriting the earlier file.
+func writeNewFile(dir, timestamp string, data []byte) (string, error) {
+	for n := 1; n <= 100; n++ {
+		name := "mail-latency." + timestamp + ".csv"
+		if n > 1 {
+			name = fmt.Sprintf("mail-latency.%s-%d.csv", timestamp, n)
+		}
+		path := filepath.Join(dir, name)
+		f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
+		if errors.Is(err, fs.ErrExist) {
+			continue
+		}
+		if err != nil {
+			return "", err
+		}
+		if _, err := f.Write(data); err != nil {
+			_ = f.Close()
+			return "", err
+		}
+		return path, f.Close()
+	}
+	return "", fmt.Errorf("no free file name for mail-latency.%s.csv in %s", timestamp, dir)
 }
 
 func Serve() {

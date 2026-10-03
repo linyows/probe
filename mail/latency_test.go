@@ -3,11 +3,27 @@ package mail
 import (
 	"bytes"
 	"os"
+	"path/filepath"
 	"testing"
 	"time"
 )
 
+// useLocation makes loc the local time zone for the rest of the test.
+func useLocation(t *testing.T, name string) {
+	t.Helper()
+	loc, err := time.LoadLocation(name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	orig := time.Local
+	time.Local = loc
+	t.Cleanup(func() { time.Local = orig })
+}
+
 func TestGetLatency(t *testing.T) {
+	// The expected CSV is written in Japan time, which is what the times are
+	// shown in when that is the local time zone.
+	useLocation(t, "Asia/Tokyo")
 	buf := new(bytes.Buffer)
 	if err := GetLatencies("./testdata/mail/", buf); err != nil {
 		t.Errorf("got error %s", err)
@@ -105,5 +121,76 @@ func TestGetReceivedTimeWithParse(t *testing.T) {
 				t.Errorf("getReceivedTimeWithParse() = %v, want %v", got, tt.expected)
 			}
 		})
+	}
+}
+
+// writeMail writes a message into dir under name.
+func writeMail(t *testing.T, dir, name, content string) {
+	t.Helper()
+	if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0o600); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestLatenciesSingleLineReceived(t *testing.T) {
+	// A Received header on one line is as complete as a folded one.
+	dir := t.TempDir()
+	writeMail(t, dir, "1", "Return-Path: <a@example.com>\r\n"+
+		"Received: from relay.example.com by mx.example.com; Wed, 8 Oct 2025 07:12:05 +0000\r\n"+
+		"Received: from client by relay.example.com; Wed, 8 Oct 2025 07:12:00 +0000\r\n"+
+		"Date: Wed, 8 Oct 2025 07:11:55 +0000\r\n"+
+		"Subject: test\r\n\r\nbody\r\n")
+
+	l := Latencies{MailDir: dir}
+	if err := l.Make(); err != nil {
+		t.Fatalf("Make() error: %v", err)
+	}
+	if len(l.Data) != 1 {
+		t.Fatalf("Data = %v, want one message", l.Data)
+	}
+	if got := l.Data[0].EndToEnd; got != 10*time.Second {
+		t.Errorf("EndToEnd = %v, want 10s", got)
+	}
+	if got := l.Data[0].Relay; got != 5*time.Second {
+		t.Errorf("Relay = %v, want 5s", got)
+	}
+}
+
+func TestLatenciesSkipsOtherFilesAndBody(t *testing.T) {
+	// A file that is not a message needs no Date, and a body line that looks
+	// like a header is not read as one.
+	dir := t.TempDir()
+	writeMail(t, dir, "notes.txt", "these are notes\n")
+	writeMail(t, dir, "1", "Return-Path: <a@example.com>\n"+
+		"Received: from client by mx.example.com;\n"+
+		"\tWed, 8 Oct 2025 07:12:00 +0000\n"+
+		"Date: Wed, 8 Oct 2025 07:11:55 +0000\n"+
+		"\n"+
+		"Date: not a date\n"+
+		"Received: not a header\n")
+
+	l := Latencies{MailDir: dir}
+	if err := l.Make(); err != nil {
+		t.Fatalf("Make() error: %v", err)
+	}
+	if len(l.Data) != 1 || l.Data[0].EndToEnd != 5*time.Second {
+		t.Errorf("Data = %+v, want one message with a 5s latency", l.Data)
+	}
+}
+
+func TestLatenciesLocalTime(t *testing.T) {
+	// Times are written in the local time zone.
+	useLocation(t, "America/New_York")
+	dir := t.TempDir()
+	writeMail(t, dir, "1", "Return-Path: <a@example.com>\n"+
+		"Received: from client by mx.example.com; Wed, 8 Oct 2025 07:12:00 +0000\n"+
+		"Date: Wed, 8 Oct 2025 07:11:55 +0000\n\n")
+
+	buf := new(bytes.Buffer)
+	if err := GetLatencies(dir, buf); err != nil {
+		t.Fatalf("GetLatencies() error: %v", err)
+	}
+	if !bytes.Contains(buf.Bytes(), []byte("2025-10-08 03:11:55")) {
+		t.Errorf("CSV = %s, want the sent time in New York time", buf)
 	}
 }

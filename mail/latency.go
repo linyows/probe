@@ -36,7 +36,6 @@ type Latencies struct {
 }
 
 const (
-	defaultTimezone   = "Asia/Tokyo"
 	defaultTimeformat = "2006-01-02 15:04:05"
 	// RFC1123Z-like format but with _2 to support both single and double digit days
 	// This matches RFC 2822 mail headers like "Wed,  8 Oct 2025 07:11:55 +0000"
@@ -65,7 +64,9 @@ func (l *Latencies) FindEarliestSentTime() (time.Time, error) {
 		if err != nil {
 			return err
 		}
-		if d.IsDir() {
+		// Only the messages that are measured count, so a file that is not
+		// one, such as a note left in the directory, does not need a Date.
+		if d.IsDir() || !IsMailText(path) {
 			return nil
 		}
 		sentTime, err := l.getDateHeader(path)
@@ -94,6 +95,10 @@ func (l *Latencies) getDateHeader(p string) (time.Time, error) {
 
 	for scanner.Scan() {
 		line := scanner.Text()
+		if line == "" {
+			// The headers end at the first empty line.
+			break
+		}
 		if HasFlexedPrefix(line, "Date:") && date.IsZero() {
 			date, err = l.getSentTimeWithParse(line)
 			if err != nil {
@@ -135,11 +140,38 @@ func (l *Latencies) ParseMail(p string) error {
 
 	row := Latency{FilePath: p}
 	var receivedTimes []time.Time
+	// receivedLines holds the Received header being read. A header can be
+	// folded over several lines, so it is only complete when the next header
+	// starts, or the headers end.
 	var receivedLines []string
+	flushReceived := func() error {
+		if receivedLines == nil {
+			return nil
+		}
+		rt, err := l.getReceivedTimeWithParse(strings.Join(receivedLines, " "))
+		receivedLines = nil
+		if err != nil {
+			return err
+		}
+		receivedTimes = append(receivedTimes, rt)
+		return nil
+	}
 	scanner := bufio.NewScanner(f)
 
 	for scanner.Scan() {
 		line := scanner.Text()
+		if line == "" {
+			// The headers end at the first empty line; the body is not read.
+			break
+		}
+
+		if receivedLines != nil && (strings.HasPrefix(line, "\t") || strings.HasPrefix(line, " ")) {
+			receivedLines = append(receivedLines, strings.TrimSpace(line))
+			continue
+		}
+		if err := flushReceived(); err != nil {
+			return err
+		}
 
 		if HasFlexedPrefix(line, "Return-Path:") && row.ReturnPath == "" {
 			row.ReturnPath = l.getReturnPathWithParse(line)
@@ -153,18 +185,11 @@ func (l *Latencies) ParseMail(p string) error {
 		}
 
 		if HasFlexedPrefix(line, "Received:") {
-			receivedLines = append(receivedLines, strings.TrimSpace(line))
-		} else if len(receivedLines) > 0 && (strings.HasPrefix(line, "\t") || strings.HasPrefix(line, " ")) {
-			receivedLines = append(receivedLines, strings.TrimSpace(line))
-			if strings.Contains(line, ";") {
-				rt, err := l.getReceivedTimeWithParse(strings.Join(receivedLines, " "))
-				if err != nil {
-					return err
-				}
-				receivedTimes = append(receivedTimes, rt)
-				receivedLines = nil
-			}
+			receivedLines = []string{strings.TrimSpace(line)}
 		}
+	}
+	if err := flushReceived(); err != nil {
+		return err
 	}
 
 	if row.SentTime.IsZero() || len(receivedTimes) == 0 {
@@ -222,12 +247,9 @@ func (l *Latencies) writeCSVWithHeader(w io.Writer) error {
 
 func (l *Latencies) Make() error {
 	var err error
+	// Times are written in the local time zone of the machine running probe.
 	if l.TimeLocation == nil {
-		z, err := time.LoadLocation(defaultTimezone)
-		if err != nil {
-			return err
-		}
-		l.TimeLocation = z
+		l.TimeLocation = time.Local
 	}
 	if l.TimeFormat == "" {
 		l.TimeFormat = defaultTimeformat
