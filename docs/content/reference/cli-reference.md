@@ -140,7 +140,7 @@ PROBE_OUTPUT=stream probe workflow.yml
 **Default:** none; no report file is written  
 **Description:** Write the result of the run to files once every job has finished. The terminal report is unchanged.
 
-A format without a path is written to its default file in the current directory. Parent directories of a path are created as needed, and each format may be given once. An existing file is replaced; when the path is a symlink, the link itself is replaced and the file it points to is left alone, so a report path planted in a checked-out project cannot be used to overwrite a file elsewhere.
+A format without a path is written to its default file in the current directory. Parent directories of a path are created as needed, and each format may be given once. An existing file is replaced and keeps its permissions; a new one gets what the umask allows. A path inside the current directory never leads out of it: a symlink at the file is replaced rather than followed, and a symlink on a directory along the way that points outside is refused, so a checked-out project cannot redirect a report to a file elsewhere. A path outside the current directory, absolute or through `..`, is written where it says.
 
 | Format | Default file | Contents |
 |---|---|---|
@@ -149,7 +149,7 @@ A format without a path is written to its default file in the current directory.
 | `markdown` | `probe-report.md` | A summary line, a table of jobs, and a section per failed step |
 | `github-summary` | `$GITHUB_STEP_SUMMARY` | The `markdown` page, appended to the GitHub Actions job summary |
 
-`github-summary` appends rather than overwrites, since earlier steps and other tools write to the same summary. Outside GitHub Actions, where `GITHUB_STEP_SUMMARY` is not set and no path is given, it prints a warning and is skipped without changing the exit code, so one command line serves CI and a local run. GitHub accepts at most 1 MiB of summary per step: when the page would go over, the requests and responses are left out, and if it is still too large the page is cut short at a failed step, with a note saying so. If earlier steps have left no room at all, nothing is written and a warning says so, so that the summary they wrote is not lost. Parent directories of an explicit path are created as for the other formats. An explicit path that is a symlink is refused, since the summary is appended to rather than replaced; the path in `GITHUB_STEP_SUMMARY` is used as given.
+`github-summary` appends rather than overwrites, since earlier steps and other tools write to the same summary. Outside GitHub Actions, where `GITHUB_STEP_SUMMARY` is not set and no path is given, it prints a warning and is skipped without changing the exit code, so one command line serves CI and a local run. GitHub accepts at most 1 MiB of summary per step: when the page would go over, the requests and responses are left out, and if it is still too large the page is cut short at a failed step, with a note saying so. If earlier steps have left no room at all, nothing is written and a warning says so, so that the summary they wrote is not lost. Parent directories of an explicit path are created as for the other formats. An explicit path is kept inside the current directory in the same way, refusing any symlink that leads out, since the summary is appended to rather than replaced; the path in `GITHUB_STEP_SUMMARY` is used as given.
 
 A step's status is `passed`, `failed`, `skipped`, or `untested` when it ran without a `test`. A failed step records one of these reasons:
 
@@ -295,7 +295,7 @@ probe skill install            # write .claude/skills/probe/SKILL.md
 probe skill install <dir>      # write <dir>/SKILL.md
 ```
 
-`install` creates the directory and replaces an existing `SKILL.md`, so running it again after upgrading Probe brings the skill up to date. For an agent that reads skills from another place, give that directory, for example `probe skill install .agents/skills/probe`. The same file is in the repository at `skills/probe/SKILL.md` for tools that install skills from a repository.
+`install` creates the directory and replaces an existing `SKILL.md`, so running it again after upgrading Probe brings the skill up to date. As with report files, a symlink in the project, at `SKILL.md` or on a directory such as `.claude`, cannot make it write outside the project. For an agent that reads skills from another place, give that directory, for example `probe skill install .agents/skills/probe`. The same file is in the repository at `skills/probe/SKILL.md` for tools that install skills from a repository.
 
 ## Environment Variables
 
