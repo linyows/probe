@@ -384,13 +384,21 @@ func (r *Req) ExecCommands() (*Data, error) {
 			}
 			data.Fetch = *fetchData
 		case "store", "uid store":
-			storeData, err := r.Store(cmd.Sequence, cmd.Dataitem, cmd.Value)
+			uid := strings.HasPrefix(strings.ToLower(cmd.Name), "uid")
+			if cmd.Sequence == "" {
+				cmd.Sequence = r.latestSet(uid)
+			}
+			storeData, err := r.Store(cmd.Sequence, cmd.Dataitem, cmd.Value, uid)
 			if err != nil {
 				return &data, fmt.Errorf("failed to execute command %d (%s): %w", i+1, cmd.Name, err)
 			}
 			data.Store = *storeData
 		case "copy", "uid copy":
-			copyData, err := r.Copy(cmd.Sequence, cmd.Mailbox)
+			uid := strings.HasPrefix(strings.ToLower(cmd.Name), "uid")
+			if cmd.Sequence == "" {
+				cmd.Sequence = r.latestSet(uid)
+			}
+			copyData, err := r.Copy(cmd.Sequence, cmd.Mailbox, uid)
 			if err != nil {
 				return &data, fmt.Errorf("failed to execute command %d (%s): %w", i+1, cmd.Name, err)
 			}
@@ -1132,8 +1140,10 @@ func (r *Req) UIDFetch(sequence, dataitem string) (*FetchData, error) {
 	return &fd, nil
 }
 
-// Store implements STORE command
-func (r *Req) Store(sequence, dataitem, value string) (*StoreData, error) {
+// Store implements STORE and UID STORE: it changes the flags of the given
+// messages. dataitem is FLAGS, +FLAGS or -FLAGS, optionally followed by
+// .SILENT, and value lists the flags, as in "\Seen \Flagged" or "(\Seen)".
+func (r *Req) Store(sequence, dataitem, value string, uid bool) (*StoreData, error) {
 	if sequence == "" {
 		return nil, fmt.Errorf("sequence is required for STORE command")
 	}
@@ -1141,16 +1151,64 @@ func (r *Req) Store(sequence, dataitem, value string) (*StoreData, error) {
 		return nil, fmt.Errorf("dataitem is required for STORE command")
 	}
 
-	// For now, return a basic successful response until we have proper API usage
-	// TODO: Implement proper STORE command when API is clarified
-	return &StoreData{
-		Success: true,
-		Count:   1, // Placeholder implementation
-	}, nil
+	numSet, err := r.parseNumSet(sequence, uid)
+	if err != nil {
+		return nil, err
+	}
+	store, err := parseStoreFlags(dataitem, value)
+	if err != nil {
+		return nil, err
+	}
+
+	messages, err := r.cl.Store(numSet, store, nil).Collect()
+	if err != nil {
+		return nil, fmt.Errorf("failed to Store: %w", err)
+	}
+
+	// With .SILENT the server does not answer with the new flags, so no
+	// message is counted.
+	return &StoreData{Success: true, Count: len(messages)}, nil
 }
 
-// Copy implements COPY command
-func (r *Req) Copy(sequence, mailbox string) (*CopyData, error) {
+// parseStoreFlags turns a STORE data item and its flag list into the flags
+// to send.
+func parseStoreFlags(dataitem, value string) (*imap.StoreFlags, error) {
+	item := strings.ToUpper(strings.TrimSpace(dataitem))
+	store := &imap.StoreFlags{}
+
+	if rest, ok := strings.CutSuffix(item, ".SILENT"); ok {
+		store.Silent = true
+		item = rest
+	}
+	switch {
+	case strings.HasPrefix(item, "+"):
+		store.Op = imap.StoreFlagsAdd
+		item = item[1:]
+	case strings.HasPrefix(item, "-"):
+		store.Op = imap.StoreFlagsDel
+		item = item[1:]
+	default:
+		store.Op = imap.StoreFlagsSet
+	}
+	if item != "FLAGS" {
+		return nil, fmt.Errorf("unsupported STORE data item %q: use FLAGS, +FLAGS or -FLAGS, optionally with .SILENT", dataitem)
+	}
+
+	list := strings.TrimSpace(value)
+	list = strings.TrimSuffix(strings.TrimPrefix(list, "("), ")")
+	for _, f := range strings.Fields(list) {
+		store.Flags = append(store.Flags, imap.Flag(f))
+	}
+	if len(store.Flags) == 0 && store.Op != imap.StoreFlagsSet {
+		return nil, fmt.Errorf("value must list the flags to add or remove, such as \\Seen")
+	}
+	return store, nil
+}
+
+// Copy implements COPY and UID COPY: it copies the given messages into
+// mailbox. Count is the number of messages the server reports copied, which
+// it does when it supports UIDPLUS; otherwise it is 0.
+func (r *Req) Copy(sequence, mailbox string, uid bool) (*CopyData, error) {
 	if sequence == "" {
 		return nil, fmt.Errorf("sequence is required for COPY command")
 	}
@@ -1158,12 +1216,49 @@ func (r *Req) Copy(sequence, mailbox string) (*CopyData, error) {
 		return nil, fmt.Errorf("mailbox is required for COPY command")
 	}
 
-	// For now, return a basic successful response until we have proper API usage
-	// TODO: Implement proper COPY command when API is clarified
-	return &CopyData{
-		Success: true,
-		Count:   1, // Placeholder implementation
-	}, nil
+	numSet, err := r.parseNumSet(sequence, uid)
+	if err != nil {
+		return nil, err
+	}
+
+	copied, err := r.cl.Copy(numSet, mailbox).Wait()
+	if err != nil {
+		return nil, fmt.Errorf("failed to Copy: %w", err)
+	}
+
+	count := 0
+	if copied != nil {
+		if uids, ok := copied.SourceUIDs.Nums(); ok {
+			count = len(uids)
+		}
+	}
+	return &CopyData{Success: true, Count: count}, nil
+}
+
+// parseNumSet parses sequence as sequence numbers, or as UIDs for the UID
+// form of a command.
+func (r *Req) parseNumSet(sequence string, uid bool) (imap.NumSet, error) {
+	if uid {
+		uidset, err := r.parseUIDSet(sequence)
+		if err != nil {
+			return nil, fmt.Errorf("invalid UID set %s: %w", sequence, err)
+		}
+		return *uidset, nil
+	}
+	seqset, err := r.parseSequenceSet(sequence)
+	if err != nil {
+		return nil, fmt.Errorf("invalid sequence set %s: %w", sequence, err)
+	}
+	return *seqset, nil
+}
+
+// latestSet returns the messages the last SEARCH or UID SEARCH found, which
+// a command without a sequence acts on, as FETCH does.
+func (r *Req) latestSet(uid bool) string {
+	if uid {
+		return r.latestUidSet
+	}
+	return r.latestSeqSet
 }
 
 // parseSequenceSet parses a sequence set string into an imap.SeqSet

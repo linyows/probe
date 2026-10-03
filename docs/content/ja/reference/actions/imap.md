@@ -149,12 +149,47 @@ with:
 - **list**: 使用可能なメールボックスの一覧表示
 - **fetch**: メッセージデータの取得
 - **uid fetch**: UIDを使用したメッセージデータの取得
+- **store**: メッセージのフラグの変更
+- **uid store**: UIDを使用したメッセージのフラグの変更
+- **copy**: メッセージを別のメールボックスへコピー
+- **uid copy**: UIDを使用したメッセージのコピー
 - **create**: メールボックスの作成
 - **delete**: メールボックスの削除
 - **rename**: メールボックス名の変更
 - **subscribe**: メールボックスの購読
 - **unsubscribe**: メールボックスの購読解除
 - **noop**: 操作なし（キープアライブ）
+
+#### storeとuid store
+
+メッセージのフラグを設定、追加、削除します。`dataitem`は、置き換えるなら`FLAGS`、追加するなら`+FLAGS`、削除するなら`-FLAGS`です。末尾に`.SILENT`を付けると、サーバーは新しいフラグを返しません。`value`にはフラグを括弧付きか括弧なしで並べます。`uid store`は`sequence`にUIDを取ります。`sequence`を省くと、`fetch`と同じく直前の`search`や`uid search`の結果を対象にします。
+
+```yaml
+- name: "select"
+  mailbox: "INBOX"
+- name: "store"
+  sequence: "1:3"
+  dataitem: "+FLAGS"
+  value: '\Seen \Flagged'
+```
+
+`res.data.store.count`は、サーバーが新しいフラグとともに返したメッセージの数で、`.SILENT`では`0`です。変更できるのはフラグだけで、ほかのデータ項目を指定するとコマンドは失敗します。
+
+#### copyとuid copy
+
+メッセージを、既にある別のメールボックスへコピーします。`uid copy`は`sequence`にUIDを取り、`sequence`を省くとどちらも直前の検索結果を対象にします。
+
+```yaml
+- name: "select"
+  mailbox: "INBOX"
+- name: "copy"
+  sequence: "1:2"
+  mailbox: "Archive"
+```
+
+`res.data.copy.count`は、サーバーが報告したときにコピーされたメッセージの数です。サーバーがUIDPLUSに対応していれば報告され、そうでなければ`0`です。
+
+存在しないメールボックスへの`copy`のようにコマンドが失敗すると、ほかのIMAPコマンドと同じく`res.code`が`1`になり、`res.error`に理由が入ります。
 
 ### 検索条件
 

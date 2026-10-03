@@ -7,6 +7,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
+	"fmt"
 	"math/big"
 	"net"
 	"strings"
@@ -14,6 +15,7 @@ import (
 	"time"
 
 	"github.com/emersion/go-imap/v2"
+	"github.com/emersion/go-imap/v2/imapclient"
 	"github.com/emersion/go-imap/v2/imapserver"
 	"github.com/emersion/go-imap/v2/imapserver/imapmemserver"
 	"github.com/stretchr/testify/assert"
@@ -858,5 +860,211 @@ func TestRequest_InsecureSkipTLS(t *testing.T) {
 	_, err := request(false)
 	if err == nil || !strings.Contains(err.Error(), "certificate") {
 		t.Errorf("without insecure_skip_tls the self-signed certificate must be refused, got %v", err)
+	}
+}
+
+// plainIMAPServer runs an in-memory IMAP server without TLS, with INBOX
+// holding n messages and an empty Archive, and returns its address.
+func plainIMAPServer(t *testing.T, n int) (string, int) {
+	t.Helper()
+
+	mem := imapmemserver.New()
+	user := imapmemserver.NewUser("user", "pass")
+	for _, mb := range []string{"INBOX", "Archive"} {
+		if err := user.Create(mb, nil); err != nil {
+			t.Fatal(err)
+		}
+	}
+	mem.AddUser(user)
+
+	srv := imapserver.New(&imapserver.Options{
+		NewSession: func(*imapserver.Conn) (imapserver.Session, *imapserver.GreetingData, error) {
+			return mem.NewSession(), nil, nil
+		},
+		Caps:         imap.CapSet{imap.CapIMAP4rev1: {}, imap.CapUIDPlus: {}},
+		InsecureAuth: true,
+	})
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	go func() { _ = srv.Serve(ln) }()
+	t.Cleanup(func() { _ = srv.Close() })
+
+	// Put the messages in through a real client, as a mail server would
+	// receive them.
+	c, err := imapclient.DialInsecure(ln.Addr().String(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = c.Close() }()
+	if err := c.Login("user", "pass").Wait(); err != nil {
+		t.Fatal(err)
+	}
+	for i := 1; i <= n; i++ {
+		msg := fmt.Sprintf("From: a@example.test\r\nSubject: message %d\r\n\r\nbody %d\r\n", i, i)
+		cmd := c.Append("INBOX", int64(len(msg)), nil)
+		if _, err := cmd.Write([]byte(msg)); err != nil {
+			t.Fatal(err)
+		}
+		if err := cmd.Close(); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := cmd.Wait(); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	addr := ln.Addr().(*net.TCPAddr)
+	return "127.0.0.1", addr.Port
+}
+
+// runCommands runs the imap action's commands against the server.
+func runCommands(t *testing.T, host string, port int, commands ...map[string]any) (map[string]any, error) {
+	t.Helper()
+	cmds := make([]any, len(commands))
+	for i, c := range commands {
+		cmds[i] = c
+	}
+	return Request(map[string]any{
+		"host": host, "port": port, "username": "user", "password": "pass",
+		"tls": false, "commands": cmds,
+	})
+}
+
+func fetchedFlags(t *testing.T, ret map[string]any) [][]string {
+	t.Helper()
+	res := ret["res"].(map[string]any)
+	data := res["data"].(map[string]any)
+	fetch := data["fetch"].(map[string]any)
+	var out [][]string
+	for _, m := range fetch["messages"].([]any) {
+		flags, _ := m.(map[string]any)["flags"].([]string)
+		out = append(out, flags)
+	}
+	return out
+}
+
+func TestStore_ChangesFlags(t *testing.T) {
+	host, port := plainIMAPServer(t, 3)
+
+	ret, err := runCommands(t, host, port,
+		map[string]any{"name": "select", "mailbox": "INBOX"},
+		map[string]any{"name": "store", "sequence": "1:2", "dataitem": "+FLAGS", "value": `\Seen \Flagged`},
+		map[string]any{"name": "store", "sequence": "2", "dataitem": "-FLAGS.SILENT", "value": `(\Flagged)`},
+		map[string]any{"name": "fetch", "sequence": "1:3", "dataitem": "FLAGS"},
+	)
+	require.NoError(t, err)
+
+	flags := fetchedFlags(t, ret)
+	require.Len(t, flags, 3)
+	assert.ElementsMatch(t, []string{`\Seen`, `\Flagged`}, flags[0], "message 1 got both flags")
+	assert.ElementsMatch(t, []string{`\Seen`}, flags[1], "message 2 lost \\Flagged again")
+	assert.Empty(t, flags[2], "message 3 was not in the set")
+}
+
+func TestStore_UIDAndReplace(t *testing.T) {
+	host, port := plainIMAPServer(t, 2)
+
+	ret, err := runCommands(t, host, port,
+		map[string]any{"name": "select", "mailbox": "INBOX"},
+		map[string]any{"name": "uid store", "sequence": "2", "dataitem": "+FLAGS", "value": `\Seen`},
+		map[string]any{"name": "uid store", "sequence": "2", "dataitem": "FLAGS", "value": `\Answered`},
+		map[string]any{"name": "fetch", "sequence": "1:2", "dataitem": "FLAGS"},
+	)
+	require.NoError(t, err)
+
+	flags := fetchedFlags(t, ret)
+	assert.Empty(t, flags[0])
+	assert.ElementsMatch(t, []string{`\Answered`}, flags[1], "FLAGS replaces the set")
+
+	store := ret["res"].(map[string]any)["data"].(map[string]any)["store"].(map[string]any)
+	assert.Equal(t, 1, store["count"], "the server reported one message")
+}
+
+func TestStore_UsesLatestSearch(t *testing.T) {
+	host, port := plainIMAPServer(t, 3)
+
+	ret, err := runCommands(t, host, port,
+		map[string]any{"name": "select", "mailbox": "INBOX"},
+		map[string]any{"name": "search", "criteria": map[string]any{"headers": map[string]any{"Subject": "message 2"}}},
+		map[string]any{"name": "store", "dataitem": "+FLAGS", "value": `\Deleted`},
+		map[string]any{"name": "fetch", "sequence": "1:3", "dataitem": "FLAGS"},
+	)
+	require.NoError(t, err)
+
+	flags := fetchedFlags(t, ret)
+	assert.Empty(t, flags[0])
+	assert.ElementsMatch(t, []string{`\Deleted`}, flags[1], "store without a sequence acts on the search result")
+	assert.Empty(t, flags[2])
+}
+
+func TestCopy_CopiesMessages(t *testing.T) {
+	host, port := plainIMAPServer(t, 3)
+
+	ret, err := runCommands(t, host, port,
+		map[string]any{"name": "select", "mailbox": "INBOX"},
+		map[string]any{"name": "copy", "sequence": "1:2", "mailbox": "Archive"},
+		map[string]any{"name": "examine", "mailbox": "Archive"},
+	)
+	require.NoError(t, err)
+
+	data := ret["res"].(map[string]any)["data"].(map[string]any)
+	assert.Equal(t, 2, data["copy"].(map[string]any)["count"])
+	assert.Equal(t, 2, data["examine"].(map[string]any)["exists"], "Archive now holds the copies")
+
+	ret, err = runCommands(t, host, port,
+		map[string]any{"name": "select", "mailbox": "INBOX"},
+		map[string]any{"name": "uid copy", "sequence": "3", "mailbox": "Archive"},
+		map[string]any{"name": "examine", "mailbox": "Archive"},
+	)
+	require.NoError(t, err)
+	data = ret["res"].(map[string]any)["data"].(map[string]any)
+	assert.Equal(t, 3, data["examine"].(map[string]any)["exists"])
+}
+
+func TestStoreAndCopy_Errors(t *testing.T) {
+	host, port := plainIMAPServer(t, 1)
+
+	tests := []struct {
+		name    string
+		command map[string]any
+		want    string
+	}{
+		{"unknown data item", map[string]any{"name": "store", "sequence": "1", "dataitem": "LABELS", "value": `\Seen`}, "unsupported STORE data item"},
+		{"nothing to add", map[string]any{"name": "store", "sequence": "1", "dataitem": "+FLAGS", "value": ""}, "value must list the flags"},
+		{"missing mailbox", map[string]any{"name": "copy", "sequence": "1", "mailbox": "Nowhere"}, "failed to Copy"},
+	}
+	// A failed command is not an action error: the step sees res.code 1 and
+	// the reason in res.error, as it does for every other command.
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ret, err := runCommands(t, host, port, map[string]any{"name": "select", "mailbox": "INBOX"}, tt.command)
+			require.NoError(t, err)
+			res := ret["res"].(map[string]any)
+			assert.Equal(t, 1, res["code"])
+			assert.Contains(t, res["error"], tt.want)
+		})
+	}
+}
+
+func TestParseStoreFlags(t *testing.T) {
+	tests := []struct {
+		dataitem, value string
+		op              imap.StoreFlagsOp
+		silent          bool
+		flags           []imap.Flag
+	}{
+		{"FLAGS", `\Seen`, imap.StoreFlagsSet, false, []imap.Flag{imap.FlagSeen}},
+		{"+flags", `(\Seen \Flagged)`, imap.StoreFlagsAdd, false, []imap.Flag{imap.FlagSeen, imap.FlagFlagged}},
+		{"-FLAGS.SILENT", `\Deleted`, imap.StoreFlagsDel, true, []imap.Flag{imap.FlagDeleted}},
+		{"FLAGS", "", imap.StoreFlagsSet, false, nil}, // clears every flag
+	}
+	for _, tt := range tests {
+		got, err := parseStoreFlags(tt.dataitem, tt.value)
+		require.NoError(t, err, tt.dataitem)
+		assert.Equal(t, tt.op, got.Op, tt.dataitem)
+		assert.Equal(t, tt.silent, got.Silent, tt.dataitem)
+		assert.Equal(t, tt.flags, got.Flags, tt.dataitem)
 	}
 }
