@@ -125,6 +125,8 @@ probe --report junit,markdown workflow.yml
   `probe-junit.xml`
 - `markdown`: a summary, a table of jobs and a section per failed step, written
   to `probe-report.md`
+- `github-summary`: the same page, appended to the GitHub Actions job summary;
+  outside GitHub Actions it is skipped with a warning
 
 Give a path after `=` to write a format somewhere else, for example
 `--report junit=out/junit.xml`. The files are written once every job has

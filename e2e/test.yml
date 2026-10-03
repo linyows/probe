@@ -280,6 +280,37 @@ jobs:
       res.code == 2 &&
       res.stderr contains "unknown report format: html" &&
       !(res.stdout contains "Report Files")
+  - name: github-summary appends to the file it is given
+    uses: shell
+    with:
+      cmd: |
+        printf '## Earlier step\n' > {{vars.report_dir}}/summary.md
+        ./probe e2e/report.yml --report github-summary={{vars.report_dir}}/summary.md >/dev/null 2>&1
+        ./probe e2e/report.yml --report github-summary={{vars.report_dir}}/summary.md >/dev/null 2>&1
+        cat {{vars.report_dir}}/summary.md
+    test: |
+      res.code == 0 &&
+      res.stdout startsWith "## Earlier step\n\n# Report Files\n" &&
+      len(split(res.stdout, "# Report Files\n")) == 3 &&
+      res.stdout contains "### Checks / 1. False test"
+  - name: github-summary outside GitHub Actions warns and does not change the exit code
+    uses: shell
+    with:
+      cmd: env -u GITHUB_STEP_SUMMARY ./probe e2e/report.yml --report github-summary
+    test: |
+      res.code == 3 &&
+      res.stderr contains "[WARN] GITHUB_STEP_SUMMARY is not set"
+  - name: github-summary writes to the job summary of this run
+    uses: shell
+    skipif: vars.ci == ""
+    with:
+      cmd: |
+        ./probe examples/shell.yml --report github-summary >/dev/null 2>&1
+        echo "exit=$?"
+        grep -q '^# Shell Action Examples$' "$GITHUB_STEP_SUMMARY" && echo found
+    test: |
+      res.stdout contains "exit=0" &&
+      res.stdout contains "found"
   - name: Remove the output directory
     uses: shell
     with:

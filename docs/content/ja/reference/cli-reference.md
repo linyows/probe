@@ -136,7 +136,7 @@ PROBE_OUTPUT=stream probe workflow.yml
 ### `--report`
 
 **型:** String  
-**値:** `format[=path]`をカンマで区切った並び。`format`は`json`、`junit`、`markdown`のいずれか  
+**値:** `format[=path]`をカンマで区切った並び。`format`は`json`、`junit`、`markdown`、`github-summary`のいずれか  
 **デフォルト:** なし（レポートファイルは書き出さない）  
 **説明:** すべてのジョブが終わったあと、実行結果をファイルに書き出します。端末に出るレポートは変わりません。
 
@@ -147,6 +147,9 @@ PROBE_OUTPUT=stream probe workflow.yml
 | `json` | `probe-report.json` | 実行全体。状態、所要時間、ジョブとステップの状態ごとの集計、そして各ステップの`test`と、失敗した場合はその理由とリクエスト・レスポンス |
 | `junit` | `probe-junit.xml` | ジョブごとに`testsuite`、ステップごとに`testcase`を持つJUnit XML。テスト結果を読めるCI向け |
 | `markdown` | `probe-report.md` | 要約の1行、ジョブの表、失敗したステップごとの節 |
+| `github-summary` | `$GITHUB_STEP_SUMMARY` | `markdown`と同じページを、GitHub Actionsのジョブサマリーに追記 |
+
+`github-summary`は上書きせずに追記します。先行するステップやほかのツールも同じサマリーに書き込むためです。`GITHUB_STEP_SUMMARY`が設定されておらずパスも指定されていない場合、つまりGitHub Actionsの外では、警告を出して書き出しを飛ばし、終了コードは変えません。同じコマンドラインをCIでも手元でも使えます。GitHubが受け付けるサマリーは1ステップあたり1MiBまでです。ページがそれを超えそうな場合はリクエストとレスポンスを省き、それでも大きすぎる場合は失敗したステップの区切りで打ち切り、その旨を書き添えます。先行するステップの書き込みで空きがまったく残っていない場合は、何も書かずに警告を出します。書き込んでしまうと上限を超え、先行するステップが書いた内容まで失われるためです。パスを明示した場合は、ほかの形式と同じく親ディレクトリを作成します。
 
 ステップの状態は`passed`、`failed`、`skipped`、そして`test`なしで実行された場合の`untested`のいずれかです。失敗したステップには次のどれかの理由が記録されます。
 
@@ -560,8 +563,10 @@ jobs:
       - name: Run Tests
         env:
           API_TOKEN: ${{ secrets.API_TOKEN }}
-        run: probe workflow.yml,${GITHUB_REF##*/}.yml
+        run: probe --report github-summary workflow.yml,${GITHUB_REF##*/}.yml
 ```
+
+`--report github-summary`を付けると、失敗したステップを含む結果が実行のサマリーページに表示されます。
 
 ### GitLab CI
 

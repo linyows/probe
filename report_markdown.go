@@ -11,7 +11,26 @@ import (
 // failed, and the request and response. The page is meant to be read as is,
 // for example as a GitHub job summary or by a coding agent.
 func (r *Report) WriteMarkdown(w io.Writer) error {
+	_, err := io.WriteString(w, r.markdown(true))
+	return err
+}
+
+// markdown renders the page. Without payloads, failed steps leave out their
+// request and response, which is what keeps a page with large responses
+// within a size limit.
+func (r *Report) markdown(payloads bool) string {
+	page, _ := r.markdownWithCuts(payloads)
+	return page
+}
+
+// markdownWithCuts renders the page and also returns the offsets where it
+// can be cut short without leaving a block half written: before the job
+// table, before the failures heading, and before each failure section. They
+// are recorded while rendering rather than searched for afterwards, because
+// a test or a message can itself contain a line that looks like a heading.
+func (r *Report) markdownWithCuts(payloads bool) (string, []int) {
 	var b strings.Builder
+	var cuts []int
 
 	fmt.Fprintf(&b, "# %s\n\n", r.Name)
 	if r.Description != "" {
@@ -22,6 +41,7 @@ func (r *Report) WriteMarkdown(w io.Writer) error {
 		markdownStatus(r.Status), msToSec(r.DurationMs),
 		countPhrase(r.Summary.Jobs), countPhrase(r.Summary.Steps))
 
+	cuts = append(cuts, b.Len())
 	b.WriteString("| Job | Status | Steps | Duration |\n")
 	b.WriteString("|---|---|---|---|\n")
 	for _, job := range r.Jobs {
@@ -42,19 +62,20 @@ func (r *Report) WriteMarkdown(w io.Writer) error {
 				continue
 			}
 			if !failures {
+				cuts = append(cuts, b.Len())
 				b.WriteString("\n## Failures\n\n")
 				failures = true
 			}
-			writeMarkdownFailure(&b, job, st)
+			cuts = append(cuts, b.Len())
+			writeMarkdownFailure(&b, job, st, payloads)
 		}
 	}
 
 	// Every block ends in a blank line; the page itself ends in one newline.
-	_, err := io.WriteString(w, strings.TrimRight(b.String(), "\n")+"\n")
-	return err
+	return strings.TrimRight(b.String(), "\n") + "\n", cuts
 }
 
-func writeMarkdownFailure(b *strings.Builder, job JobReport, st StepReport) {
+func writeMarkdownFailure(b *strings.Builder, job JobReport, st StepReport, payloads bool) {
 	fmt.Fprintf(b, "### %s / %d. %s\n\n", job.Name, st.Index, st.Name)
 
 	if st.Failure != nil {
@@ -66,7 +87,7 @@ func writeMarkdownFailure(b *strings.Builder, job JobReport, st StepReport) {
 	if st.Test != "" {
 		writeFence(b, "", st.Test)
 	}
-	if st.Failure == nil {
+	if st.Failure == nil || !payloads {
 		return
 	}
 	for _, part := range []struct {
