@@ -673,8 +673,10 @@ func TestReq_FailureEvidence(t *testing.T) {
 	if data, _ := os.ReadFile(htmls[0]); string(data) != "<html><body>at failure</body></html>" {
 		t.Errorf("html = %q", data)
 	}
-	if info, _ := os.Stat(shots[0]); info.Mode().Perm() != 0o644 {
-		t.Errorf("screenshot mode = %v, want 0644 so CI can upload it", info.Mode().Perm())
+	for _, f := range []string{shots[0], htmls[0]} {
+		if info, _ := os.Stat(f); info.Mode().Perm() != 0o600 {
+			t.Errorf("%s mode = %v, want 0600: the page can hold private data", filepath.Base(f), info.Mode().Perm())
+		}
 	}
 }
 
@@ -762,5 +764,33 @@ func TestRequest_EvidenceDirMapping(t *testing.T) {
 	}
 	if req.EvidenceDir != "out/browser" {
 		t.Errorf("EvidenceDir = %q", req.EvidenceDir)
+	}
+}
+
+// failingStartRunner is a runner whose browser cannot be launched.
+type failingStartRunner struct{ MockRunner }
+
+func (r *failingStartRunner) Start(context.Context) error { return errors.New("chrome not found") }
+
+func TestReq_FailureEvidence_BrowserDidNotStart(t *testing.T) {
+	req := NewReq()
+	req.EvidenceDir = t.TempDir()
+	req.browserRunner = &failingStartRunner{}
+	called := false
+	req.capture = func(context.Context) ([]byte, string, string, error) {
+		called = true
+		return nil, "", "", nil
+	}
+	action := NewChromeDPAction()
+	action.Name = "navigate"
+	action.URL = "http://app.test/"
+	req.Actions = []*ChromeDPAction{action}
+
+	_, err := req.do()
+	if err == nil || !strings.Contains(err.Error(), "chrome not found (the page could not be captured: the browser did not start)") {
+		t.Errorf("error = %v, want the start failure with a note that no page was saved", err)
+	}
+	if called {
+		t.Error("there is no browser to capture the page from")
 	}
 }

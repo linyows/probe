@@ -411,7 +411,9 @@ func (req *Req) do() (*Result, error) {
 	}
 
 	if err := req.browserRunner.Start(browserCtx); err != nil {
-		return nil, err
+		// There is no page to capture, but say so, as every other failure
+		// of the actions says whether the page was saved.
+		return nil, fmt.Errorf("%w (the page could not be captured: the browser did not start)", err)
 	}
 
 	ctx, actionsCancel := context.WithDeadline(browserCtx, deadline)
@@ -487,7 +489,8 @@ func (req *Req) captureWithRunner(ctx context.Context) ([]byte, string, string, 
 	err := req.browserRunner.Run(ctx,
 		chromedp.Location(&url),
 		chromedp.Evaluate(`document.documentElement.outerHTML`, &html),
-		chromedp.FullScreenshot(&screenshot, defaultQuality),
+		// FullScreenshot returns PNG only at quality 100, and JPEG otherwise.
+		chromedp.FullScreenshot(&screenshot, 100),
 	)
 	return screenshot, html, url, err
 }
@@ -507,17 +510,14 @@ func saveEvidence(dir string, screenshot []byte, html string) (string, string, e
 	if cerr := f.Close(); err == nil {
 		err = cerr
 	}
-	if err == nil {
-		// CreateTemp makes the file private; match the HTML beside it, so
-		// a CI job can upload both as artifacts.
-		err = os.Chmod(shotPath, 0o644)
-	}
 	if err != nil {
 		return "", "", err
 	}
 
 	htmlPath := strings.TrimSuffix(shotPath, ".png") + ".html"
-	if err := os.WriteFile(htmlPath, []byte(html), 0o644); err != nil {
+	// The page can hold private data and the default directory is shared,
+	// so the HTML stays private like the screenshot CreateTemp made.
+	if err := os.WriteFile(htmlPath, []byte(html), 0o600); err != nil {
 		return "", "", err
 	}
 	return shotPath, htmlPath, nil

@@ -465,7 +465,7 @@ action error in step_execute: action execution failed (caused by: ... context de
 
 The same message is the failure's `message` in the files `--report` writes. A test that evaluates to false is not an action failure, so the page is not saved then; add a `capture_screenshot` action to keep it.
 
-The files go to the system's temporary directory unless `evidence_dir` names another. The directory is created when needed, which suits uploading it as a CI artifact:
+The files go to the system's temporary directory unless `evidence_dir` names another. The directory is created when needed, which suits uploading it as a CI artifact. The page can show private data, so the files are readable only by the user who ran Probe:
 
 ```yaml
 - name: Checkout page

@@ -872,6 +872,9 @@ jobs:
         echo "exit=$?"
         ls "$dir"
         grep -q "<h1>Probe Browser Fixture</h1>" "$dir"/probe-browser-failure-*.html && echo html-ok
+        for f in "$dir"/probe-browser-failure-*.png; do
+          [ "$(head -c 4 "$f" | tail -c 3)" = "PNG" ] && echo png-ok
+        done
         rm -rf "$dir"
       timeout: 1m
       env:
@@ -881,7 +884,8 @@ jobs:
       res.stdout contains "page at failure: url http://localhost:8090/" &&
       res.stdout matches "probe-browser-failure-[0-9]+\\.png" &&
       res.stdout matches "probe-browser-failure-[0-9]+\\.html" &&
-      res.stdout contains "html-ok"
+      res.stdout contains "html-ok" &&
+      res.stdout contains "png-ok"
   - name: Stop Xvfb
     uses: shell
     skipif: vars.ci == ""
