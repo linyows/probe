@@ -9,6 +9,7 @@ import (
 	"strings"
 	"syscall"
 	"testing"
+	"time"
 )
 
 func TestEndToEndExitCodes(t *testing.T) {
@@ -118,5 +119,103 @@ jobs:
 	if _, err := os.Stat(log); !os.IsNotExist(err) {
 		_ = os.Remove(log)
 		t.Errorf("log %s was left behind: %v", log, err)
+	}
+}
+
+func TestEndToEndBackgroundStoppedOnInterrupt(t *testing.T) {
+	if testing.Short() {
+		t.Skip("builds probe")
+	}
+	dir := t.TempDir()
+	bin := filepath.Join(dir, "probe")
+	if out, err := exec.Command("go", "build", "-o", bin, "./cmd/probe").CombinedOutput(); err != nil {
+		t.Fatalf("build: %v\n%s", err, out)
+	}
+
+	pidFile := filepath.Join(dir, "pid")
+	logFile := filepath.Join(dir, "log")
+	workflow := filepath.Join(dir, "workflow.yml")
+	yml := fmt.Sprintf(`name: interrupted
+jobs:
+- name: server
+  steps:
+  - name: start a command that never ends
+    id: server
+    uses: shell
+    with:
+      cmd: "echo $$ > %s; exec sleep 300"
+      background: true
+    outputs:
+      log: res.log
+  - name: record the log path
+    uses: shell
+    with:
+      cmd: "echo '{{outputs.server.log}}' > %s"
+  - name: take a long time
+    uses: shell
+    with:
+      cmd: "sleep 60"
+      timeout: 2m
+`, pidFile, logFile)
+	if err := os.WriteFile(workflow, []byte(yml), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	// Run probe in a group of its own and interrupt the whole group, as
+	// Ctrl+C in a terminal does.
+	cmd := exec.Command(bin, workflow)
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL) })
+
+	deadline := time.Now().Add(30 * time.Second)
+	for {
+		if data, err := os.ReadFile(logFile); err == nil && len(data) > 0 {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("the workflow did not reach its long step")
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+
+	if err := syscall.Kill(-cmd.Process.Pid, syscall.SIGINT); err != nil {
+		t.Fatal(err)
+	}
+	waited := make(chan error, 1)
+	go func() { waited <- cmd.Wait() }()
+	select {
+	case <-waited:
+	case <-time.After(15 * time.Second):
+		t.Fatal("probe did not exit after SIGINT")
+	}
+	if ws, ok := cmd.ProcessState.Sys().(syscall.WaitStatus); !ok || !ws.Signaled() || ws.Signal() != syscall.SIGINT {
+		t.Errorf("probe exited with %v, want it ended by SIGINT", cmd.ProcessState)
+	}
+
+	pidData, err := os.ReadFile(pidFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pid, err := strconv.Atoi(strings.TrimSpace(string(pidData)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = syscall.Kill(-pid, syscall.SIGKILL) })
+	if !waitGroupGone(pid) {
+		t.Errorf("background process %d is still running after the interrupt", pid)
+	}
+
+	logData, err := os.ReadFile(logFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if log := strings.TrimSpace(string(logData)); log != "" {
+		if _, err := os.Stat(log); !os.IsNotExist(err) {
+			_ = os.Remove(log)
+			t.Errorf("log %s was left behind: %v", log, err)
+		}
 	}
 }

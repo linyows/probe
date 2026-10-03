@@ -111,7 +111,7 @@ A background command is for something the following steps need running, such as 
 
 - **Output:** stdout and stderr both go to a log file of its own, whose path is in `res.log`. Starting the same command twice gives two files.
 - **Lifetime:** the command keeps running after its step and after its job, so steps in later jobs can use it too. When the workflow is over, Probe sends `SIGTERM` to the command and everything it started, sends `SIGKILL` to whatever is left after 3 seconds, and removes the log file. Read the log in a step if it is needed afterwards.
-- **Interruption:** if Probe itself is killed, for example with Ctrl+C, it cannot stop the command, and the command and its log file are left behind.
+- **Interruption:** when Probe is interrupted with Ctrl+C, or receives `SIGTERM` or `SIGHUP`, it stops the command the same way before it exits, and a second Ctrl+C ends Probe at once. Only a Probe killed outright, such as with `SIGKILL`, leaves the command and its log file behind.
 
 A command started inside an [embedded](/reference/actions/embedded) job is stopped when that job is over.
 
