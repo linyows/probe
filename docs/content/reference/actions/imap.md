@@ -125,15 +125,16 @@ with:
 
 ### `timeout` (optional)
 
-**Type:** Duration  
+**Type:** Duration string or number of seconds  
 **Default:** `30s`  
-**Description:** Connection and operation timeout
+**Description:** Limit for the whole session: connecting, the TLS handshake, logging in, every command and logging out
 
 ```yaml
 with:
-  timeout: "60s"
-  timeout: "2m"
+  timeout: "60s"   # or 60
 ```
+
+A server that does not answer in time is cut off, and the step fails with an action error, which exits the run with status `3`, such as `IMAP session timed out after 30s while running commands`. That is unlike a command the server refuses, which sets `res.code` to `1`. A value that is not a duration, not a number, or not above zero is rejected.
 
 ### `commands` (required)
 

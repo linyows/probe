@@ -1,6 +1,7 @@
 package imap
 
 import (
+	"bufio"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
@@ -8,6 +9,7 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"fmt"
+	"io"
 	"math/big"
 	"net"
 	"strings"
@@ -1265,4 +1267,157 @@ func TestParseStoreFlags_Parentheses(t *testing.T) {
 		require.NoError(t, err, "%q", clear)
 		assert.Empty(t, got.Flags, "%q clears the flags on purpose", clear)
 	}
+}
+
+// stallingIMAPServer accepts connections and answers like an IMAP server up
+// to the point given, then goes silent: "greeting" never sends the greeting,
+// "select" logs the client in but never answers SELECT, and "logout" refuses
+// SELECT and then never answers LOGOUT.
+func stallingIMAPServer(t *testing.T, stallAt string) (string, int) {
+	t.Helper()
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = ln.Close() })
+
+	go func() {
+		for {
+			conn, err := ln.Accept()
+			if err != nil {
+				return
+			}
+			go func(c net.Conn) {
+				defer func() { _ = c.Close() }()
+				if stallAt == "greeting" {
+					_, _ = io.Copy(io.Discard, c)
+					return
+				}
+				_, _ = c.Write([]byte("* OK [CAPABILITY IMAP4rev1 AUTH=PLAIN] ready\r\n"))
+				rd := bufio.NewReader(c)
+				for {
+					line, err := rd.ReadString('\n')
+					if err != nil {
+						return
+					}
+					fields := strings.Fields(line)
+					if len(fields) < 2 {
+						continue
+					}
+					tag, cmd := fields[0], strings.ToUpper(fields[1])
+					switch {
+					case cmd == "LOGOUT" && stallAt == "logout":
+						// Never answer: the session has to be cut off.
+					case cmd == "LOGIN" || cmd == "LOGOUT" || cmd == "CAPABILITY" || cmd == "NOOP":
+						_, _ = c.Write([]byte(tag + " OK done\r\n"))
+					case cmd == "SELECT" && stallAt == "logout":
+						_, _ = c.Write([]byte(tag + " NO no such mailbox\r\n"))
+					default:
+						// Never answer: the session has to be cut off.
+					}
+				}
+			}(conn)
+		}
+	}()
+
+	addr := ln.Addr().(*net.TCPAddr)
+	return "127.0.0.1", addr.Port
+}
+
+func TestRequest_TimeoutBoundsTheSession(t *testing.T) {
+	tests := []struct {
+		stallAt string
+		want    string
+	}{
+		{"greeting", "IMAP session timed out after 300ms while logging in"},
+		{"select", "IMAP session timed out after 300ms while running commands"},
+		// The command fails first; the session then runs out on LOGOUT.
+		{"logout", "IMAP session timed out after 300ms while logging out"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.stallAt, func(t *testing.T) {
+			host, port := stallingIMAPServer(t, tt.stallAt)
+
+			start := time.Now()
+			_, err := Request(map[string]any{
+				"host": host, "port": port, "username": "user", "password": "pass",
+				"tls": false, "timeout": "300ms",
+				"commands": []any{map[string]any{"name": "select", "mailbox": "INBOX"}},
+			})
+			elapsed := time.Since(start)
+
+			require.Error(t, err, "a silent server must not leave the step hanging")
+			assert.Contains(t, err.Error(), tt.want)
+			assert.Less(t, elapsed, 3*time.Second, "the timeout has to cut the session short")
+		})
+	}
+}
+
+func TestRequest_TimeoutAsNumberIsSeconds(t *testing.T) {
+	host, port := plainIMAPServer(t, 1)
+
+	// 5 used to mean 5 nanoseconds, which no session survives.
+	for _, timeout := range []any{5, 5.0, "5"} {
+		ret, err := Request(map[string]any{
+			"host": host, "port": port, "username": "user", "password": "pass",
+			"tls": false, "timeout": timeout,
+			// Ignored: the setting was removed and unknown keys are skipped.
+			"strict_host_check": true,
+			"commands":          []any{map[string]any{"name": "select", "mailbox": "INBOX"}},
+		})
+		require.NoError(t, err, "timeout %#v", timeout)
+		req := ret["req"].(map[string]any)
+		assert.Equal(t, 5*time.Second, req["timeout"], "timeout %#v", timeout)
+	}
+}
+
+func TestParseTimeout(t *testing.T) {
+	tests := []struct {
+		in      any
+		want    time.Duration
+		wantErr bool
+	}{
+		{"30s", 30 * time.Second, false},
+		{"1m30s", 90 * time.Second, false},
+		{" 2 ", 2 * time.Second, false},
+		{"1.5", 1500 * time.Millisecond, false},
+		{2, 2 * time.Second, false},
+		{int64(3), 3 * time.Second, false},
+		{0.25, 250 * time.Millisecond, false},
+		{10 * time.Second, 10 * time.Second, false},
+		{"soon", 0, true},
+		{0, 0, true},
+		{"-1s", 0, true},
+		{true, 0, true},
+		{20_000_000_000, 0, true}, // would wrap to about 49 years
+		{int64(maxTimeoutSeconds) + 1, 0, true},
+		{1e20, 0, true},
+		{"1e20", 0, true},
+		{"NaN", 0, true},
+		{-5, 0, true},
+		{time.Duration(0), 0, true},
+		{int64(maxTimeoutSeconds), time.Duration(maxTimeoutSeconds) * time.Second, false},
+	}
+	for _, tt := range tests {
+		got, err := parseTimeout(tt.in)
+		if tt.wantErr {
+			assert.Error(t, err, "%#v", tt.in)
+			continue
+		}
+		require.NoError(t, err, "%#v", tt.in)
+		assert.Equal(t, tt.want, got, "%#v", tt.in)
+	}
+}
+
+func TestRequest_TimeoutWhileLoggingOutKeepsTheCommandError(t *testing.T) {
+	host, port := stallingIMAPServer(t, "logout")
+	_, err := Request(map[string]any{
+		"host": host, "port": port, "username": "user", "password": "pass",
+		"tls": false, "timeout": "300ms",
+		"commands": []any{map[string]any{"name": "select", "mailbox": "Nowhere"}},
+	})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "while logging out")
+	assert.Contains(t, err.Error(), "after the command failed")
+	assert.Contains(t, err.Error(), "no such mailbox")
 }
