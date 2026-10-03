@@ -51,7 +51,7 @@ The rest tune the connection and fall back to the defaults below when omitted.
 | `timeout` | string | "30s" | Limit for connecting and for running the command, as a Go duration such as `"30s"` or `"5m"` (a plain number is rejected) |
 | `workdir` | string | - | Working directory on remote server |
 | `strict_host_check` | bool | true | Strict host key verification |
-| `known_hosts` | string | `~/.ssh/known_hosts` and `/etc/ssh/ssh_known_hosts` | Known hosts file path |
+| `known_hosts` | string | `~/.ssh/known_hosts` and `/etc/ssh/ssh_known_hosts` | Known hosts file path. By default both files are read, as many of them as exist; with neither, a strict host check fails |
 
 ### Environment Variables
 

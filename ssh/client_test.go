@@ -2,7 +2,10 @@ package ssh
 
 import (
 	"errors"
+	"os"
+	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 )
@@ -318,5 +321,60 @@ func TestWithEnvRefused(t *testing.T) {
 	cb.envRefused("X", errors.New("refused"))
 	if !called {
 		t.Error("the installed callback should be the one given")
+	}
+}
+
+func TestCreateSSHConfigDefaultKnownHosts(t *testing.T) {
+	// Either default known_hosts file is enough; this machine may well have
+	// no /etc/ssh/ssh_known_hosts.
+	tests := []struct {
+		name    string
+		home    bool
+		system  bool
+		wantErr bool
+	}{
+		{name: "only the user's file", home: true},
+		{name: "only the system file", system: true},
+		{name: "both", home: true, system: true},
+		{name: "neither", wantErr: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			home := t.TempDir()
+			t.Setenv("HOME", home)
+			t.Setenv("USERPROFILE", home) // what os.UserHomeDir reads on Windows
+			if tt.home {
+				if err := os.MkdirAll(filepath.Join(home, ".ssh"), 0o700); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(filepath.Join(home, ".ssh", "known_hosts"), nil, 0o600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			system := filepath.Join(t.TempDir(), "ssh_known_hosts")
+			if tt.system {
+				if err := os.WriteFile(system, nil, 0o600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			orig := systemKnownHosts
+			systemKnownHosts = system
+			t.Cleanup(func() { systemKnownHosts = orig })
+
+			config, err := createSSHConfig(&sshParams{user: "u", password: "p", strictHostCheck: true})
+			if tt.wantErr {
+				if err == nil || !strings.Contains(err.Error(), "no known hosts file") {
+					t.Fatalf("createSSHConfig() error = %v, want one naming the missing files", err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("createSSHConfig() error: %v", err)
+			}
+			if config.HostKeyCallback == nil {
+				t.Error("HostKeyCallback is not set")
+			}
+		})
 	}
 }
