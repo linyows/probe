@@ -111,3 +111,48 @@ func TestInstallSkill_Unwritable(t *testing.T) {
 		t.Error("expected an error when the directory cannot be created")
 	}
 }
+
+// TestInstallSkill_DoesNotFollowSymlink covers a project that ships SKILL.md
+// as a symlink to a file outside it: installing must replace the link, not
+// write through it.
+func TestInstallSkill_DoesNotFollowSymlink(t *testing.T) {
+	root := t.TempDir()
+	target := filepath.Join(root, "outside.txt")
+	if err := os.WriteFile(target, []byte("keep me"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	dir := filepath.Join(root, "project", ".claude", "skills", "probe")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(dir, "SKILL.md")
+	if err := os.Symlink(target, link); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+
+	if _, err := InstallSkill(dir); err != nil {
+		t.Fatal(err)
+	}
+
+	if data, _ := os.ReadFile(target); string(data) != "keep me" {
+		t.Errorf("the file the link pointed at was changed to %.40q", data)
+	}
+	info, err := os.Lstat(link)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Mode()&os.ModeSymlink != 0 {
+		t.Error("SKILL.md should now be a regular file, not the link")
+	}
+	if data, _ := os.ReadFile(link); string(data) != Skill() {
+		t.Error("SKILL.md should hold the skill")
+	}
+	if info.Mode().Perm() != 0o644 {
+		t.Errorf("mode = %v, want 0644", info.Mode().Perm())
+	}
+
+	leftovers, _ := filepath.Glob(filepath.Join(dir, ".SKILL.md.*"))
+	if len(leftovers) != 0 {
+		t.Errorf("temporary files left behind: %v", leftovers)
+	}
+}
