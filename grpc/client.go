@@ -82,7 +82,7 @@ func (r *Req) Do() (re *Result, er error) {
 	// Setup timeout
 	timeout, err := time.ParseDuration(r.Timeout)
 	if err != nil {
-		timeout = 30 * time.Second
+		return nil, fmt.Errorf("invalid timeout %q: use a duration such as 30s", r.Timeout)
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
@@ -202,17 +202,17 @@ func (r *Req) invokeMethod(ctx context.Context, conn *grpc.ClientConn, reflectio
 
 	// Invoke the method
 	fullMethodName := fmt.Sprintf("/%s/%s", serviceDesc.FullName(), methodDesc.Name())
-	err = conn.Invoke(answer.mark(ctx), fullMethodName, requestMsg, responseMsg)
+	var header, trailer metadata.MD
+	err = conn.Invoke(answer.mark(ctx), fullMethodName, requestMsg, responseMsg, grpc.Header(&header), grpc.Trailer(&trailer))
 
-	// Extract response metadata
-	var responseMD metadata.MD
-	responseMD, _ = metadata.FromIncomingContext(ctx)
-
-	// Convert metadata to map
+	// The server's metadata arrives as headers before the reply and trailers
+	// after it; a trailer wins over a header of the same name.
 	metadataMap := make(map[string]string)
-	for key, values := range responseMD {
-		if len(values) > 0 {
-			metadataMap[key] = values[0] // Take first value
+	for _, md := range []metadata.MD{header, trailer} {
+		for key, values := range md {
+			if len(values) > 0 {
+				metadataMap[key] = values[0] // Take first value
+			}
 		}
 	}
 

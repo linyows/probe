@@ -31,7 +31,7 @@ steps:
 | `method` | String | 必須 | - | メソッド名 |
 | `body` | StringまたはObject | 任意 | `""` | リクエストメッセージ（JSON）。オブジェクトはJSONにシリアライズされます |
 | `metadata` | Object | 任意 | `{}` | リクエストメタデータ（HTTPのヘッダーに相当） |
-| `timeout` | String | 任意 | `30s` | 接続とリフレクションによる解決を含めた、呼び出しの制限時間。`"10s"`のようなGoのduration形式 |
+| `timeout` | String | 任意 | `30s` | 接続とリフレクションによる解決を含めた、呼び出しの制限時間。`"10s"`のようなGoのduration形式。それ以外の値はエラー |
 | `tls` | Boolean | 任意 | `false` | TLSを使う |
 | `insecure` | Boolean | 任意 | `false` | 証明書の検証をスキップする |
 | `cert_file` | String | 任意 | - | mTLS用のクライアント証明書 |
@@ -48,7 +48,7 @@ steps:
 | `res.rawbody` | String | 解析前のJSON形式のレスポンスメッセージ |
 | `res.status_code` | String | gRPCのステータスコード（`OK`、`NOT_FOUND`など） |
 | `res.status_message` | String | ステータスメッセージ |
-| `res.metadata` | Object | レスポンスメタデータ |
+| `res.metadata` | Object | サーバーが送ったヘッダーとトレーラー。各キーの最初の値が入り、同じ名前ならトレーラーが優先 |
 | `rt.duration` | String | ラウンドトリップ時間（例: `"1.2ms"`） |
 | `rt.sec` | Float | ラウンドトリップ時間（秒） |
 | `status` | Integer | ステータスが`OK`のとき`0`、それ以外は`1` |

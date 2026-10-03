@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -12,6 +13,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/health"
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/reflection"
 )
 
@@ -248,7 +250,8 @@ func TestRequest_StructureValidation(t *testing.T) {
 }
 
 // startHealthServer serves the standard health service with reflection, which
-// answers NOT_FOUND for a service it does not know. A check of the service
+// answers NOT_FOUND for a service it does not know. Every reply carries the
+// header x-test-header and the trailer x-test-trailer. A check of the service
 // "slow" takes a second before it is answered, and one of "drop" stops the
 // server without answering.
 func startHealthServer(t *testing.T) string {
@@ -259,6 +262,8 @@ func startHealthServer(t *testing.T) string {
 	}
 	var s *grpclib.Server
 	s = grpclib.NewServer(grpclib.UnaryInterceptor(func(ctx context.Context, req any, _ *grpclib.UnaryServerInfo, handler grpclib.UnaryHandler) (any, error) {
+		_ = grpclib.SetHeader(ctx, metadata.Pairs("x-test-header", "from-header"))
+		_ = grpclib.SetTrailer(ctx, metadata.Pairs("x-test-trailer", "from-trailer"))
 		if r, ok := req.(*healthpb.HealthCheckRequest); ok {
 			switch r.Service {
 			case "slow":
@@ -380,5 +385,39 @@ func TestStatusCodeName(t *testing.T) {
 		if got := statusCodeName(c); got != want {
 			t.Errorf("statusCodeName(%v) = %s, want %s", c, got, want)
 		}
+	}
+}
+
+func TestRequestMetadata(t *testing.T) {
+	addr := startHealthServer(t)
+
+	// The status does not matter: headers and trailers come back either way.
+	for _, body := range []string{`{"service": ""}`, `{"service": "unknown"}`} {
+		ret, err := Request(map[string]any{
+			"addr":    addr,
+			"service": "grpc.health.v1.Health",
+			"method":  "Check",
+			"body":    body,
+		})
+		if err != nil {
+			t.Fatalf("Request() error: %v", err)
+		}
+		res, _ := ret["res"].(map[string]any)
+		md, _ := res["metadata"].(map[string]string)
+		if md["x-test-header"] != "from-header" || md["x-test-trailer"] != "from-trailer" {
+			t.Errorf("body %s: metadata = %v, want the header and the trailer", body, res["metadata"])
+		}
+	}
+}
+
+func TestRequestInvalidTimeout(t *testing.T) {
+	_, err := Request(map[string]any{
+		"addr":    "127.0.0.1:1",
+		"service": "grpc.health.v1.Health",
+		"method":  "Check",
+		"timeout": "soon",
+	})
+	if err == nil || !strings.Contains(err.Error(), "invalid timeout") {
+		t.Fatalf("Request() error = %v, want an invalid timeout error", err)
 	}
 }
