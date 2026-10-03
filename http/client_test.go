@@ -21,7 +21,6 @@ func TestNewReq(t *testing.T) {
 	expects := &Req{
 		URL:    "",
 		Method: "GET",
-		Proto:  "HTTP/1.1",
 		Header: map[string]string{
 			"Accept":     "*/*",
 			"User-Agent": "probe-http/1.0.0",
@@ -208,8 +207,28 @@ func TestHasJSONContentType(t *testing.T) {
 			expected: true,
 		},
 		{
+			name:     "json with a charset",
+			headers:  map[string]any{"Content-Type": "application/json; charset=utf-8"},
+			expected: true,
+		},
+		{
+			name:     "json in another case",
+			headers:  map[string]any{"Content-Type": "Application/JSON"},
+			expected: true,
+		},
+		{
+			name:     "structured syntax suffix",
+			headers:  map[string]any{"Content-Type": "application/problem+json"},
+			expected: true,
+		},
+		{
 			name:     "non-json content-type",
 			headers:  map[string]any{"content-type": "text/plain"},
+			expected: false,
+		},
+		{
+			name:     "json only as a parameter",
+			headers:  map[string]any{"content-type": "text/plain; format=application/json"},
 			expected: false,
 		},
 		{

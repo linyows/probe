@@ -25,7 +25,7 @@ The fields below describe the request. All of them accept template expressions.
 | `url` | String | Yes | - | Request URL, or the base URL when a method shorthand carries a path |
 | `method` | String | Yes | - | HTTP method. Supplied by a method shorthand when one is used |
 | `headers` | Object | No | - | Request headers |
-| `body` | String or Object | No | - | Request body. An object is serialized as JSON when `content-type` is `application/json` |
+| `body` | String or Object | No | - | Request body. An object is serialized as JSON when `content-type` is a JSON type: `application/json`, with or without parameters such as `charset`, or one ending in `+json` |
 | `timeout` | Duration | No | `30s` | Time limit for the whole request, including reading the response |
 
 There are no parameters for redirects or TLS verification. Redirects are followed by default.

@@ -25,7 +25,7 @@ steps:
 | `url` | String | 必須 | - | リクエストURL。メソッド省略記法でパスを渡す場合はベースURL |
 | `method` | String | 必須 | - | HTTPメソッド。メソッド省略記法を使う場合はそちらが設定します |
 | `headers` | Object | 任意 | - | リクエストヘッダー |
-| `body` | StringまたはObject | 任意 | - | リクエストボディ。`content-type`が`application/json`のとき、オブジェクトはJSONにシリアライズされます |
+| `body` | StringまたはObject | 任意 | - | リクエストボディ。`content-type`がJSONの型のとき、オブジェクトはJSONにシリアライズされます。JSONの型とは、`charset`などのパラメータの有無を問わない`application/json`と、`+json`で終わる型です |
 | `timeout` | Duration | 任意 | `30s` | レスポンスの読み取りまで含めた、リクエスト全体の制限時間 |
 
 リダイレクトとTLS検証を指定するパラメータはありません。リダイレクトは既定で追跡します。

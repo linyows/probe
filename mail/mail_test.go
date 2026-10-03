@@ -888,4 +888,8 @@ func TestDeliverCountsMessagesOfFailedSessions(t *testing.T) {
 	if result.Sent != 2 || result.Failed != 2 {
 		t.Errorf("sent = %d, failed = %d, want 2 and 2", result.Sent, result.Failed)
 	}
+	// All six were attempted, although only two went out.
+	if result.Total != 6 {
+		t.Errorf("total = %d, want 6", result.Total)
+	}
 }
