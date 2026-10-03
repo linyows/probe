@@ -10,6 +10,7 @@ import (
 	"io"
 	"maps"
 	"os"
+	"sync/atomic"
 	"time"
 
 	"github.com/linyows/probe/mapping"
@@ -19,6 +20,7 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/reflection/grpc_reflection_v1alpha"
+	"google.golang.org/grpc/stats"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
@@ -125,7 +127,8 @@ func (r *Req) Do() (re *Result, er error) {
 	}
 
 	// Establish connection
-	conn, err := grpc.NewClient(r.Addr, grpc.WithTransportCredentials(creds))
+	answer := &answerHandler{}
+	conn, err := grpc.NewClient(r.Addr, grpc.WithTransportCredentials(creds), grpc.WithStatsHandler(answer))
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to gRPC server: %w", err)
 	}
@@ -151,7 +154,7 @@ func (r *Req) Do() (re *Result, er error) {
 
 	// Use reflection to get service descriptor
 	reflectionClient := grpc_reflection_v1alpha.NewServerReflectionClient(conn)
-	res, err := r.invokeMethod(ctx, conn, reflectionClient)
+	res, err := r.invokeMethod(ctx, conn, reflectionClient, answer)
 	result.RT = time.Since(start)
 
 	if err != nil {
@@ -173,7 +176,7 @@ func (r *Req) Do() (re *Result, er error) {
 	return result, nil
 }
 
-func (r *Req) invokeMethod(ctx context.Context, conn *grpc.ClientConn, reflectionClient grpc_reflection_v1alpha.ServerReflectionClient) (*Res, error) {
+func (r *Req) invokeMethod(ctx context.Context, conn *grpc.ClientConn, reflectionClient grpc_reflection_v1alpha.ServerReflectionClient, answer *answerHandler) (*Res, error) {
 	// Get service descriptor using reflection
 	serviceDesc, err := r.getServiceDescriptor(ctx, reflectionClient)
 	if err != nil {
@@ -199,7 +202,7 @@ func (r *Req) invokeMethod(ctx context.Context, conn *grpc.ClientConn, reflectio
 
 	// Invoke the method
 	fullMethodName := fmt.Sprintf("/%s/%s", serviceDesc.FullName(), methodDesc.Name())
-	err = conn.Invoke(ctx, fullMethodName, requestMsg, responseMsg)
+	err = conn.Invoke(answer.mark(ctx), fullMethodName, requestMsg, responseMsg)
 
 	// Extract response metadata
 	var responseMD metadata.MD
@@ -229,12 +232,13 @@ func (r *Req) invokeMethod(ctx context.Context, conn *grpc.ClientConn, reflectio
 		Metadata:      metadataMap,
 	}
 
-	// A status the call ended with is the server's answer, which a test can
-	// check like an HTTP status code; only a call that never produced one is
-	// an error.
+	// A status the server sent is its answer, which a test can check like an
+	// HTTP status code. Every error from a call is a status, but one made up
+	// on this side, such as the timeout running out or the connection
+	// failing, arrives without the server's trailers and stays an error.
 	if err != nil {
 		st, ok := status.FromError(err)
-		if !ok {
+		if !ok || !answer.answered.Load() {
 			return nil, err
 		}
 		res.StatusCode = statusCodeName(st.Code())
@@ -243,6 +247,36 @@ func (r *Req) invokeMethod(ctx context.Context, conn *grpc.ClientConn, reflectio
 
 	return res, nil
 }
+
+// answerHandler records whether the server sent the trailers that carry the
+// status of the call marked with mark. It ignores the reflection lookup that
+// goes over the same connection.
+type answerHandler struct {
+	answered atomic.Bool
+}
+
+type answerKey struct{}
+
+// mark returns the context to make the call with.
+func (h *answerHandler) mark(ctx context.Context) context.Context {
+	return context.WithValue(ctx, answerKey{}, true)
+}
+
+func (h *answerHandler) TagRPC(ctx context.Context, _ *stats.RPCTagInfo) context.Context {
+	return ctx
+}
+
+func (h *answerHandler) HandleRPC(ctx context.Context, s stats.RPCStats) {
+	if _, ok := s.(*stats.InTrailer); ok && ctx.Value(answerKey{}) != nil {
+		h.answered.Store(true)
+	}
+}
+
+func (h *answerHandler) TagConn(ctx context.Context, _ *stats.ConnTagInfo) context.Context {
+	return ctx
+}
+
+func (h *answerHandler) HandleConn(context.Context, stats.ConnStats) {}
 
 // statusCodeName returns the canonical name of a gRPC status code, such as
 // NOT_FOUND, which is how the gRPC specification and other tools spell it.

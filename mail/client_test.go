@@ -403,6 +403,13 @@ func TestSend_MyHostname(t *testing.T) {
 
 // startRejectingServer runs an SMTP server that refuses every recipient.
 func startRejectingServer(t *testing.T) string {
+	return startSMTPServer(t, func(int) bool { return true })
+}
+
+// startSMTPServer runs an SMTP server that refuses every recipient on the
+// connections answer reports true for, counting from 0. The others are
+// dropped without a word after a moment, so that they finish last.
+func startSMTPServer(t *testing.T, answer func(n int) bool) string {
 	t.Helper()
 	lis, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -411,10 +418,17 @@ func startRejectingServer(t *testing.T) string {
 	t.Cleanup(func() { _ = lis.Close() })
 
 	go func() {
-		for {
+		for n := 0; ; n++ {
 			conn, err := lis.Accept()
 			if err != nil {
 				return
+			}
+			if !answer(n) {
+				go func(conn net.Conn) {
+					time.Sleep(100 * time.Millisecond)
+					_ = conn.Close()
+				}(conn)
+				continue
 			}
 			go func(conn net.Conn) {
 				defer func() { _ = conn.Close() }()
@@ -484,5 +498,32 @@ func TestReqDo_Unreachable(t *testing.T) {
 	}
 	if _, err := req.Do(); err == nil {
 		t.Fatal("Do() to a closed port succeeded")
+	}
+}
+
+func TestReqDo_RejectedAndDropped(t *testing.T) {
+	// One session is refused and the other loses its connection, after the
+	// refusal. The server answered once, so the outcome is a result whichever
+	// session finishes last.
+	for i := 0; i < 5; i++ {
+		addr := startSMTPServer(t, func(n int) bool { return n%2 == 0 })
+		req := &Req{
+			Addr:    addr,
+			From:    "from@example.com",
+			To:      "nobody@example.com",
+			Subject: "test",
+			Session: 2,
+			Message: 2,
+		}
+		result, err := req.Do()
+		if err != nil {
+			t.Fatalf("run %d: Do() error: %v", i, err)
+		}
+		if result.Res.Failed != 2 {
+			t.Errorf("run %d: failed = %d, want 2", i, result.Res.Failed)
+		}
+		if !strings.Contains(result.Res.Error, "550") {
+			t.Errorf("run %d: error = %q, want the server's reply", i, result.Res.Error)
+		}
 	}
 }

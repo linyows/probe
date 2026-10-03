@@ -1,9 +1,12 @@
 package grpc
 
 import (
+	"context"
+	"fmt"
 	"net"
 	"reflect"
 	"testing"
+	"time"
 
 	grpclib "google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -245,14 +248,29 @@ func TestRequest_StructureValidation(t *testing.T) {
 }
 
 // startHealthServer serves the standard health service with reflection, which
-// answers NOT_FOUND for a service it does not know.
+// answers NOT_FOUND for a service it does not know. A check of the service
+// "slow" takes a second before it is answered, and one of "drop" stops the
+// server without answering.
 func startHealthServer(t *testing.T) string {
 	t.Helper()
 	lis, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
 	}
-	s := grpclib.NewServer()
+	var s *grpclib.Server
+	s = grpclib.NewServer(grpclib.UnaryInterceptor(func(ctx context.Context, req any, _ *grpclib.UnaryServerInfo, handler grpclib.UnaryHandler) (any, error) {
+		if r, ok := req.(*healthpb.HealthCheckRequest); ok {
+			switch r.Service {
+			case "slow":
+				time.Sleep(time.Second)
+			case "drop":
+				go s.Stop()
+				<-ctx.Done()
+				return nil, ctx.Err()
+			}
+		}
+		return handler(ctx, req)
+	}))
 	healthpb.RegisterHealthServer(s, health.NewServer())
 	reflection.Register(s)
 	go func() { _ = s.Serve(lis) }()
@@ -317,6 +335,35 @@ func TestRequestUnreachable(t *testing.T) {
 	})
 	if err == nil {
 		t.Fatal("Request() to a closed port succeeded")
+	}
+}
+
+func TestRequestNoAnswer(t *testing.T) {
+	// Every failed call ends with a status, but these were made up on this
+	// side: the server never sent one, so they are errors, not results.
+	tests := []struct {
+		name    string
+		service string
+		timeout string
+	}{
+		{name: "timeout runs out", service: "slow", timeout: "300ms"},
+		{name: "connection lost", service: "drop", timeout: "5s"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			addr := startHealthServer(t)
+			ret, err := Request(map[string]any{
+				"addr":    addr,
+				"service": "grpc.health.v1.Health",
+				"method":  "Check",
+				"body":    fmt.Sprintf(`{"service": %q}`, tt.service),
+				"timeout": tt.timeout,
+			})
+			if err == nil {
+				t.Fatalf("Request() returned %v, want an error", ret)
+			}
+		})
 	}
 }
 

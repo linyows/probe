@@ -174,10 +174,18 @@ func (r *Req) Execute(driverDSN string, timeout time.Duration) (res map[string]a
 	if err != nil {
 		return r.createErrorResult(start, fmt.Errorf("failed to open database: %w", err))
 	}
+	// A failing Close must not turn the result into an error, which would
+	// drop it. A result that already reports a failure keeps it, since that
+	// first error says more; a successful one reports the Close instead.
 	defer func() {
-		if closeErr := db.Close(); closeErr != nil && err == nil {
-			err = closeErr
+		closeErr := db.Close()
+		if closeErr == nil || err != nil {
+			return
 		}
+		if status, _ := res["status"].(int); status != 0 {
+			return
+		}
+		res, err = r.createErrorResult(start, fmt.Errorf("failed to close database: %w", closeErr))
 	}()
 
 	// Test connection

@@ -54,7 +54,7 @@ steps:
 | `status` | Integer | ステータスが`OK`のとき`0`、それ以外は`1` |
 | `req` | Object | 送信したリクエスト |
 
-`res.status_code`は、呼び出しが終わったときのステータスの正式名です。`OK`、`CANCELLED`、`UNKNOWN`、`INVALID_ARGUMENT`、`DEADLINE_EXCEEDED`、`NOT_FOUND`、`ALREADY_EXISTS`、`PERMISSION_DENIED`、`RESOURCE_EXHAUSTED`、`FAILED_PRECONDITION`、`ABORTED`、`OUT_OF_RANGE`、`UNIMPLEMENTED`、`INTERNAL`、`UNAVAILABLE`、`DATA_LOSS`、`UNAUTHENTICATED`のいずれかになります。`OK`以外のステータスもサーバーの応答なので、ステップはそのままテストに進み、テストでそのステータスを期待できます。接続できないサーバーや、リフレクションにサービスが載っていない場合のように、ステータスが得られなかった呼び出しだけが、エラーとしてステップを終わらせます。
+`res.status_code`は、呼び出しが終わったときのステータスの正式名です。`OK`、`CANCELLED`、`UNKNOWN`、`INVALID_ARGUMENT`、`DEADLINE_EXCEEDED`、`NOT_FOUND`、`ALREADY_EXISTS`、`PERMISSION_DENIED`、`RESOURCE_EXHAUSTED`、`FAILED_PRECONDITION`、`ABORTED`、`OUT_OF_RANGE`、`UNIMPLEMENTED`、`INTERNAL`、`UNAVAILABLE`、`DATA_LOSS`、`UNAUTHENTICATED`のいずれかになります。`OK`以外のステータスもサーバーの応答なので、ステップはそのままテストに進み、テストでそのステータスを期待できます。サーバーからステータスが得られなかった呼び出しだけが、エラーとしてステップを終わらせます。接続できないサーバーやリフレクションにサービスが載っていない場合と、サーバーが応答する前に`timeout`を過ぎたり接続が切れたりした場合です。
 
 ## 使用例
 

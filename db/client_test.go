@@ -1,6 +1,10 @@
 package db
 
 import (
+	"database/sql"
+	"database/sql/driver"
+	"errors"
+	"io"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -382,5 +386,69 @@ func TestParseDSNUnsupportedScheme(t *testing.T) {
 	// The message has to name a scheme that works.
 	if !strings.Contains(err.Error(), "file:") {
 		t.Errorf("error = %q, want it to name the file: scheme", err)
+	}
+}
+
+// failCloseDriver is a database whose connections fail to close. A query
+// for missing_table fails; any other query returns no rows.
+type failCloseDriver struct{}
+
+func (failCloseDriver) Open(string) (driver.Conn, error) { return failCloseConn{}, nil }
+
+type failCloseConn struct{}
+
+func (failCloseConn) Prepare(query string) (driver.Stmt, error) {
+	if strings.Contains(query, "missing_table") {
+		return nil, errors.New("no such table: missing_table")
+	}
+	return emptyStmt{}, nil
+}
+func (failCloseConn) Close() error              { return errors.New("close failed") }
+func (failCloseConn) Begin() (driver.Tx, error) { return nil, errors.New("not supported") }
+
+type emptyStmt struct{}
+
+func (emptyStmt) Close() error                               { return nil }
+func (emptyStmt) NumInput() int                              { return -1 }
+func (emptyStmt) Exec([]driver.Value) (driver.Result, error) { return driver.RowsAffected(0), nil }
+func (emptyStmt) Query([]driver.Value) (driver.Rows, error)  { return emptyRows{}, nil }
+
+type emptyRows struct{}
+
+func (emptyRows) Columns() []string         { return []string{"one"} }
+func (emptyRows) Close() error              { return nil }
+func (emptyRows) Next([]driver.Value) error { return io.EOF }
+
+func init() {
+	sql.Register("failclose", failCloseDriver{})
+}
+
+func TestExecuteCloseFailure(t *testing.T) {
+	// Whatever Close reports, the step still gets a result rather than an
+	// error that would drop it.
+	tests := []struct {
+		name      string
+		query     string
+		wantError string
+	}{
+		{name: "failed query keeps its error", query: "SELECT * FROM missing_table", wantError: "no such table"},
+		{name: "successful query reports the close", query: "SELECT 1", wantError: "close failed"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := &Req{Driver: "failclose", Query: tt.query, cb: &Callback{}}
+			ret, err := req.Execute("", time.Second)
+			if err != nil {
+				t.Fatalf("Execute() error: %v", err)
+			}
+			res, _ := ret["res"].(map[string]any)
+			if msg, _ := res["error"].(string); !strings.Contains(msg, tt.wantError) {
+				t.Errorf("error = %q, want it to contain %q", msg, tt.wantError)
+			}
+			if ret["status"] != 1 {
+				t.Errorf("status = %v, want 1", ret["status"])
+			}
+		})
 	}
 }
