@@ -1,9 +1,14 @@
 package main
 
 import (
+	"regexp"
 	"runtime/debug"
 	"strings"
 )
+
+// pseudoVersionCommit matches the timestamp and commit hash that end a Go
+// pseudo-version, such as v1.12.1-0.20261003045007-cb0525138c61.
+var pseudoVersionCommit = regexp.MustCompile(`[-.]\d{14}-([0-9a-f]{12})(\+incompatible)?$`)
 
 // resolveVersion returns the version and commit to report. GoReleaser sets
 // both with -ldflags, but go install builds from the module without them,
@@ -39,6 +44,10 @@ func resolveVersion(version, commit string, info *debug.BuildInfo, ok bool) (str
 			if modified {
 				commit += "-dirty"
 			}
+		} else if m := pseudoVersionCommit.FindStringSubmatch(info.Main.Version); m != nil {
+			// go install from the module proxy records no VCS settings,
+			// but a pseudo-version ends in the commit's short hash.
+			commit = m[1]
 		}
 	}
 

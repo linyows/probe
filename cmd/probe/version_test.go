@@ -38,7 +38,19 @@ func TestResolveVersion(t *testing.T) {
 			name:    "go install at a pseudo-version",
 			version: "dev", commit: "unknown",
 			info: info("v1.12.1-0.20261003041500-29c6aa7c0ffe"), ok: true,
-			wantVersion: "1.12.1-0.20261003041500-29c6aa7c0ffe", wantCommit: "unknown",
+			wantVersion: "1.12.1-0.20261003041500-29c6aa7c0ffe", wantCommit: "29c6aa7c0ffe",
+		},
+		{
+			name:    "pseudo-version without a base tag",
+			version: "dev", commit: "unknown",
+			info: info("v0.0.0-20261003041500-29c6aa7c0ffe"), ok: true,
+			wantVersion: "0.0.0-20261003041500-29c6aa7c0ffe", wantCommit: "29c6aa7c0ffe",
+		},
+		{
+			name:    "a tag that only looks numeric is not a pseudo-version",
+			version: "dev", commit: "unknown",
+			info: info("v1.12.0-rc.1"), ok: true,
+			wantVersion: "1.12.0-rc.1", wantCommit: "unknown",
 		},
 		{
 			name:    "build from a clean checkout",
