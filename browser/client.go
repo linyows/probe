@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -14,6 +15,9 @@ import (
 
 const (
 	defaultTimeout = 5 * time.Second
+	// evidenceGrace is how long the browser is kept after the actions'
+	// deadline, so that the page can still be captured when they time out.
+	evidenceGrace = 10 * time.Second
 	// Full HD
 	defaultWindowWidth  = 1920
 	defaultWindowHeight = 1080
@@ -23,11 +27,20 @@ const (
 
 // BrowserRunner defines the interface for running browser actions
 type BrowserRunner interface {
+	// Start launches the browser. chromedp ties the browser process to the
+	// context of the first Run, so the browser is started on a context
+	// without the actions' deadline and outlives a timed-out action.
+	Start(ctx context.Context) error
 	Run(ctx context.Context, actions ...chromedp.Action) error
 }
 
 // ChromeDPRunner implements BrowserRunner using the actual ChromeDP
 type ChromeDPRunner struct{}
+
+// Start launches the browser by running no actions on ctx.
+func (r *ChromeDPRunner) Start(ctx context.Context) error {
+	return chromedp.Run(ctx)
+}
 
 // Run executes actions using ChromeDP
 func (r *ChromeDPRunner) Run(ctx context.Context, actions ...chromedp.Action) error {
@@ -46,6 +59,12 @@ func NewMockRunner() *MockRunner {
 	return &MockRunner{
 		CallHistory: make([][]chromedp.Action, 0),
 	}
+}
+
+// Start does nothing: there is no browser to launch. It is not recorded, so
+// the call history holds only the actions that were run.
+func (m *MockRunner) Start(ctx context.Context) error {
+	return nil
 }
 
 // Run records the call and optionally executes a custom function
@@ -122,13 +141,19 @@ func NewChromeDPAction() *ChromeDPAction {
 }
 
 type Req struct {
-	Actions       []*ChromeDPAction `map:"actions"`
-	Headless      bool              `map:"headless"`
-	WindowW       int               `map:"window_w"`
-	WindowH       int               `map:"window_h"`
+	Actions  []*ChromeDPAction `map:"actions"`
+	Headless bool              `map:"headless"`
+	WindowW  int               `map:"window_w"`
+	WindowH  int               `map:"window_h"`
+	// EvidenceDir is where the page is saved when the actions fail. Empty
+	// means the system's temporary directory.
+	EvidenceDir   string `map:"evidence_dir"`
 	Timeout       time.Duration
 	cb            *Callback
 	browserRunner BrowserRunner
+	// capture takes the page as it is when the actions fail. Nil means
+	// capturing it through browserRunner; tests replace it.
+	capture func(ctx context.Context) (screenshot []byte, html, url string, err error)
 }
 
 func NewReq() *Req {
@@ -197,24 +222,23 @@ func (req *Req) buildChromeDPOptions() []chromedp.ExecAllocatorOption {
 	return opts
 }
 
-func (req *Req) createBrowserContext() (context.Context, context.CancelFunc, error) {
+// createBrowserContext returns the chromedp context the browser lives in.
+// It carries no deadline of its own beyond browserDeadline, which bounds the
+// browser process as a whole; the actions get their own, earlier deadline.
+func (req *Req) createBrowserContext(browserDeadline time.Time) (context.Context, context.CancelFunc, error) {
 	cdpOpts := req.buildChromeDPOptions()
 
-	// Create allocator context with timeout for Chrome startup and WebSocket connection
-	allocBaseCtx, allocBaseCancel := context.WithTimeout(context.Background(), req.Timeout)
+	allocBaseCtx, allocBaseCancel := context.WithDeadline(context.Background(), browserDeadline)
 	allocCtx, allocCancel := chromedp.NewExecAllocator(allocBaseCtx, cdpOpts...)
-	// Create context with timeout
 	ctx, cancel := chromedp.NewContext(allocCtx, chromedp.WithDebugf(func(s string, i ...any) {
 		// Callback
 		if req.cb != nil && req.cb.withInBrowser != nil {
 			req.cb.withInBrowser(s, i)
 		}
 	}))
-	ctx, timeoutCancel := context.WithTimeout(ctx, req.Timeout)
 
 	// Combine cancellation functions
 	cancelFunc := func() {
-		timeoutCancel()
 		cancel()
 		allocCancel()
 		allocBaseCancel()
@@ -368,8 +392,9 @@ func (req *Req) collectResults() (map[string]string, map[string]string, error) {
 
 func (req *Req) do() (*Result, error) {
 	start := time.Now()
+	deadline := start.Add(req.Timeout)
 
-	ctx, cancel, err := req.createBrowserContext()
+	browserCtx, cancel, err := req.createBrowserContext(deadline.Add(evidenceGrace))
 	if err != nil {
 		return nil, err
 	}
@@ -385,8 +410,17 @@ func (req *Req) do() (*Result, error) {
 		req.cb.before(req)
 	}
 
+	if err := req.browserRunner.Start(browserCtx); err != nil {
+		// There is no page to capture, but say so, as every other failure
+		// of the actions says whether the page was saved.
+		return nil, fmt.Errorf("%w (the page could not be captured: the browser did not start)", err)
+	}
+
+	ctx, actionsCancel := context.WithDeadline(browserCtx, deadline)
+	defer actionsCancel()
+
 	if err := req.browserRunner.Run(ctx, tasks...); err != nil {
-		return nil, err
+		return nil, req.withEvidence(browserCtx, err)
 	}
 
 	results, filePaths, err := req.collectResults()
@@ -412,6 +446,81 @@ func (req *Req) do() (*Result, error) {
 	}
 
 	return ret, nil
+}
+
+// evidenceTimeout bounds capturing the page after a failure.
+const evidenceTimeout = 5 * time.Second
+
+// withEvidence saves the page as it was when the actions failed, and names
+// the files in the returned error. An action error is all that reaches the
+// workflow runner, so the error message is where the report and the terminal
+// can point at the evidence. A page that cannot be captured, such as a
+// browser that never started, leaves the error as it was, with a note.
+func (req *Req) withEvidence(browserCtx context.Context, err error) error {
+	ctx, cancel := context.WithTimeout(browserCtx, evidenceTimeout)
+	defer cancel()
+
+	capture := req.capture
+	if capture == nil {
+		capture = req.captureWithRunner
+	}
+	screenshot, html, url, cerr := capture(ctx)
+	if cerr != nil {
+		return fmt.Errorf("%w (the page could not be captured: %v)", err, cerr)
+	}
+
+	dir := req.EvidenceDir
+	if dir == "" {
+		dir = os.TempDir()
+	}
+	shot, html2, serr := saveEvidence(dir, screenshot, html)
+	if serr != nil {
+		return fmt.Errorf("%w (the page could not be saved: %v)", err, serr)
+	}
+	return fmt.Errorf("%w (page at failure: url %s, screenshot %s, html %s)", err, url, shot, html2)
+}
+
+// captureWithRunner takes the URL, the HTML and a full-page screenshot of the
+// current page. The HTML is read with a script rather than a node query,
+// which would wait for the node to become visible.
+func (req *Req) captureWithRunner(ctx context.Context) ([]byte, string, string, error) {
+	var screenshot []byte
+	var html, url string
+	err := req.browserRunner.Run(ctx,
+		chromedp.Location(&url),
+		chromedp.Evaluate(`document.documentElement.outerHTML`, &html),
+		// FullScreenshot returns PNG only at quality 100, and JPEG otherwise.
+		chromedp.FullScreenshot(&screenshot, 100),
+	)
+	return screenshot, html, url, err
+}
+
+// saveEvidence writes the screenshot and the HTML into dir under one shared,
+// unique name, and returns their paths.
+func saveEvidence(dir string, screenshot []byte, html string) (string, string, error) {
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return "", "", err
+	}
+	f, err := os.CreateTemp(dir, "probe-browser-failure-*.png")
+	if err != nil {
+		return "", "", err
+	}
+	shotPath := f.Name()
+	_, err = f.Write(screenshot)
+	if cerr := f.Close(); err == nil {
+		err = cerr
+	}
+	if err != nil {
+		return "", "", err
+	}
+
+	htmlPath := strings.TrimSuffix(shotPath, ".png") + ".html"
+	// The page can hold private data and the default directory is shared,
+	// so the HTML stays private like the screenshot CreateTemp made.
+	if err := os.WriteFile(htmlPath, []byte(html), 0o600); err != nil {
+		return "", "", err
+	}
+	return shotPath, htmlPath, nil
 }
 
 func Request(data map[string]any, opts ...Option) (map[string]any, error) {

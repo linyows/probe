@@ -453,24 +453,33 @@ steps:
 
 ## Error Handling
 
-A selector that matches nothing returns a non-zero `code`, which the step's test and `continue_on_error` decide what to do with.
+An action that cannot finish makes the whole step fail with an action error, which exits the run with status `3`. A selector that matches nothing is not an empty result: `wait_visible`, `text`, `click` and the other actions that look for an element keep waiting until the step's `timeout`. A navigation that cannot reach its URL fails at once. In both cases there is no `res` to test, and the failure message carries the browser's error.
+
+### Page at failure
+
+When the actions fail, Probe saves the page as it was at that moment: a full-page PNG screenshot and the HTML of the document, under one shared name such as `probe-browser-failure-1947177907.png` and `.html`. The failure message names both files along with the page's URL:
+
+```
+action error in step_execute: action execution failed (caused by: ... context deadline exceeded (page at failure: url http://localhost:8090/, screenshot /tmp/probe-browser-failure-1947177907.png, html /tmp/probe-browser-failure-1947177907.html))
+```
+
+The same message is the failure's `message` in the files `--report` writes. A test that evaluates to false is not an action failure, so the page is not saved then; add a `capture_screenshot` action to keep it.
+
+The files go to the system's temporary directory unless `evidence_dir` names another. The directory is created when needed, which suits uploading it as a CI artifact. The page can show private data, so the files are readable only by the user who ran Probe:
 
 ```yaml
-- name: "Browser Action with Error Handling"
+- name: Checkout page
   uses: browser
   with:
-    action: click
-    selector: "#may-not-exist"
-    timeout: "5s"
-  test: res.code == 0 || (res.success == "false" && res.error | contains("not found"))
-  outputs:
-    click_success: res.code == 0
-    error_type: |
-      {{res.code == 0 ? "none" :
-        res.error | contains("timeout") ? "timeout" :
-        res.error | contains("not found") ? "element_not_found" :
-        "unknown"}}
+    evidence_dir: out/browser
+    actions:
+    - name: navigate
+      url: "{{vars.url}}/checkout"
+    - name: wait_visible
+      selector: "#pay"
 ```
+
+The browser is kept for up to 10 seconds after the timeout so that the page can still be read. If it cannot be, for example because the browser never started, the message says so and nothing is saved.
 
 ## Performance Considerations
 

@@ -2,8 +2,12 @@ package browser
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -529,7 +533,7 @@ func TestReqWithMockRunner(t *testing.T) {
 
 		// Execute request - should fail
 		result, err := req.do()
-		if err != expectedErr {
+		if !errors.Is(err, expectedErr) {
 			t.Errorf("Expected custom error, got %v", err)
 		}
 		if result != nil {
@@ -611,4 +615,182 @@ func TestMockRunnerArgumentVerification(t *testing.T) {
 			t.Errorf("Expected at least 2 actions, got %d", len(lastCall))
 		}
 	})
+}
+
+// stubCapture returns a capture function that hands back a fixed page and
+// records whether the browser context was still alive when it was called.
+func stubCapture(alive *bool) func(context.Context) ([]byte, string, string, error) {
+	return func(ctx context.Context) ([]byte, string, string, error) {
+		*alive = ctx.Err() == nil
+		return []byte("\x89PNG fake"), "<html><body>at failure</body></html>", "http://app.test/checkout", nil
+	}
+}
+
+func TestReq_FailureEvidence(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "evidence")
+
+	req := NewReq()
+	req.Timeout = 50 * time.Millisecond
+	req.EvidenceDir = dir
+	mock := NewMockRunner()
+	// The action waits out its deadline, as wait_visible on a missing node does.
+	mock.SetRunFunc(func(ctx context.Context, actions ...chromedp.Action) error {
+		<-ctx.Done()
+		return ctx.Err()
+	})
+	req.browserRunner = mock
+	alive := false
+	req.capture = stubCapture(&alive)
+
+	action := NewChromeDPAction()
+	action.Name = "wait_visible"
+	action.Selector = "#missing"
+	req.Actions = []*ChromeDPAction{action}
+
+	_, err := req.do()
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("error = %v, want it to wrap the action's deadline", err)
+	}
+	if !alive {
+		t.Error("the page must be captured on a context that outlives the actions' deadline")
+	}
+
+	msg := err.Error()
+	if !strings.Contains(msg, "page at failure: url http://app.test/checkout") {
+		t.Errorf("message should give the URL: %s", msg)
+	}
+	shots, _ := filepath.Glob(filepath.Join(dir, "probe-browser-failure-*.png"))
+	htmls, _ := filepath.Glob(filepath.Join(dir, "probe-browser-failure-*.html"))
+	if len(shots) != 1 || len(htmls) != 1 {
+		t.Fatalf("files = %v %v, want one screenshot and one HTML", shots, htmls)
+	}
+	if strings.TrimSuffix(shots[0], ".png") != strings.TrimSuffix(htmls[0], ".html") {
+		t.Errorf("the two files should share a name: %s %s", shots[0], htmls[0])
+	}
+	if !strings.Contains(msg, "screenshot "+shots[0]) || !strings.Contains(msg, "html "+htmls[0]) {
+		t.Errorf("message should name both files: %s", msg)
+	}
+	if data, _ := os.ReadFile(htmls[0]); string(data) != "<html><body>at failure</body></html>" {
+		t.Errorf("html = %q", data)
+	}
+	for _, f := range []string{shots[0], htmls[0]} {
+		if info, _ := os.Stat(f); info.Mode().Perm() != 0o600 {
+			t.Errorf("%s mode = %v, want 0600: the page can hold private data", filepath.Base(f), info.Mode().Perm())
+		}
+	}
+}
+
+func TestReq_FailureEvidence_DefaultDir(t *testing.T) {
+	tmp := t.TempDir()
+	t.Setenv("TMPDIR", tmp)
+
+	req := NewReq()
+	alive := false
+	req.capture = stubCapture(&alive)
+	err := req.withEvidence(context.Background(), errors.New("boom"))
+
+	if !strings.Contains(err.Error(), "screenshot "+tmp) {
+		t.Errorf("without evidence_dir the files should go to the temporary directory: %v", err)
+	}
+}
+
+func TestReq_FailureEvidence_CaptureFails(t *testing.T) {
+	req := NewReq()
+	req.EvidenceDir = t.TempDir()
+	req.capture = func(context.Context) ([]byte, string, string, error) {
+		return nil, "", "", errors.New("browser is gone")
+	}
+	original := errors.New("navigation failed")
+
+	err := req.withEvidence(context.Background(), original)
+	if !errors.Is(err, original) {
+		t.Errorf("the action's error must be kept: %v", err)
+	}
+	if !strings.Contains(err.Error(), "the page could not be captured: browser is gone") {
+		t.Errorf("message should say why there is no evidence: %v", err)
+	}
+	if files, _ := os.ReadDir(req.EvidenceDir); len(files) != 0 {
+		t.Errorf("nothing should be written, got %d files", len(files))
+	}
+}
+
+func TestReq_FailureEvidence_SaveFails(t *testing.T) {
+	file := filepath.Join(t.TempDir(), "file")
+	if err := os.WriteFile(file, nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	req := NewReq()
+	req.EvidenceDir = filepath.Join(file, "evidence")
+	alive := false
+	req.capture = stubCapture(&alive)
+	original := errors.New("click failed")
+
+	err := req.withEvidence(context.Background(), original)
+	if !errors.Is(err, original) || !strings.Contains(err.Error(), "the page could not be saved") {
+		t.Errorf("error = %v", err)
+	}
+}
+
+func TestReq_NoEvidenceOnSuccess(t *testing.T) {
+	req := NewReq()
+	req.EvidenceDir = t.TempDir()
+	req.browserRunner = NewMockRunner()
+	called := false
+	req.capture = func(context.Context) ([]byte, string, string, error) {
+		called = true
+		return nil, "", "", nil
+	}
+	action := NewChromeDPAction()
+	action.Name = "navigate"
+	action.URL = "http://app.test/"
+	req.Actions = []*ChromeDPAction{action}
+
+	if _, err := req.do(); err != nil {
+		t.Fatal(err)
+	}
+	if called {
+		t.Error("a successful run should not capture the page")
+	}
+}
+
+func TestRequest_EvidenceDirMapping(t *testing.T) {
+	req := NewReq()
+	err := req.parseData(map[string]any{
+		"evidence_dir": "out/browser",
+		"actions":      []any{map[string]any{"name": "navigate", "url": "http://app.test/"}},
+	}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if req.EvidenceDir != "out/browser" {
+		t.Errorf("EvidenceDir = %q", req.EvidenceDir)
+	}
+}
+
+// failingStartRunner is a runner whose browser cannot be launched.
+type failingStartRunner struct{ MockRunner }
+
+func (r *failingStartRunner) Start(context.Context) error { return errors.New("chrome not found") }
+
+func TestReq_FailureEvidence_BrowserDidNotStart(t *testing.T) {
+	req := NewReq()
+	req.EvidenceDir = t.TempDir()
+	req.browserRunner = &failingStartRunner{}
+	called := false
+	req.capture = func(context.Context) ([]byte, string, string, error) {
+		called = true
+		return nil, "", "", nil
+	}
+	action := NewChromeDPAction()
+	action.Name = "navigate"
+	action.URL = "http://app.test/"
+	req.Actions = []*ChromeDPAction{action}
+
+	_, err := req.do()
+	if err == nil || !strings.Contains(err.Error(), "chrome not found (the page could not be captured: the browser did not start)") {
+		t.Errorf("error = %v, want the start failure with a note that no page was saved", err)
+	}
+	if called {
+		t.Error("there is no browser to capture the page from")
+	}
 }

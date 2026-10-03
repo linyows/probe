@@ -445,24 +445,33 @@ steps:
 
 ## エラーハンドリング
 
-セレクタが何にも一致しない場合、`code`は0以外になります。その後の扱いはステップのテストと`continue_on_error`で決めます。
+アクションが完了できないと、ステップ全体がアクションのエラーとして失敗し、実行は終了ステータス`3`で終わります。セレクタが何にも一致しなくても空の結果にはなりません。`wait_visible`、`text`、`click`など要素を探すアクションは、ステップの`timeout`まで待ち続けます。URLに到達できないナビゲーションはすぐに失敗します。どちらの場合もテストできる`res`はなく、失敗のメッセージにブラウザのエラーが入ります。
+
+### 失敗時のページ
+
+アクションが失敗すると、Probeはその時点のページを保存します。ページ全体のPNGのスクリーンショットと、文書のHTMLです。2つのファイルは`probe-browser-failure-1947177907.png`と`.html`のように同じ名前を共有します。失敗のメッセージには、ページのURLとあわせて両方のファイルのパスが入ります。
+
+```
+action error in step_execute: action execution failed (caused by: ... context deadline exceeded (page at failure: url http://localhost:8090/, screenshot /tmp/probe-browser-failure-1947177907.png, html /tmp/probe-browser-failure-1947177907.html))
+```
+
+`--report`で書き出すファイルでも、このメッセージが失敗の`message`になります。テストがfalseになるのはアクションの失敗ではないため、そのときはページを保存しません。残したい場合は`capture_screenshot`アクションを加えます。
+
+ファイルはシステムの一時ディレクトリに保存します。`evidence_dir`を指定するとそこに保存し、ディレクトリは必要に応じて作成します。CIのアーティファクトとしてアップロードする場合に便利です。ページには個人の情報が写りうるため、ファイルはProbeを実行したユーザーだけが読めるようにします。
 
 ```yaml
-- name: "Browser Action with Error Handling"
+- name: Checkout page
   uses: browser
   with:
-    action: click
-    selector: "#may-not-exist"
-    timeout: "5s"
-  test: res.code == 0 || (res.success == "false" && res.error | contains("not found"))
-  outputs:
-    click_success: res.code == 0
-    error_type: |
-      {{res.code == 0 ? "none" :
-        res.error | contains("timeout") ? "timeout" :
-        res.error | contains("not found") ? "element_not_found" :
-        "unknown"}}
+    evidence_dir: out/browser
+    actions:
+    - name: navigate
+      url: "{{vars.url}}/checkout"
+    - name: wait_visible
+      selector: "#pay"
 ```
+
+ページを読み取れるように、ブラウザはタイムアウトのあとも最大10秒残します。ブラウザが起動しなかった場合など、読み取れなかったときはその旨をメッセージに書き、何も保存しません。
 
 ## パフォーマンスの考慮事項
 
