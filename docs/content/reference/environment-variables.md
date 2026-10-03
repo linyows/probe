@@ -399,8 +399,8 @@ Since Probe is a single binary, the image only has to fetch it and pass the vari
 FROM alpine:latest
 
 # Install Probe
-RUN curl -L https://github.com/linyows/probe/releases/latest/download/probe_linux_x86_64.tar.gz | tar -xz -C /usr/local/bin probe && \
-    chmod +x /usr/local/bin/probe
+RUN apk add --no-cache curl && \
+    curl -L https://github.com/linyows/probe/releases/latest/download/probe_linux_x86_64.tar.gz | tar -xz -C /usr/local/bin probe
 
 # Set default environment variables
 ENV PROBE_OUTPUT=stream

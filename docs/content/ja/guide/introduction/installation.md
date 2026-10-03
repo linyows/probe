@@ -10,7 +10,7 @@ Probeは軽量でシングルバイナリのツールで、複数の方法でイ
 
 ## インストール方法
 
-Probeは単一のバイナリです。以下の4つから、他のツールの導入方法に合うものを選んでください。
+Probeは単一のバイナリです。以下の3つから、他のツールの導入方法に合うものを選んでください。
 
 ### 1. プリビルドバイナリのダウンロード
 
@@ -52,14 +52,6 @@ git clone https://github.com/linyows/probe.git
 cd probe
 go build -o probe ./cmd/probe
 sudo mv probe /usr/local/bin/
-```
-
-### 4. Docker
-
-DockerコンテナでProbeを実行：
-
-```bash
-docker run --rm -v $(pwd):/workspace linyows/probe:latest /workspace/workflow.yml
 ```
 
 ## インストールの確認
