@@ -47,8 +47,8 @@ steps:
 | フィールド | 型 | 説明 |
 |---|---|---|
 | `res.code` | Integer | 失敗したセッションがなく、1通以上配送できたとき`0` |
-| `res.sent` | Integer | 配送できた通数 |
-| `res.failed` | Integer | 失敗したセッション数。失敗したセッションでは、そのセッションの通数をすべて配送しない |
+| `res.sent` | Integer | サーバーが受け付けた通数。途中で失敗したセッションが、それまでに配送した分も含む |
+| `res.failed` | Integer | 失敗したセッション数 |
 | `res.total` | Integer | 試行した通数 |
 | `res.error` | String | 失敗時のエラーメッセージ |
 | `res.maildata` | String | 生成したメール（テキストの場合） |
@@ -56,6 +56,8 @@ steps:
 | `rt.duration` | String | 配送にかかった時間（例: `"3.4ms"`） |
 | `rt.sec` | Float | 配送にかかった時間（秒） |
 | `status` | Integer | `res.code`と同じ値 |
+
+すべてのセッションが失敗して1通も配送できなかった場合は、結果ではなくアクションのエラーとしてステップが終わるため、`res`をテストできません。
 
 ## 使用例
 
