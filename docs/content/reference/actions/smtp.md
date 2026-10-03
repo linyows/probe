@@ -57,6 +57,8 @@ After the step, `res` reports how much was delivered.
 | `rt.sec` | Float | Time the delivery took in seconds |
 | `status` | Integer | Same as `res.code` |
 
+A server that refuses the mail, for example with `550` to `RCPT TO`, has answered, so the step goes on to its test with `res.code` set to `1` and the reply in `res.error`. When no session can reach the server at all, the step ends with an error.
+
 ## SMTP Examples
 
 The examples below send generated messages and then read the counts back from the step outputs.
