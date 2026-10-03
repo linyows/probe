@@ -4,10 +4,10 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"maps"
 	"net"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -70,8 +70,9 @@ type sshParams struct {
 type Option func(*Callback)
 
 type Callback struct {
-	before func(host string, port int, user string, cmd string)
-	after  func(result *Result)
+	before     func(host string, port int, user string, cmd string)
+	after      func(result *Result)
+	envRefused func(name string, err error)
 }
 
 func NewReq() *Req {
@@ -318,14 +319,13 @@ func (r *Req) Do() (re *Result, er error) {
 	// Note: We will explicitly close the session after command completion
 	// instead of using defer to ensure proper cleanup timing
 
-	// Set environment variables
-	for key, value := range params.env {
-		if err := session.Setenv(key, value); err != nil {
-			// Some SSH servers don't allow setting environment variables
-			// Log the error but continue execution
-			continue
-		}
+	// Set environment variables. A server accepts only the names its
+	// AcceptEnv allows; a refused one is reported and the command still runs.
+	var refused func(string, error)
+	if r.cb != nil {
+		refused = r.cb.envRefused
 	}
+	setEnv(session, params.env, refused)
 
 	// Prepare command with working directory if specified
 	cmd := params.cmd
@@ -451,43 +451,9 @@ func (r *Req) Do() (re *Result, er error) {
 	return result, nil
 }
 
-// PrepareRequestData prepares SSH request data by extracting environment variables
-func PrepareRequestData(data map[string]any) error {
-	// Extract environment variables from env__ prefixed keys
-	env := make(map[string]string)
-	for key, value := range data {
-		if after, ok := strings.CutPrefix(key, "env__"); ok {
-			envKey := after
-			if strValue, ok := value.(string); ok {
-				env[envKey] = strValue
-			} else {
-				env[envKey] = fmt.Sprintf("%v", value)
-			}
-			delete(data, key)
-		}
-	}
-
-	// Store env as a nested structure if any env vars were found
-	if len(env) > 0 {
-		for key, value := range env {
-			data["env__"+key] = value
-		}
-	}
-
-	return nil
-}
-
 func Execute(data map[string]any, opts ...Option) (map[string]any, error) {
-	// Create a copy to avoid modifying the original data
-	dataCopy := make(map[string]any)
-	maps.Copy(dataCopy, data)
-
-	// Prepare request data
-	if err := PrepareRequestData(dataCopy); err != nil {
-		return map[string]any{}, err
-	}
-
-	m := mapping.HeaderToStringValue(dataCopy)
+	// EnvToStringValue copies data, so the caller's map is left as it was.
+	m := mapping.HeaderToStringValue(mapping.EnvToStringValue(data))
 
 	// Manually handle type conversions BEFORE MapToStructByTags to prevent reflection panics
 	if portInput, exists := m["port"]; exists {
@@ -540,5 +506,35 @@ func WithBefore(f func(host string, port int, user string, cmd string)) Option {
 func WithAfter(f func(result *Result)) Option {
 	return func(c *Callback) {
 		c.after = f
+	}
+}
+
+// WithEnvRefused is called for each environment variable the server refuses
+// to set, typically because sshd_config does not list it in AcceptEnv. The
+// command still runs, without that variable.
+func WithEnvRefused(f func(name string, err error)) Option {
+	return func(c *Callback) {
+		c.envRefused = f
+	}
+}
+
+// envSetter is the part of an SSH session that sets environment variables.
+type envSetter interface {
+	Setenv(name, value string) error
+}
+
+// setEnv sets each variable on the session in name order, and reports every
+// name the server refuses through refused, which may be nil.
+func setEnv(s envSetter, env map[string]string, refused func(name string, err error)) {
+	names := make([]string, 0, len(env))
+	for name := range env {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+
+	for _, name := range names {
+		if err := s.Setenv(name, env[name]); err != nil && refused != nil {
+			refused(name, err)
+		}
 	}
 }

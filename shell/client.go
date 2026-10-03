@@ -12,7 +12,6 @@ import (
 	"runtime"
 	"slices"
 	"strconv"
-	"strings"
 	"syscall"
 	"time"
 
@@ -338,50 +337,10 @@ func (r *Req) Do() (*Result, error) {
 	return result, nil
 }
 
-// PrepareRequestData prepares shell request data by extracting environment variables
-func PrepareRequestData(data map[string]string) error {
-	// Extract environment variables from env__ prefixed keys
-	env := make(map[string]string)
-	for key, value := range data {
-		if after, ok := strings.CutPrefix(key, "env__"); ok {
-			envKey := after
-			env[envKey] = value
-			delete(data, key)
-		}
-	}
-
-	// Store env as a nested structure if any env vars were found
-	if len(env) > 0 {
-		for key, value := range env {
-			data["env__"+key] = value
-		}
-	}
-
-	return nil
-}
-
 func Execute(data map[string]any, opts ...Option) (map[string]any, error) {
-	// Create a copy to avoid modifying the original data and convert to map[string]string for compatibility
-	dataCopy := make(map[string]string)
-	for k, v := range data {
-		if str, ok := v.(string); ok {
-			dataCopy[k] = str
-		} else {
-			dataCopy[k] = fmt.Sprintf("%v", v)
-		}
-	}
-
-	// Prepare request data
-	if err := PrepareRequestData(dataCopy); err != nil {
-		return map[string]any{}, err
-	}
-
-	// Convert dataCopy (map[string]string) directly to map[string]any
-	m := make(map[string]any)
-	for k, v := range dataCopy {
-		m[k] = v
-	}
-	m = mapping.HeaderToStringValue(m)
+	// Keep the parameters' types: env arrives as a nested map, and turning it
+	// into a string here is what used to drop it before it reached the command.
+	m := mapping.EnvToStringValue(data)
 
 	r := NewReq()
 

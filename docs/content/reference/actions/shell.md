@@ -91,6 +91,8 @@ with:
     BUILD_VERSION: "{{vars.version}}"
 ```
 
+Numbers and booleans are passed as their text, so `PORT: 8080` sets `PORT` to `8080`. The variables are added to the environment Probe itself runs with.
+
 ## Response Format
 
 The result carries the exit code and both output streams.

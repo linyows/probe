@@ -261,64 +261,85 @@ func TestDo(t *testing.T) {
 	}
 }
 
-func TestPrepareRequestData(t *testing.T) {
+// TestExecute_Env pins that env reaches the command, in every form the
+// parameters can take. env used to be turned into a string before mapping,
+// which dropped it without an error.
+func TestExecute_Env(t *testing.T) {
 	tests := []struct {
-		name     string
-		input    map[string]any
-		expected map[string]any
+		name string
+		data map[string]any
+		want string
 	}{
 		{
-			name: "extract environment variables",
-			input: map[string]any{
-				"cmd":           "echo $TEST_VAR",
-				"env__TEST_VAR": "hello",
-				"env__PATH":     "/usr/bin",
-				"shell":         "/bin/bash",
+			name: "nested env map",
+			data: map[string]any{
+				"cmd": `printf '%s|%s' "$GREETING" "$PORT"`,
+				"env": map[string]any{"GREETING": "hello", "PORT": 8080},
 			},
-			expected: map[string]any{
-				"cmd":           "echo $TEST_VAR",
-				"shell":         "/bin/bash",
-				"env__TEST_VAR": "hello",
-				"env__PATH":     "/usr/bin",
-			},
+			want: "hello|8080",
 		},
 		{
-			name: "no environment variables",
-			input: map[string]any{
-				"cmd":   "echo hello",
-				"shell": "/bin/sh",
+			name: "flat env__ keys",
+			data: map[string]any{
+				"cmd":           `printf '%s' "$TEST_VAR"`,
+				"env__TEST_VAR": "hello_world",
 			},
-			expected: map[string]any{
-				"cmd":   "echo hello",
-				"shell": "/bin/sh",
+			want: "hello_world",
+		},
+		{
+			name: "nested map wins over a flat key of the same name",
+			data: map[string]any{
+				"cmd":       `printf '%s' "$MODE"`,
+				"env":       map[string]any{"MODE": "nested"},
+				"env__MODE": "flat",
 			},
+			want: "nested",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Make a copy of input to avoid modifying the test case
-			data := make(map[string]string)
-			for k, v := range tt.input {
-				data[k] = v.(string) // Convert to string for PrepareRequestData
-			}
-
-			err := PrepareRequestData(data)
+			result, err := Execute(tt.data)
 			if err != nil {
-				t.Errorf("PrepareRequestData() error = %v", err)
-				return
+				t.Fatalf("Execute() error: %v", err)
 			}
-
-			// Convert data back to map[string]any for comparison
-			dataAny := make(map[string]any)
-			for k, v := range data {
-				dataAny[k] = v
+			res, ok := result["res"].(map[string]any)
+			if !ok {
+				t.Fatalf("result has no res: %v", result)
 			}
-
-			if !reflect.DeepEqual(dataAny, tt.expected) {
-				t.Errorf("PrepareRequestData() = %v, want %v", dataAny, tt.expected)
+			if res["stdout"] != tt.want {
+				t.Errorf("stdout = %q, want %q", res["stdout"], tt.want)
+			}
+			req, _ := result["req"].(map[string]any)
+			if env, _ := req["env"].(map[string]string); len(env) == 0 {
+				t.Errorf("the request should report the env it used, got %#v", req["env"])
 			}
 		})
+	}
+}
+
+// TestExecute_KeepsParameterTypes checks that parameters other than env are
+// still mapped when they arrive with their own types rather than as strings.
+func TestExecute_KeepsParameterTypes(t *testing.T) {
+	result, err := Execute(map[string]any{
+		"cmd":     "pwd",
+		"workdir": "/",
+		"timeout": "5s",
+	})
+	if err != nil {
+		t.Fatalf("Execute() error: %v", err)
+	}
+	res := result["res"].(map[string]any)
+	if res["stdout"] != "/\n" {
+		t.Errorf("stdout = %q, want the workdir", res["stdout"])
+	}
+
+	bg, err := Execute(map[string]any{"cmd": "sleep 0", "background": true})
+	if err != nil {
+		t.Fatalf("Execute() background error: %v", err)
+	}
+	if status, _ := bg["status"].(int); status != -1 {
+		t.Errorf("background status = %v, want -1", bg["status"])
 	}
 }
 

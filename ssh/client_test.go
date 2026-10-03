@@ -1,7 +1,8 @@
 package ssh
 
 import (
-	"maps"
+	"errors"
+	"reflect"
 	"testing"
 	"time"
 )
@@ -181,67 +182,6 @@ func TestValidateKeyFile(t *testing.T) {
 	}
 }
 
-func TestPrepareRequestData(t *testing.T) {
-	tests := []struct {
-		name     string
-		input    map[string]any
-		expected map[string]any
-	}{
-		{
-			name: "with environment variables",
-			input: map[string]any{
-				"host":      "example.com",
-				"user":      "testuser",
-				"env__PATH": "/usr/bin",
-				"env__HOME": "/home/user",
-				"cmd":       "echo $PATH",
-			},
-			expected: map[string]any{
-				"host":      "example.com",
-				"user":      "testuser",
-				"env__PATH": "/usr/bin",
-				"env__HOME": "/home/user",
-				"cmd":       "echo $PATH",
-			},
-		},
-		{
-			name: "without environment variables",
-			input: map[string]any{
-				"host": "example.com",
-				"user": "testuser",
-				"cmd":  "ls -la",
-			},
-			expected: map[string]any{
-				"host": "example.com",
-				"user": "testuser",
-				"cmd":  "ls -la",
-			},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			// Make a copy of input since PrepareRequestData modifies the map
-			data := make(map[string]any)
-			maps.Copy(data, tt.input)
-
-			err := PrepareRequestData(data)
-			if err != nil {
-				t.Errorf("Unexpected error: %v", err)
-			}
-
-			// Verify the result
-			for key, expectedValue := range tt.expected {
-				if actualValue, exists := data[key]; !exists {
-					t.Errorf("Expected key '%s' not found in result", key)
-				} else if actualValue != expectedValue {
-					t.Errorf("Expected value '%s' for key '%s', got '%s'", expectedValue, key, actualValue)
-				}
-			}
-		})
-	}
-}
-
 func TestWithBefore(t *testing.T) {
 	called := false
 	var capturedHost string
@@ -315,5 +255,68 @@ func TestWithAfter(t *testing.T) {
 	}
 	if capturedResult != testResult {
 		t.Errorf("Expected captured result to match test result")
+	}
+}
+
+// fakeSession refuses the names listed in deny, as a server whose AcceptEnv
+// does not include them would.
+type fakeSession struct {
+	deny map[string]bool
+	set  map[string]string
+}
+
+func (f *fakeSession) Setenv(name, value string) error {
+	if f.deny[name] {
+		return errors.New("ssh: setenv failed")
+	}
+	f.set[name] = value
+	return nil
+}
+
+func TestSetEnv(t *testing.T) {
+	s := &fakeSession{
+		deny: map[string]bool{"SECRET_TOKEN": true, "APP_MODE": true},
+		set:  map[string]string{},
+	}
+	env := map[string]string{
+		"LANG":         "C",
+		"SECRET_TOKEN": "hunter2",
+		"APP_MODE":     "prod",
+		"LC_ALL":       "C",
+	}
+
+	var refused []string
+	setEnv(s, env, func(name string, err error) {
+		if err == nil {
+			t.Errorf("refused %s without an error", name)
+		}
+		refused = append(refused, name)
+	})
+
+	if want := []string{"APP_MODE", "SECRET_TOKEN"}; !reflect.DeepEqual(refused, want) {
+		t.Errorf("refused = %v, want %v in name order", refused, want)
+	}
+	if want := map[string]string{"LANG": "C", "LC_ALL": "C"}; !reflect.DeepEqual(s.set, want) {
+		t.Errorf("set = %v, want %v", s.set, want)
+	}
+
+	// Without a callback a refusal is still not fatal.
+	s2 := &fakeSession{deny: map[string]bool{"A": true}, set: map[string]string{}}
+	setEnv(s2, map[string]string{"A": "1", "B": "2"}, nil)
+	if s2.set["B"] != "2" {
+		t.Error("the accepted name should be set even when another is refused")
+	}
+}
+
+func TestWithEnvRefused(t *testing.T) {
+	called := false
+	cb := &Callback{}
+	WithEnvRefused(func(string, error) { called = true })(cb)
+	if cb.envRefused == nil {
+		t.Fatal("WithEnvRefused should install the callback")
+	}
+	cb.envRefused("X", errors.New("refused"))
+	if !called {
+		t.Error("the installed callback should be the one given")
 	}
 }
