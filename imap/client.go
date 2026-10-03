@@ -546,8 +546,13 @@ func (r *Req) Search(cr *Criteria) (*SearchData, error) {
 		return nil, fmt.Errorf("failed to Search: %s", err)
 	}
 
+	// No match gives no set at all, which String would dereference.
+	all := ""
+	if data.All != nil {
+		all = data.All.String()
+	}
 	sd := SearchData{
-		All:   data.All.String(),
+		All:   all,
 		Min:   int(data.Min),
 		Max:   int(data.Max),
 		Count: int(data.Count),
@@ -1409,6 +1414,36 @@ func (r *Req) parseUIDSet(sequence string) (*imap.UIDSet, error) {
 }
 
 // parseFetchItems parses fetch items string into imap.FetchItem
+// splitFetchItems splits a list of fetch items on the spaces between them.
+// A space inside brackets or parentheses belongs to its item, as in
+// BODY[HEADER.FIELDS (SUBJECT FROM)].
+func splitFetchItems(dataitem string) []string {
+	var items []string
+	depth := 0
+	start := 0
+	for i, c := range dataitem {
+		switch c {
+		case '[', '(':
+			depth++
+		case ']', ')':
+			if depth > 0 {
+				depth--
+			}
+		case ' ':
+			if depth == 0 {
+				if i > start {
+					items = append(items, dataitem[start:i])
+				}
+				start = i + 1
+			}
+		}
+	}
+	if start < len(dataitem) {
+		items = append(items, dataitem[start:])
+	}
+	return items
+}
+
 func (r *Req) parseFetchItems(dataitem string) (*imap.FetchOptions, error) {
 	opts := &imap.FetchOptions{}
 
@@ -1476,7 +1511,7 @@ func (r *Req) parseFetchItems(dataitem string) (*imap.FetchOptions, error) {
 		opts.Flags = true
 	default:
 		// For complex fetch items, try to parse them
-		items := strings.Split(dataitem, " ")
+		items := splitFetchItems(dataitem)
 		for _, item := range items {
 			item = strings.TrimSpace(item)
 
