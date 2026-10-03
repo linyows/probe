@@ -229,13 +229,13 @@ Every criterion given has to match. The criteria are:
 | `flags` | Array of strings | That have every flag |
 | `not_flags` | Array of strings | That have none of the flags |
 
-A flag is given without its backslash, as in `seen`, `answered`, `flagged`, `deleted` or `draft`, or with it, as in `'\Seen'`. There is no `unseen` flag: unread messages are `not_flags: ["seen"]`.
+A flag is given without its backslash, as in `seen`, `answered`, `flagged`, `deleted`, `draft` or `recent`, or with it, as in `'\Seen'`. Any other name is a keyword, such as `$Important`, and is passed as it is. There is no `unseen` flag: unread messages are `not_flags: ["seen"]`.
 
 A date is one of:
 
-- `today` or `yesterday`
+- `today` or `yesterday`, from midnight in the local time zone of the machine running probe
 - `N hours ago` or `N minutes ago`, such as `2 hours ago`
-- `2006-01-02`, `2006/01/02` or `02/01/2006` (day first)
+- `2006-01-02`, `2006/01/02`, `02/01/2006` (day first) or `02-Jan-2006`
 - RFC 3339, such as `2006-01-02T15:04:05+09:00`, or RFC 822, such as `02 Jan 06 15:04 JST`
 
 IMAP compares dates without the time, so only the day of a date counts: `2 hours ago` matches everything from the start of that day.
@@ -367,7 +367,7 @@ The top-level `status` is the same as `res.code`, and `rt.duration` (such as `"1
 | `rename` | `success`, `old_mailbox`, `new_mailbox` |
 | `noop` | `success` |
 
-Each entry of `res.data.fetch.messages` has `uid`, `flags`, `from`, `to`, `subject`, `size`, `body`, `html_body` and `headers`, filled as the data items asked for. `from` and `to` are the first address only. Index the list to reach a message, as in `res.data.fetch.messages[0].from`.
+Each entry of `res.data.fetch.messages` has `uid`, `flags`, `date`, `from`, `to`, `subject`, `size`, `body`, `html_body` and `headers`, filled as the data items asked for. `date` is the envelope's `Date` in RFC 3339, such as `2025-10-08T07:11:55Z`, and is empty when the message has none. `from` and `to` are the first address only. Index the list to reach a message, as in `res.data.fetch.messages[0].from`.
 
 ## IMAP Examples
 
