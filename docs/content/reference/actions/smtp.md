@@ -29,7 +29,7 @@ The fields below describe the delivery. All of them accept template expressions.
 |-----------|------|----------|---------|-------------|
 | `addr` | String | Yes | - | SMTP server as `host:port` |
 | `from` | String | Yes | - | Envelope sender |
-| `to` | String | Yes | - | Envelope recipient. Several recipients are separated by commas without spaces, such as `a@example.com,b@example.com` |
+| `to` | String | Yes | - | Envelope recipient. Several recipients are separated by commas, such as `a@example.com, b@example.com` |
 | `subject` | String | No | `""` | Subject line |
 | `myhostname` | String | No | The machine's host name, or `localhost` if it is unknown | Hostname sent in the `EHLO` / `HELO` command. Many servers refuse a client that greets with `localhost`, so set a name the server accepts |
 | `session` | Integer | No | `1` | Number of SMTP sessions to open at the same time |
@@ -49,7 +49,7 @@ After the step, `res` reports how much was delivered.
 | `res.code` | Integer | `0` when no session failed and at least one message was delivered |
 | `res.sent` | Integer | Messages the server accepted, including those a session delivered before it failed |
 | `res.failed` | Integer | Sessions that failed |
-| `res.total` | Integer | Messages attempted |
+| `res.total` | Integer | Messages attempted, which is `message` |
 | `res.error` | String | Error message, when delivery failed |
 | `res.maildata` | String | The generated message, when it is text |
 | `res.filepath` | String | Path to the generated message, when it is binary |

@@ -218,3 +218,18 @@ func TestCalcMessageNumEachSessionTotal(t *testing.T) {
 		}
 	}
 }
+
+func TestSplitRecipients(t *testing.T) {
+	tests := map[string][]string{
+		"a@example.com":                    {"a@example.com"},
+		"a@example.com,b@example.com":      {"a@example.com", "b@example.com"},
+		"a@example.com, b@example.com":     {"a@example.com", "b@example.com"},
+		" a@example.com ,, b@example.com ": {"a@example.com", "b@example.com"},
+		"":                                 nil,
+	}
+	for in, want := range tests {
+		if got := splitRecipients(in); !reflect.DeepEqual(got, want) {
+			t.Errorf("splitRecipients(%q) = %q, want %q", in, got, want)
+		}
+	}
+}

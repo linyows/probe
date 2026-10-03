@@ -86,7 +86,6 @@ func (b *Bulk) DeliverWithResult() DeliveryResult {
 	var lastError, rejection string
 	for result := range resultCh {
 		if result.err != nil {
-			fmt.Printf("[ERROR] Send failed: %v\n", result.err)
 			sessionsFailed++
 			// The messages accepted before the failure were delivered all
 			// the same.
@@ -102,10 +101,16 @@ func (b *Bulk) DeliverWithResult() DeliveryResult {
 		}
 	}
 
+	// Every message is handed to a session, so the count is how many were
+	// attempted.
+	b.mu.Lock()
+	attempted := b.count
+	b.mu.Unlock()
+
 	result := DeliveryResult{
 		Sent:     totalSent,
 		Failed:   sessionsFailed,
-		Total:    totalSent,
+		Total:    attempted,
 		Sessions: sessionsSuccess + sessionsFailed,
 		Error:    lastError,
 		Rejected: rejection != "",
@@ -126,7 +131,7 @@ func (b *Bulk) Send() (int, error) {
 		Addr:             b.Addr,
 		LocalName:        b.MyHostname,
 		MailFrom:         b.From,
-		RcptTo:           strings.Split(b.To, ","),
+		RcptTo:           splitRecipients(b.To),
 		Data:             b.makeData(),
 		StartTLSDisabled: true,
 		MessageCount:     n,
@@ -137,6 +142,19 @@ func (b *Bulk) Send() (int, error) {
 		return m.Delivered, err
 	}
 	return n, nil
+}
+
+// splitRecipients splits a comma-separated list of addresses, dropping the
+// spaces around each one and any empty entries, so that "a@x, b@x" gives
+// "b@x" rather than " b@x".
+func splitRecipients(to string) []string {
+	var addrs []string
+	for _, a := range strings.Split(to, ",") {
+		if a = strings.TrimSpace(a); a != "" {
+			addrs = append(addrs, a)
+		}
+	}
+	return addrs
 }
 
 func (b *Bulk) calcMessageNumEachSession() int {

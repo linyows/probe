@@ -29,7 +29,7 @@ steps:
 |---|---|---|---|---|
 | `addr` | String | 必須 | - | SMTPサーバー（`host:port`） |
 | `from` | String | 必須 | - | エンベロープの送信者 |
-| `to` | String | 必須 | - | エンベロープの受信者。複数の受信者は`a@example.com,b@example.com`のように空白を入れずにカンマで区切る |
+| `to` | String | 必須 | - | エンベロープの受信者。複数の受信者は`a@example.com, b@example.com`のようにカンマで区切る |
 | `subject` | String | 任意 | `""` | 件名 |
 | `myhostname` | String | 任意 | 実行マシンのホスト名。取得できなければ`localhost` | `EHLO` / `HELO`で名乗るホスト名。`localhost`を名乗るクライアントを拒否するサーバーが多いため、サーバーが受け付ける名前を指定する |
 | `session` | Integer | 任意 | `1` | 同時に開くSMTPセッション数 |
@@ -49,7 +49,7 @@ steps:
 | `res.code` | Integer | 失敗したセッションがなく、1通以上配送できたとき`0` |
 | `res.sent` | Integer | サーバーが受け付けた通数。途中で失敗したセッションが、それまでに配送した分も含む |
 | `res.failed` | Integer | 失敗したセッション数 |
-| `res.total` | Integer | 試行した通数 |
+| `res.total` | Integer | 試行した通数。`message`と同じ値 |
 | `res.error` | String | 失敗時のエラーメッセージ |
 | `res.maildata` | String | 生成したメール（テキストの場合） |
 | `res.filepath` | String | 生成したメールのパス（バイナリの場合） |

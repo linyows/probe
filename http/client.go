@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"maps"
+	"mime"
 	hp "net/http"
 	"net/url"
 	"path"
@@ -25,7 +26,6 @@ const DefaultTimeout = 30 * time.Second
 type Req struct {
 	URL     string            `map:"url" validate:"required"`
 	Method  string            `map:"method" validate:"required"`
-	Proto   string            `map:"ver"`
 	Header  map[string]string `map:"headers"`
 	Body    string            `map:"body"` // Changed from []byte to string for text data
 	Timeout string            `map:"timeout"`
@@ -50,7 +50,6 @@ type Result struct {
 func NewReq() *Req {
 	return &Req{
 		Method: "GET",
-		Proto:  "HTTP/1.1",
 		Header: map[string]string{
 			"Accept":     "*/*",
 			"User-Agent": "probe-http/1.0.0",
@@ -274,11 +273,13 @@ func ResolveMethodAndURL(data map[string]any) error {
 	return nil
 }
 
-// hasJSONContentType checks if headers contain Content-Type: application/json
+// hasJSONContentType checks if headers declare a JSON Content-Type, such as
+// application/json; charset=utf-8 or application/problem+json.
 // Supports multiple header map types and case-insensitive matching
 func hasJSONContentType(headers any) bool {
 	checkHeader := func(k string, v any) bool {
-		return strings.EqualFold(k, "content-type") && v == "application/json"
+		s, ok := v.(string)
+		return ok && strings.EqualFold(k, "content-type") && isJSONMediaType(s)
 	}
 
 	switch h := headers.(type) {
@@ -296,6 +297,16 @@ func hasJSONContentType(headers any) bool {
 		}
 	}
 	return false
+}
+
+// isJSONMediaType reports whether a Content-Type value names JSON, ignoring
+// parameters such as charset.
+func isJSONMediaType(v string) bool {
+	mediaType, _, err := mime.ParseMediaType(v)
+	if err != nil {
+		return false
+	}
+	return mediaType == "application/json" || strings.HasSuffix(mediaType, "+json")
 }
 
 // MarshalBodyIfJSON converts body to JSON string when Content-Type is application/json
