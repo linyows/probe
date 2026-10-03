@@ -73,7 +73,11 @@ func (a *Action) Run(with map[string]any) (map[string]any, error) {
 		}
 		a.log.Debug("ssh command completed", "result", logResult)
 	})
-	ret, err := ssh.Execute(with, before, after)
+	// Only the name is logged: the value may be a secret.
+	envRefused := ssh.WithEnvRefused(func(name string, err error) {
+		a.log.Warn("ssh server refused an environment variable; the command runs without it (allow it with AcceptEnv in sshd_config)", "name", name, "error", err)
+	})
+	ret, err := ssh.Execute(with, before, after, envRefused)
 
 	if err != nil {
 		a.log.Error("ssh command failed", "error", err)

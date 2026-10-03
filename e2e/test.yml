@@ -616,6 +616,18 @@ jobs:
           ./probe examples/ssh.yml
     test: res.code == 0
     echo: "{{res.stdout}}"
+  - name: A refused environment variable is warned about, by name only
+    uses: shell
+    with:
+      cmd: |
+        SSH_HOST=127.0.0.1 SSH_PORT=2222 SSH_USER=probe \
+          SSH_KEY_FILE=./e2e/ssh/test_key \
+          ./probe e2e/ssh-env.yml
+    test: |
+      res.code == 0 &&
+      res.stderr contains "ssh server refused an environment variable" &&
+      res.stderr contains "PROBE_E2E_REFUSED" &&
+      !(res.stderr contains "should-not-arrive")
   - name: Stop SSH container
     uses: shell
     with:
