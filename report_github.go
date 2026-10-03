@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
 )
 
 // maxStepSummaryBytes is the most GitHub accepts in one step's job summary.
@@ -27,31 +26,22 @@ var ErrStepSummaryFull = errors.New("the job summary has no room left under GitH
 // leaves out the requests and responses, and if that is still too large it
 // cuts the page short and says so.
 func (r *Report) writeGitHubSummary(path string) error {
-	if path != "" {
-		// An explicit path can sit in a checked-out project, where a symlink
-		// would make the append land in a file elsewhere. The summary is
-		// appended to, so it cannot be replaced by a rename; refuse instead.
-		// The path GitHub Actions provides is trusted.
-		if info, err := os.Lstat(path); err == nil && info.Mode()&os.ModeSymlink != 0 {
-			return fmt.Errorf("refusing to append the job summary to %s: it is a symlink", path)
-		}
-	} else {
+	// An explicit path can sit in a checked-out project, so it is kept inside
+	// the current directory the way report files are. The path GitHub Actions
+	// provides in GITHUB_STEP_SUMMARY is trusted and used as given.
+	confine := path != ""
+	if !confine {
 		path = os.Getenv("GITHUB_STEP_SUMMARY")
 	}
 	if path == "" {
 		return ErrNoStepSummary
 	}
 
-	if dir := filepath.Dir(path); dir != "." {
-		if err := os.MkdirAll(dir, 0o755); err != nil {
-			return fmt.Errorf("failed to create the job summary directory: %w", err)
-		}
+	f, existing, err := openForAppend(path, confine)
+	if err != nil {
+		return fmt.Errorf("failed to open the job summary %s: %w", path, err)
 	}
 
-	var existing int64
-	if info, err := os.Stat(path); err == nil {
-		existing = info.Size()
-	}
 	// A blank line separates this page from whatever the file already holds,
 	// and it counts against the limit too.
 	sep := ""
@@ -60,13 +50,10 @@ func (r *Report) writeGitHubSummary(path string) error {
 	}
 	page := fitStepSummary(r, maxStepSummaryBytes-int(existing)-len(sep))
 	if page == "" {
+		_ = f.Close()
 		return ErrStepSummaryFull
 	}
 
-	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
-	if err != nil {
-		return fmt.Errorf("failed to open the job summary %s: %w", path, err)
-	}
 	_, err = f.WriteString(sep + page)
 	if cerr := f.Close(); err == nil {
 		err = cerr

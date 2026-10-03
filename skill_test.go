@@ -147,12 +147,31 @@ func TestInstallSkill_DoesNotFollowSymlink(t *testing.T) {
 	if data, _ := os.ReadFile(link); string(data) != Skill() {
 		t.Error("SKILL.md should hold the skill")
 	}
-	if info.Mode().Perm() != 0o644 {
-		t.Errorf("mode = %v, want 0644", info.Mode().Perm())
+	if info.Mode().Perm() != umaskMode(t) {
+		t.Errorf("mode = %v, want %v as the umask allows", info.Mode().Perm(), umaskMode(t))
 	}
 
 	leftovers, _ := filepath.Glob(filepath.Join(dir, ".SKILL.md.*"))
 	if len(leftovers) != 0 {
 		t.Errorf("temporary files left behind: %v", leftovers)
+	}
+}
+
+// TestInstallSkill_RefusesLinkedDirectory covers a project whose .claude is
+// a symlink to a directory elsewhere.
+func TestInstallSkill_RefusesLinkedDirectory(t *testing.T) {
+	victim := checkout(t)
+	if err := os.MkdirAll(filepath.Join(filepath.Dir(victim), "skills", "probe"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(filepath.Dir(victim), ".claude"); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+
+	if _, err := InstallSkill(""); err == nil {
+		t.Error("installing through a linked .claude should be refused")
+	}
+	if _, err := os.Stat(filepath.Join(filepath.Dir(victim), "skills", "probe", "SKILL.md")); err == nil {
+		t.Error("SKILL.md was written outside the project")
 	}
 }

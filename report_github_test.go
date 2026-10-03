@@ -322,8 +322,8 @@ func TestReport_WriteGitHubSummary_RefusesSymlinkedPath(t *testing.T) {
 	}
 
 	err := newTestReport().Write(ReportTarget{Format: ReportGitHubSummary, Path: link})
-	if err == nil || !strings.Contains(err.Error(), "it is a symlink") {
-		t.Errorf("error = %v, want the symlink refused", err)
+	if err == nil || !strings.Contains(err.Error(), "path escapes") {
+		t.Errorf("error = %v, want the link out of its directory refused", err)
 	}
 	if data, _ := os.ReadFile(target); string(data) != "keep me" {
 		t.Errorf("the file the link pointed at was changed to %.40q", data)

@@ -4,8 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"os"
-	"path/filepath"
 	"strings"
 	"time"
 )
@@ -366,52 +364,21 @@ func (r *Report) Write(t ReportTarget) error {
 		return r.writeGitHubSummary(t.Path)
 	}
 
-	if dir := filepath.Dir(t.Path); dir != "." {
-		if err := os.MkdirAll(dir, 0o755); err != nil {
-			return fmt.Errorf("failed to create report directory: %w", err)
-		}
-	}
-
-	// A directory where the file should go is refused up front, as creating
-	// it there would be.
-	if info, err := os.Stat(t.Path); err == nil && info.IsDir() {
-		return fmt.Errorf("failed to create %s report: %s is a directory", t.Format, t.Path)
-	}
-
-	// The report is written next to its destination and renamed over it. A
-	// rename replaces the directory entry, so when a checked-out project
-	// carries, say, probe-report.json as a symlink to a file elsewhere, that
-	// file is left alone instead of being overwritten through the link.
-	f, err := os.CreateTemp(filepath.Dir(t.Path), "."+filepath.Base(t.Path)+".*")
-	if err != nil {
-		return fmt.Errorf("failed to create %s report: %w", t.Format, err)
-	}
-	tmp := f.Name()
-
+	var render func(io.Writer) error
 	switch t.Format {
 	case ReportJSON:
-		err = r.WriteJSON(f)
+		render = r.WriteJSON
 	case ReportJUnit:
-		err = r.WriteJUnit(f)
+		render = r.WriteJUnit
 	case ReportMarkdown:
-		err = r.WriteMarkdown(f)
+		render = r.WriteMarkdown
 	default:
-		err = fmt.Errorf("unknown report format: %s", t.Format)
+		return fmt.Errorf("unknown report format: %s", t.Format)
 	}
 
-	if cerr := f.Close(); err == nil {
-		err = cerr
-	}
-	if err == nil {
-		// CreateTemp makes the file private; keep the mode a report had.
-		err = os.Chmod(tmp, 0o644)
-	}
-	if err != nil {
-		_ = os.Remove(tmp)
-		return fmt.Errorf("failed to write %s report to %s: %w", t.Format, t.Path, err)
-	}
-	if err := os.Rename(tmp, t.Path); err != nil {
-		_ = os.Remove(tmp)
+	// replaceFile keeps a symlink in the current directory, at the file or
+	// any directory on the way, from redirecting the report elsewhere.
+	if err := replaceFile(t.Path, render); err != nil {
 		return fmt.Errorf("failed to create %s report: %w", t.Format, err)
 	}
 	return nil

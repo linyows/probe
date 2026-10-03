@@ -3,7 +3,7 @@ package probe
 import (
 	_ "embed"
 	"fmt"
-	"os"
+	"io"
 	"path/filepath"
 )
 
@@ -27,35 +27,20 @@ func Skill() string {
 // wrote. An existing SKILL.md is replaced, so running it again after an
 // upgrade brings the skill up to date.
 //
-// The file is written next to its destination and renamed over it. A rename
-// replaces the directory entry itself, so when a checked-out project carries
-// SKILL.md as a symlink to a file elsewhere, that file is left alone instead
-// of being overwritten through the link.
+// The default directory is inside the project, which the user may have
+// checked out from anywhere, so the file is written through replaceFile: a
+// symlink at SKILL.md, or at .claude or another directory on the way, cannot
+// redirect it to a file elsewhere.
 func InstallSkill(dir string) (string, error) {
 	if dir == "" {
 		dir = DefaultSkillDir
 	}
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return "", fmt.Errorf("failed to create the skill directory: %w", err)
-	}
 	path := filepath.Join(dir, "SKILL.md")
-
-	tmp, err := os.CreateTemp(dir, ".SKILL.md.*")
+	err := replaceFile(path, func(w io.Writer) error {
+		_, err := io.WriteString(w, skill)
+		return err
+	})
 	if err != nil {
-		return "", fmt.Errorf("failed to write the skill: %w", err)
-	}
-	_, err = tmp.WriteString(skill)
-	if cerr := tmp.Close(); err == nil {
-		err = cerr
-	}
-	if err == nil {
-		err = os.Chmod(tmp.Name(), 0o644)
-	}
-	if err == nil {
-		err = os.Rename(tmp.Name(), path)
-	}
-	if err != nil {
-		_ = os.Remove(tmp.Name())
 		return "", fmt.Errorf("failed to write the skill: %w", err)
 	}
 	return path, nil
