@@ -229,7 +229,7 @@ Every criterion given has to match. The criteria are:
 | `flags` | Array of strings | That have every flag |
 | `not_flags` | Array of strings | That have none of the flags |
 
-A flag is given without its backslash, as in `seen`, `answered`, `flagged`, `deleted` or `draft`, or with it, as in `'\Seen'`. Any other name is a keyword, such as `$Important`, and is passed as it is. There is no `unseen` flag: unread messages are `not_flags: ["seen"]`.
+A flag is given without its backslash, as in `seen`, `answered`, `flagged`, `deleted`, `draft` or `recent`, or with it, as in `'\Seen'`. Any other name is a keyword, such as `$Important`, and is passed as it is. There is no `unseen` flag: unread messages are `not_flags: ["seen"]`.
 
 A date is one of:
 

@@ -308,7 +308,7 @@ criteria:
 | `flags` | 文字列の配列 | すべてのフラグを持つ |
 | `not_flags` | 文字列の配列 | どのフラグも持たない |
 
-フラグは`seen`、`answered`、`flagged`、`deleted`、`draft`のようにバックスラッシュなしで書くか、`'\Seen'`のようにバックスラッシュ付きで書きます。それ以外の名前は`$Important`のようなキーワードとして、そのまま渡します。`unseen`というフラグはないため、未読のメッセージは`not_flags: ["seen"]`で指定します。
+フラグは`seen`、`answered`、`flagged`、`deleted`、`draft`、`recent`のようにバックスラッシュなしで書くか、`'\Seen'`のようにバックスラッシュ付きで書きます。それ以外の名前は`$Important`のようなキーワードとして、そのまま渡します。`unseen`というフラグはないため、未読のメッセージは`not_flags: ["seen"]`で指定します。
 
 日付には以下のいずれかを書きます。
 

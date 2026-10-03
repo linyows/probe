@@ -1471,21 +1471,20 @@ func TestParseDateDayMonthYear(t *testing.T) {
 	}
 }
 
-func TestSelectPermanentFlags(t *testing.T) {
-	// select and examine read the same mailbox, so they report the same
-	// permanent flags; select used to append them to the plain flags.
-	host, port := plainIMAPServer(t, 1)
-	get := func(name string) any {
-		ret, err := runCommands(t, host, port, map[string]any{"name": name, "mailbox": "INBOX"})
-		if err != nil {
-			t.Fatalf("%s: Request() error: %v", name, err)
-		}
-		data := ret["res"].(map[string]any)["data"].(map[string]any)
-		return data[name].(map[string]any)["permanent_flags"]
+func TestNewSelectDataPermanentFlags(t *testing.T) {
+	// The permanent flags are their own list. They used to be appended to
+	// the plain flags, which gave the flags followed by the last permanent
+	// one. The in-memory server always answers with the flags plus \*, which
+	// is what the bug gave too, so the conversion is tested on its own.
+	sd := newSelectData(&imap.SelectData{
+		Flags:          []imap.Flag{imap.FlagSeen, imap.FlagAnswered},
+		PermanentFlags: []imap.Flag{imap.FlagSeen, imap.FlagDeleted, imap.FlagWildcard},
+	})
+	if want := []string{`\Seen`, `\Answered`}; !reflect.DeepEqual(sd.Flags, want) {
+		t.Errorf("Flags = %q, want %q", sd.Flags, want)
 	}
-	s, e := get("select"), get("examine")
-	if !reflect.DeepEqual(s, e) {
-		t.Errorf("select permanent_flags = %v, examine = %v, want them equal", s, e)
+	if want := []string{`\Seen`, `\Deleted`, `\*`}; !reflect.DeepEqual(sd.PermanentFlags, want) {
+		t.Errorf("PermanentFlags = %q, want %q", sd.PermanentFlags, want)
 	}
 }
 

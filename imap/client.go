@@ -497,17 +497,8 @@ func (r *Req) ExecCommands() (*Data, error) {
 	return &data, nil
 }
 
-func (r *Req) Select(mb string) (*SelectData, error) {
-	opts := &imap.SelectOptions{
-		ReadOnly:  false,
-		CondStore: false,
-	}
-
-	data, err := r.cl.Select(mb, opts).Wait()
-	if err != nil {
-		return nil, fmt.Errorf("failed to Select: %s", err)
-	}
-
+// newSelectData converts the server's answer to SELECT or EXAMINE.
+func newSelectData(data *imap.SelectData) *SelectData {
 	sd := SelectData{
 		Exists:      int(data.NumMessages),
 		Recent:      int(data.NumRecent),
@@ -523,7 +514,21 @@ func (r *Req) Select(mb string) (*SelectData, error) {
 		sd.PermanentFlags = append(sd.PermanentFlags, string(flag))
 	}
 
-	return &sd, nil
+	return &sd
+}
+
+func (r *Req) Select(mb string) (*SelectData, error) {
+	opts := &imap.SelectOptions{
+		ReadOnly:  false,
+		CondStore: false,
+	}
+
+	data, err := r.cl.Select(mb, opts).Wait()
+	if err != nil {
+		return nil, fmt.Errorf("failed to Select: %s", err)
+	}
+
+	return newSelectData(data), nil
 }
 
 func (r *Req) Search(cr *Criteria) (*SearchData, error) {
@@ -839,22 +844,7 @@ func (r *Req) Examine(mb string) (*SelectData, error) {
 		return nil, fmt.Errorf("failed to Examine: %s", err)
 	}
 
-	sd := SelectData{
-		Exists:      int(data.NumMessages),
-		Recent:      int(data.NumRecent),
-		FirstUnseen: int(data.FirstUnseenSeqNum),
-		UIDNext:     int(data.UIDNext),
-	}
-
-	for _, flag := range data.Flags {
-		sd.Flags = append(sd.Flags, string(flag))
-	}
-
-	for _, flag := range data.PermanentFlags {
-		sd.PermanentFlags = append(sd.PermanentFlags, string(flag))
-	}
-
-	return &sd, nil
+	return newSelectData(data), nil
 }
 
 // List implements LIST command
