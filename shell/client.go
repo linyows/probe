@@ -229,17 +229,26 @@ func (r *Req) Do() (*Result, error) {
 		cmd.Stdout = logFile
 		cmd.Stderr = logFile
 
-		// Start command
+		// Start the command and record it in one go, so that StopStarted,
+		// which takes the same lock, never runs in between.
+		started.Lock()
 		if err := cmd.Start(); err != nil {
+			started.Unlock()
 			_ = logFile.Close()
 			_ = os.Remove(logPath)
 			return result, fmt.Errorf("failed to start command: %w", err)
 		}
+		proc := &startedProc{pid: cmd.Process.Pid, log: logPath}
+		started.procs = append(started.procs, proc)
+		started.Unlock()
 
 		// Start a goroutine to close the log file when process exits
 		go func() {
 			_ = cmd.Wait()
 			_ = logFile.Close()
+			started.Lock()
+			proc.exited = true
+			started.Unlock()
 		}()
 
 		result.RT = time.Since(start)

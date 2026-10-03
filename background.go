@@ -2,6 +2,7 @@ package probe
 
 import (
 	"os"
+	"os/signal"
 	"sync"
 	"syscall"
 	"time"
@@ -36,6 +37,9 @@ type backgroundProcs struct {
 	// stopped is set once stop has run; a process reported after that is
 	// stopped as soon as it is.
 	stopped bool
+	// stopping is held for the whole of stop, so that a second call, such
+	// as one from a signal, returns only once the processes are gone.
+	stopping sync.Mutex
 }
 
 func newBackgroundProcs() *backgroundProcs {
@@ -88,11 +92,51 @@ func (b *backgroundProcs) track(uses string, ret map[string]any) {
 	b.mu.Unlock()
 }
 
+// stopOnSignal stops the recorded processes when probe is interrupted,
+// terminated or hung up on, and then lets the signal end probe as it would
+// have. The background processes are in sessions of their own, so the
+// signal never reaches them, and nothing else would stop them. The first
+// signal restores the default handling, so a second one ends probe at once.
+// The returned function ends the watch.
+func (b *backgroundProcs) stopOnSignal() func() {
+	if b == nil {
+		return func() {}
+	}
+	ch := make(chan os.Signal, 1)
+	signal.Notify(ch, os.Interrupt, syscall.SIGTERM, syscall.SIGHUP)
+	done := make(chan struct{})
+	finished := make(chan struct{})
+	go func() {
+		select {
+		case sig := <-ch:
+			signal.Stop(ch)
+			b.stop()
+			if s, ok := sig.(syscall.Signal); ok {
+				_ = syscall.Kill(os.Getpid(), s)
+			}
+			// The signal ends the process; finished is never closed, so the
+			// workflow cannot return and exit before that.
+		case <-done:
+			close(finished)
+		}
+	}()
+	return func() {
+		signal.Stop(ch)
+		close(done)
+		// A signal can end the workflow early, for example by killing the
+		// plugin of a running step. Wait for its handling, so that probe
+		// still ends by the signal after the cleanup.
+		<-finished
+	}
+}
+
 // stop terminates every recorded process and removes its log file.
 func (b *backgroundProcs) stop() {
 	if b == nil {
 		return
 	}
+	b.stopping.Lock()
+	defer b.stopping.Unlock()
 
 	deadline := time.Now().Add(backgroundStopGrace)
 	for b.pendingCount() > 0 && time.Now().Before(deadline) {

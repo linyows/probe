@@ -3,6 +3,8 @@ package shell
 import (
 	"errors"
 	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/go-plugin"
@@ -36,6 +38,8 @@ func (a *Action) Run(with map[string]any) (map[string]any, error) {
 }
 
 func Serve() {
+	stopStartedOnSignal()
+
 	log := hclog.New(&hclog.LoggerOptions{
 		Level:      hclog.Debug,
 		Output:     os.Stderr,
@@ -51,4 +55,23 @@ func Serve() {
 		Plugins:         map[string]plugin.Plugin{"actions": pl},
 		GRPCServer:      plugin.DefaultGRPCServer,
 	})
+}
+
+// stopStartedOnSignal stops the background commands this plugin started
+// when it is interrupted, terminated or hung up on, and then lets the signal
+// end it. Ctrl+C reaches this plugin with the rest of probe's process group,
+// and can do so before the workflow has heard of a command just started. The
+// signal is caught rather than ignored, so the commands the plugin runs get
+// it as usual.
+func stopStartedOnSignal() {
+	ch := make(chan os.Signal, 1)
+	signal.Notify(ch, os.Interrupt, syscall.SIGTERM, syscall.SIGHUP)
+	go func() {
+		sig := <-ch
+		signal.Stop(ch)
+		shell.StopStarted()
+		if s, ok := sig.(syscall.Signal); ok {
+			_ = syscall.Kill(os.Getpid(), s)
+		}
+	}()
 }
