@@ -2,6 +2,7 @@ package imap
 
 import (
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"maps"
 	"mime"
@@ -9,6 +10,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/emersion/go-imap/v2"
@@ -24,7 +26,6 @@ type Req struct {
 	Password        string        `map:"password" validate:"required"`
 	TLS             bool          `map:"tls"`
 	Timeout         time.Duration `map:"timeout"`
-	StrictHostCheck bool          `map:"strict_host_check"`
 	InsecureSkipTLS bool          `map:"insecure_skip_tls"`
 	Commands        []Command     `map:"commands"`
 	cl              *imapclient.Client
@@ -209,14 +210,6 @@ func Request(data map[string]any, opts ...Option) (map[string]any, error) {
 		}
 	}
 
-	if strictInput, exists := m["strict_host_check"]; exists {
-		if strictStr, ok := strictInput.(string); ok {
-			if strictBool, err := strconv.ParseBool(strictStr); err == nil {
-				m["strict_host_check"] = strictBool
-			}
-		}
-	}
-
 	if insecureInput, exists := m["insecure_skip_tls"]; exists {
 		if insecureStr, ok := insecureInput.(string); ok {
 			if insecureBool, err := strconv.ParseBool(insecureStr); err == nil {
@@ -226,11 +219,11 @@ func Request(data map[string]any, opts ...Option) (map[string]any, error) {
 	}
 
 	if timeoutInput, exists := m["timeout"]; exists {
-		if timeoutStr, ok := timeoutInput.(string); ok {
-			if timeoutDuration, err := time.ParseDuration(timeoutStr); err == nil {
-				m["timeout"] = timeoutDuration
-			}
+		timeout, err := parseTimeout(timeoutInput)
+		if err != nil {
+			return map[string]any{}, err
 		}
+		m["timeout"] = timeout
 	}
 
 	r := NewReq()
@@ -256,7 +249,6 @@ func NewReq() *Req {
 		Port:            993,
 		TLS:             true,
 		Timeout:         30 * time.Second,
-		StrictHostCheck: true,
 		InsecureSkipTLS: false,
 	}
 }
@@ -277,9 +269,62 @@ func (r *Req) Do() (*Result, error) {
 	return result, nil
 }
 
+// dialError reports a failed connection, naming the timeout when it ran out.
+func (r *Req) dialError(err error) error {
+	var netErr net.Error
+	if errors.As(err, &netErr) && netErr.Timeout() {
+		return fmt.Errorf("IMAP connection timed out after %s: %w", r.Timeout, err)
+	}
+	return fmt.Errorf("failed to dial IMAP server: %w", err)
+}
+
+// timeoutError reports a session that ran out of time while doing what.
+func (r *Req) timeoutError(doing string, err error) error {
+	if err == nil {
+		return fmt.Errorf("IMAP session timed out after %s while %s", r.Timeout, doing)
+	}
+	return fmt.Errorf("IMAP session timed out after %s while %s: %w", r.Timeout, doing, err)
+}
+
+// parseTimeout reads timeout as a duration string such as "30s", or as a
+// number of seconds. A number used to be taken as nanoseconds.
+func parseTimeout(v any) (time.Duration, error) {
+	var d time.Duration
+	switch t := v.(type) {
+	case time.Duration:
+		d = t
+	case string:
+		parsed, err := time.ParseDuration(strings.TrimSpace(t))
+		if err != nil {
+			secs, nerr := strconv.ParseFloat(strings.TrimSpace(t), 64)
+			if nerr != nil {
+				return 0, fmt.Errorf("invalid timeout %q: use a duration such as 30s, or a number of seconds", t)
+			}
+			parsed = time.Duration(secs * float64(time.Second))
+		}
+		d = parsed
+	case int:
+		d = time.Duration(t) * time.Second
+	case int64:
+		d = time.Duration(t) * time.Second
+	case float64:
+		d = time.Duration(t * float64(time.Second))
+	default:
+		return 0, fmt.Errorf("invalid timeout %v: use a duration such as 30s, or a number of seconds", v)
+	}
+	if d <= 0 {
+		return 0, fmt.Errorf("invalid timeout %v: it must be greater than zero", v)
+	}
+	return d, nil
+}
+
 func (r *Req) runImap() (*Res, error) {
 	addr := net.JoinHostPort(r.Host, strconv.Itoa(r.Port))
+	// timeout bounds the whole session. The dialer covers connecting and the
+	// TLS handshake; a timer started once connected covers the rest.
+	deadline := time.Now().Add(r.Timeout)
 	options := &imapclient.Options{
+		Dialer:      &net.Dialer{Timeout: r.Timeout},
 		WordDecoder: &mime.WordDecoder{CharsetReader: charset.Reader},
 		// Without a TLSConfig the client verifies the certificate whatever
 		// insecure_skip_tls says, which fails against a server with a
@@ -291,24 +336,46 @@ func (r *Req) runImap() (*Res, error) {
 	if r.TLS {
 		r.cl, err = imapclient.DialTLS(addr, options)
 		if err != nil {
-			return nil, fmt.Errorf("failed to dial IMAP server: %w", err)
+			return nil, r.dialError(err)
 		}
 	} else {
 		r.cl, err = imapclient.DialInsecure(addr, options)
 		if err != nil {
-			return nil, fmt.Errorf("failed to dial IMAP server: %w", err)
+			return nil, r.dialError(err)
 		}
+	}
+
+	// Closing the connection is what stops a command waiting on a server
+	// that does not answer; the command then fails and is reported as a
+	// timeout below.
+	// A zero Timeout, possible only through the Go API, means no limit.
+	var timedOut atomic.Bool
+	if r.Timeout > 0 {
+		timer := time.AfterFunc(time.Until(deadline), func() {
+			timedOut.Store(true)
+			_ = r.cl.Close()
+		})
+		defer timer.Stop()
 	}
 	defer func() {
 		_ = r.cl.Close()
 	}()
 
 	if err := r.cl.Login(r.Username, r.Password).Wait(); err != nil {
+		if timedOut.Load() {
+			return nil, r.timeoutError("logging in", err)
+		}
 		return nil, fmt.Errorf("failed to login: %w", err)
 	}
 
 	cmdRes, err := r.ExecCommands()
 	res := Res{Data: *cmdRes}
+
+	// A session cut short is the environment's failure, not the command's,
+	// so it is an action error rather than res.code 1.
+	if timedOut.Load() {
+		return nil, r.timeoutError("running commands", err)
+	}
 
 	if err != nil {
 		res.Code = 1
@@ -318,6 +385,9 @@ func (r *Req) runImap() (*Res, error) {
 	}
 
 	if err := r.cl.Logout().Wait(); err != nil {
+		if timedOut.Load() {
+			return nil, r.timeoutError("logging out", err)
+		}
 		res.Code = 2
 		res.Error = fmt.Sprintf("command succeeded but logout failed: %v", err)
 		return &res, nil
