@@ -47,8 +47,8 @@ After the step, `res` reports how much was delivered.
 | Field | Type | Description |
 |-------|------|-------------|
 | `res.code` | Integer | `0` when no session failed and at least one message was delivered |
-| `res.sent` | Integer | Messages delivered |
-| `res.failed` | Integer | Sessions that failed. A session that fails delivers none of its messages |
+| `res.sent` | Integer | Messages the server accepted, including those a session delivered before it failed |
+| `res.failed` | Integer | Sessions that failed |
 | `res.total` | Integer | Messages attempted |
 | `res.error` | String | Error message, when delivery failed |
 | `res.maildata` | String | The generated message, when it is text |

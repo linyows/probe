@@ -57,6 +57,11 @@ func (b *Bulk) DeliverWithResult() DeliveryResult {
 		err   error
 	}
 
+	// Every delivery hands out the messages from the start.
+	b.mu.Lock()
+	b.count = 0
+	b.mu.Unlock()
+
 	var wg sync.WaitGroup
 	resultCh := make(chan sendResult, b.Session)
 
@@ -83,6 +88,9 @@ func (b *Bulk) DeliverWithResult() DeliveryResult {
 		if result.err != nil {
 			fmt.Printf("[ERROR] Send failed: %v\n", result.err)
 			sessionsFailed++
+			// The messages accepted before the failure were delivered all
+			// the same.
+			totalSent += result.count
 			lastError = result.err.Error()
 			var reply *textproto.Error
 			if errors.As(result.err, &reply) {
@@ -126,7 +134,7 @@ func (b *Bulk) Send() (int, error) {
 
 	err := m.Send()
 	if err != nil {
-		return 0, err
+		return m.Delivered, err
 	}
 	return n, nil
 }
@@ -135,22 +143,15 @@ func (b *Bulk) calcMessageNumEachSession() int {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
-	if b.Message == b.Session {
-		return 1
-	}
-
-	// Round up messages per session
+	// Spread the messages over the sessions, rounding up, so that the last
+	// sessions get what is left and those after them get none. Resetting the
+	// count once it ran out, as this used to, handed the messages out again
+	// to the sessions after an empty one.
 	n := (b.Message + b.Session - 1) / b.Session
-
-	// If over message count
-	k := b.Message - b.count
-	if k < n {
-		b.count = 0
-		return k
+	if left := b.Message - b.count; left < n {
+		n = left
 	}
-
-	// If not over
-	b.count = b.count + n
+	b.count += n
 	return n
 }
 

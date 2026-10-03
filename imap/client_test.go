@@ -12,6 +12,7 @@ import (
 	"io"
 	"math/big"
 	"net"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -1382,4 +1383,56 @@ func TestRequest_TimeoutWhileLoggingOutKeepsTheCommandError(t *testing.T) {
 	assert.Contains(t, err.Error(), "while logging out")
 	assert.Contains(t, err.Error(), "after the command failed")
 	assert.Contains(t, err.Error(), "no such mailbox")
+}
+
+func TestSplitFetchItems(t *testing.T) {
+	tests := map[string][]string{
+		"ENVELOPE FLAGS": {"ENVELOPE", "FLAGS"},
+		"ENVELOPE BODY[HEADER.FIELDS (SUBJECT FROM)]": {"ENVELOPE", "BODY[HEADER.FIELDS (SUBJECT FROM)]"},
+		"BODY.PEEK[HEADER.FIELDS (TO)] UID":           {"BODY.PEEK[HEADER.FIELDS (TO)]", "UID"},
+		"  FLAGS   UID ":                              {"FLAGS", "UID"},
+		"BODY[HEADER.FIELDS.NOT (DATE)]":              {"BODY[HEADER.FIELDS.NOT (DATE)]"},
+	}
+	for in, want := range tests {
+		if got := splitFetchItems(in); !reflect.DeepEqual(got, want) {
+			t.Errorf("splitFetchItems(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+func TestParseFetchItemsHeaderFieldsInList(t *testing.T) {
+	// A section with spaces in it used to be cut apart and dropped.
+	opts, err := NewReq().parseFetchItems("ENVELOPE BODY[HEADER.FIELDS (SUBJECT FROM)]")
+	if err != nil {
+		t.Fatalf("parseFetchItems() error: %v", err)
+	}
+	if !opts.Envelope {
+		t.Error("Envelope = false, want true")
+	}
+	if len(opts.BodySection) != 1 {
+		t.Fatalf("BodySection = %v, want one section", opts.BodySection)
+	}
+	if got := opts.BodySection[0].HeaderFields; !reflect.DeepEqual(got, []string{"SUBJECT", "FROM"}) {
+		t.Errorf("HeaderFields = %q, want SUBJECT and FROM", got)
+	}
+}
+
+func TestSearchNoMatch(t *testing.T) {
+	// A search that matches nothing used to panic on the missing set.
+	host, port := plainIMAPServer(t, 2)
+	for _, name := range []string{"search", "uid search"} {
+		ret, err := runCommands(t, host, port,
+			map[string]any{"name": "select", "mailbox": "INBOX"},
+			map[string]any{"name": name, "criteria": map[string]any{"headers": map[string]any{"subject": "no such message"}}},
+		)
+		if err != nil {
+			t.Fatalf("%s: Request() error: %v", name, err)
+		}
+		res := ret["res"].(map[string]any)
+		data := res["data"].(map[string]any)
+		search := data["search"].(map[string]any)
+		if search["count"] != 0 || search["all"] != "" {
+			t.Errorf("%s: search = %v, want count 0 and an empty all", name, search)
+		}
+	}
 }

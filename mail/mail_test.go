@@ -9,6 +9,7 @@ import (
 	"log"
 	"net"
 	"net/smtp"
+	"net/textproto"
 	"os"
 	"strconv"
 	"strings"
@@ -797,5 +798,94 @@ func TestMailSend_RejectsLineBreakInName(t *testing.T) {
 	}
 	if got := srv.greetings(); len(got) != 0 {
 		t.Errorf("nothing should have been sent, got %q", got)
+	}
+}
+
+// startOneMessageServer runs an SMTP server that accepts one message per
+// connection and refuses the MAIL FROM of the next with 451.
+func startOneMessageServer(t *testing.T) string {
+	t.Helper()
+	lis, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = lis.Close() })
+
+	go func() {
+		for {
+			conn, err := lis.Accept()
+			if err != nil {
+				return
+			}
+			go func(conn net.Conn) {
+				defer func() { _ = conn.Close() }()
+				text := textproto.NewConn(conn)
+				_ = text.PrintfLine("220 test ESMTP")
+				mails := 0
+				for {
+					line, err := text.ReadLine()
+					if err != nil {
+						return
+					}
+					switch strings.ToUpper(strings.SplitN(line, " ", 2)[0]) {
+					case "MAIL":
+						mails++
+						if mails > 1 {
+							_ = text.PrintfLine("451 4.7.1 Try again later")
+							continue
+						}
+						_ = text.PrintfLine("250 ok")
+					case "DATA":
+						_ = text.PrintfLine("354 go ahead")
+						if _, err := text.ReadDotBytes(); err != nil {
+							return
+						}
+						_ = text.PrintfLine("250 queued")
+					case "QUIT":
+						_ = text.PrintfLine("221 bye")
+						return
+					default:
+						_ = text.PrintfLine("250 ok")
+					}
+				}
+			}(conn)
+		}
+	}()
+
+	return lis.Addr().String()
+}
+
+func TestSendCountsMessagesBeforeFailure(t *testing.T) {
+	// Each message is committed on its own, so the one accepted before the
+	// refusal was delivered even though Send fails.
+	m := &Mail{
+		Addr:             startOneMessageServer(t),
+		MailFrom:         "from@example.com",
+		RcptTo:           []string{"to@example.com"},
+		Data:             []byte("Subject: test\r\n\r\nbody\r\n"),
+		StartTLSDisabled: true,
+		MessageCount:     3,
+	}
+	if err := m.Send(); err == nil {
+		t.Fatal("Send() succeeded although the second message was refused")
+	}
+	if m.Delivered != 1 {
+		t.Errorf("Delivered = %d, want 1", m.Delivered)
+	}
+}
+
+func TestDeliverCountsMessagesOfFailedSessions(t *testing.T) {
+	// Two sessions of three messages each: every session delivers one and
+	// then fails, and the two delivered count as sent.
+	b := &Bulk{
+		Addr:    startOneMessageServer(t),
+		From:    "from@example.com",
+		To:      "to@example.com",
+		Session: 2,
+		Message: 6,
+	}
+	result := b.DeliverWithResult()
+	if result.Sent != 2 || result.Failed != 2 {
+		t.Errorf("sent = %d, failed = %d, want 2 and 2", result.Sent, result.Failed)
 	}
 }
