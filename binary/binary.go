@@ -67,8 +67,11 @@ func SaveBinaryToTempFile(data []byte, contentType string) (string, error) {
 	tempDir := os.TempDir()
 	filePath := filepath.Join(tempDir, filename)
 
-	// Write data to file
-	file, err := os.Create(filePath)
+	// Write data to file. The temporary directory is shared with other
+	// users and the data can be private, such as a screenshot of a signed-in
+	// page, so only the owner may read it; O_EXCL refuses a file or symlink
+	// already sitting at the name instead of writing through it.
+	file, err := os.OpenFile(filePath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
 	if err != nil {
 		return "", fmt.Errorf("failed to create temp file: %w", err)
 	}

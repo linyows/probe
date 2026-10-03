@@ -28,7 +28,7 @@ jobs:
       Heading: {{res.results.heading}}
       -----
     outputs:
-      load_time: res.time_ms
+      load_time: rt.duration
 
 - name: Capture screenshot
   steps:
@@ -44,5 +44,7 @@ jobs:
         url: "{{vars.url}}/"
       - name: capture_screenshot
         path: ./e2e/capture_screenshot.png
-        quality: 80
-    test: res.code == 0
+      - name: full_screenshot
+        id: full_page
+    test: res.code == 0 && res.filepaths.full_page endsWith ".png"
+    echo: "Full page: {{res.filepaths.full_page}}"

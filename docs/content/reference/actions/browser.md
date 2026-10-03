@@ -1,459 +1,214 @@
 # Browser Action
 
-The `browser` action automates web browsers using ChromeDP, providing comprehensive web automation capabilities for testing, scraping, and interaction with web applications.
+The `browser` action drives a real Chrome through [chromedp](https://github.com/chromedp/chromedp): it opens pages, reads and types into them, waits for elements, and takes screenshots. Chrome or Chromium has to be installed where Probe runs.
 
 ## Basic Syntax
 
-A browser step names the operation in `action` and gives it whatever that operation needs.
+A browser step lists what to do under `actions`, in order. Every step starts a fresh browser, runs its actions, and closes it, so cookies and a login do not carry over to the next step: put a whole flow in one step.
 
 ```yaml
 steps:
-  - name: "Navigate to Website"
+  - name: Read the heading
     uses: browser
     with:
-      action: navigate
-      url: "https://example.com"
-      headless: true
-      timeout: 30s
-    test: res.code == 0
+      actions:
+        - name: navigate
+          url: "{{vars.url}}/"
+        - name: text
+          id: heading
+          selector: h1
+    test: res.code == 0 && res.results.heading == "Welcome"
 ```
 
 ## Parameters
 
-`action` decides which browser operation runs, and the rest of the parameters supply what that operation needs: the target, the value to type, and how the browser is launched.
+These go directly under `with`.
 
-### `action` (required)
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `actions` | List | required | The actions to run, in order. See [Actions](#actions) |
+| `timeout` | Duration string | `5s` | Limit for the whole step: starting the browser and every action. Write it as a string such as `30s`; a plain number is ignored and the default applies |
+| `headless` | Boolean | `true` | Run Chrome without a window |
+| `window_w` | Integer | `1920` | Window width in pixels |
+| `window_h` | Integer | `1080` | Window height in pixels |
+| `evidence_dir` | String | the temporary directory | Where the page is saved when the actions fail. See [Page at failure](#page-at-failure) |
 
-**Type:** String  
-**Description:** The browser action to perform  
-**Values:** 
-- **Navigation:** `navigate`
-- **Text/Content:** `text`, `value`, `get_html`
-- **Attributes:** `get_attribute`
-- **Interactions:** `click`, `double_click`, `right_click`, `hover`, `focus`
-- **Input:** `type`, `send_keys`, `select`
-- **Forms:** `submit`
-- **Scrolling:** `scroll`
-- **Screenshots:** `screenshot`, `capture_screenshot`, `full_screenshot`
-- **Waiting:** `wait_visible`, `wait_not_visible`, `wait_ready`, `wait_text`, `wait_enabled`
+Starting Chrome takes part of `timeout`, often a second or more, so a short limit can run out before the first page opens.
 
-### `url` (optional)
+## Actions
 
-**Type:** String  
-**Description:** URL to navigate to (required for navigate action)  
-**Supports:** Template expressions
+Each entry of `actions` names its action in `name` and takes these fields:
 
-```yaml
-with:
-  action: navigate
-  url: "https://example.com"
-  url: "{{vars.base_url}}/login"
-```
+| Field | Used by | Description |
+|-------|---------|-------------|
+| `name` | all | The action, from the tables below |
+| `id` | actions that return something | The key for the result in `res.results` or `res.filepaths`. Without it the action's name is the key, so a later action of the same kind replaces the earlier result |
+| `url` | `navigate` | The address to open |
+| `selector` | actions on an element | A CSS selector |
+| `value` | `type`, `send_keys`, `select` | The text to use |
+| `attribute` | `get_attribute` | The attribute to read, as a list: `[href]`. Only the first entry is read, and a plain string is rejected |
+| `quality` | `full_screenshot` | `1` to `99` saves JPEG at that quality. Anything else, including unset, `0`, `100` and above, or a negative number, saves PNG |
+| `path` | screenshots | Deprecated: also write the image to this path. Use `res.filepaths` instead |
 
-### `selector` (optional)
+An action that looks for an element waits until the element appears, and the step fails when `timeout` runs out first. Most of them also wait for it to be visible.
 
-**Type:** String  
-**Description:** CSS selector for targeting elements  
-**Supports:** Template expressions
+### Navigation and waiting
 
-```yaml
-with:
-  action: get_text
-  selector: "h1"
-  selector: "#main-title"
-  selector: ".article-content p:first-child"
-```
+These open a page or hold the step until the page is in the state the next action needs.
 
-### `value` (optional)
+| Action | What it does |
+|--------|--------------|
+| `navigate` | Opens `url` and waits for the page to load. A network error the browser reports, such as `net::ERR_CONNECTION_REFUSED`, fails it at once; an address that never answers keeps it waiting until `timeout` |
+| `wait_visible` | Waits until `selector` is visible |
+| `wait_not_visible` | Waits until `selector` is not visible |
+| `wait_enabled` | Waits until `selector` is visible and enabled |
+| `wait_ready` | Waits until the page's `body` is ready. `selector` is ignored |
 
-**Type:** String  
-**Description:** Value to type or text to wait for  
-**Supports:** Template expressions
+### Reading the page
 
-```yaml
-with:
-  action: type
-  selector: "#email"
-  value: "user@example.com"
-  value: "{{vars.username}}"
-```
+These put a string in `res.results`, under `id` or the action's name.
 
-### `attribute` (optional)
+| Action | Result |
+|--------|--------|
+| `text` | The text content of `selector` |
+| `wait_text` | Waits until `selector` is visible, then its text content |
+| `value` | The value of a form field, such as an `input` |
+| `get_attribute` | The first attribute in `attribute` of `selector`, or an empty string when the element does not have it |
+| `get_html` | The outer HTML of `selector`, once it is visible |
 
-**Type:** String  
-**Description:** Attribute name to retrieve (required for get_attribute action)
+### Interacting
 
-```yaml
-with:
-  action: get_attribute
-  selector: "a"
-  attribute: "href"
-```
+These act on the page the way a user would. They return nothing.
 
-### `headless` (optional)
+| Action | What it does |
+|--------|--------------|
+| `click` | Clicks `selector` once it is visible |
+| `double_click` | Double-clicks `selector` once it is visible |
+| `type`, `send_keys` | Clears `selector`, then types `value` into it |
+| `submit` | Submits the form `selector` belongs to |
+| `focus` | Focuses `selector` |
+| `scroll` | Scrolls `selector` into view |
+| `select` | Sets the `value` attribute of `selector` to `value`. It does not choose an option of a `<select>`; click the option instead |
+| `hover` | Sends a `mouseover` event to `selector`. It does not wait, and does nothing when nothing matches |
+| `right_click` | Sends a `contextmenu` event to `selector`. It does not wait, and does nothing when nothing matches |
 
-**Type:** Boolean  
-**Default:** `true`  
-**Description:** Whether to run browser in headless mode
+### Screenshots
 
-```yaml
-with:
-  action: navigate
-  url: "https://example.com"
-  headless: false  # Show browser window
-```
+These save an image file and put its path in `res.filepaths`, under `id` or the action's name. The file is named for its format, `.png` or `.jpg`.
 
-### `timeout` (optional)
-
-**Type:** Duration  
-**Default:** `30s`  
-**Description:** Action timeout
-
-```yaml
-with:
-  action: wait_visible
-  selector: ".loading"
-  timeout: "60s"
-```
+| Action | Image |
+|--------|-------|
+| `capture_screenshot` | The visible part of the window, as PNG |
+| `full_screenshot` | The whole page, as PNG, or as JPEG when `quality` is `1` to `99` |
+| `screenshot` | Only `selector`, once it is visible, as PNG |
 
 ## Response Object
 
-The browser action provides a `res` object with action-specific properties:
+When every action succeeds, the step sees:
 
-### Common Properties
+| Field | Type | Description |
+|-------|------|-------------|
+| `res.code` | Integer | `0` |
+| `res.results` | Object | What the reading actions returned, by `id` or action name |
+| `res.filepaths` | Object | Where the screenshots were saved, by `id` or action name |
+| `rt.duration` | String | How long the step took, such as `"663.268333ms"` |
+| `status` | Integer | `0` |
 
-Every browser action returns these two fields, whatever it did.
+When an action fails there is no response to test: the step fails with an action error, as described in [Error Handling](#error-handling).
 
-| Property | Type | Description |
-|----------|------|-------------|
-| `code` | Integer | Result code (0 = success, non-zero = error) |
-| `results` | Object | Action-specific results (text, values, etc.) |
+## Examples
 
-### Navigation Response
+Each example is one step, since a step's actions share one browser and the next step starts a new one.
 
-`navigate` reports where it ended up and how long the page took.
+### Logging in
 
-| Property | Type | Description |
-|----------|------|-------------|
-| `url` | String | URL that was navigated to |
-| `time_ms` | String | Navigation time in milliseconds |
-
-### Text/Attribute Response
-
-`text` and `get_attribute` report the selector they used along with what they read.
-
-| Property | Type | Description |
-|----------|------|-------------|
-| `selector` | String | CSS selector used |
-| `text` | String | Extracted text content (get_text) |
-| `attribute` | String | Attribute name (get_attribute) |
-| `value` | String | Attribute value (get_attribute) |
-| `exists` | String | "true" if attribute exists |
-
-### Screenshot Response
-
-`screenshot` returns the image itself, encoded as Base64.
-
-| Property | Type | Description |
-|----------|------|-------------|
-| `screenshot` | String | Base64-encoded screenshot |
-| `size_bytes` | String | Screenshot size in bytes |
-
-## Browser Actions
-
-Each `action` value is shown below with the parameters it reads and what it returns.
-
-### Navigate to URL
-
-`navigate` opens a page and is the step every other browser action depends on.
+A login and the check that it worked have to share one browser, so they are one step.
 
 ```yaml
-- name: "Open Website"
-  uses: browser
-  with:
-    action: navigate
-    url: "https://example.com"
-    headless: true
-  test: res.code == 0
-  outputs:
-    load_time: rt.sec * 1000
-```
-
-### Extract Text Content
-
-`text` reads the text of the element the selector matches, which can then be asserted on or passed along in `outputs`.
-
-```yaml
-- name: "Get Page Title"
-  uses: browser
-  with:
-    action: text
-    selector: "h1"
-  test: res.code == 0 && res.results.text != ""
-  outputs:
-    page_title: res.results.text
-
-- name: "Get Input Value"
-  uses: browser
-  with:
-    action: value
-    selector: "#username"
-  test: res.code == 0
-  outputs:
-    current_username: res.results.value
-
-- name: "Get Element HTML"
-  uses: browser
-  with:
-    action: get_html
-    selector: ".article-content"
-  test: res.code == 0
-  outputs:
-    article_html: res.results.get_html
-```
-
-### Get Element Attributes
-
-`get_attribute` reads one named attribute rather than the element's text.
-
-```yaml
-- name: "Extract Links"
-  uses: browser
-  with:
-    action: get_attribute
-    selector: "a.download-link"
-    attribute: "href"
-  test: res.code == 0 && res.exists == "true"
-  outputs:
-    download_url: res.results.value
-```
-
-### Form Interactions
-
-Filling a form takes one step per action: typing into a field, clicking a control, and submitting.
-
-```yaml
-# Fill form fields
-- name: "Enter Email"
-  uses: browser
-  with:
-    action: type
-    selector: "#email"
-    value: "user@example.com"
-  test: res.code == 0
-
-# Click buttons
-- name: "Click Submit"
-  uses: browser
-  with:
-    action: click
-    selector: "#submit-btn"
-  test: res.code == 0
-
-# Submit forms
-- name: "Submit Form"
-  uses: browser
-  with:
-    action: submit
-    selector: "form"
-  test: res.code == 0
-```
-
-### Wait for Elements
-
-A page that renders after loading needs an explicit wait before the next step can address it.
-
-```yaml
-# Wait for element to appear
-- name: "Wait for Results"
-  uses: browser
-  with:
-    action: wait_visible
-    selector: ".search-results"
-    timeout: "10s"
-  test: res.code == 0
-
-# Wait for specific text
-- name: "Wait for Success Message"
-  uses: browser
-  with:
-    action: wait_text
-    selector: ".status"
-    value: "Success"
-  test: res.code == 0
-```
-
-### Capture Screenshots
-
-`screenshot` records what the page looked like at that point in the run.
-
-```yaml
-- name: "Take Screenshot"
-  uses: browser
-  with:
-    action: screenshot
-  test: res.code == 0
-  outputs:
-    screenshot_data: res.screenshot
-    screenshot_size: res.size_bytes
-```
-
-## Advanced Usage Examples
-
-A single action rarely stands alone. The workflows below chain several steps together and carry state between them through `outputs`.
-
-### Login Flow
-
-Logging in is a sequence: open the form, type the credentials, submit, and confirm the result.
-
-```yaml
+secrets:
+  - PASSWORD
 vars:
-  login_url: "{{LOGIN_URL}}"
-  username: "{{USERNAME}}"
+  url: "{{APP_URL}}"
+  user: "{{USERNAME}}"
   password: "{{PASSWORD}}"
 
-steps:
-  - name: "Navigate to Login"
+jobs:
+- name: Sign in
+  steps:
+  - name: Log in and reach the dashboard
     uses: browser
     with:
-      action: navigate
-      url: "{{vars.login_url}}"
-    test: res.code == 0
-
-  - name: "Enter Username"
-    uses: browser
-    with:
-      action: type
-      selector: "#username"
-      value: "{{vars.username}}"
-    test: res.code == 0
-
-  - name: "Enter Password"
-    uses: browser
-    with:
-      action: type
-      selector: "#password"
-      value: "{{vars.password}}"
-    test: res.code == 0
-
-  - name: "Submit Login"
-    uses: browser
-    with:
-      action: click
-      selector: "#login-button"
-    test: res.code == 0
-
-  - name: "Wait for Dashboard"
-    uses: browser
-    with:
-      action: wait_visible
-      selector: ".dashboard"
-      timeout: "15s"
-    test: res.code == 0
+      timeout: 30s
+      actions:
+        - name: navigate
+          url: "{{vars.url}}/login"
+        - name: type
+          selector: "#username"
+          value: "{{vars.user}}"
+        - name: type
+          selector: "#password"
+          value: "{{vars.password}}"
+        - name: click
+          selector: "button[type='submit']"
+        - name: wait_visible
+          selector: "#dashboard"
+        - name: text
+          id: greeting
+          selector: "#dashboard h1"
+    test: res.code == 0 && res.results.greeting contains vars.user
 ```
 
-### Data Extraction
+### Reading several values
 
-Navigating and then reading several elements turns a page into values the rest of the workflow can use.
+Give each reading action an `id` so the results do not replace each other.
 
 ```yaml
-steps:
-  - name: "Navigate to Data Page"
+  - name: Product page
     uses: browser
     with:
-      action: navigate
-      url: "https://example.com/data"
-    test: res.code == 0
-
-  - name: "Wait for Table"
-    uses: browser
-    with:
-      action: wait_visible
-      selector: "table"
-    test: res.code == 0
-
-  - name: "Count Rows"
-    uses: browser
-    with:
-      action: get_elements
-      selector: "table tr"
-    test: res.code == 0 && res.count != "0"
+      actions:
+        - name: navigate
+          url: "{{vars.url}}/products/42"
+        - name: text
+          id: title
+          selector: "h1"
+        - name: text
+          id: price
+          selector: ".price"
+        - name: get_attribute
+          id: image
+          selector: "img.product"
+          attribute: [src]
+    test: |
+      res.code == 0 &&
+      res.results.title != "" &&
+      res.results.price startsWith "$"
     outputs:
-      row_count: res.count
-
-  - name: "Extract First Cell"
-    uses: browser
-    with:
-      action: get_text
-      selector: "table tr:first-child td:first-child"
-    test: res.code == 0
-    outputs:
-      first_cell: res.results.text
+      image_url: res.results.image
 ```
 
-### E2E Testing
+### Keeping a screenshot
 
-An end-to-end test drives the application the way a user would and asserts on what the page shows.
+The path of the saved image is in `res.filepaths`, ready to print or pass on.
 
 ```yaml
-steps:
-  - name: "Load Application"
+  - name: Checkout page
     uses: browser
     with:
-      action: navigate
-      url: "https://app.example.com"
+      window_w: 1280
+      window_h: 800
+      actions:
+        - name: navigate
+          url: "{{vars.url}}/checkout"
+        - name: full_screenshot
+          id: page
     test: res.code == 0
-
-  - name: "Fill Contact Form"
-    uses: browser
-    with:
-      action: type
-      selector: "#contact-name"
-      value: "John Doe"
-    test: res.code == 0
-
-  - name: "Fill Email"
-    uses: browser
-    with:
-      action: type
-      selector: "#contact-email"
-      value: "john@example.com"
-    test: res.code == 0
-
-  - name: "Fill Message"
-    uses: browser
-    with:
-      action: type
-      selector: "#contact-message"
-      value: "Hello from automated test"
-    test: res.code == 0
-
-  - name: "Submit Form"
-    uses: browser
-    with:
-      action: submit
-      selector: "#contact-form"
-    test: res.code == 0
-
-  - name: "Verify Success"
-    uses: browser
-    with:
-      action: wait_text
-      selector: ".success-message"
-      value: "Thank you"
-      timeout: "10s"
-    test: res.code == 0
-
-  - name: "Take Success Screenshot"
-    uses: browser
-    with:
-      action: screenshot
-    test: res.code == 0
+    echo: "Saved {{res.filepaths.page}}"
 ```
 
 ## Error Handling
 
-An action that cannot finish makes the whole step fail with an action error, which exits the run with status `3`. A selector that matches nothing is not an empty result: `wait_visible`, `text`, `click` and the other actions that look for an element keep waiting until the step's `timeout`. A navigation that cannot reach its URL fails at once. In both cases there is no `res` to test, and the failure message carries the browser's error.
+An action that cannot finish makes the whole step fail with an action error, which exits the run with status `3`. A selector that matches nothing is not an empty result: `wait_visible`, `text`, `click` and the other actions that look for an element keep waiting until the step's `timeout`. A navigation fails as soon as the browser reports a network error, such as a refused connection, while an address that never answers also waits until `timeout`. In every case there is no `res` to test, and the failure message carries the browser's error.
 
 ### Page at failure
 
@@ -479,20 +234,13 @@ The files go to the system's temporary directory unless `evidence_dir` names ano
       selector: "#pay"
 ```
 
-The browser is kept for up to 10 seconds after the timeout so that the page can still be read. If it cannot be, for example because the browser never started, the message says so and nothing is saved.
+The browser is kept for up to 10 seconds after the timeout so that the page can still be read. If it cannot be, for example because the browser never started or the page was still loading when time ran out, the message says so and nothing is saved.
 
-## Performance Considerations
+## Running in CI
 
-- **Headless Mode**: Use `headless: true` (default) for faster execution
-- **Timeouts**: Set appropriate timeouts to prevent hanging
-- **Resource Usage**: Browser actions consume more resources than other actions
-- **Screenshots**: Large screenshots consume significant memory
+A CI runner needs a browser and a little more time than a laptop.
 
-## Security Features
-
-The browser action implements several security measures:
-
-- **Sandboxed Execution**: ChromeDP runs in a sandboxed environment
-- **Timeout Protection**: Prevents indefinite hanging
-- **URL Validation**: Validates URLs before navigation
-- **Resource Limits**: Built-in resource usage limits
+- Install Chrome or Chromium on the runner.
+- Keep `headless: true`, or provide a display such as Xvfb when a window is needed.
+- Chrome is started with `--no-sandbox`, as containers usually require, so point it only at sites you trust.
+- Give `timeout` room for Chrome to start, which is slower on a cold runner.

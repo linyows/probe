@@ -794,3 +794,98 @@ func TestReq_FailureEvidence_BrowserDidNotStart(t *testing.T) {
 		t.Error("there is no browser to capture the page from")
 	}
 }
+
+func TestFullScreenshotQuality(t *testing.T) {
+	tests := []struct{ in, want int }{
+		{0, 100},   // not given in YAML: PNG, not a quality-0 JPEG
+		{-5, 100},  // out of range
+		{101, 100}, // out of range
+		{100, 100}, // PNG
+		{1, 1},
+		{80, 80}, // JPEG at that quality
+		{99, 99},
+	}
+	for _, tt := range tests {
+		if got := fullScreenshotQuality(tt.in); got != tt.want {
+			t.Errorf("fullScreenshotQuality(%d) = %d, want %d", tt.in, got, tt.want)
+		}
+	}
+}
+
+// TestFullScreenshot_IsSaved covers full_screenshot, which captured an image
+// and then dropped it: the buffer was never attached to the action.
+func TestFullScreenshot_IsSaved(t *testing.T) {
+	req := NewReq()
+	action := &ChromeDPAction{Name: "full_screenshot", ID: "page"}
+	req.Actions = []*ChromeDPAction{action}
+
+	if _, err := req.buildActionTasks(); err != nil {
+		t.Fatal(err)
+	}
+	if action.reBuf == nil {
+		t.Fatal("full_screenshot must keep the buffer it captures into")
+	}
+
+	*action.reBuf = []byte("\x89PNG\r\n\x1a\n" + strings.Repeat("\x00", 16))
+	_, filePaths, err := req.collectResults()
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := filePaths["page"]
+	t.Cleanup(func() { _ = os.Remove(path) })
+	if !strings.HasSuffix(path, ".png") {
+		t.Errorf("path = %q, want a saved .png", path)
+	}
+}
+
+// TestScreenshot_ExtensionFollowsContent checks the saved file is named for
+// what it holds: full_screenshot below quality 100 is JPEG.
+func TestScreenshot_ExtensionFollowsContent(t *testing.T) {
+	tests := []struct {
+		name string
+		data []byte
+		ext  string
+	}{
+		{"png", []byte("\x89PNG\r\n\x1a\n" + strings.Repeat("\x00", 16)), ".png"},
+		{"jpeg", []byte("\xff\xd8\xff\xe0\x00\x10JFIF\x00" + strings.Repeat("\x00", 16)), ".jpg"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			buf := tt.data
+			req := NewReq()
+			req.Actions = []*ChromeDPAction{{Name: "full_screenshot", ID: "shot", reBuf: &buf}}
+
+			_, filePaths, err := req.collectResults()
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { _ = os.Remove(filePaths["shot"]) })
+			if !strings.HasSuffix(filePaths["shot"], tt.ext) {
+				t.Errorf("path = %q, want %s", filePaths["shot"], tt.ext)
+			}
+		})
+	}
+}
+
+func TestJSString(t *testing.T) {
+	tests := map[string]string{
+		`#menu`:               `"#menu"`,
+		`a[href='/checkout']`: `"a[href='/checkout']"`,
+		`input[name="q"]`:     `"input[name=\"q\"]"`,
+		"a\\b":                `"a\\b"`,
+		"</script>":           `"\u003c/script\u003e"`,
+	}
+	for in, want := range tests {
+		if got := jsString(in); got != want {
+			t.Errorf("jsString(%q) = %s, want %s", in, got, want)
+		}
+	}
+}
+
+// TestNewChromeDPAction_FullScreenshotIsPNG keeps the constructor and an
+// action read from YAML on the same format for full_screenshot.
+func TestNewChromeDPAction_FullScreenshotIsPNG(t *testing.T) {
+	if q := fullScreenshotQuality(NewChromeDPAction().Quality); q != 100 {
+		t.Errorf("quality = %d, want 100 so a constructed action saves PNG", q)
+	}
+}

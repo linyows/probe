@@ -1,451 +1,214 @@
-# ブラウザアクション
+# Browserアクション
 
-`browser`アクションはChromeDPを使用してWebブラウザを自動化し、テスト、スクレイピング、Webアプリケーションとの相互作用のための包括的なWeb自動化機能を提供します。
+`browser`アクションは[chromedp](https://github.com/chromedp/chromedp)を通して実際のChromeを操作します。ページを開き、内容を読み、入力し、要素を待ち、スクリーンショットを撮ります。Probeを実行する環境にChromeかChromiumが必要です。
 
 ## 基本的な構文
 
-ブラウザのステップでは、行う操作を`action`で指定し、その操作に必要な情報を与えます。
+browserステップでは、行う操作を`actions`に順番に並べます。ステップごとに新しいブラウザを起動し、操作を実行して閉じます。そのためクッキーやログイン状態は次のステップに引き継がれません。一連の流れは1つのステップにまとめます。
 
 ```yaml
 steps:
-  - name: "Navigate to Website"
+  - name: Read the heading
     uses: browser
     with:
-      action: navigate
-      url: "https://example.com"
-      headless: true
-      timeout: 30s
-    test: res.code == 0
+      actions:
+        - name: navigate
+          url: "{{vars.url}}/"
+        - name: text
+          id: heading
+          selector: h1
+    test: res.code == 0 && res.results.heading == "Welcome"
 ```
 
 ## パラメータ
 
-どのブラウザ操作を行うかは`action`で決まり、残りのパラメータはその操作に必要な情報、つまり対象の要素、入力する値、ブラウザの起動方法を与えます。
+以下は`with`の直下に書きます。
 
-### `action` (必須)
+| パラメータ | 型 | デフォルト | 説明 |
+|-----------|------|---------|-------------|
+| `actions` | List | 必須 | 順に実行する操作。[アクション](#アクション)を参照 |
+| `timeout` | 期間の文字列 | `5s` | ステップ全体の制限時間。ブラウザの起動とすべての操作を含む。`30s`のように文字列で書く。数値を書くと無視され、デフォルトが使われる |
+| `headless` | Boolean | `true` | ウィンドウを表示せずにChromeを動かす |
+| `window_w` | Integer | `1920` | ウィンドウの幅（ピクセル） |
+| `window_h` | Integer | `1080` | ウィンドウの高さ（ピクセル） |
+| `evidence_dir` | String | 一時ディレクトリ | 操作が失敗したときにページを保存する場所。[失敗時のページ](#失敗時のページ)を参照 |
 
-**型:** String  
-**説明:** 実行するブラウザアクション  
-**値:** 
-- **ナビゲーション:** `navigate`
-- **テキスト/コンテンツ:** `text`, `value`, `get_html`
-- **属性:** `get_attribute`
-- **インタラクション:** `click`, `double_click`, `right_click`, `hover`, `focus`
-- **入力:** `type`, `send_keys`, `select`
-- **フォーム:** `submit`
-- **スクロール:** `scroll`
-- **スクリーンショット:** `screenshot`, `capture_screenshot`, `full_screenshot`
-- **待機:** `wait_visible`, `wait_not_visible`, `wait_ready`, `wait_text`, `wait_enabled`
+Chromeの起動にも`timeout`の一部を使い、1秒以上かかることもよくあります。短すぎる制限では、最初のページを開く前に時間切れになることがあります。
 
-### `url` (オプション)
+## アクション
 
-**型:** String  
-**説明:** ナビゲートするURL（navigateアクションに必須）  
-**サポート:** テンプレート式
+`actions`の各要素は、`name`で操作を指定し、次のフィールドを取ります。
 
-```yaml
-with:
-  action: navigate
-  url: "https://example.com"
-  url: "{{vars.base_url}}/login"
-```
+| フィールド | 使うアクション | 説明 |
+|-------|---------|-------------|
+| `name` | すべて | 下の表にある操作の名前 |
+| `id` | 結果を返すアクション | `res.results`や`res.filepaths`で結果を引くキー。省くとアクション名がキーになるため、同じ種類のアクションを後に置くと前の結果を置き換える |
+| `url` | `navigate` | 開くアドレス |
+| `selector` | 要素に対するアクション | CSSセレクタ |
+| `value` | `type`、`send_keys`、`select` | 使うテキスト |
+| `attribute` | `get_attribute` | 読む属性を`[href]`のようにリストで指定する。読むのは最初の要素だけで、文字列で書くとエラーになる |
+| `quality` | `full_screenshot` | `1`から`99`はその品質のJPEGで保存する。それ以外は、省略、`0`、`100`以上、負の数も含めてPNGで保存する |
+| `path` | スクリーンショット | 非推奨。画像をこのパスにも書き出す。代わりに`res.filepaths`を使う |
 
-### `selector` (オプション)
+要素を探すアクションは、要素が現れるまで待ちます。先に`timeout`が尽きるとステップは失敗します。多くは要素が表示されるまでも待ちます。
 
-**型:** String  
-**説明:** 要素をターゲットするためのCSSセレクタ  
-**サポート:** テンプレート式
+### 移動と待機
 
-```yaml
-with:
-  action: get_text
-  selector: "h1"
-  selector: "#main-title"
-  selector: ".article-content p:first-child"
-```
+ページを開くか、次の操作に必要な状態になるまでステップを待たせます。
 
-### `value` (オプション)
+| アクション | 内容 |
+|--------|--------------|
+| `navigate` | `url`を開き、ページの読み込みを待つ。`net::ERR_CONNECTION_REFUSED`のようにブラウザがネットワークのエラーを返すとすぐに失敗する。応答のないアドレスでは`timeout`まで待つ |
+| `wait_visible` | `selector`が表示されるまで待つ |
+| `wait_not_visible` | `selector`が表示されなくなるまで待つ |
+| `wait_enabled` | `selector`が表示され、有効になるまで待つ |
+| `wait_ready` | ページの`body`の準備ができるまで待つ。`selector`は使わない |
 
-**型:** String  
-**説明:** タイプする値または待機するテキスト  
-**サポート:** テンプレート式
+### ページの読み取り
 
-```yaml
-with:
-  action: type
-  selector: "#email"
-  value: "user@example.com"
-  value: "{{vars.username}}"
-```
+以下は文字列を`res.results`に、`id`またはアクション名をキーにして入れます。
 
-### `attribute` (オプション)
+| アクション | 結果 |
+|--------|--------|
+| `text` | `selector`のテキスト |
+| `wait_text` | `selector`が表示されるまで待ち、そのテキスト |
+| `value` | `input`などのフォーム項目の値 |
+| `get_attribute` | `selector`の、`attribute`の最初の属性の値。要素がその属性を持たなければ空文字列 |
+| `get_html` | 表示された`selector`の外側のHTML |
 
-**型:** String  
-**説明:** 取得する属性名（get_attributeアクションに必須）
+### 操作
 
-```yaml
-with:
-  action: get_attribute
-  selector: "a"
-  attribute: "href"
-```
+利用者と同じようにページを操作します。結果は返しません。
 
-### `headless` (オプション)
+| アクション | 内容 |
+|--------|--------------|
+| `click` | 表示された`selector`をクリックする |
+| `double_click` | 表示された`selector`をダブルクリックする |
+| `type`、`send_keys` | `selector`の内容を消してから`value`を入力する |
+| `submit` | `selector`が属するフォームを送信する |
+| `focus` | `selector`にフォーカスを移す |
+| `scroll` | `selector`が見える位置までスクロールする |
+| `select` | `selector`の`value`属性を`value`に設定する。`<select>`の選択肢は選ばないため、選ぶ場合は選択肢をクリックする |
+| `hover` | `selector`に`mouseover`イベントを送る。待たず、一致する要素がなければ何もしない |
+| `right_click` | `selector`に`contextmenu`イベントを送る。待たず、一致する要素がなければ何もしない |
 
-**型:** Boolean  
-**デフォルト:** `true`  
-**説明:** ヘッドレスモードでブラウザを実行するかどうか
+### スクリーンショット
 
-```yaml
-with:
-  action: navigate
-  url: "https://example.com"
-  headless: false  # ブラウザウィンドウを表示
-```
+以下は画像をファイルに保存し、そのパスを`res.filepaths`に、`id`またはアクション名をキーにして入れます。ファイル名の拡張子は形式に合わせて`.png`か`.jpg`になります。
 
-### `timeout` (オプション)
-
-**型:** Duration  
-**デフォルト:** `30s`  
-**説明:** アクションタイムアウト
-
-```yaml
-with:
-  action: wait_visible
-  selector: ".loading"
-  timeout: "60s"
-```
+| アクション | 画像 |
+|--------|-------|
+| `capture_screenshot` | ウィンドウに見えている範囲。PNG |
+| `full_screenshot` | ページ全体。PNG。`quality`が`1`から`99`ならJPEG |
+| `screenshot` | 表示された`selector`だけ。PNG |
 
 ## レスポンスオブジェクト
 
-ブラウザアクションはアクション固有のプロパティを持つ`res`オブジェクトを提供します：
+すべての操作が成功すると、ステップからは次の値を参照できます。
 
-### 共通プロパティ
+| フィールド | 型 | 説明 |
+|-------|------|-------------|
+| `res.code` | Integer | `0` |
+| `res.results` | Object | 読み取りのアクションが返した値。キーは`id`またはアクション名 |
+| `res.filepaths` | Object | スクリーンショットの保存先。キーは`id`またはアクション名 |
+| `rt.duration` | String | ステップにかかった時間。`"663.268333ms"`など |
+| `status` | Integer | `0` |
 
- | プロパティ | 型      | 説明                                    |
- | ---------- | ------  | -------------                           |
- | `code`     | Integer | 結果コード (0 = 成功, 非ゼロ = エラー)  |
- | `results`  | Object  | アクション固有の結果 (テキスト、値など) |
+操作が失敗した場合は、テストできるレスポンスはありません。ステップは[エラーハンドリング](#エラーハンドリング)のとおりアクションのエラーとして失敗します。
 
-### ナビゲーションレスポンス
+## 例
 
- | プロパティ | 型     | 説明                         |
- | ---------- | ------ | -------------                |
- | `url`      | String | ナビゲートしたURL            |
- | `time_ms`  | String | ナビゲーション時間（ミリ秒） |
+どの例も1つのステップです。1つのステップの操作は同じブラウザを共有し、次のステップは新しいブラウザで始まるためです。
 
-### テキスト/属性レスポンス
+### ログイン
 
- | プロパティ  | 型     | 説明                                    |
- | ----------  | ------ | -------------                           |
- | `selector`  | String | 使用されたCSSセレクタ                   |
- | `text`      | String | 抽出されたテキストコンテンツ (get_text) |
- | `attribute` | String | 属性名 (get_attribute)                  |
- | `value`     | String | 属性値 (get_attribute)                  |
- | `exists`    | String | 属性が存在する場合"true"                |
-
-### スクリーンショットレスポンス
-
- | プロパティ   | 型     | 説明                                     |
- | ----------   | ------ | -------------                            |
- | `screenshot` | String | Base64エンコードされたスクリーンショット |
- | `size_bytes` | String | スクリーンショットサイズ（バイト）       |
-
-## ブラウザアクション
-
-`action`に指定できる値ごとに、参照するパラメータと返る内容を示します。
-
-### URLへのナビゲート
-
-`navigate`はページを開きます。他のブラウザ操作はすべてこのステップを前提にします。
+ログインと、それが成功したことの確認は同じブラウザで行う必要があるため、1つのステップにします。
 
 ```yaml
-- name: "Open Website"
-  uses: browser
-  with:
-    action: navigate
-    url: "https://example.com"
-    headless: true
-  test: res.code == 0
-  outputs:
-    load_time: rt.sec * 1000
-```
-
-### テキストコンテンツの抽出
-
-`text`はセレクタに一致した要素のテキストを読みます。読んだ値は検証にも、`outputs`での受け渡しにも使えます。
-
-```yaml
-- name: "Get Page Title"
-  uses: browser
-  with:
-    action: text
-    selector: "h1"
-  test: res.code == 0 && res.results.text != ""
-  outputs:
-    page_title: res.results.text
-
-- name: "Get Input Value"
-  uses: browser
-  with:
-    action: value
-    selector: "#username"
-  test: res.code == 0
-  outputs:
-    current_username: res.results.value
-
-- name: "Get Element HTML"
-  uses: browser
-  with:
-    action: get_html
-    selector: ".article-content"
-  test: res.code == 0
-  outputs:
-    article_html: res.results.get_html
-```
-
-### 要素属性の取得
-
-`get_attribute`は要素のテキストではなく、指定した属性の値を読みます。
-
-```yaml
-- name: "Extract Links"
-  uses: browser
-  with:
-    action: get_attribute
-    selector: "a.download-link"
-    attribute: "href"
-  test: res.code == 0 && res.exists == "true"
-  outputs:
-    download_url: res.results.value
-```
-
-### フォームインタラクション
-
-フォームの操作は1ステップにつき1つです。フィールドへの入力、コントロールのクリック、送信と分けて書きます。
-
-```yaml
-# フォームフィールドの入力
-- name: "Enter Email"
-  uses: browser
-  with:
-    action: type
-    selector: "#email"
-    value: "user@example.com"
-  test: res.code == 0
-
-# ボタンのクリック
-- name: "Click Submit"
-  uses: browser
-  with:
-    action: click
-    selector: "#submit-btn"
-  test: res.code == 0
-
-# フォームの送信
-- name: "Submit Form"
-  uses: browser
-  with:
-    action: submit
-    selector: "form"
-  test: res.code == 0
-```
-
-### 要素の待機
-
-読み込み後に描画されるページでは、次のステップが要素を指定する前に明示的に待つ必要があります。
-
-```yaml
-# 要素の表示を待機
-- name: "Wait for Results"
-  uses: browser
-  with:
-    action: wait_visible
-    selector: ".search-results"
-    timeout: "10s"
-  test: res.code == 0
-
-# 特定のテキストを待機
-- name: "Wait for Success Message"
-  uses: browser
-  with:
-    action: wait_text
-    selector: ".status"
-    value: "Success"
-  test: res.code == 0
-```
-
-### スクリーンショットの撮影
-
-`screenshot`は、その時点でページがどう表示されていたかを記録します。
-
-```yaml
-- name: "Take Screenshot"
-  uses: browser
-  with:
-    action: screenshot
-  test: res.code == 0
-  outputs:
-    screenshot_data: res.screenshot
-    screenshot_size: res.size_bytes
-```
-
-## 高度な使用例
-
-1つのアクションだけで完結する場面はほとんどありません。以下のワークフローでは複数のステップをつなぎ、`outputs`で状態を引き継ぎます。
-
-### ログインフロー
-
-ログインは一連の手順になります。フォームを開き、認証情報を入力し、送信し、結果を確認します。
-
-```yaml
+secrets:
+  - PASSWORD
 vars:
-  login_url: "{{LOGIN_URL}}"
-  username: "{{USERNAME}}"
+  url: "{{APP_URL}}"
+  user: "{{USERNAME}}"
   password: "{{PASSWORD}}"
 
-steps:
-  - name: "Navigate to Login"
+jobs:
+- name: Sign in
+  steps:
+  - name: Log in and reach the dashboard
     uses: browser
     with:
-      action: navigate
-      url: "{{vars.login_url}}"
-    test: res.code == 0
-
-  - name: "Enter Username"
-    uses: browser
-    with:
-      action: type
-      selector: "#username"
-      value: "{{vars.username}}"
-    test: res.code == 0
-
-  - name: "Enter Password"
-    uses: browser
-    with:
-      action: type
-      selector: "#password"
-      value: "{{vars.password}}"
-    test: res.code == 0
-
-  - name: "Submit Login"
-    uses: browser
-    with:
-      action: click
-      selector: "#login-button"
-    test: res.code == 0
-
-  - name: "Wait for Dashboard"
-    uses: browser
-    with:
-      action: wait_visible
-      selector: ".dashboard"
-      timeout: "15s"
-    test: res.code == 0
+      timeout: 30s
+      actions:
+        - name: navigate
+          url: "{{vars.url}}/login"
+        - name: type
+          selector: "#username"
+          value: "{{vars.user}}"
+        - name: type
+          selector: "#password"
+          value: "{{vars.password}}"
+        - name: click
+          selector: "button[type='submit']"
+        - name: wait_visible
+          selector: "#dashboard"
+        - name: text
+          id: greeting
+          selector: "#dashboard h1"
+    test: res.code == 0 && res.results.greeting contains vars.user
 ```
 
-### データ抽出
+### 複数の値の読み取り
 
-ページを開いて複数の要素を読めば、ワークフローの他の部分で使える値になります。
+結果が互いに置き換わらないよう、読み取りのアクションにはそれぞれ`id`を付けます。
 
 ```yaml
-steps:
-  - name: "Navigate to Data Page"
+  - name: Product page
     uses: browser
     with:
-      action: navigate
-      url: "https://example.com/data"
-    test: res.code == 0
-
-  - name: "Wait for Table"
-    uses: browser
-    with:
-      action: wait_visible
-      selector: "table"
-    test: res.code == 0
-
-  - name: "Count Rows"
-    uses: browser
-    with:
-      action: get_elements
-      selector: "table tr"
-    test: res.code == 0 && res.count != "0"
+      actions:
+        - name: navigate
+          url: "{{vars.url}}/products/42"
+        - name: text
+          id: title
+          selector: "h1"
+        - name: text
+          id: price
+          selector: ".price"
+        - name: get_attribute
+          id: image
+          selector: "img.product"
+          attribute: [src]
+    test: |
+      res.code == 0 &&
+      res.results.title != "" &&
+      res.results.price startsWith "$"
     outputs:
-      row_count: res.count
-
-  - name: "Extract First Cell"
-    uses: browser
-    with:
-      action: get_text
-      selector: "table tr:first-child td:first-child"
-    test: res.code == 0
-    outputs:
-      first_cell: res.results.text
+      image_url: res.results.image
 ```
 
-### E2Eテスト
+### スクリーンショットを残す
 
-E2Eテストでは、利用者と同じ手順でアプリケーションを操作し、画面に表示された内容を検証します。
+保存した画像のパスは`res.filepaths`に入り、表示したり次に渡したりできます。
 
 ```yaml
-steps:
-  - name: "Load Application"
+  - name: Checkout page
     uses: browser
     with:
-      action: navigate
-      url: "https://app.example.com"
+      window_w: 1280
+      window_h: 800
+      actions:
+        - name: navigate
+          url: "{{vars.url}}/checkout"
+        - name: full_screenshot
+          id: page
     test: res.code == 0
-
-  - name: "Fill Contact Form"
-    uses: browser
-    with:
-      action: type
-      selector: "#contact-name"
-      value: "John Doe"
-    test: res.code == 0
-
-  - name: "Fill Email"
-    uses: browser
-    with:
-      action: type
-      selector: "#contact-email"
-      value: "john@example.com"
-    test: res.code == 0
-
-  - name: "Fill Message"
-    uses: browser
-    with:
-      action: type
-      selector: "#contact-message"
-      value: "Hello from automated test"
-    test: res.code == 0
-
-  - name: "Submit Form"
-    uses: browser
-    with:
-      action: submit
-      selector: "#contact-form"
-    test: res.code == 0
-
-  - name: "Verify Success"
-    uses: browser
-    with:
-      action: wait_text
-      selector: ".success-message"
-      value: "Thank you"
-      timeout: "10s"
-    test: res.code == 0
-
-  - name: "Take Success Screenshot"
-    uses: browser
-    with:
-      action: screenshot
-    test: res.code == 0
+    echo: "Saved {{res.filepaths.page}}"
 ```
 
 ## エラーハンドリング
 
-アクションが完了できないと、ステップ全体がアクションのエラーとして失敗し、実行は終了ステータス`3`で終わります。セレクタが何にも一致しなくても空の結果にはなりません。`wait_visible`、`text`、`click`など要素を探すアクションは、ステップの`timeout`まで待ち続けます。URLに到達できないナビゲーションはすぐに失敗します。どちらの場合もテストできる`res`はなく、失敗のメッセージにブラウザのエラーが入ります。
+アクションが完了できないと、ステップ全体がアクションのエラーとして失敗し、実行は終了ステータス`3`で終わります。セレクタが何にも一致しなくても空の結果にはなりません。`wait_visible`、`text`、`click`など要素を探すアクションは、ステップの`timeout`まで待ち続けます。ナビゲーションは、接続の拒否のようにブラウザがネットワークのエラーを返すとすぐに失敗しますが、応答のないアドレスでは`timeout`まで待ちます。いずれの場合もテストできる`res`はなく、失敗のメッセージにブラウザのエラーが入ります。
 
 ### 失敗時のページ
 
@@ -471,20 +234,13 @@ action error in step_execute: action execution failed (caused by: ... context de
       selector: "#pay"
 ```
 
-ページを読み取れるように、ブラウザはタイムアウトのあとも最大10秒残します。ブラウザが起動しなかった場合など、読み取れなかったときはその旨をメッセージに書き、何も保存しません。
+ページを読み取れるように、ブラウザはタイムアウトのあとも最大10秒残します。ブラウザが起動しなかった場合や、時間切れの時点でページがまだ読み込み中だった場合など、読み取れなかったときはその旨をメッセージに書き、何も保存しません。
 
-## パフォーマンスの考慮事項
+## CIでの実行
 
-- **ヘッドレスモード**: より高速な実行のため`headless: true`（デフォルト）を使用
-- **タイムアウト**: ハングを防ぐために適切なタイムアウトを設定
-- **リソース使用量**: ブラウザアクションは他のアクションよりも多くのリソースを消費
-- **スクリーンショット**: 大きなスクリーンショットは大量のメモリを消費
+CIのランナーには、ブラウザと、手元より少し長い時間が必要です。
 
-## セキュリティ機能
-
-ブラウザアクションはいくつかのセキュリティ対策を実装しています：
-
-- **サンドボックス実行**: ChromeDPはサンドボックス環境で実行
-- **タイムアウト保護**: 無限ハングを防止
-- **URL検証**: ナビゲーション前にURLを検証
-- **リソース制限**: 組み込みのリソース使用制限
+- ランナーにChromeかChromiumを入れる。
+- `headless: true`のままにするか、ウィンドウが必要ならXvfbなどのディスプレイを用意する。
+- コンテナで多く必要になるため、Chromeは`--no-sandbox`で起動する。信頼できるサイトだけを開く。
+- コールドスタートのランナーではChromeの起動が遅いため、`timeout`に余裕を持たせる。
