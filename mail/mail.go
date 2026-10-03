@@ -21,6 +21,10 @@ type Mail struct {
 	Auth             smtp.Auth
 	StartTLSDisabled bool
 	MessageCount     int
+	// Delivered is how many messages the server accepted in the last Send.
+	// Each message is committed on its own, so a Send that fails part way
+	// has still delivered the ones before.
+	Delivered int
 }
 
 // localName returns the name to greet the server with. Many servers refuse
@@ -40,6 +44,7 @@ func (m *Mail) localName() string {
 var osHostname = os.Hostname
 
 func (m *Mail) Send() error {
+	m.Delivered = 0
 	if err := validateLine(m.MailFrom); err != nil {
 		return err
 	}
@@ -98,6 +103,7 @@ func (m *Mail) Send() error {
 		if err != nil {
 			return fmt.Errorf("smtp data close error: %w", err)
 		}
+		m.Delivered++
 	}
 
 	return c.Quit()
