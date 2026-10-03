@@ -1,6 +1,7 @@
 package imap
 
 import (
+	"crypto/tls"
 	"fmt"
 	"maps"
 	"mime"
@@ -280,6 +281,10 @@ func (r *Req) runImap() (*Res, error) {
 	addr := net.JoinHostPort(r.Host, strconv.Itoa(r.Port))
 	options := &imapclient.Options{
 		WordDecoder: &mime.WordDecoder{CharsetReader: charset.Reader},
+		// Without a TLSConfig the client verifies the certificate whatever
+		// insecure_skip_tls says, which fails against a server with a
+		// self-signed certificate.
+		TLSConfig: &tls.Config{InsecureSkipVerify: r.InsecureSkipTLS},
 	}
 
 	var err error

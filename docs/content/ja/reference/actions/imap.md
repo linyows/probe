@@ -89,6 +89,35 @@ with:
   password: "{{vars.app_password}}"
 ```
 
+### `tls` (オプション)
+
+**型:** Boolean
+**デフォルト:** `true`
+**説明:** TLS/SSLで暗号化して接続するかどうか
+
+```yaml
+with:
+  host: "imap.example.com"
+  port: 993
+  tls: true     # TLSを使う（推奨）
+```
+
+### `insecure_skip_tls` (オプション)
+
+**型:** Boolean
+**デフォルト:** `false`
+**説明:** サーバーの証明書を検証せずに受け入れる
+
+`tls: true`では証明書をシステムが信頼する認証局で検証します。そのため、ローカルやステージングのメールサーバーのように自己署名証明書を使うサーバーでは`x509: certificate signed by unknown authority`で失敗します。`insecure_skip_tls: true`にすると、それでも接続します。通信は暗号化されたままですが、なりすましへの防御はなくなるため、自分で管理するサーバーにだけ使います。
+
+```yaml
+with:
+  host: "mail.staging.internal"
+  port: 993
+  tls: true
+  insecure_skip_tls: true
+```
+
 ### `commands` (必須)
 
 **型:** コマンドオブジェクトの配列  

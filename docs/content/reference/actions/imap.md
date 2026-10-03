@@ -107,6 +107,22 @@ with:
   tls: false    # Plain connection (not recommended)
 ```
 
+### `insecure_skip_tls` (optional)
+
+**Type:** Boolean  
+**Default:** `false`  
+**Description:** Accept the server's certificate without verifying it
+
+With `tls: true` the certificate is verified against the system's trusted authorities, so a server with a self-signed certificate, such as a local or staging mail server, fails with `x509: certificate signed by unknown authority`. `insecure_skip_tls: true` connects anyway. The connection is still encrypted, but it is no longer protected against an impostor, so use it only for servers you control.
+
+```yaml
+with:
+  host: "mail.staging.internal"
+  port: 993
+  tls: true
+  insecure_skip_tls: true
+```
+
 ### `timeout` (optional)
 
 **Type:** Duration  

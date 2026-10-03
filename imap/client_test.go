@@ -1,10 +1,21 @@
 package imap
 
 import (
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
+	"crypto/tls"
+	"crypto/x509"
+	"crypto/x509/pkix"
+	"math/big"
+	"net"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/emersion/go-imap/v2"
+	"github.com/emersion/go-imap/v2/imapserver"
+	"github.com/emersion/go-imap/v2/imapserver/imapmemserver"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -760,5 +771,92 @@ func TestParseHeaderData(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// startIMAPServer runs an in-memory IMAP server for user/pass with an INBOX.
+// With useTLS it listens with a freshly made self-signed certificate, the
+// kind a test or staging mail server often has.
+func startIMAPServer(t *testing.T, useTLS bool) (host string, port int, user *imapmemserver.User) {
+	t.Helper()
+
+	mem := imapmemserver.New()
+	user = imapmemserver.NewUser("user", "pass")
+	if err := user.Create("INBOX", nil); err != nil {
+		t.Fatal(err)
+	}
+	mem.AddUser(user)
+
+	srv := imapserver.New(&imapserver.Options{
+		NewSession: func(*imapserver.Conn) (imapserver.Session, *imapserver.GreetingData, error) {
+			return mem.NewSession(), nil, nil
+		},
+		Caps:         imap.CapSet{imap.CapIMAP4rev1: {}},
+		InsecureAuth: !useTLS,
+	})
+
+	var ln net.Listener
+	var err error
+	if useTLS {
+		ln, err = tls.Listen("tcp", "127.0.0.1:0", &tls.Config{Certificates: []tls.Certificate{selfSignedCert(t)}})
+	} else {
+		ln, err = net.Listen("tcp", "127.0.0.1:0")
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	go func() { _ = srv.Serve(ln) }()
+	t.Cleanup(func() { _ = srv.Close() })
+
+	addr := ln.Addr().(*net.TCPAddr)
+	return "127.0.0.1", addr.Port, user
+}
+
+func selfSignedCert(t *testing.T) tls.Certificate {
+	t.Helper()
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tmpl := &x509.Certificate{
+		SerialNumber: big.NewInt(1),
+		Subject:      pkix.Name{CommonName: "imap.test"},
+		NotBefore:    time.Now().Add(-time.Hour),
+		NotAfter:     time.Now().Add(time.Hour),
+		IPAddresses:  []net.IP{net.ParseIP("127.0.0.1")},
+		KeyUsage:     x509.KeyUsageDigitalSignature,
+		ExtKeyUsage:  []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+	}
+	der, err := x509.CreateCertificate(rand.Reader, tmpl, tmpl, &key.PublicKey, key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return tls.Certificate{Certificate: [][]byte{der}, PrivateKey: key}
+}
+
+func TestRequest_InsecureSkipTLS(t *testing.T) {
+	host, port, _ := startIMAPServer(t, true)
+
+	request := func(skip any) (map[string]any, error) {
+		return Request(map[string]any{
+			"host":              host,
+			"port":              port,
+			"username":          "user",
+			"password":          "pass",
+			"tls":               true,
+			"insecure_skip_tls": skip,
+			"commands":          []any{map[string]any{"name": "select", "mailbox": "INBOX"}},
+		})
+	}
+
+	for _, skip := range []any{true, "true"} {
+		if _, err := request(skip); err != nil {
+			t.Errorf("insecure_skip_tls=%v should accept a self-signed certificate: %v", skip, err)
+		}
+	}
+
+	_, err := request(false)
+	if err == nil || !strings.Contains(err.Error(), "certificate") {
+		t.Errorf("without insecure_skip_tls the self-signed certificate must be refused, got %v", err)
 	}
 }
