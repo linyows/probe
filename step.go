@@ -135,8 +135,16 @@ func (st *Step) executeSingleAction(runner ActionRunner, expW map[string]any, jC
 	masker := jCtx.Printer.Masker()
 	masker.Learn(expW)
 
+	// A process the action starts in the background is tracked here rather
+	// than after the select, so that one started after the step timed out is
+	// still stopped with the others.
+	done := jCtx.background.begin(st.Uses)
 	go func() {
+		defer done()
 		ret, err := runner.RunActions(st.Uses, expW, RunOptions{Verbose: jCtx.Verbose, Quiet: quiet, Masker: masker})
+		if err == nil {
+			jCtx.background.track(st.Uses, ret)
+		}
 		resultCh <- result{ret: ret, err: err}
 	}()
 

@@ -93,6 +93,26 @@ with:
 
 Numbers and booleans are passed as their text, so `PORT: 8080` sets `PORT` to `8080`. The variables are added to the environment Probe itself runs with.
 
+### `background` (optional)
+
+**Type:** Boolean  
+**Default:** `false`  
+**Description:** Start the command and move on without waiting for it to finish
+
+```yaml
+with:
+  cmd: "python3 -m http.server 8080 --bind 127.0.0.1"
+  background: true
+```
+
+A background command is for something the following steps need running, such as a server under test. The step returns as soon as the command has started, so `res.code` is `-1` and `res.stdout` and `res.stderr` are empty. `timeout` does not apply.
+
+- **Output:** stdout and stderr both go to a log file of its own, whose path is in `res.log`. Starting the same command twice gives two files.
+- **Lifetime:** the command keeps running after its step and after its job, so steps in later jobs can use it too. When the workflow is over, Probe sends `SIGTERM` to the command and everything it started, sends `SIGKILL` to whatever is left after 3 seconds, and removes the log file. Read the log in a step if it is needed afterwards.
+- **Interruption:** if Probe itself is killed, for example with Ctrl+C, it cannot stop the command, and the command and its log file are left behind.
+
+A command started inside an [embedded](/reference/actions/embedded) job is stopped when that job is over.
+
 ## Response Format
 
 The result carries the exit code and both output streams.
@@ -102,6 +122,7 @@ res:
   code: 0                    # Exit code (0 = success)
   stdout: "Build successful" # Standard output
   stderr: ""                 # Standard error output
+  pid: 12345                 # Process ID of the shell
 
 req:
   cmd: "npm run build"       # Original command
@@ -110,6 +131,18 @@ req:
   timeout: "30s"            # Timeout setting
   env:                      # Environment variables
     NODE_ENV: "production"
+  background: false         # Background setting
+```
+
+With `background: true`, the command is still running when the result is made:
+
+```yaml
+res:
+  code: -1                   # Not finished yet
+  stdout: ""                 # Empty: the output goes to the log
+  stderr: ""
+  pid: 12345                 # Process ID of the shell
+  log: "/tmp/probe-shell-action.1234567890.log" # Log file for stdout and stderr
 ```
 
 ## Usage Examples
@@ -171,6 +204,38 @@ vars:
     env:
       DEPLOY_KEY: "{{vars.deploy_key}}"
       TARGET_ENV: "{{vars.target_env}}"
+  test: res.code == 0
+```
+
+### Server for Later Steps
+
+A server started in the background is left running for the steps after it. The next step retries until the server answers, and the last one reads what the server logged before Probe removes the log.
+
+```yaml
+- name: "Start the Server"
+  id: server
+  uses: shell
+  with:
+    cmd: "python3 -m http.server 8080 --bind 127.0.0.1"
+    background: true
+  test: res.code == -1 && res.pid > 0
+  outputs:
+    log: res.log
+
+- name: "Wait Until It Answers"
+  uses: http
+  with:
+    url: "http://127.0.0.1:8080"
+    get: "/"
+  retry:
+    max_attempts: 20
+    interval: "500ms"
+  test: res.code == 200
+
+- name: "Show the Server Log"
+  uses: shell
+  with:
+    cmd: "cat {{outputs.server.log}}"
   test: res.code == 0
 ```
 

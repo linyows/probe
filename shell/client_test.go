@@ -7,6 +7,7 @@ import (
 	"reflect"
 	"strings"
 	"sync"
+	"syscall"
 	"testing"
 	"time"
 )
@@ -195,6 +196,9 @@ func TestDo(t *testing.T) {
 			}
 
 			result, err := tt.req.Do()
+			if result != nil {
+				cleanupBackground(t, result.Res.PID, result.Res.Log)
+			}
 
 			if tt.expectError {
 				if err == nil {
@@ -341,6 +345,11 @@ func TestExecute_KeepsParameterTypes(t *testing.T) {
 	if status, _ := bg["status"].(int); status != -1 {
 		t.Errorf("background status = %v, want -1", bg["status"])
 	}
+	if bgRes, ok := bg["res"].(map[string]any); ok {
+		pid, _ := bgRes["pid"].(int)
+		log, _ := bgRes["log"].(string)
+		cleanupBackground(t, pid, log)
+	}
 }
 
 func TestExecute(t *testing.T) {
@@ -393,6 +402,11 @@ func TestExecute(t *testing.T) {
 			})
 
 			result, err := Execute(tt.data, before, after)
+			if res, ok := result["res"].(map[string]any); ok {
+				pid, _ := res["pid"].(int)
+				log, _ := res["log"].(string)
+				cleanupBackground(t, pid, log)
+			}
 
 			if tt.expectError {
 				if err == nil {
@@ -577,6 +591,9 @@ func TestDoBackground(t *testing.T) {
 			}
 
 			result, err := tt.req.Do()
+			if result != nil {
+				cleanupBackground(t, result.Res.PID, result.Res.Log)
+			}
 
 			if tt.expectError {
 				if err == nil {
@@ -645,12 +662,7 @@ func TestDoBackground(t *testing.T) {
 					// Verify log filename format
 					filename := filepath.Base(result.Res.Log)
 					if !strings.HasPrefix(filename, "probe-shell-action.") || !strings.HasSuffix(filename, ".log") {
-						t.Errorf("Expected log filename format 'probe-shell-action.<hash>.log', got: %s", filename)
-					}
-					// Verify hash length (8 characters)
-					parts := strings.Split(filename, ".")
-					if len(parts) != 3 || len(parts[1]) != 8 {
-						t.Errorf("Expected hash to be 8 characters, got filename: %s", filename)
+						t.Errorf("Expected log filename format 'probe-shell-action.<random>.log', got: %s", filename)
 					}
 				}
 			}
@@ -708,6 +720,11 @@ func TestExecuteBackground(t *testing.T) {
 			})
 
 			result, err := Execute(tt.data, before, after)
+			if res, ok := result["res"].(map[string]any); ok {
+				pid, _ := res["pid"].(int)
+				log, _ := res["log"].(string)
+				cleanupBackground(t, pid, log)
+			}
 
 			if tt.expectError {
 				if err == nil {
@@ -762,7 +779,7 @@ func TestExecuteBackground(t *testing.T) {
 									// Verify log filename format
 									filename := filepath.Base(logStr)
 									if !strings.HasPrefix(filename, "probe-shell-action.") || !strings.HasSuffix(filename, ".log") {
-										t.Errorf("Expected log filename format 'probe-shell-action.<hash>.log', got: %s", filename)
+										t.Errorf("Expected log filename format 'probe-shell-action.<random>.log', got: %s", filename)
 									}
 								} else {
 									t.Error("Expected log to be string")
@@ -775,6 +792,54 @@ func TestExecuteBackground(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// cleanupBackground stops a process the test started in the background and
+// removes its log, which is what the workflow does once it is over.
+func cleanupBackground(t *testing.T, pid int, log string) {
+	t.Helper()
+	t.Cleanup(func() {
+		if pid > 0 {
+			_ = syscall.Kill(-pid, syscall.SIGKILL)
+		}
+		if log != "" {
+			_ = os.Remove(log)
+		}
+	})
+}
+
+func TestDoBackgroundSeparateLogs(t *testing.T) {
+	// The same command started twice must not share a log: each run's output
+	// has to stay readable on its own.
+	var logs []string
+	for i := 0; i < 2; i++ {
+		req := &Req{Cmd: "echo run-$$", Shell: "/bin/sh", Timeout: "5s", Background: true}
+		result, err := req.Do()
+		if err != nil {
+			t.Fatalf("Do() error: %v", err)
+		}
+		cleanupBackground(t, result.Res.PID, result.Res.Log)
+		logs = append(logs, result.Res.Log)
+	}
+
+	if logs[0] == logs[1] {
+		t.Fatalf("both runs wrote to %s", logs[0])
+	}
+
+	for _, log := range logs {
+		var got []byte
+		deadline := time.Now().Add(3 * time.Second)
+		for time.Now().Before(deadline) {
+			got, _ = os.ReadFile(log)
+			if len(got) > 0 {
+				break
+			}
+			time.Sleep(20 * time.Millisecond)
+		}
+		if lines := strings.Count(string(got), "\n"); lines != 1 {
+			t.Errorf("%s = %q, want the output of one run", log, got)
+		}
 	}
 }
 

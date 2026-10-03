@@ -93,6 +93,26 @@ with:
 
 数値や真偽値は文字列として渡すため、`PORT: 8080`は`PORT`を`8080`に設定します。これらの変数は、Probe自身が動いている環境に追加されます。
 
+### `background` (オプション)
+
+**型:** Boolean  
+**デフォルト:** `false`  
+**説明:** コマンドを起動し、終了を待たずに次へ進む
+
+```yaml
+with:
+  cmd: "python3 -m http.server 8080 --bind 127.0.0.1"
+  background: true
+```
+
+backgroundは、テスト対象のサーバーのように、後続のステップが動いていることを前提とするコマンドに使います。ステップはコマンドを起動した時点で返るため、`res.code`は`-1`になり、`res.stdout`と`res.stderr`は空です。`timeout`は適用されません。
+
+- **出力:** 標準出力と標準エラー出力は、実行ごとに作られる1つのログファイルに書き込まれ、そのパスは`res.log`に入ります。同じコマンドを2回起動すれば、ファイルも2つになります。
+- **寿命:** コマンドはステップやジョブが終わっても動き続けるため、後続のジョブのステップからも使えます。ワークフローが終わると、Probeはコマンドとそこから起動されたプロセスに`SIGTERM`を送り、3秒後に残っていれば`SIGKILL`を送り、ログファイルを削除します。ログを後で使うなら、ステップの中で読んでください。
+- **中断:** Ctrl+CなどでProbe自身が強制終了した場合はコマンドを止められず、コマンドとログファイルが残ります。
+
+[embedded](/ja/reference/actions/embedded)のジョブの中で起動したコマンドは、そのジョブが終わった時点で止まります。
+
 ## リトライ機能
 
 shellアクションは統一されたステップレベルのリトライ機能をサポートしています。これにより、一時的な障害やサービス起動時間に対してコマンドを自動的に再実行できます。
@@ -120,6 +140,7 @@ res:
   code: 0                    # 終了コード (0 = 成功)
   stdout: "Build successful" # 標準出力
   stderr: ""                 # 標準エラー出力
+  pid: 12345                 # シェルのプロセスID
 
 req:
   cmd: "npm run build"       # 元のコマンド
@@ -128,6 +149,18 @@ req:
   timeout: "30s"            # タイムアウト設定
   env:                      # 環境変数
     NODE_ENV: "production"
+  background: false         # background設定
+```
+
+`background: true`の場合、結果ができた時点でコマンドはまだ動いています。
+
+```yaml
+res:
+  code: -1                   # まだ終了していない
+  stdout: ""                 # 空 (出力はログに書かれる)
+  stderr: ""
+  pid: 12345                 # シェルのプロセスID
+  log: "/tmp/probe-shell-action.1234567890.log" # 標準出力と標準エラー出力のログファイル
 ```
 
 ## 使用例
@@ -189,6 +222,38 @@ vars:
     env:
       DEPLOY_KEY: "{{vars.deploy_key}}"
       TARGET_ENV: "{{vars.target_env}}"
+  test: res.code == 0
+```
+
+### 後続のステップのためのサーバー
+
+backgroundで起動したサーバーは、後続のステップのために動き続けます。次のステップはサーバーが応答するまでリトライし、最後のステップはProbeがログを削除する前にサーバーのログを読みます。
+
+```yaml
+- name: "Start the Server"
+  id: server
+  uses: shell
+  with:
+    cmd: "python3 -m http.server 8080 --bind 127.0.0.1"
+    background: true
+  test: res.code == -1 && res.pid > 0
+  outputs:
+    log: res.log
+
+- name: "Wait Until It Answers"
+  uses: http
+  with:
+    url: "http://127.0.0.1:8080"
+    get: "/"
+  retry:
+    max_attempts: 20
+    interval: "500ms"
+  test: res.code == 200
+
+- name: "Show the Server Log"
+  uses: shell
+  with:
+    cmd: "cat {{outputs.server.log}}"
   test: res.code == 0
 ```
 
