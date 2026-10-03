@@ -635,6 +635,12 @@ func (p *Printer) LogError(format string, args ...any) {
 	p.Fprint(os.Stderr, p.generateLogError(format, args...))
 }
 
+// LogWarn prints a warning to the error writer: something the user should
+// know about that does not make the run fail.
+func (p *Printer) LogWarn(format string, args ...any) {
+	p.Fprint(p.errWriter, colorWarning().Sprintf("[WARN] %s", fmt.Sprintf(format, args...))+"\n")
+}
+
 // Step Output Formatting Functions
 // These functions handle output formatting with proper separation of concerns
 

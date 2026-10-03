@@ -33,7 +33,7 @@ probe workflow.yml
 ### `PROBE_REPORT`
 
 **型:** String  
-**値:** `format[=path]`をカンマで区切った並び。`format`は`json`、`junit`、`markdown`のいずれか  
+**値:** `format[=path]`をカンマで区切った並び。`format`は`json`、`junit`、`markdown`、`github-summary`のいずれか  
 **デフォルト:** なし  
 **説明:** 実行が終わったあとに書き出すレポートファイル。パスを省いた形式は既定のファイルに書き出します。`--report`フラグを指定した場合はそちらが優先されます。
 

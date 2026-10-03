@@ -98,7 +98,14 @@ func (w *Workflow) writeReports(targets []ReportTarget, rs *Result, order []stri
 
 	var errs []error
 	for _, t := range targets {
-		if err := report.Write(t); err != nil {
+		err := report.Write(t)
+		if errors.Is(err, ErrNoStepSummary) {
+			// Outside GitHub Actions there is no summary to write to; say so
+			// and carry on, so one command line serves CI and a laptop.
+			w.printer.LogWarn("%v", err)
+			continue
+		}
+		if err != nil {
 			errs = append(errs, err)
 		}
 	}

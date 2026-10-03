@@ -17,6 +17,9 @@ const (
 	ReportJSON     ReportFormat = "json"
 	ReportJUnit    ReportFormat = "junit"
 	ReportMarkdown ReportFormat = "markdown"
+	// ReportGitHubSummary appends the Markdown page to the GitHub Actions job
+	// summary, the file GITHUB_STEP_SUMMARY names.
+	ReportGitHubSummary ReportFormat = "github-summary"
 )
 
 // defaultReportPaths is where a format is written when no path is given.
@@ -24,6 +27,8 @@ var defaultReportPaths = map[ReportFormat]string{
 	ReportJSON:     "probe-report.json",
 	ReportJUnit:    "probe-junit.xml",
 	ReportMarkdown: "probe-report.md",
+	// Resolved when the report is written, from GITHUB_STEP_SUMMARY.
+	ReportGitHubSummary: "",
 }
 
 // ReportTarget is one report file to write after a run.
@@ -51,7 +56,7 @@ func ParseReportTargets(s string) ([]ReportTarget, error) {
 
 		def, ok := defaultReportPaths[format]
 		if !ok {
-			return nil, fmt.Errorf("unknown report format: %s (expected json, junit or markdown)", name)
+			return nil, fmt.Errorf("unknown report format: %s (expected json, junit, markdown or github-summary)", name)
 		}
 		if seen[format] {
 			return nil, fmt.Errorf("report format given more than once: %s", format)
@@ -357,6 +362,10 @@ func (r *Report) WriteJSON(w io.Writer) error {
 // Write renders the report in the target's format and writes it to the
 // target's path, creating parent directories as needed.
 func (r *Report) Write(t ReportTarget) error {
+	if t.Format == ReportGitHubSummary {
+		return r.writeGitHubSummary(t.Path)
+	}
+
 	if dir := filepath.Dir(t.Path); dir != "." {
 		if err := os.MkdirAll(dir, 0o755); err != nil {
 			return fmt.Errorf("failed to create report directory: %w", err)

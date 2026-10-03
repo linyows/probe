@@ -33,7 +33,7 @@ probe workflow.yml
 ### `PROBE_REPORT`
 
 **Type:** String  
-**Values:** a comma separated list of `format[=path]`, where `format` is `json`, `junit` or `markdown`  
+**Values:** a comma separated list of `format[=path]`, where `format` is `json`, `junit`, `markdown` or `github-summary`  
 **Default:** none  
 **Description:** Report files to write once the run has finished. A format without a path goes to its default file. The `--report` flag overrides this variable.
 

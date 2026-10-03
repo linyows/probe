@@ -11,6 +11,14 @@ import (
 // failed, and the request and response. The page is meant to be read as is,
 // for example as a GitHub job summary or by a coding agent.
 func (r *Report) WriteMarkdown(w io.Writer) error {
+	_, err := io.WriteString(w, r.markdown(true))
+	return err
+}
+
+// markdown renders the page. Without payloads, failed steps leave out their
+// request and response, which is what keeps a page with large responses
+// within a size limit.
+func (r *Report) markdown(payloads bool) string {
 	var b strings.Builder
 
 	fmt.Fprintf(&b, "# %s\n\n", r.Name)
@@ -45,16 +53,15 @@ func (r *Report) WriteMarkdown(w io.Writer) error {
 				b.WriteString("\n## Failures\n\n")
 				failures = true
 			}
-			writeMarkdownFailure(&b, job, st)
+			writeMarkdownFailure(&b, job, st, payloads)
 		}
 	}
 
 	// Every block ends in a blank line; the page itself ends in one newline.
-	_, err := io.WriteString(w, strings.TrimRight(b.String(), "\n")+"\n")
-	return err
+	return strings.TrimRight(b.String(), "\n") + "\n"
 }
 
-func writeMarkdownFailure(b *strings.Builder, job JobReport, st StepReport) {
+func writeMarkdownFailure(b *strings.Builder, job JobReport, st StepReport, payloads bool) {
 	fmt.Fprintf(b, "### %s / %d. %s\n\n", job.Name, st.Index, st.Name)
 
 	if st.Failure != nil {
@@ -66,7 +73,7 @@ func writeMarkdownFailure(b *strings.Builder, job JobReport, st StepReport) {
 	if st.Test != "" {
 		writeFence(b, "", st.Test)
 	}
-	if st.Failure == nil {
+	if st.Failure == nil || !payloads {
 		return
 	}
 	for _, part := range []struct {

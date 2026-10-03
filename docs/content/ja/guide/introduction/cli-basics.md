@@ -115,6 +115,8 @@ probe --report junit,markdown workflow.yml
 - `junit`: CIがテスト結果として表示できるJUnit XMLを`probe-junit.xml`に書き出す
 - `markdown`: 要約、ジョブの表、失敗したステップごとの節を`probe-report.md`に
   書き出す
+- `github-summary`: 同じページをGitHub Actionsのジョブサマリーに追記する。
+  GitHub Actionsの外では警告を出して飛ばす
 
 `--report junit=out/junit.xml`のように`=`のあとにパスを書くと、別の場所に
 書き出せます。ファイルはすべてのジョブが終わってから書き出され、端末の

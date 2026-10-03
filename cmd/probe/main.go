@@ -219,7 +219,7 @@ func (c *Cmd) printOptions() {
 		{"", "--timing", "Show timing (start time, response time)"},
 		{"-v", "--verbose", "Show verbose log"},
 		{"", "--output", "Report output: auto, spinner or stream (env: PROBE_OUTPUT)"},
-		{"", "--report", "Write report files: json, junit, markdown as format[=path],... (env: PROBE_REPORT)"},
+		{"", "--report", "Write reports: json, junit, markdown, github-summary as format[=path],... (env: PROBE_REPORT)"},
 	}
 
 	for _, opt := range options {
