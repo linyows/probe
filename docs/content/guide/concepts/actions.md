@@ -707,46 +707,87 @@ While Probe comes with powerful built-in actions, you can extend it with custom 
 
 ### Custom Action Interface
 
-Custom actions must implement the Actions interface:
+A custom action implements the `actionrpc.Action` interface:
 
 ```go
-type Actions interface {
+type Action interface {
     Run(with map[string]any) (map[string]any, error)
 }
 ```
 
-### Action Plugin Structure
+`with` holds the step's `with` parameters. The returned map becomes the step's `req`, `res`, `rt` and `status`, as with the built-in actions.
 
-A plugin implements the interface above and is served over gRPC.
+### Serving a Custom Action
+
+Probe runs each action in a process of its own, by starting its own executable again as `<executable> builtin-actions <name>`. A custom action therefore lives in your own build of Probe: a program that uses Probe as a library, serves your action under that subcommand, and hands the other names to the built-in actions.
 
 ```go
-// Example custom action plugin
 package main
 
 import (
+    "fmt"
+    "os"
+    "time"
+
+    "github.com/hashicorp/go-hclog"
     "github.com/linyows/probe"
-    "github.com/hashicorp/go-plugin"
+    "github.com/linyows/probe/actionrpc"
+    "github.com/linyows/probe/actions"
 )
 
-type CustomAction struct{}
+// Greet is a custom action, used as `uses: greet`.
+type Greet struct {
+    log hclog.Logger
+}
 
-func (c *CustomAction) Run(with map[string]any) (map[string]any, error) {
-    // Custom action logic here
+func (g *Greet) Run(with map[string]any) (map[string]any, error) {
+    start := time.Now()
+    actionrpc.LogParams(g.log, "greet received parameters", with)
+
+    name, _ := with["name"].(string)
     return map[string]any{
-        "status": "success",
-        "result": "custom action completed",
+        "req":    with,
+        "res":    map[string]any{"message": fmt.Sprintf("Hello, %s!", name)},
+        "rt":     time.Since(start).String(),
+        "status": 0,
     }, nil
 }
 
 func main() {
-    plugin.Serve(&plugin.ServeConfig{
-        HandshakeConfig: probe.Handshake,
-        Plugins: map[string]plugin.Plugin{
-            "actions": &probe.ActionsPlugin{Impl: &CustomAction{}},
-        },
-        GRPCServer: plugin.DefaultGRPCServer,
-    })
+    // Probe runs every action by starting this executable again
+    // as `<executable> builtin-actions <name>`.
+    if len(os.Args) == 3 && os.Args[1] == actionrpc.BuiltinCmd {
+        name := os.Args[2]
+        if name == "greet" {
+            actionrpc.Serve(func(log hclog.Logger) actionrpc.Action {
+                return &Greet{log: log}
+            })
+            return
+        }
+        if serve, ok := actions.Lookup(name); ok {
+            serve()
+            return
+        }
+        fmt.Fprintf(os.Stderr, "unknown action: %s\n", name)
+        os.Exit(1)
+    }
+
+    p := probe.New(os.Args[1], false)
+    if err := p.Do(); err != nil {
+        fmt.Fprintln(os.Stderr, err)
+    }
+    os.Exit(p.ExitStatus())
 }
+```
+
+Build it and run a workflow with the resulting binary in place of `probe`:
+
+```yaml
+- name: Say hello
+  uses: greet
+  with:
+    name: probe
+  test: res.message == "Hello, probe!"
 ```
 
 ## What's Next?

@@ -921,46 +921,87 @@ Probeには強力な組み込みアクションが付属していますが、特
 
 ### カスタムアクション インターフェース
 
-カスタムアクションはActionsインターフェースを実装する必要があります：
+カスタムアクションは`actionrpc.Action`インターフェースを実装します：
 
 ```go
-type Actions interface {
+type Action interface {
     Run(with map[string]any) (map[string]any, error)
 }
 ```
 
-### アクションプラグイン構造
+`with`にはステップの`with`パラメータが渡されます。返したマップは、組み込みアクションと同じくステップの`req`、`res`、`rt`、`status`になります。
 
-プラグインは上記のインターフェースを実装し、gRPC経由で提供されます。
+### カスタムアクションの提供
+
+Probeはアクションごとに別のプロセスを使い、自身の実行ファイルを`<実行ファイル> builtin-actions <名前>`として起動し直します。そのため、カスタムアクションは独自にビルドしたProbeに組み込みます。Probeをライブラリとして使うプログラムを作り、このサブコマンドで自分のアクションを提供し、それ以外の名前は組み込みアクションに任せます。
 
 ```go
-// カスタムアクションプラグインの例
 package main
 
 import (
+    "fmt"
+    "os"
+    "time"
+
+    "github.com/hashicorp/go-hclog"
     "github.com/linyows/probe"
-    "github.com/hashicorp/go-plugin"
+    "github.com/linyows/probe/actionrpc"
+    "github.com/linyows/probe/actions"
 )
 
-type CustomAction struct{}
+// Greet は `uses: greet` で使うカスタムアクション
+type Greet struct {
+    log hclog.Logger
+}
 
-func (c *CustomAction) Run(with map[string]any) (map[string]any, error) {
-    // ここにカスタムアクションロジック
+func (g *Greet) Run(with map[string]any) (map[string]any, error) {
+    start := time.Now()
+    actionrpc.LogParams(g.log, "greet received parameters", with)
+
+    name, _ := with["name"].(string)
     return map[string]any{
-        "status": "success",
-        "result": "custom action completed",
+        "req":    with,
+        "res":    map[string]any{"message": fmt.Sprintf("Hello, %s!", name)},
+        "rt":     time.Since(start).String(),
+        "status": 0,
     }, nil
 }
 
 func main() {
-    plugin.Serve(&plugin.ServeConfig{
-        HandshakeConfig: probe.Handshake,
-        Plugins: map[string]plugin.Plugin{
-            "actions": &probe.ActionsPlugin{Impl: &CustomAction{}},
-        },
-        GRPCServer: plugin.DefaultGRPCServer,
-    })
+    // Probe はアクションごとに、この実行ファイルを
+    // `<実行ファイル> builtin-actions <名前>` として起動し直す
+    if len(os.Args) == 3 && os.Args[1] == actionrpc.BuiltinCmd {
+        name := os.Args[2]
+        if name == "greet" {
+            actionrpc.Serve(func(log hclog.Logger) actionrpc.Action {
+                return &Greet{log: log}
+            })
+            return
+        }
+        if serve, ok := actions.Lookup(name); ok {
+            serve()
+            return
+        }
+        fmt.Fprintf(os.Stderr, "unknown action: %s\n", name)
+        os.Exit(1)
+    }
+
+    p := probe.New(os.Args[1], false)
+    if err := p.Do(); err != nil {
+        fmt.Fprintln(os.Stderr, err)
+    }
+    os.Exit(p.ExitStatus())
 }
+```
+
+これをビルドし、`probe`の代わりにできたバイナリでワークフローを実行します：
+
+```yaml
+- name: Say hello
+  uses: greet
+  with:
+    name: probe
+  test: res.message == "Hello, probe!"
 ```
 
 ## 次のステップ
