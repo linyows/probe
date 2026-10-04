@@ -13,6 +13,7 @@ import (
 	"math/big"
 	"net"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -1666,13 +1667,28 @@ func TestFetchRFC822Items(t *testing.T) {
 	if subject != "message 1" {
 		t.Errorf("RFC822.HEADER headers = %v, want the subject", header["headers"])
 	}
-	if flags, _ := fetch("FLAGS")["flags"].([]any); len(flags) != 0 {
+	flagsOf := func() []string {
+		t.Helper()
+		got := fetch("FLAGS")["flags"]
+		flags, ok := got.([]string)
+		if !ok && got != nil {
+			t.Fatalf("flags = %#v, want []string", got)
+		}
+		return flags
+	}
+	if flags := flagsOf(); slices.Contains(flags, `\Seen`) {
 		t.Errorf("flags = %v after RFC822.HEADER, want the message still unread", flags)
 	}
 
 	text := fetch("RFC822.TEXT")
 	if body, _ := text["body"].(string); !strings.Contains(body, "body 1") || strings.Contains(body, "Subject:") {
 		t.Errorf("RFC822.TEXT body = %q, want the body without the headers", body)
+	}
+
+	// RFC822.TEXT is BODY[TEXT], which marks the message read, so the check
+	// above does tell a read message apart.
+	if flags := flagsOf(); !slices.Contains(flags, `\Seen`) {
+		t.Errorf("flags = %v after RFC822.TEXT, want the message read", flags)
 	}
 }
 
