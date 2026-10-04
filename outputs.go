@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"maps"
-	"slices"
 	"sort"
 	"sync"
 )
@@ -12,22 +11,17 @@ import (
 // Outputs manages step outputs across the entire workflow
 type Outputs struct {
 	data map[string]any // stores both stepID->outputs and outputName->value
-	// owners records which step published each flat output name.
+	// owners records which step published each flat output name. The first
+	// step to publish a name keeps it.
 	owners map[string]string
-	// ambiguous holds the names that more than one step published, with
-	// those steps. Such a name has no flat value: which step's it would be
-	// depends on the order the steps ran in, and for jobs that run at the
-	// same time that order is not fixed.
-	ambiguous map[string][]string
-	mu        sync.RWMutex
+	mu     sync.RWMutex
 }
 
 // NewOutputs creates a new Outputs instance
 func NewOutputs() *Outputs {
 	return &Outputs{
-		data:      make(map[string]any),
-		owners:    make(map[string]string),
-		ambiguous: make(map[string][]string),
+		data:   make(map[string]any),
+		owners: make(map[string]string),
 	}
 }
 
@@ -52,7 +46,9 @@ func (o *Outputs) Set(stepID string, outputs map[string]any) error {
 		o.data[stepID] = outputs
 	}
 
-	// Store flat outputs, by name alone
+	// Store flat outputs. The first step to publish a name keeps it; a later
+	// step's value under the same name is read through its step id, and is
+	// reported so that it is not lost without a word.
 	var errs []error
 	if conflictError != nil {
 		errs = append(errs, conflictError)
@@ -63,36 +59,21 @@ func (o *Outputs) Set(stepID string, outputs map[string]any) error {
 	}
 	sort.Strings(names)
 	for _, outputName := range names {
-		value := outputs[outputName]
-
-		if steps, ok := o.ambiguous[outputName]; ok {
-			if !slices.Contains(steps, stepID) {
-				o.ambiguous[outputName] = append(steps, stepID)
-			}
-			continue
-		}
-
 		owner, owned := o.owners[outputName]
 		switch {
 		case owned && owner == stepID:
-			// The same step publishing again is not a second publisher: the
-			// flat name follows its latest value, as outputs.<step_id>.<name>
-			// does.
-			o.data[outputName] = value
+			// The same step publishing again keeps the name, with its
+			// latest value, as outputs.<step_id>.<name> has.
+			o.data[outputName] = outputs[outputName]
 		case owned:
-			// Another step publishes the name too, so the name alone no
-			// longer says which value is meant.
-			delete(o.data, outputName)
-			delete(o.owners, outputName)
-			o.ambiguous[outputName] = []string{owner, stepID}
-			errs = append(errs, fmt.Errorf("output '%s' is published by both '%s' and '%s', so outputs.%s is not set; read outputs.%s.%s or outputs.%s.%s instead",
-				outputName, owner, stepID, outputName, owner, outputName, stepID, outputName))
+			errs = append(errs, fmt.Errorf("output '%s' of '%s' is also published by '%s', which came first, so outputs.%s keeps the value of '%s'; read outputs.%s.%s for this one",
+				outputName, stepID, owner, outputName, owner, stepID, outputName))
 		default:
 			// A step ID of the same name keeps the name for its outputs.
 			if _, exists := o.data[outputName]; exists {
 				continue
 			}
-			o.data[outputName] = value
+			o.data[outputName] = outputs[outputName]
 			o.owners[outputName] = stepID
 		}
 	}

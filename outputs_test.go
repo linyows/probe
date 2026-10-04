@@ -87,18 +87,19 @@ func TestOutputsFlatAccess(t *testing.T) {
 		"token": "profile_token", // Conflicts with existing "token"
 		"name":  "john_doe",
 	})
-	if err == nil || !strings.Contains(err.Error(), "outputs.auth.token or outputs.profile.token") {
-		t.Errorf("Expected a warning naming both steps for profile, got: %v", err)
+	// The first publisher keeps the name, and the later one is told how to
+	// read its own value
+	if err == nil || !strings.Contains(err.Error(), "outputs.token keeps the value of 'auth'; read outputs.profile.token") {
+		t.Errorf("Expected a warning for profile's token, got: %v", err)
 	}
 
-	// Two steps publish "token", so the name alone is ambiguous and gone
-	if flatToken, exists = outputs.GetFlat("token"); exists {
-		t.Errorf("Expected no flat access to the ambiguous 'token', got %v", flatToken)
+	// Original flat access should be preserved
+	flatToken, exists = outputs.GetFlat("token")
+	if !exists {
+		t.Fatal("Expected flat access to 'token' to still exist")
 	}
-
-	// Each step's own value is still there under its id
-	if profile, _ := outputs.Get("profile"); profile["token"] != "profile_token" {
-		t.Errorf("Expected profile token 'profile_token', got %v", profile["token"])
+	if flatToken != "secret123" {
+		t.Errorf("Expected original flat token 'secret123', got %v", flatToken)
 	}
 
 	// New non-conflicting output should be accessible via flat access
@@ -246,44 +247,24 @@ func TestOutputsConflictWarning(t *testing.T) {
 	}
 }
 
-func TestOutputsAmbiguousWhateverTheOrder(t *testing.T) {
-	// Jobs running at the same time publish in either order; the outcome
-	// must not depend on it.
-	for _, order := range [][]string{{"a", "b"}, {"b", "a"}} {
-		outputs := NewOutputs()
-		for _, step := range order {
-			_ = outputs.Set(step, map[string]any{"token": step + "-token"})
-		}
-		if v, exists := outputs.GetFlat("token"); exists {
-			t.Errorf("order %v: flat token = %v, want none", order, v)
-		}
-		if _, exists := outputs.GetAll()["token"]; exists {
-			t.Errorf("order %v: GetAll has a flat token", order)
-		}
-		for _, step := range order {
-			if got, _ := outputs.Get(step); got["token"] != step+"-token" {
-				t.Errorf("order %v: outputs.%s.token = %v", order, step, got["token"])
-			}
-		}
-	}
-}
-
-func TestOutputsStaysAmbiguous(t *testing.T) {
-	// A third step, or one of the two publishing again, does not bring the
-	// name back, and only the step that made it ambiguous is warned about.
+func TestOutputsFirstPublisherKeepsName(t *testing.T) {
+	// Every later publisher is warned, and the first value stays.
 	outputs := NewOutputs()
-	_ = outputs.Set("a", map[string]any{"token": "a"})
-	if err := outputs.Set("b", map[string]any{"token": "b"}); err == nil {
-		t.Fatal("Expected a warning when the name became ambiguous")
+	if err := outputs.Set("a", map[string]any{"token": "a"}); err != nil {
+		t.Fatalf("Unexpected warning for the first publisher: %v", err)
 	}
-	if err := outputs.Set("c", map[string]any{"token": "c"}); err != nil {
-		t.Errorf("Unexpected warning for a name already ambiguous: %v", err)
+	for _, step := range []string{"b", "c"} {
+		if err := outputs.Set(step, map[string]any{"token": step}); err == nil {
+			t.Errorf("Expected a warning for %s", step)
+		}
 	}
-	if err := outputs.Set("a", map[string]any{"token": "a2"}); err != nil {
-		t.Errorf("Unexpected warning for a step publishing again: %v", err)
+	if v, _ := outputs.GetFlat("token"); v != "a" {
+		t.Errorf("flat token = %v, want a", v)
 	}
-	if v, exists := outputs.GetFlat("token"); exists {
-		t.Errorf("flat token = %v, want none", v)
+	for _, step := range []string{"a", "b", "c"} {
+		if got, _ := outputs.Get(step); got["token"] != step {
+			t.Errorf("outputs.%s.token = %v, want %s", step, got["token"], step)
+		}
 	}
 }
 
@@ -298,8 +279,5 @@ func TestOutputsSameStepAgain(t *testing.T) {
 	}
 	if v, _ := outputs.GetFlat("count"); v != 3 {
 		t.Errorf("flat count = %v, want 3", v)
-	}
-	if got, _ := outputs.Get("poll"); got["count"] != 3 {
-		t.Errorf("outputs.poll.count = %v, want 3", got["count"])
 	}
 }

@@ -69,7 +69,7 @@ jobs:
 | `status` | Integer | `res.code`と同じ値 |
 | `rt` | Object | 埋め込みジョブの実行時間 |
 
-`res.outputs`のキーは出力名なので、`mytoken`として公開した値は`res.outputs.mytoken`で読みます。同じ値は公開したステップのidの下にも`res.outputs.get_token.mytoken`として入っています。2つのステップが同じ名前を公開した場合は名前だけでは区別できないため、`res.outputs.<name>`は入らず、ステップのidの下の形にだけ値が入ります。
+`res.outputs`のキーは出力名なので、`mytoken`として公開した値は`res.outputs.mytoken`で読みます。同じ値は公開したステップのidの下にも`res.outputs.get_token.mytoken`として入っています。2つのステップが同じ名前を公開した場合、`res.outputs.<name>`には先に公開したステップの値が入り、ステップのidの下の形にはそれぞれの値が入ります。
 
 ## 関連項目
 
