@@ -354,24 +354,20 @@ func Execute(data map[string]any, opts ...Option) (map[string]any, error) {
 	}
 	r.cb = cb
 
-	mapErr := mapping.MapToStructByTags(m, r)
+	// A parameter that cannot be read stops the step before the command
+	// runs: going on would run it with that parameter at its zero value,
+	// such as in the foreground for background: maybe.
+	if err := mapping.MapToStructByTags(m, r); err != nil {
+		return map[string]any{}, err
+	}
 
 	result, err := r.Do()
-	if err != nil || mapErr != nil {
+	if err != nil {
 		// Even on error, try to return a structured result if we have one
 		if result != nil {
-			mapResult, structErr := mapping.StructToMapByTags(result)
-			if structErr == nil {
-				// Return the original error (either mapErr or err)
-				if mapErr != nil {
-					return mapResult, mapErr
-				}
+			if mapResult, structErr := mapping.StructToMapByTags(result); structErr == nil {
 				return mapResult, err
 			}
-		}
-		// If we can't create a structured result, return the original error
-		if mapErr != nil {
-			return map[string]any{}, mapErr
 		}
 		return map[string]any{}, err
 	}

@@ -890,3 +890,28 @@ func TestDoStdoutNotEmpty(t *testing.T) {
 		t.Fatal(msg)
 	}
 }
+
+func TestExecuteStopsOnUnreadableParameter(t *testing.T) {
+	// A parameter that cannot be read fails the step before the command
+	// runs; it used to run the command with the parameter at its zero value,
+	// here in the foreground, and report the error only afterwards.
+	// The command names a fixed file in workdir, so that no character of the
+	// path can change what the shell is asked to do; the space in it is there
+	// to make sure of that.
+	dir := filepath.Join(t.TempDir(), "with space")
+	if err := os.Mkdir(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	marker := filepath.Join(dir, "ran")
+	_, err := Execute(map[string]any{
+		"cmd":        "touch ran",
+		"workdir":    dir,
+		"background": "maybe",
+	})
+	if err == nil {
+		t.Fatal("Execute() succeeded with an unreadable background")
+	}
+	if _, statErr := os.Stat(marker); !os.IsNotExist(statErr) {
+		t.Errorf("the command ran although background could not be read: %v", statErr)
+	}
+}
