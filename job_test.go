@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+
+	"github.com/linyows/probe/expr"
 )
 
 func TestJob_validateSteps(t *testing.T) {
@@ -235,8 +237,8 @@ func TestJob_shouldSkip(t *testing.T) {
 				Printer: newBufferPrinter(),
 			}
 
-			expr := &Expr{}
-			result := job.shouldSkip(expr, ctx)
+			ev := &expr.Expr{}
+			result := job.shouldSkip(ev, ctx)
 
 			if result != tt.expected {
 				t.Errorf("shouldSkip() = %v, want %v", result, tt.expected)
@@ -281,8 +283,8 @@ func TestJob_shouldSkip_errorHandling(t *testing.T) {
 				Printer: newBufferPrinter(),
 			}
 
-			expr := &Expr{}
-			result := job.shouldSkip(expr, ctx)
+			ev := &expr.Expr{}
+			result := job.shouldSkip(ev, ctx)
 
 			if result != tt.expected {
 				t.Errorf("shouldSkip() = %v, want %v", result, tt.expected)

@@ -11,9 +11,9 @@ import (
 	"time"
 
 	"github.com/fatih/color"
-	"github.com/linyows/probe/procgroup"
-
 	"github.com/hashicorp/go-hclog"
+	"github.com/linyows/probe/expr"
+	"github.com/linyows/probe/procgroup"
 )
 
 func TestStep_parseWaitDuration(t *testing.T) {
@@ -243,7 +243,7 @@ func TestStep_SkipIfWithWaitTiming(t *testing.T) {
 				Uses:   "hello",
 				Wait:   tt.wait,
 				SkipIf: tt.skipif,
-				Expr:   &Expr{},
+				Expr:   &expr.Expr{},
 			}
 
 			jCtx := &JobContext{
@@ -362,7 +362,7 @@ func TestStep_shouldSkip(t *testing.T) {
 			step := &Step{
 				SkipIf: tt.skipif,
 				ctx:    tt.context,
-				Expr:   &Expr{},
+				Expr:   &expr.Expr{},
 			}
 			jCtx := &JobContext{
 				Printer: &Printer{},
@@ -412,7 +412,7 @@ func TestStep_createStepResult_Timing(t *testing.T) {
 		Test: "res.status == 200",
 		Echo: "Hello World",
 		Wait: "1s",
-		Expr: &Expr{},
+		Expr: &expr.Expr{},
 		ctx: StepContext{
 			Res: map[string]any{"status": 200},
 			RT: ResponseTime{
@@ -600,7 +600,7 @@ func TestStep_prepare(t *testing.T) {
 				Name:   tt.stepName,
 				Wait:   tt.wait,
 				SkipIf: tt.skipif,
-				Expr:   &Expr{},
+				Expr:   &expr.Expr{},
 			}
 
 			// Set up context
@@ -633,7 +633,7 @@ func TestStep_executeAction(t *testing.T) {
 		step := &Step{
 			Uses: "http",
 			With: map[string]any{"url": "http://example.com"},
-			Expr: &Expr{},
+			Expr: &expr.Expr{},
 		}
 
 		// Set up mock runner
@@ -679,7 +679,7 @@ func TestStep_executeAction(t *testing.T) {
 		step := &Step{
 			Uses: "failing-action",
 			With: map[string]any{},
-			Expr: &Expr{},
+			Expr: &expr.Expr{},
 		}
 
 		// Set up mock runner with error
@@ -710,7 +710,7 @@ func TestStep_executeAction(t *testing.T) {
 		step := &Step{
 			Uses: "test-action",
 			With: map[string]any{},
-			Expr: &Expr{},
+			Expr: &expr.Expr{},
 		}
 		// Don't set actionRunner - should use default PluginActionRunner
 
@@ -759,7 +759,7 @@ func TestStep_processActionResult(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			step := &Step{
-				Expr: &Expr{},
+				Expr: &expr.Expr{},
 			}
 
 			jCtx := &JobContext{}
@@ -772,7 +772,7 @@ func TestStep_processActionResult(t *testing.T) {
 func TestStep_handleActionError(t *testing.T) {
 	step := &Step{
 		Uses: "mock-action-for-error-test",
-		Expr: &Expr{},
+		Expr: &expr.Expr{},
 	}
 
 	jCtx := &JobContext{
@@ -851,7 +851,7 @@ func TestStep_finalize(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			step := &Step{
-				Expr: &Expr{},
+				Expr: &expr.Expr{},
 			}
 
 			jCtx := &JobContext{
@@ -881,7 +881,7 @@ func TestStep_Do_Integration(t *testing.T) {
 			Name:   "Skipped Step",
 			Uses:   "", // Empty action since this step should be skipped anyway
 			SkipIf: "true",
-			Expr:   &Expr{},
+			Expr:   &expr.Expr{},
 		}
 
 		step.ctx = StepContext{
@@ -906,7 +906,7 @@ func TestStep_Do_Integration(t *testing.T) {
 			Name: "Test Step",
 			Uses: "http",
 			With: map[string]any{"url": "http://example.com"},
-			Expr: &Expr{},
+			Expr: &expr.Expr{},
 		}
 
 		// Set up mock runner for successful execution
@@ -954,7 +954,7 @@ func TestStep_Do_Integration(t *testing.T) {
 		step := Step{
 			Name: "Failed Step",
 			Uses: "failing-action",
-			Expr: &Expr{},
+			Expr: &expr.Expr{},
 		}
 
 		// Set up mock runner for failed execution
@@ -1112,7 +1112,7 @@ func TestStep_getEchoOutput(t *testing.T) {
 			step := &Step{
 				Echo: tt.echo,
 				ctx:  tt.context,
-				Expr: &Expr{},
+				Expr: &expr.Expr{},
 			}
 			printer := newBufferPrinter()
 
@@ -1129,7 +1129,7 @@ func TestStep_getEchoOutput_Error(t *testing.T) {
 	step := &Step{
 		Echo: "{{invalid_expression + }}", // Invalid syntax that will cause template error
 		ctx:  StepContext{},
-		Expr: &Expr{},
+		Expr: &expr.Expr{},
 	}
 	printer := newBufferPrinter()
 
@@ -1182,16 +1182,16 @@ func TestStepContext_RepeatIndex(t *testing.T) {
 				RepeatIndex: tt.repeatIndex,
 			}
 
-			expr := &Expr{}
+			ev := &expr.Expr{}
 			var result string
 			var err error
 
 			if strings.Contains(tt.expression, "{{") {
 				// Template expression
-				result, err = expr.EvalTemplate(tt.expression, ctx)
+				result, err = ev.EvalTemplate(tt.expression, ctx)
 			} else {
 				// Boolean/arithmetic expression
-				output, evalErr := expr.Eval(tt.expression, ctx)
+				output, evalErr := ev.Eval(tt.expression, ctx)
 				err = evalErr
 				if err == nil {
 					result = fmt.Sprintf("%v", output)
@@ -1223,7 +1223,7 @@ func (m *SlowMockActionRunner) RunActions(name string, with map[string]any, opts
 func TestStep_executeSingleAction_DefaultTimeout(t *testing.T) {
 	step := &Step{
 		Uses: "test-action",
-		Expr: &Expr{},
+		Expr: &expr.Expr{},
 		// No Timeout specified - should use DefaultStepTimeout
 	}
 
@@ -1255,7 +1255,7 @@ func TestStep_executeSingleAction_CustomTimeout(t *testing.T) {
 	step := &Step{
 		Uses:    "test-action",
 		Timeout: Interval{Duration: 2 * time.Second},
-		Expr:    &Expr{},
+		Expr:    &expr.Expr{},
 	}
 
 	// Mock runner that takes 3 seconds (longer than timeout)
@@ -1289,7 +1289,7 @@ func TestStep_executeSingleAction_CompletesBeforeTimeout(t *testing.T) {
 	step := &Step{
 		Uses:    "test-action",
 		Timeout: Interval{Duration: 3 * time.Second},
-		Expr:    &Expr{},
+		Expr:    &expr.Expr{},
 	}
 
 	// Mock runner that takes 1 second (less than timeout)
@@ -1328,7 +1328,7 @@ func TestStep_executeActionWithRetry_Timeout(t *testing.T) {
 			MaxAttempts: 3,
 			Interval:    Interval{Duration: 100 * time.Millisecond},
 		},
-		Expr: &Expr{},
+		Expr: &expr.Expr{},
 	}
 
 	// Mock runner that takes 1 second per attempt (longer than timeout)
@@ -1379,7 +1379,7 @@ func TestStep_executeActionWithRetry_NoTest(t *testing.T) {
 			MaxAttempts: 3,
 			Interval:    Interval{Duration: 10 * time.Millisecond},
 		},
-		Expr: &Expr{},
+		Expr: &expr.Expr{},
 	}
 
 	jCtx := &JobContext{
@@ -1426,7 +1426,7 @@ func TestStep_executeActionWithRetry_TestFailThenPass(t *testing.T) {
 			MaxAttempts: 3,
 			Interval:    Interval{Duration: 10 * time.Millisecond},
 		},
-		Expr: &Expr{},
+		Expr: &expr.Expr{},
 	}
 
 	jCtx := &JobContext{
@@ -1463,7 +1463,7 @@ func TestStep_executeActionWithRetry_TestFailAllAttempts(t *testing.T) {
 			MaxAttempts: 3,
 			Interval:    Interval{Duration: 10 * time.Millisecond},
 		},
-		Expr: &Expr{},
+		Expr: &expr.Expr{},
 	}
 
 	jCtx := &JobContext{
@@ -1509,7 +1509,7 @@ func TestStep_handleRepeatExecution_AccumulatesEchoOutputs(t *testing.T) {
 	step := &Step{
 		Idx:  1,
 		Echo: "iteration {{vars.i}}",
-		Expr: &Expr{},
+		Expr: &expr.Expr{},
 	}
 
 	jCtx := &JobContext{
@@ -1641,7 +1641,7 @@ func TestStep_executeActionWithRetry_QuietsNonFinalAttempts(t *testing.T) {
 			MaxAttempts: 4,
 			Interval:    Interval{Duration: time.Millisecond},
 		},
-		Expr: &Expr{},
+		Expr: &expr.Expr{},
 	}
 
 	jCtx := &JobContext{
@@ -1680,7 +1680,7 @@ func TestStep_executeActionWithRetry_FinalAttemptIsNotQuiet(t *testing.T) {
 			MaxAttempts: 3,
 			Interval:    Interval{Duration: time.Millisecond},
 		},
-		Expr: &Expr{},
+		Expr: &expr.Expr{},
 	}
 
 	jCtx := &JobContext{
@@ -1718,7 +1718,7 @@ func TestStep_executeActionWithRetry_VerboseOverridesQuiet(t *testing.T) {
 			MaxAttempts: 3,
 			Interval:    Interval{Duration: time.Millisecond},
 		},
-		Expr: &Expr{},
+		Expr: &expr.Expr{},
 	}
 
 	jCtx := &JobContext{
@@ -1747,7 +1747,7 @@ func TestStep_executeSingleAction_WithoutRetryIsNotQuiet(t *testing.T) {
 
 	step := &Step{
 		Uses: "test-action",
-		Expr: &Expr{},
+		Expr: &expr.Expr{},
 	}
 
 	jCtx := &JobContext{
@@ -1780,7 +1780,7 @@ func TestSaveOutputsWarnsAboutTakenName(t *testing.T) {
 	jCtx := &JobContext{Outputs: NewOutputs(), Printer: printer}
 	_ = jCtx.Outputs.Set("first", map[string]any{"token": "one"})
 
-	st := &Step{ID: "second", Outputs: map[string]string{"token": "res.v"}, Expr: &Expr{}}
+	st := &Step{ID: "second", Outputs: map[string]string{"token": "res.v"}, Expr: &expr.Expr{}}
 	st.ctx = StepContext{Res: map[string]any{"v": "two"}}
 	st.saveOutputs(jCtx)
 
@@ -1913,7 +1913,7 @@ func TestStepTimeoutStillTracksBackground(t *testing.T) {
 	step := &Step{
 		Uses:    "shell",
 		Timeout: Interval{Duration: 100 * time.Millisecond},
-		Expr:    &Expr{},
+		Expr:    &expr.Expr{},
 	}
 	runner := &lateBackgroundRunner{t: t, delay: 300 * time.Millisecond, pid: make(chan int, 1)}
 	jCtx := &JobContext{background: procgroup.NewTracker()}

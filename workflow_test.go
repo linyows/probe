@@ -11,6 +11,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/linyows/probe/expr"
 )
 
 func TestWorkflowExecutor_DependencyManagement(t *testing.T) {
@@ -786,7 +788,7 @@ func TestStepRepeatCounterUpdate(t *testing.T) {
 		Name: "Test Step",
 		Test: "true", // Always success
 		Idx:  0,
-		Expr: &Expr{},
+		Expr: &expr.Expr{},
 	}
 
 	// Capture stdout to avoid test output noise

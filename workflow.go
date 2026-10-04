@@ -6,8 +6,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/linyows/probe/expr"
 	"github.com/linyows/probe/mask"
-
 	"github.com/linyows/probe/procgroup"
 )
 
@@ -254,12 +254,12 @@ func (w *Workflow) evalVars() (map[string]any, error) {
 	env := strmapToAnymap(w.Env())
 	vars := make(map[string]any)
 
-	expr := &Expr{}
+	ev := &expr.Expr{}
 	for k, v := range w.Vars {
 		if mapV, ok := v.(map[string]any); ok {
-			vars[k] = expr.EvalTemplateMap(mapV, env)
+			vars[k] = ev.EvalTemplateMap(mapV, env)
 		} else if strV, ok2 := v.(string); ok2 {
-			output, err := expr.EvalTemplate(strV, env)
+			output, err := ev.EvalTemplate(strV, env)
 			if err != nil {
 				return vars, err
 			}

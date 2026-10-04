@@ -14,6 +14,7 @@ code that imports them has to be updated as follows.
 
 | Before | After |
 |---|---|
+| `probe.Expr` | `expr.Expr` |
 | `probe.MatchJSON` | `jsonutil.Match` |
 | `probe.DiffJSON` | `jsonutil.Diff` |
 | `probe.ParseJSON` | `jsonutil.Parse` |
@@ -27,9 +28,9 @@ code that imports them has to be updated as follows.
 | `probe.MaxStringLength` | `truncate.MaxLength` |
 
 `Printer.SetMasker`, `Printer.Masker`, `Report.Mask` and `RunOptions.Masker`
-now take or return a `*mask.Masker`.
+now take or return a `*mask.Masker`, and `Step.Expr` is a `*expr.Expr`.
 
-The packages are imported from `github.com/linyows/probe/jsonutil`,
-`github.com/linyows/probe/mask` and `github.com/linyows/probe/truncate`. Two
-more new packages, `safefile` and `procgroup`, hold what used to be
-unexported in the root package.
+The packages are imported from `github.com/linyows/probe/expr`,
+`github.com/linyows/probe/jsonutil`, `github.com/linyows/probe/mask` and
+`github.com/linyows/probe/truncate`. Two more new packages, `safefile` and
+`procgroup`, hold what used to be unexported in the root package.

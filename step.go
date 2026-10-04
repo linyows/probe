@@ -9,9 +9,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/linyows/probe/procgroup"
-
+	"github.com/linyows/probe/expr"
 	"github.com/linyows/probe/jsonutil"
+	"github.com/linyows/probe/procgroup"
 )
 
 const (
@@ -39,7 +39,7 @@ type Step struct {
 	startedAt    time.Time
 	failure      *StepFailure
 	Idx          int          `yaml:"-"`
-	Expr         *Expr        `yaml:"-"`
+	Expr         *expr.Expr   `yaml:"-"`
 	actionRunner ActionRunner `yaml:"-"`
 }
 
@@ -568,12 +568,12 @@ func (st *Step) SetCtx(j JobContext, override map[string]any) {
 	// Evaluate step-level vars with access to outputs
 	evaluatedStepVars := make(map[string]any)
 	if len(st.Vars) > 0 {
-		expr := &Expr{}
+		ev := &expr.Expr{}
 		for k, v := range st.Vars {
 			if mapV, ok := v.(map[string]any); ok {
-				evaluatedStepVars[k] = expr.EvalTemplateMap(mapV, evalCtx)
+				evaluatedStepVars[k] = ev.EvalTemplateMap(mapV, evalCtx)
 			} else if strV, ok2 := v.(string); ok2 {
-				output, err := expr.EvalTemplate(strV, evalCtx)
+				output, err := ev.EvalTemplate(strV, evalCtx)
 				if err != nil {
 					// If evaluation fails, keep original value
 					evaluatedStepVars[k] = v

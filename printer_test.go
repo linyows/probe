@@ -7,9 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/linyows/probe/mask"
-
 	"github.com/fatih/color"
+	"github.com/linyows/probe/mask"
 )
 
 // Color function tests

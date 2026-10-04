@@ -5,6 +5,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/linyows/probe/expr"
 	"github.com/linyows/probe/procgroup"
 )
 
@@ -24,7 +25,7 @@ func (j *Job) Start(ctx JobContext) error {
 
 	// Use local pointer instead of j.ctx to avoid race conditions in async mode
 	ctxPtr := &ctx
-	expr := &Expr{}
+	ev := &expr.Expr{}
 
 	// Validate steps before execution
 	if err := j.validateSteps(); err != nil {
@@ -32,18 +33,18 @@ func (j *Job) Start(ctx JobContext) error {
 		return NewExecutionError("job_start", "step validation failed", err)
 	}
 
-	if err := j.expandJobName(expr, ctxPtr); err != nil {
+	if err := j.expandJobName(ev, ctxPtr); err != nil {
 		ctx.Result.recordFailure(failureConfig)
 		return NewExecutionError("job_start", "failed to expand job name", err)
 	}
 
 	// Check if job should be skipped
-	if j.shouldSkip(expr, *ctxPtr) {
+	if j.shouldSkip(ev, *ctxPtr) {
 		j.handleSkip(*ctxPtr)
 		return nil
 	}
 
-	j.executeSteps(expr, ctxPtr)
+	j.executeSteps(ev, ctxPtr)
 	if ctxPtr.Failed {
 		return NewExecutionError("job_start", "job execution failed", nil).
 			WithContext("job_name", j.Name)
@@ -52,13 +53,13 @@ func (j *Job) Start(ctx JobContext) error {
 }
 
 // expandJobName evaluates and sets the job name, printing it if appropriate
-func (j *Job) expandJobName(expr *Expr, ctx *JobContext) error {
+func (j *Job) expandJobName(ev *expr.Expr, ctx *JobContext) error {
 	if j.Name == "" {
 		j.Name = "Unknown Job"
 		return nil
 	}
 
-	name, err := expr.EvalTemplate(j.Name, *ctx)
+	name, err := ev.EvalTemplate(j.Name, *ctx)
 	if err != nil {
 		return err
 	}
@@ -97,10 +98,10 @@ func (j *Job) cloneForAsync() *Job {
 }
 
 // executeSteps runs all steps in the job, handling iterations appropriately
-func (j *Job) executeSteps(expr *Expr, ctx *JobContext) {
+func (j *Job) executeSteps(ev *expr.Expr, ctx *JobContext) {
 	idx := 0
 	for _, st := range j.Steps {
-		st.Expr = expr
+		st.Expr = ev
 
 		if len(st.Iteration) == 0 {
 			j.executeStep(st, &idx, ctx, nil)
@@ -175,7 +176,7 @@ func isValidStepID(id string) bool {
 }
 
 // shouldSkip evaluates the skipif expression and returns true if job should be skipped
-func (j *Job) shouldSkip(expr *Expr, ctx JobContext) bool {
+func (j *Job) shouldSkip(ev *expr.Expr, ctx JobContext) bool {
 	if j.SkipIf == "" {
 		return false
 	}
@@ -192,7 +193,7 @@ func (j *Job) shouldSkip(expr *Expr, ctx JobContext) bool {
 		Outputs: outputs,
 	}
 
-	result, err := expr.Eval(j.SkipIf, evalCtx)
+	result, err := ev.Eval(j.SkipIf, evalCtx)
 	if err != nil {
 		ctx.Printer.PrintError("job skipif evaluation error: %v", err)
 		return false // Don't skip on evaluation error
