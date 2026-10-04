@@ -1,21 +1,27 @@
 package probe
 
 import (
+	"errors"
 	"fmt"
 	"maps"
+	"sort"
 	"sync"
 )
 
 // Outputs manages step outputs across the entire workflow
 type Outputs struct {
 	data map[string]any // stores both stepID->outputs and outputName->value
-	mu   sync.RWMutex
+	// owners records which step published each flat output name. The first
+	// step to publish a name keeps it.
+	owners map[string]string
+	mu     sync.RWMutex
 }
 
 // NewOutputs creates a new Outputs instance
 func NewOutputs() *Outputs {
 	return &Outputs{
-		data: make(map[string]any),
+		data:   make(map[string]any),
+		owners: make(map[string]string),
 	}
 }
 
@@ -40,18 +46,58 @@ func (o *Outputs) Set(stepID string, outputs map[string]any) error {
 		o.data[stepID] = outputs
 	}
 
-	// Store flat outputs if no conflicts (new functionality)
-	for outputName, value := range outputs {
-		// Skip if output name already exists
-		if _, exists := o.data[outputName]; exists {
-			continue
-		}
+	// Store flat outputs. The first step to publish a name keeps it; a later
+	// step's value under the same name is read through its step id, and is
+	// reported so that it is not lost without a word.
+	var errs []error
+	if conflictError != nil {
+		errs = append(errs, conflictError)
+	}
+	names := make([]string, 0, len(outputs))
+	for outputName := range outputs {
+		names = append(names, outputName)
+	}
+	sort.Strings(names)
+	for _, outputName := range names {
+		owner, owned := o.owners[outputName]
+		_, isStep := o.data[outputName].(map[string]any)
 
-		// Safe to store flat access
-		o.data[outputName] = value
+		// Where this value can still be read when the name alone is taken:
+		// through the step's id, unless that was taken as well above.
+		instead := fmt.Sprintf("read outputs.%s.%s for this one", stepID, outputName)
+		if stepIDConflictsWithFlat {
+			instead = fmt.Sprintf("this one cannot be read, since outputs.%s is an output name too", stepID)
+		}
+		switch {
+		case owned && owner == stepID:
+			// The same step publishing again keeps the name, with its
+			// latest value, as outputs.<step_id>.<name> has.
+			o.data[outputName] = outputs[outputName]
+		case owned:
+			errs = append(errs, &NameTakenError{fmt.Sprintf("output '%s' of '%s' is also published by '%s', which came first, so outputs.%s keeps the value of '%s'; %s",
+				outputName, stepID, owner, outputName, owner, instead)})
+		case isStep:
+			// A step ID of the same name keeps the name for its outputs.
+			errs = append(errs, &NameTakenError{fmt.Sprintf("output '%s' of '%s' has the name of the step '%s', so outputs.%s is that step's outputs; %s",
+				outputName, stepID, outputName, outputName, instead)})
+		default:
+			o.data[outputName] = outputs[outputName]
+			o.owners[outputName] = stepID
+		}
 	}
 
-	return conflictError
+	return errors.Join(errs...)
+}
+
+// NameTakenError reports an output whose name was taken before it was
+// published, so that outputs.<name> holds something else. It is a warning:
+// the step's value is kept under its id when that can be.
+type NameTakenError struct {
+	msg string
+}
+
+func (e *NameTakenError) Error() string {
+	return e.msg
 }
 
 // Get retrieves outputs for a step (existing functionality)

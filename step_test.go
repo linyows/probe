@@ -1,6 +1,7 @@
 package probe
 
 import (
+	"bytes"
 	"fmt"
 	"strings"
 	"sync"
@@ -1837,5 +1838,24 @@ func TestStep_executeSingleAction_WithoutRetryIsNotQuiet(t *testing.T) {
 	}
 	if recorded[0].logLevel() != hclog.Warn {
 		t.Errorf("logLevel = %v, want warn", recorded[0].logLevel())
+	}
+}
+
+func TestSaveOutputsWarnsAboutTakenName(t *testing.T) {
+	// A later step publishing a name already taken gets a warning, not an
+	// error-labelled message.
+	errOut := new(bytes.Buffer)
+	printer := NewPrinter(false, nil)
+	printer.errWriter = errOut
+	jCtx := &JobContext{Outputs: NewOutputs(), Printer: printer}
+	_ = jCtx.Outputs.Set("first", map[string]any{"token": "one"})
+
+	st := &Step{ID: "second", Outputs: map[string]string{"token": "res.v"}, Expr: &Expr{}}
+	st.ctx = StepContext{Res: map[string]any{"v": "two"}}
+	st.saveOutputs(jCtx)
+
+	out := errOut.String()
+	if !strings.Contains(out, "[WARN]") || strings.Contains(out, "Error:") {
+		t.Errorf("output = %q, want a warning and no error", out)
 	}
 }

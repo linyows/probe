@@ -165,6 +165,8 @@ steps:
       Test Duration: {{outputs['app-test'].test_duration}}ms
 ```
 
+An output can also be read by its name alone, as `outputs.test_result`. When more than one step publishes the same name, the name belongs to the step that published it first: `outputs.<name>` keeps that step's value, and Probe warns about each later one, whose value is read through its step's id. Steps in a job run in order, so which one comes first is fixed; between jobs that run at the same time it is not, so read a name that such jobs share through the step's id. A name that is also a step's id stays that step's outputs, and a step publishing it is warned the same way.
+
 ## Cross-Job Data Flow
 
 Data can flow between jobs through job-level outputs and dependencies.
