@@ -114,7 +114,7 @@ func TestCmd_start(t *testing.T) {
 		expectCode     int
 		expectWorkflow string
 		expectVerbose  bool
-		expectTiming       bool
+		expectTiming   bool
 		expectHelp     bool
 		expectOutput   string
 	}{
@@ -125,7 +125,7 @@ func TestCmd_start(t *testing.T) {
 			expectHelp:     true,
 			expectWorkflow: "",
 			expectVerbose:  false,
-			expectTiming:       false,
+			expectTiming:   false,
 			expectOutput:   help,
 		},
 		{
@@ -135,7 +135,7 @@ func TestCmd_start(t *testing.T) {
 			expectHelp:     false,
 			expectWorkflow: "",
 			expectVerbose:  false,
-			expectTiming:       false,
+			expectTiming:   false,
 			expectOutput:   "",
 		},
 		{
@@ -145,7 +145,7 @@ func TestCmd_start(t *testing.T) {
 			expectHelp:     false,
 			expectWorkflow: "",
 			expectVerbose:  false,
-			expectTiming:       false,
+			expectTiming:   false,
 			expectOutput:   "[ERROR] workflow is required\n",
 		},
 		{
@@ -155,7 +155,7 @@ func TestCmd_start(t *testing.T) {
 			expectHelp:     false,
 			expectWorkflow: "test.yml",
 			expectVerbose:  false,
-			expectTiming:       false,
+			expectTiming:   false,
 			expectOutput:   "",
 		},
 		{
@@ -165,7 +165,7 @@ func TestCmd_start(t *testing.T) {
 			expectHelp:     false,
 			expectWorkflow: "",
 			expectVerbose:  true,
-			expectTiming:       false,
+			expectTiming:   false,
 			expectOutput:   "[ERROR] workflow is required\n",
 		},
 		{
@@ -175,7 +175,7 @@ func TestCmd_start(t *testing.T) {
 			expectHelp:     false,
 			expectWorkflow: "",
 			expectVerbose:  false,
-			expectTiming:       true,
+			expectTiming:   true,
 			expectOutput:   "[ERROR] workflow is required\n",
 		},
 		{
@@ -185,7 +185,7 @@ func TestCmd_start(t *testing.T) {
 			expectHelp:     false,
 			expectWorkflow: "test.yml",
 			expectVerbose:  true,
-			expectTiming:       true,
+			expectTiming:   true,
 			expectOutput:   "",
 		},
 		{
@@ -195,7 +195,7 @@ func TestCmd_start(t *testing.T) {
 			expectHelp:     false,
 			expectWorkflow: "test.yml",
 			expectVerbose:  true,
-			expectTiming:       false,
+			expectTiming:   false,
 			expectOutput:   "",
 		},
 		{
@@ -205,7 +205,7 @@ func TestCmd_start(t *testing.T) {
 			expectHelp:     true,
 			expectWorkflow: "",
 			expectVerbose:  false,
-			expectTiming:       false,
+			expectTiming:   false,
 			expectOutput:   help,
 		},
 		{
@@ -215,7 +215,7 @@ func TestCmd_start(t *testing.T) {
 			expectHelp:     false,
 			expectWorkflow: "test.yml",
 			expectVerbose:  true,
-			expectTiming:       false,
+			expectTiming:   false,
 			expectOutput:   "",
 		},
 		{
@@ -225,7 +225,7 @@ func TestCmd_start(t *testing.T) {
 			expectHelp:     false,
 			expectWorkflow: "test.yml",
 			expectVerbose:  true,
-			expectTiming:       true,
+			expectTiming:   true,
 			expectOutput:   "",
 		},
 		{
@@ -235,7 +235,7 @@ func TestCmd_start(t *testing.T) {
 			expectHelp:     false,
 			expectWorkflow: "test.yml",
 			expectVerbose:  true,
-			expectTiming:       true,
+			expectTiming:   true,
 			expectOutput:   "",
 		},
 		{
@@ -245,7 +245,7 @@ func TestCmd_start(t *testing.T) {
 			expectHelp:     false,
 			expectWorkflow: "test.yml",
 			expectVerbose:  true,
-			expectTiming:       false,
+			expectTiming:   false,
 			expectOutput:   "",
 		},
 	}
