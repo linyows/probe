@@ -909,7 +909,7 @@ jobs:
     uses: shell
     with:
       background: true
-      cmd: python3 e2e/echo-server.py 8091
+      cmd: go run ./e2e/echo-server -addr 127.0.0.1:8091
     test: status == -1
     outputs:
       echo_pid: res.pid
@@ -921,10 +921,11 @@ jobs:
     with:
       url: http://127.0.0.1:8091
       get: /
+    # go run builds the server first
     retry:
-      max_attempts: 10
-      interval: "0.5s"
-      initial_delay: "0.5s"
+      max_attempts: 60
+      interval: "1s"
+      initial_delay: "1s"
     test: res.code == 200
   - name: external-action.yml downloads the action into an empty cache
     uses: shell
