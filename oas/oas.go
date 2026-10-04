@@ -56,10 +56,10 @@ type workflowMap struct {
 }
 
 type jobMap struct {
-	Name     string       `yaml:"name"`
-	ID       string       `yaml:"id"`
-	Defaults any          `yaml:"defaults,omitempty"`
-	Steps    []stepMap    `yaml:"steps"`
+	Name     string    `yaml:"name"`
+	ID       string    `yaml:"id"`
+	Defaults any       `yaml:"defaults,omitempty"`
+	Steps    []stepMap `yaml:"steps"`
 }
 
 type stepMap struct {
@@ -549,4 +549,3 @@ func toSnakeCase(s string) string {
 	s = strings.Trim(s, "_")
 	return s
 }
-
