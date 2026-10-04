@@ -9,6 +9,7 @@ import (
 	"github.com/linyows/probe/expr"
 	"github.com/linyows/probe/mask"
 	"github.com/linyows/probe/procgroup"
+	"github.com/linyows/probe/report"
 )
 
 type Workflow struct {
@@ -99,18 +100,18 @@ func (w *Workflow) Start(c Config) error {
 
 // writeReports writes every requested report file. A file that cannot be
 // written does not stop the others; the errors are returned together.
-func (w *Workflow) writeReports(targets []ReportTarget, rs *Result, order []string, startedAt, finishedAt time.Time) error {
+func (w *Workflow) writeReports(targets []report.Target, rs *Result, order []string, startedAt, finishedAt time.Time) error {
 	if len(targets) == 0 {
 		return nil
 	}
 
-	report := BuildReport(w.Name, w.Description, rs, order, startedAt, finishedAt)
-	report.Mask(w.printer.Masker())
+	r := BuildReport(w.Name, w.Description, rs, order, startedAt, finishedAt)
+	r.Mask(w.printer.Masker())
 
 	var errs []error
 	for _, t := range targets {
-		err := report.Write(t)
-		if errors.Is(err, ErrNoStepSummary) || errors.Is(err, ErrStepSummaryFull) {
+		err := r.Write(t)
+		if errors.Is(err, report.ErrNoStepSummary) || errors.Is(err, report.ErrStepSummaryFull) {
 			// Outside GitHub Actions there is no summary to write to, and a
 			// full one has no room; say so and carry on, so one command line
 			// serves CI and a laptop and a full summary fails no run.

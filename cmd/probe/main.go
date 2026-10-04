@@ -14,6 +14,7 @@ import (
 	"github.com/linyows/probe/actionrpc"
 	"github.com/linyows/probe/actions"
 	"github.com/linyows/probe/oas"
+	"github.com/linyows/probe/report"
 )
 
 var (
@@ -134,7 +135,7 @@ func (c *Cmd) parseArgs(args []string) error {
 					flagValue = args[i+1]
 					skipNext = true
 				}
-				if _, err := probe.ParseReportTargets(flagValue); err != nil {
+				if _, err := report.ParseTargets(flagValue); err != nil {
 					return err
 				}
 				c.Report = flagValue
@@ -334,11 +335,11 @@ func (c *Cmd) runProbe() int {
 	p.Config.Output = mode
 
 	// Likewise the flag wins over PROBE_REPORT.
-	report := c.Report
-	if report == "" {
-		report = os.Getenv("PROBE_REPORT")
+	spec := c.Report
+	if spec == "" {
+		spec = os.Getenv("PROBE_REPORT")
 	}
-	reports, err := probe.ParseReportTargets(report)
+	reports, err := report.ParseTargets(spec)
 	if err != nil {
 		_, _ = fmt.Fprintf(c.errWriter, "[ERROR] %v\n", err)
 		return probe.ExitConfigError

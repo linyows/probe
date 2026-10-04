@@ -3,6 +3,8 @@ package probe
 import (
 	"sync"
 	"time"
+
+	"github.com/linyows/probe/report"
 )
 
 // StatusType represents the status of execution
@@ -48,12 +50,13 @@ type StepResult struct {
 	Failure *StepFailure  // Why the step failed; nil unless Status is StatusError
 }
 
-// Failure kinds recorded on a StepFailure.
+// Failure kinds recorded on a StepFailure. They are the kinds a report
+// carries, so they are defined there.
 const (
-	FailureAssertion = "assertion"  // The test expression evaluated to false
-	FailureTestError = "test_error" // The test expression could not be evaluated
-	FailureTestType  = "test_type"  // The test expression did not evaluate to a boolean
-	FailureAction    = "action"     // The action itself returned an error
+	FailureAssertion = report.FailureAssertion
+	FailureTestError = report.FailureTestError
+	FailureTestType  = report.FailureTestType
+	FailureAction    = report.FailureAction
 )
 
 // StepFailure describes a failed step without terminal formatting, so that

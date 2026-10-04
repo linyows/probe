@@ -12,6 +12,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/linyows/probe/report"
+
 	"github.com/linyows/probe/expr"
 )
 
@@ -1148,7 +1150,7 @@ func TestWorkflow_MasksSecrets(t *testing.T) {
 	w.printer.verbose = true
 
 	path := filepath.Join(t.TempDir(), "report.json")
-	if err := w.Start(Config{Verbose: true, Reports: []ReportTarget{{Format: ReportJSON, Path: path}}}); err != nil {
+	if err := w.Start(Config{Verbose: true, Reports: []report.Target{{Format: report.JSON, Path: path}}}); err != nil {
 		t.Fatalf("Start: %v", err)
 	}
 
