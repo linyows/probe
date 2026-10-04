@@ -890,3 +890,20 @@ func TestDoStdoutNotEmpty(t *testing.T) {
 		t.Fatal(msg)
 	}
 }
+
+func TestExecuteStopsOnUnreadableParameter(t *testing.T) {
+	// A parameter that cannot be read fails the step before the command
+	// runs; it used to run the command with the parameter at its zero value,
+	// here in the foreground, and report the error only afterwards.
+	marker := filepath.Join(t.TempDir(), "ran")
+	_, err := Execute(map[string]any{
+		"cmd":        "touch " + marker,
+		"background": "maybe",
+	})
+	if err == nil {
+		t.Fatal("Execute() succeeded with an unreadable background")
+	}
+	if _, statErr := os.Stat(marker); !os.IsNotExist(statErr) {
+		t.Errorf("the command ran although background could not be read: %v", statErr)
+	}
+}
