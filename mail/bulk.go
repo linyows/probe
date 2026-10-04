@@ -29,6 +29,12 @@ type Bulk struct {
 	Message    int    `map:"message"`
 	Length     int    `map:"length"`
 
+	// StartTLS is off, auto or required, as the smtp action's starttls. It
+	// is off when empty, as Bulk always was.
+	StartTLS string
+	// InsecureSkipTLS accepts any certificate after STARTTLS.
+	InsecureSkipTLS bool
+
 	mu    sync.Mutex
 	count int
 }
@@ -128,13 +134,15 @@ func (b *Bulk) Send() (int, error) {
 	}
 
 	m := &Mail{
-		Addr:             b.Addr,
-		LocalName:        b.MyHostname,
-		MailFrom:         b.From,
-		RcptTo:           splitRecipients(b.To),
-		Data:             b.makeData(),
-		StartTLSDisabled: true,
-		MessageCount:     n,
+		Addr:               b.Addr,
+		LocalName:          b.MyHostname,
+		MailFrom:           b.From,
+		RcptTo:             splitRecipients(b.To),
+		Data:               b.makeData(),
+		StartTLSDisabled:   b.StartTLS == "" || b.StartTLS == StartTLSOff,
+		StartTLSRequired:   b.StartTLS == StartTLSRequired,
+		InsecureSkipVerify: b.InsecureSkipTLS,
+		MessageCount:       n,
 	}
 
 	err := m.Send()

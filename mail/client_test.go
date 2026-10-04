@@ -21,6 +21,7 @@ func TestNewReq(t *testing.T) {
 		Session:    1,
 		Message:    1,
 		Length:     0,
+		StartTLS:   StartTLSAuto,
 	}
 
 	if !reflect.DeepEqual(got, expected) {
@@ -525,5 +526,54 @@ func TestReqDo_RejectedAndDropped(t *testing.T) {
 		if !strings.Contains(result.Res.Error, "550") {
 			t.Errorf("run %d: error = %q, want the server's reply", i, result.Res.Error)
 		}
+	}
+}
+
+func TestSendStartTLS(t *testing.T) {
+	// The smtp action's starttls and insecure_skip_tls, against a server that
+	// offers STARTTLS with a self-signed certificate.
+	addr := startMockServer(t, true)
+	params := func(extra map[string]any) map[string]any {
+		p := map[string]any{"addr": addr, "from": "from@example.com", "to": "to@example.com", "subject": "test"}
+		for k, v := range extra {
+			p[k] = v
+		}
+		return p
+	}
+
+	// auto is the default, so STARTTLS is taken up and the certificate
+	// checked, which a self-signed one fails
+	if _, err := Send(params(nil)); err == nil || !strings.Contains(err.Error(), "certificate") {
+		t.Errorf("default: error = %v, want a certificate error", err)
+	}
+
+	for _, extra := range []map[string]any{
+		{"starttls": "required", "insecure_skip_tls": true},
+		{"starttls": "AUTO", "insecure_skip_tls": true},
+		{"starttls": "off"},
+	} {
+		ret, err := Send(params(extra))
+		if err != nil {
+			t.Errorf("%v: Send() error: %v", extra, err)
+			continue
+		}
+		res, _ := ret["res"].(map[string]any)
+		if res["code"] != 0 || res["sent"] != 1 {
+			t.Errorf("%v: res = %v, want one message sent", extra, res)
+		}
+	}
+
+	if _, err := Send(params(map[string]any{"starttls": "sometimes"})); err == nil || !strings.Contains(err.Error(), "off, auto or required") {
+		t.Errorf("invalid starttls: error = %v, want the values there are", err)
+	}
+}
+
+func TestSendStartTLSRequiredNotOffered(t *testing.T) {
+	// required fails a server that does not offer STARTTLS, rather than
+	// sending in plain text
+	addr := startMockServer(t, false)
+	_, err := Send(map[string]any{"addr": addr, "from": "from@example.com", "to": "to@example.com", "starttls": "required"})
+	if err == nil || !strings.Contains(err.Error(), "does not offer STARTTLS") {
+		t.Errorf("error = %v, want the server not offering STARTTLS", err)
 	}
 }

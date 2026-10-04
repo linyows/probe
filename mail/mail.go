@@ -20,7 +20,13 @@ type Mail struct {
 	Data             []byte
 	Auth             smtp.Auth
 	StartTLSDisabled bool
-	MessageCount     int
+	// StartTLSRequired fails the session when the server does not offer
+	// STARTTLS, instead of going on in plain text.
+	StartTLSRequired bool
+	// InsecureSkipVerify accepts any certificate after STARTTLS, such as a
+	// self-signed one.
+	InsecureSkipVerify bool
+	MessageCount       int
 	// Delivered is how many messages the server accepted in the last Send.
 	// Each message is committed on its own, so a Send that fails part way
 	// has still delivered the ones before.
@@ -62,14 +68,18 @@ func (m *Mail) Send() error {
 		return fmt.Errorf("smtp hello error: %w", err)
 	}
 	if !m.StartTLSDisabled {
-		if ok, _ := c.Extension("STARTTLS"); ok {
-			config := &tls.Config{ServerName: c.serverName}
+		ok, _ := c.Extension("STARTTLS")
+		switch {
+		case ok:
+			config := &tls.Config{ServerName: c.serverName, InsecureSkipVerify: m.InsecureSkipVerify}
 			if testHookStartTLS != nil {
 				testHookStartTLS(config)
 			}
 			if err = c.StartTLS(config); err != nil {
 				return fmt.Errorf("starttls error: %w", err)
 			}
+		case m.StartTLSRequired:
+			return errors.New("starttls error: the server does not offer STARTTLS")
 		}
 	}
 	if m.Auth != nil && c.ext != nil {
