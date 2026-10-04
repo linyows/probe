@@ -14,7 +14,19 @@ type Outputs struct {
 	// owners records which step published each flat output name. The first
 	// step to publish a name keeps it.
 	owners map[string]string
-	mu     sync.RWMutex
+	// parent is the workflow's store when this one holds a single run of a
+	// job repeated asynchronously. The run reads its own outputs before the
+	// parent's, so that it never sees another run's, and writes only its
+	// own; published lists what it wrote, in order, for publish to replay.
+	parent    *Outputs
+	published []publication
+	mu        sync.RWMutex
+}
+
+// publication is one Set call of a run.
+type publication struct {
+	stepID  string
+	outputs map[string]any
 }
 
 // NewOutputs creates a new Outputs instance
@@ -25,15 +37,71 @@ func NewOutputs() *Outputs {
 	}
 }
 
+// newRunOutputs returns a store for one run of a job repeated
+// asynchronously, in front of parent.
+func newRunOutputs(parent *Outputs) *Outputs {
+	run := NewOutputs()
+	run.parent = parent
+	return run
+}
+
+// publish copies into o what the run wrote, in the order it wrote it, so
+// that later jobs read the outputs that run left.
+func (o *Outputs) publish(run *Outputs) error {
+	run.mu.RLock()
+	published := run.published
+	run.mu.RUnlock()
+
+	var errs []error
+	for _, p := range published {
+		errs = append(errs, o.Set(p.stepID, p.outputs))
+	}
+	return errors.Join(errs...)
+}
+
+// lookupLocked returns the entry under name, the run's own before its
+// parent's. o.mu must be held.
+func (o *Outputs) lookupLocked(name string) (any, bool) {
+	if v, ok := o.data[name]; ok {
+		return v, true
+	}
+	if o.parent == nil {
+		return nil, false
+	}
+	o.parent.mu.RLock()
+	defer o.parent.mu.RUnlock()
+	v, ok := o.parent.data[name]
+	return v, ok
+}
+
+// ownerLocked returns the step that published the flat name, looking in
+// the parent too. o.mu must be held.
+func (o *Outputs) ownerLocked(name string) (string, bool) {
+	if owner, ok := o.owners[name]; ok {
+		return owner, true
+	}
+	if o.parent == nil {
+		return "", false
+	}
+	o.parent.mu.RLock()
+	defer o.parent.mu.RUnlock()
+	owner, ok := o.parent.owners[name]
+	return owner, ok
+}
+
 // Set stores outputs for a step with flat access support
 func (o *Outputs) Set(stepID string, outputs map[string]any) error {
 	o.mu.Lock()
 	defer o.mu.Unlock()
 
+	if o.parent != nil {
+		o.published = append(o.published, publication{stepID: stepID, outputs: outputs})
+	}
+
 	// Check if stepID conflicts with existing flat data
 	stepIDConflictsWithFlat := false
 	var conflictError error
-	if existingValue, exists := o.data[stepID]; exists {
+	if existingValue, exists := o.lookupLocked(stepID); exists {
 		if _, isMap := existingValue.(map[string]any); !isMap {
 			// stepID conflicts with existing flat data - this will prevent step-based access
 			stepIDConflictsWithFlat = true
@@ -59,8 +127,9 @@ func (o *Outputs) Set(stepID string, outputs map[string]any) error {
 	}
 	sort.Strings(names)
 	for _, outputName := range names {
-		owner, owned := o.owners[outputName]
-		_, isStep := o.data[outputName].(map[string]any)
+		owner, owned := o.ownerLocked(outputName)
+		existing, _ := o.lookupLocked(outputName)
+		_, isStep := existing.(map[string]any)
 
 		// Where this value can still be read when the name alone is taken:
 		// through the step's id, unless that was taken as well above.
@@ -105,7 +174,7 @@ func (o *Outputs) Get(stepID string) (map[string]any, bool) {
 	o.mu.RLock()
 	defer o.mu.RUnlock()
 
-	value, exists := o.data[stepID]
+	value, exists := o.lookupLocked(stepID)
 	if !exists {
 		return nil, false
 	}
@@ -122,7 +191,7 @@ func (o *Outputs) GetFlat(outputName string) (any, bool) {
 	o.mu.RLock()
 	defer o.mu.RUnlock()
 
-	value, exists := o.data[outputName]
+	value, exists := o.lookupLocked(outputName)
 	if !exists {
 		return nil, false
 	}
@@ -135,12 +204,16 @@ func (o *Outputs) GetFlat(outputName string) (any, bool) {
 	return value, true
 }
 
-// GetAll returns all outputs (safe copy for expression evaluation)
+// GetAll returns all outputs (safe copy for expression evaluation). A run's
+// own outputs stand in front of its parent's.
 func (o *Outputs) GetAll() map[string]any {
+	copy := make(map[string]any)
+	if o.parent != nil {
+		copy = o.parent.GetAll()
+	}
+
 	o.mu.RLock()
 	defer o.mu.RUnlock()
-
-	copy := make(map[string]any)
 
 	for k, v := range o.data {
 		if stepOutputs, ok := v.(map[string]any); ok {

@@ -234,6 +234,8 @@ jobs:
         test: res.code == 200
 ```
 
+Each run's steps read the outputs that the earlier steps of the same run published, also when `async` runs them at the same time. The jobs after it read the outputs of the last run.
+
 ## Steps
 
 A step is one action invocation plus what surrounds it: the condition that decides whether it runs, the test that decides whether it passed, and the outputs it leaves for later steps.

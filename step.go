@@ -298,14 +298,17 @@ func (st *Step) finalize(name string, actionResult map[string]any, jCtx *JobCont
 		jCtx.Printer.PrintRequestResponse(st.Idx, name, st.ctx.Req, st.ctx.Res, st.ctx.RT.Duration)
 	}
 
+	// Outputs are saved before the test and echo, as always; a repeated job
+	// used to skip this, so its later steps could not read its earlier ones.
+	st.saveOutputs(jCtx)
+
 	// Handle repeat execution
 	if jCtx.IsRepeating {
 		st.handleRepeatExecution(jCtx, name, false) // false = no error
 		return
 	}
 
-	// Standard execution: save outputs and create result
-	st.saveOutputs(jCtx)
+	// Standard execution: create result
 	stepResult := st.createStepResult(name, jCtx, nil)
 
 	// Add step result to workflow buffer

@@ -111,6 +111,13 @@ func (e *Executor) executeJobRepeatLoopAsync(ctx JobContext) bool {
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
+	// The runs overlap, so each writes its outputs to a store of its own,
+	// in front of the workflow's, and reads its own before anyone else's.
+	// Once all are done, the outputs of the last run are published, as a
+	// job repeated in turn leaves them.
+	var runsMu sync.Mutex
+	runs := make(map[int]*Outputs)
+
 	for ctx.JobScheduler.ShouldRepeatJob(jobID) {
 		current, _ := ctx.JobScheduler.GetRepeatInfo(jobID)
 
@@ -127,6 +134,12 @@ func (e *Executor) executeJobRepeatLoopAsync(ctx JobContext) bool {
 			// Create a copy of context for this goroutine
 			execCtx := ctx
 			execCtx.RepeatCurrent = repeatIndex
+			if ctx.Outputs != nil {
+				execCtx.Outputs = newRunOutputs(ctx.Outputs)
+				runsMu.Lock()
+				runs[repeatIndex] = execCtx.Outputs
+				runsMu.Unlock()
+			}
 
 			// Execute single run
 			err := j.Start(execCtx)
@@ -147,6 +160,16 @@ func (e *Executor) executeJobRepeatLoopAsync(ctx JobContext) bool {
 
 	// Wait for all goroutines to complete
 	wg.Wait()
+
+	last := -1
+	for i := range runs {
+		last = max(last, i)
+	}
+	if last >= 0 {
+		// Any taken name was warned about when the run wrote it, so the same
+		// warnings are not repeated here.
+		_ = ctx.Outputs.publish(runs[last])
+	}
 
 	return overallSuccess.Load()
 }
