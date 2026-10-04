@@ -386,13 +386,12 @@ func (st *Step) handleRepeatExecution(jCtx *JobContext, name string, hasError bo
 	// Execute test first (outside of lock)
 	hasTest := st.Test != ""
 	testResult := true
-	var testOutput string
 
 	// If there was an error, always count as failure
 	if hasError {
 		testResult = false
 	} else if hasTest {
-		testOutput, testResult = st.DoTest(jCtx.Printer)
+		_, testResult = st.DoTest(jCtx.Printer)
 		if !testResult {
 			jCtx.SetFailed()
 			jCtx.Result.recordFailure(st.failure.Kind)
@@ -430,25 +429,10 @@ func (st *Step) handleRepeatExecution(jCtx *JobContext, name string, hasError bo
 		counter.EchoOutputs = append(counter.EchoOutputs, echoFormatted)
 	}
 
-	// Store updated counter back to map
+	// Store updated counter back to map. The step's result is made from the
+	// counter once every run is done (Executor.appendRepeatStepResults).
 	jCtx.StepCounters[st.Idx] = counter
 	jCtx.countersMu.Unlock()
-
-	// Display on first execution and final execution only
-	isFinalExecution := jCtx.RepeatCurrent == jCtx.RepeatTotal
-
-	if isFinalExecution {
-		// Create StepResult with repeat counter for final execution
-		stepResult := st.createStepResult(name, jCtx, &counter)
-		if hasTest && !testResult {
-			stepResult.TestOutput = testOutput
-		}
-
-		// Add step result to workflow buffer
-		if jCtx.Result != nil {
-			jCtx.Result.AddStepResult(jCtx.CurrentJobID, stepResult)
-		}
-	}
 
 	if st.Echo != "" {
 		if echoErr != nil {
@@ -776,21 +760,10 @@ func (st *Step) handleSkipRepeatExecution(jCtx *JobContext, name string) {
 	counter.SuccessCount++
 	counter.LastResult = true
 
-	// Store updated counter back to map
+	// Store updated counter back to map. The step's result is made from the
+	// counter once every run is done (Executor.appendRepeatStepResults).
 	jCtx.StepCounters[st.Idx] = counter
 	jCtx.countersMu.Unlock()
-
-	// Display on first execution and final execution only
-	isFinalExecution := jCtx.RepeatCurrent == jCtx.RepeatTotal
-
-	if isFinalExecution {
-		stepResult := st.createSkippedStepResult(name, jCtx, &counter)
-
-		// Add step result to workflow buffer
-		if jCtx.Result != nil {
-			jCtx.Result.AddStepResult(jCtx.CurrentJobID, stepResult)
-		}
-	}
 }
 
 // createSkippedStepResult creates a StepResult for a skipped step

@@ -1601,10 +1601,11 @@ func TestStep_handleRepeatExecution_AccumulatesEchoOutputs(t *testing.T) {
 	}
 	jCtx.Result.Jobs["job-1"] = &JobResult{JobID: "job-1"}
 
-	for i := 1; i <= 3; i++ {
+	// Runs are counted from 0, as the executor counts them.
+	for i := 0; i < 3; i++ {
 		jCtx.RepeatCurrent = i
 		step.ctx = StepContext{
-			Vars: map[string]any{"i": i},
+			Vars: map[string]any{"i": i + 1},
 		}
 		step.handleRepeatExecution(jCtx, "Repeat Step", false)
 	}
@@ -1622,6 +1623,14 @@ func TestStep_handleRepeatExecution_AccumulatesEchoOutputs(t *testing.T) {
 			t.Errorf("EchoOutputs[%d] = %q, want to contain %q", i, out, want)
 		}
 	}
+
+	// The runs themselves add no result; the executor makes one from the
+	// counter once they are done.
+	if got := len(jCtx.Result.Jobs["job-1"].StepResults); got != 0 {
+		t.Fatalf("StepResults length = %d after the runs, want 0", got)
+	}
+	e := &Executor{job: &Job{ID: "job-1", Steps: []*Step{{Name: "first"}, step}}}
+	e.appendRepeatStepResults(jCtx)
 
 	stepResults := jCtx.Result.Jobs["job-1"].StepResults
 	if len(stepResults) != 1 {
