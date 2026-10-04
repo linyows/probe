@@ -343,3 +343,49 @@ func TestOutputsWarningsAndErrorsApart(t *testing.T) {
 		t.Errorf("got %d warnings and %d errors, want 1 and 1: %v", warnings, others, err)
 	}
 }
+
+func TestRunOutputs(t *testing.T) {
+	parent := NewOutputs()
+	_ = parent.Set("setup", map[string]any{"base": "b", "token": "parent-token"})
+
+	run := newRunOutputs(parent)
+	if err := run.Set("pub", map[string]any{"v": "run"}); err != nil {
+		t.Fatalf("Set() error: %v", err)
+	}
+
+	// The run sees the parent's outputs and its own
+	if v, _ := run.GetFlat("base"); v != "b" {
+		t.Errorf("run base = %v, want the parent's", v)
+	}
+	if got, _ := run.Get("pub"); got["v"] != "run" {
+		t.Errorf("run pub.v = %v, want its own", got["v"])
+	}
+	if all := run.GetAll(); all["base"] != "b" || all["v"] != "run" {
+		t.Errorf("run GetAll = %v, want both", all)
+	}
+
+	// The parent does not see the run's until it is published
+	if _, ok := parent.Get("pub"); ok {
+		t.Error("parent has the run's outputs before publish")
+	}
+
+	// A name the parent's steps took stays theirs, as in a workflow
+	err := run.Set("other", map[string]any{"token": "run-token"})
+	var taken *NameTakenError
+	if !errors.As(err, &taken) {
+		t.Errorf("Set() = %v, want a name-taken warning", err)
+	}
+	if v, _ := run.GetFlat("token"); v != "parent-token" {
+		t.Errorf("run token = %v, want the parent's", v)
+	}
+
+	if err := parent.publish(run); err == nil {
+		t.Error("publish() gave no warning for the taken name")
+	}
+	if got, _ := parent.Get("pub"); got["v"] != "run" {
+		t.Errorf("parent pub.v = %v after publish, want the run's", got["v"])
+	}
+	if v, _ := parent.GetFlat("v"); v != "run" {
+		t.Errorf("parent v = %v after publish, want the run's", v)
+	}
+}

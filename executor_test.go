@@ -1,6 +1,7 @@
 package probe
 
 import (
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -232,5 +233,114 @@ func TestExecutor_AsyncRepeat_NoDataRace(t *testing.T) {
 	config := Config{Verbose: false}
 	if err := workflow.Start(config); err != nil {
 		t.Fatalf("workflow failed: %v", err)
+	}
+}
+
+// echoRunner answers every action with its own parameters as res, as hello
+// does, after sleeping for with.sleep when that is set. It records the
+// values of with.got, so that a test can see what each run read.
+type echoRunner struct {
+	mu  sync.Mutex
+	got []string
+}
+
+func (r *echoRunner) RunActions(name string, with map[string]any, opts RunOptions) (map[string]any, error) {
+	if s, ok := with["sleep"].(string); ok {
+		if d, err := time.ParseDuration(s); err == nil {
+			time.Sleep(d)
+		}
+	}
+	if got, ok := with["got"].(string); ok {
+		r.mu.Lock()
+		r.got = append(r.got, got)
+		r.mu.Unlock()
+	}
+	res := make(map[string]any, len(with))
+	for k, v := range with {
+		res[k] = v
+	}
+	return map[string]any{"req": with, "res": res, "status": 0}, nil
+}
+
+// repeatOutputsWorkflow repeats a job that publishes a value naming its run,
+// waits, and reads it back, followed by a job that reads it after. One step
+// is skipped by the last run.
+func repeatOutputsWorkflow(runner ActionRunner, async bool) *Workflow {
+	repeated := Job{
+		Name: "repeated",
+		ID:   "repeated",
+		Repeat: &Repeat{
+			Count:    4,
+			Interval: Interval{Duration: 10 * time.Millisecond},
+			Async:    async,
+		},
+		Steps: []*Step{
+			{
+				Name: "publish", ID: "pub", Uses: "hello", actionRunner: runner,
+				With:    map[string]any{"v": "run-{{repeat_index}}"},
+				Outputs: map[string]string{"v": "res.v"},
+			},
+			{
+				// The last run skips this one, so what the jobs after read is
+				// what the run before left.
+				Name: "early", ID: "early", Uses: "hello", actionRunner: runner,
+				SkipIf:  "repeat_index == 3",
+				With:    map[string]any{"e": "early-{{repeat_index}}"},
+				Outputs: map[string]string{"e": "res.e"},
+			},
+			{
+				// Long enough for the other runs to publish meanwhile.
+				Name: "pause", ID: "pause", Uses: "hello", actionRunner: runner,
+				With: map[string]any{"sleep": "100ms"},
+			},
+			{
+				Name: "read own", ID: "own", Uses: "hello", actionRunner: runner,
+				With: map[string]any{"got": "{{outputs.pub.v}}", "want": "run-{{repeat_index}}"},
+				Test: "res.got == res.want",
+			},
+		},
+	}
+	after := Job{
+		Name:  "after",
+		ID:    "after",
+		Needs: []string{"repeated"},
+		Steps: []*Step{
+			{
+				Name: "read last", ID: "last", Uses: "hello", actionRunner: runner,
+				With: map[string]any{"got": "{{outputs.pub.v}}", "early": "{{outputs.early.e}}"},
+				Test: `res.got == "run-3" && res.early == "early-2"`,
+			},
+		},
+	}
+	return &Workflow{
+		Name:    "repeat outputs",
+		Jobs:    []Job{repeated, after},
+		printer: newBufferPrinter(),
+	}
+}
+
+func TestRepeatedJobOutputs(t *testing.T) {
+	// A repeated job used to save no outputs at all, so its later steps
+	// could not read its earlier ones, nor could the jobs after it. Each run
+	// reads its own, also when the runs overlap, and the jobs after read
+	// those of the last run.
+	for _, async := range []bool{false, true} {
+		name := "in turn"
+		if async {
+			name = "async"
+		}
+		t.Run(name, func(t *testing.T) {
+			runner := &echoRunner{}
+			w := repeatOutputsWorkflow(runner, async)
+			if err := w.Start(Config{}); err != nil {
+				t.Fatalf("Start() error: %v", err)
+			}
+			if w.exitStatus != 0 {
+				runner.mu.Lock()
+				got := strings.Join(runner.got, ", ")
+				runner.mu.Unlock()
+				t.Errorf("exit status = %d, want 0; values read: %s", w.exitStatus, got)
+			}
+		})
 	}
 }

@@ -1,6 +1,7 @@
 package probe
 
 import (
+	"sort"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -111,6 +112,15 @@ func (e *Executor) executeJobRepeatLoopAsync(ctx JobContext) bool {
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
+	// The runs overlap, so each writes its outputs to a store of its own,
+	// in front of the workflow's, and reads its own before anyone else's.
+	// Once all are done, every run's outputs are published in the order of
+	// the runs, so that a later run's value replaces an earlier one's and a
+	// value only an earlier run published stays, as a job repeated in turn
+	// leaves them.
+	var runsMu sync.Mutex
+	runs := make(map[int]*Outputs)
+
 	for ctx.JobScheduler.ShouldRepeatJob(jobID) {
 		current, _ := ctx.JobScheduler.GetRepeatInfo(jobID)
 
@@ -127,6 +137,12 @@ func (e *Executor) executeJobRepeatLoopAsync(ctx JobContext) bool {
 			// Create a copy of context for this goroutine
 			execCtx := ctx
 			execCtx.RepeatCurrent = repeatIndex
+			if ctx.Outputs != nil {
+				execCtx.Outputs = newRunOutputs(ctx.Outputs)
+				runsMu.Lock()
+				runs[repeatIndex] = execCtx.Outputs
+				runsMu.Unlock()
+			}
 
 			// Execute single run
 			err := j.Start(execCtx)
@@ -147,6 +163,17 @@ func (e *Executor) executeJobRepeatLoopAsync(ctx JobContext) bool {
 
 	// Wait for all goroutines to complete
 	wg.Wait()
+
+	order := make([]int, 0, len(runs))
+	for i := range runs {
+		order = append(order, i)
+	}
+	sort.Ints(order)
+	for _, i := range order {
+		// Any taken name was warned about when the run wrote it, so the same
+		// warnings are not repeated here.
+		_ = ctx.Outputs.publish(runs[i])
+	}
 
 	return overallSuccess.Load()
 }
