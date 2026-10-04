@@ -29,14 +29,20 @@ type MockServer struct {
 	Name string
 	Log  *log.Logger
 	*TLS
+	// tlsConfig is loaded from TLS when the server starts, and is nil when
+	// the certificate cannot be read; the server then offers no STARTTLS.
+	tlsConfig *tls.Config
 }
 
 type MockServerSession struct {
 	id                string
 	server            *MockServer
+	conn              net.Conn
 	reader            *bufio.Reader
 	writer            *bufio.Writer
 	nowDataInProgress bool
+	// secure is set once the session has switched to TLS.
+	secure bool
 }
 
 func (s *MockServer) Serve() error {
@@ -48,6 +54,11 @@ func (s *MockServer) Serve() error {
 	}
 	if s.Log == nil {
 		s.Log = log.New(os.Stderr, "", log.LstdFlags)
+	}
+	// STARTTLS is offered only with a certificate to answer it with; offering
+	// it without one made every client that took it up fail.
+	if cert, err := tls.LoadX509KeyPair(s.CertPath, s.KeyPath); err == nil {
+		s.tlsConfig = &tls.Config{Certificates: []tls.Certificate{cert}}
 	}
 
 	listener, err := net.Listen("tcp", s.Addr)
@@ -79,6 +90,7 @@ func (s *MockServerSession) handle(conn net.Conn) {
 		return
 	}
 
+	s.conn = conn
 	s.reader = bufio.NewReader(conn)
 	s.writer = bufio.NewWriter(conn)
 
@@ -124,12 +136,18 @@ func (s *MockServerSession) handleCommand(cmd string) {
 	}
 	switch first {
 	case "EHLO":
-		str := `250-%s
-250-PIPELINING
-250-SIZE 10240000
-250-STARTTLS
-250 8BITMIME`
-		s.writeStringWithLog(fmt.Sprintf(strings.ReplaceAll(str, "\n", crlf), s.server.Name))
+		lines := []string{s.server.Name, "PIPELINING", "SIZE 10240000"}
+		if s.server.tlsConfig != nil && !s.secure {
+			lines = append(lines, "STARTTLS")
+		}
+		lines = append(lines, "8BITMIME")
+		for i, l := range lines {
+			sep := "-"
+			if i == len(lines)-1 {
+				sep = " "
+			}
+			s.writeStringWithLog("250" + sep + l)
+		}
 	case "HELO":
 		s.writeStringWithLog(fmt.Sprintf("250 Hello %s", parts[1]))
 	case "MAIL":
@@ -157,8 +175,13 @@ func (s *MockServerSession) handleCommand(cmd string) {
 	case "VRFY":
 		s.writeStringWithLog("502 5.5.1 VRFY command is disabled")
 	case "STARTTLS":
+		if s.server.tlsConfig == nil || s.secure {
+			s.writeStringWithLog("454 4.7.0 TLS not available")
+			return
+		}
 		s.writeStringWithLog("220 2.0.0 Ready to start TLS")
 		_ = s.writer.Flush()
+		s.startTLS()
 	default:
 		if !s.nowDataInProgress {
 			s.writeStringWithLog("500 Command not recognized")
@@ -175,19 +198,18 @@ func (s *MockServerSession) setOptimisticID() error {
 	return nil
 }
 
+// startTLS switches the session to TLS. A failed handshake ends it, since
+// the connection is in no state to go on in plain text.
+//
 //nolint:unused // Reserved for future TLS support
-func (s *MockServerSession) startTLS(conn net.Conn) {
-	cert, err := tls.LoadX509KeyPair(s.server.CertPath, s.server.KeyPath)
-	if err != nil {
-		s.server.Log.Printf("%s %s Error loading server certificate: %#v", s.id, inserver, err)
-		return
-	}
-	tlsConfig := &tls.Config{Certificates: []tls.Certificate{cert}}
-	tlsConn := tls.Server(conn, tlsConfig)
+func (s *MockServerSession) startTLS() {
+	tlsConn := tls.Server(s.conn, s.server.tlsConfig)
 	if err := tlsConn.Handshake(); err != nil {
-		s.writeStringWithLog("550 5.0.0 Handshake error")
+		s.server.Log.Printf("%s %s TLS handshake error: %v", s.id, inserver, err)
+		_ = s.conn.Close()
 		return
 	}
+	s.secure = true
 	s.reader = bufio.NewReader(tlsConn)
 	s.writer = bufio.NewWriter(tlsConn)
 }

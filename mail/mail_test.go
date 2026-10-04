@@ -3,14 +3,22 @@ package mail
 import (
 	"bufio"
 	"bytes"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
 	"crypto/tls"
+	"crypto/x509"
+	"crypto/x509/pkix"
+	"encoding/pem"
 	"errors"
 	"io"
 	"log"
+	"math/big"
 	"net"
 	"net/smtp"
 	"net/textproto"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -519,72 +527,123 @@ func TestMail_Send_NetworkErrors(t *testing.T) {
 	}
 }
 
+// writeSelfSignedCert writes a self-signed certificate for 127.0.0.1 and its
+// key into dir, and returns their paths.
+func writeSelfSignedCert(t *testing.T, dir string) (certPath, keyPath string) {
+	t.Helper()
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tmpl := &x509.Certificate{
+		SerialNumber: big.NewInt(1),
+		Subject:      pkix.Name{CommonName: "probe-test"},
+		NotBefore:    time.Now().Add(-time.Hour),
+		NotAfter:     time.Now().Add(time.Hour),
+		IPAddresses:  []net.IP{net.ParseIP("127.0.0.1")},
+		KeyUsage:     x509.KeyUsageDigitalSignature,
+		ExtKeyUsage:  []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+	}
+	der, err := x509.CreateCertificate(rand.Reader, tmpl, tmpl, &key.PublicKey, key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	keyDER, err := x509.MarshalECPrivateKey(key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	certPath = filepath.Join(dir, "cert.pem")
+	keyPath = filepath.Join(dir, "key.pem")
+	if err := os.WriteFile(certPath, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der}), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(keyPath, pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: keyDER}), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return certPath, keyPath
+}
+
+// startMockServer runs the mock SMTP server on 127.0.0.1, offering STARTTLS
+// with a self-signed certificate when withTLS is set, and returns its address.
+func startMockServer(t *testing.T, withTLS bool) string {
+	t.Helper()
+	dir := t.TempDir()
+	certPath, keyPath := filepath.Join(dir, "none.pem"), filepath.Join(dir, "none.key")
+	if withTLS {
+		certPath, keyPath = writeSelfSignedCert(t, dir)
+	}
+
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	addr := listener.Addr().String()
+	_ = listener.Close()
+
+	server := &MockServer{
+		Addr: addr,
+		Name: "test.example.com",
+		Log:  log.New(io.Discard, "", 0),
+		TLS:  &TLS{CertPath: certPath, KeyPath: keyPath},
+	}
+	go func() { _ = server.Serve() }()
+
+	deadline := time.Now().Add(3 * time.Second)
+	for {
+		if conn, err := net.Dial("tcp", addr); err == nil {
+			_ = conn.Close()
+			return addr
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("mock server on %s did not start", addr)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
 func TestMail_Send_StartTLS(t *testing.T) {
 	tests := []struct {
-		name             string
-		startTLSDisabled bool
-		wantError        bool
+		name       string
+		serverTLS  bool
+		disabled   bool
+		required   bool
+		skipVerify bool
+		wantErr    string
 	}{
-		{
-			name:             "STARTTLS disabled",
-			startTLSDisabled: true,
-			wantError:        false,
-		},
-		{
-			name:             "STARTTLS enabled",
-			startTLSDisabled: false,
-			wantError:        true, // Will fail due to TLS cert issues in test
-		},
+		{name: "off, server offers it", serverTLS: true, disabled: true},
+		// The certificate is self-signed, so verifying it fails: STARTTLS was
+		// taken up.
+		{name: "auto, verified", serverTLS: true, wantErr: "certificate"},
+		{name: "auto, not verified", serverTLS: true, skipVerify: true},
+		{name: "auto, server does not offer it", serverTLS: false},
+		{name: "required, server offers it", serverTLS: true, required: true, skipVerify: true},
+		{name: "required, server does not offer it", serverTLS: false, required: true, wantErr: "does not offer STARTTLS"},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Start mock SMTP server
-			mockServer := &MockServer{
-				Addr: "localhost:0",
-				Name: "test.example.com",
-				Log:  log.New(io.Discard, "", 0), // Disable logging for tests
+			m := &Mail{
+				Addr:               startMockServer(t, tt.serverTLS),
+				MailFrom:           "sender@example.com",
+				RcptTo:             []string{"recipient@example.com"},
+				Data:               []byte("Subject: Test\n\nTest message"),
+				StartTLSDisabled:   tt.disabled,
+				StartTLSRequired:   tt.required,
+				InsecureSkipVerify: tt.skipVerify,
+				MessageCount:       1,
 			}
-
-			// Create a listener to get a free port
-			listener, err := net.Listen("tcp", "localhost:0")
-			if err != nil {
-				t.Fatalf("failed to create listener: %v", err)
-			}
-			addr := listener.Addr().String()
-			_ = listener.Close()
-
-			mockServer.Addr = addr
-
-			// Start server in goroutine
-			go func() {
-				if err := mockServer.Serve(); err != nil {
-					t.Logf("mock server error: %v", err)
-				}
-			}()
-
-			// Give server time to start
-			time.Sleep(100 * time.Millisecond)
-
-			mail := &Mail{
-				Addr:             addr,
-				MailFrom:         "sender@example.com",
-				RcptTo:           []string{"recipient@example.com"},
-				Data:             []byte("Subject: Test\n\nTest message"),
-				StartTLSDisabled: tt.startTLSDisabled,
-				MessageCount:     1,
-			}
-
-			err = mail.Send()
-
-			if tt.wantError {
-				if err == nil {
-					t.Error("expected error but got none")
-				}
-			} else {
+			err := m.Send()
+			if tt.wantErr == "" {
 				if err != nil {
-					t.Errorf("expected no error but got %v", err)
+					t.Fatalf("Send() error: %v", err)
 				}
+				if m.Delivered != 1 {
+					t.Errorf("Delivered = %d, want 1", m.Delivered)
+				}
+				return
+			}
+			if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+				t.Errorf("Send() error = %v, want one containing %q", err, tt.wantErr)
 			}
 		})
 	}
@@ -607,44 +666,17 @@ func TestMail_Send_StartTLSHook(t *testing.T) {
 		}
 	}
 
-	// Start mock SMTP server
-	mockServer := &MockServer{
-		Addr: "localhost:0",
-		Name: "test.example.com",
-		Log:  log.New(io.Discard, "", 0), // Disable logging for tests
-	}
-
-	// Create a listener to get a free port
-	listener, err := net.Listen("tcp", "localhost:0")
-	if err != nil {
-		t.Fatalf("failed to create listener: %v", err)
-	}
-	addr := listener.Addr().String()
-	_ = listener.Close()
-
-	mockServer.Addr = addr
-
-	// Start server in goroutine
-	go func() {
-		if err := mockServer.Serve(); err != nil {
-			t.Logf("mock server error: %v", err)
-		}
-	}()
-
-	// Give server time to start
-	time.Sleep(100 * time.Millisecond)
-
 	mail := &Mail{
-		Addr:             addr,
-		MailFrom:         "sender@example.com",
-		RcptTo:           []string{"recipient@example.com"},
-		Data:             []byte("Subject: Test\n\nTest message"),
-		StartTLSDisabled: false, // Enable STARTTLS to trigger hook
-		MessageCount:     1,
+		Addr:               startMockServer(t, true),
+		MailFrom:           "sender@example.com",
+		RcptTo:             []string{"recipient@example.com"},
+		Data:               []byte("Subject: Test\n\nTest message"),
+		InsecureSkipVerify: true,
+		MessageCount:       1,
 	}
-
-	// This will fail due to certificate issues, but hook should be called
-	_ = mail.Send() // Intentionally ignoring error for test
+	if err := mail.Send(); err != nil {
+		t.Errorf("Send() error: %v", err)
+	}
 
 	if !hookCalled {
 		t.Error("expected testHookStartTLS to be called")

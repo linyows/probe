@@ -35,8 +35,10 @@ The fields below describe the delivery. All of them accept template expressions.
 | `session` | Integer | No | `1` | Number of SMTP sessions to open at the same time |
 | `message` | Integer | No | `1` | Messages to send in total, divided among the sessions |
 | `length` | Integer | No | `0` | Number of `*` characters appended to the generated body |
+| `starttls` | String | No | `auto` | `auto` switches to TLS with `STARTTLS` when the server offers it, `required` fails a session whose server does not, and `off` never uses it |
+| `insecure_skip_tls` | Boolean | No | `false` | Accept any certificate after `STARTTLS`, such as a self-signed one |
 
-There are no parameters for authentication, TLS, CC/BCC, a custom body or HTML. To include a report in the run output, use the step's `echo`.
+After `STARTTLS` the server's certificate is verified against the host in `addr`, so a self-signed or mismatched one fails the session unless `insecure_skip_tls` is set. A connection that starts in TLS, as on port 465, is not supported. There are no parameters for authentication, CC/BCC, a custom body or HTML. To include a report in the run output, use the step's `echo`.
 
 The generated message has `From`, `To`, `Date` and `Subject` headers and a body of `This is a test mail.` followed by `length` `*` characters, broken into lines of 80.
 

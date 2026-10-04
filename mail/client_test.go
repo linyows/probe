@@ -5,6 +5,7 @@ import (
 	"net/textproto"
 	"reflect"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -21,6 +22,7 @@ func TestNewReq(t *testing.T) {
 		Session:    1,
 		Message:    1,
 		Length:     0,
+		StartTLS:   StartTLSAuto,
 	}
 
 	if !reflect.DeepEqual(got, expected) {
@@ -525,5 +527,90 @@ func TestReqDo_RejectedAndDropped(t *testing.T) {
 		if !strings.Contains(result.Res.Error, "550") {
 			t.Errorf("run %d: error = %q, want the server's reply", i, result.Res.Error)
 		}
+	}
+}
+
+func TestSendStartTLS(t *testing.T) {
+	// The smtp action's starttls and insecure_skip_tls, against a server that
+	// offers STARTTLS with a self-signed certificate.
+	addr := startMockServer(t, true)
+	params := func(extra map[string]any) map[string]any {
+		p := map[string]any{"addr": addr, "from": "from@example.com", "to": "to@example.com", "subject": "test"}
+		for k, v := range extra {
+			p[k] = v
+		}
+		return p
+	}
+
+	// auto is the default, so STARTTLS is taken up and the certificate
+	// checked, which a self-signed one fails
+	if _, err := Send(params(nil)); err == nil || !strings.Contains(err.Error(), "certificate") {
+		t.Errorf("default: error = %v, want a certificate error", err)
+	}
+
+	for _, extra := range []map[string]any{
+		{"starttls": "required", "insecure_skip_tls": true},
+		{"starttls": "AUTO", "insecure_skip_tls": true},
+		{"starttls": "off"},
+	} {
+		ret, err := Send(params(extra))
+		if err != nil {
+			t.Errorf("%v: Send() error: %v", extra, err)
+			continue
+		}
+		res, _ := ret["res"].(map[string]any)
+		if res["code"] != 0 || res["sent"] != 1 {
+			t.Errorf("%v: res = %v, want one message sent", extra, res)
+		}
+	}
+
+	if _, err := Send(params(map[string]any{"starttls": "sometimes"})); err == nil || !strings.Contains(err.Error(), "off, auto or required") {
+		t.Errorf("invalid starttls: error = %v, want the values there are", err)
+	}
+}
+
+func TestSendStartTLSRequiredNotOffered(t *testing.T) {
+	// required fails a server that does not offer STARTTLS, rather than
+	// sending in plain text
+	addr := startMockServer(t, false)
+	_, err := Send(map[string]any{"addr": addr, "from": "from@example.com", "to": "to@example.com", "starttls": "required"})
+	if err == nil || !strings.Contains(err.Error(), "does not offer STARTTLS") {
+		t.Errorf("error = %v, want the server not offering STARTTLS", err)
+	}
+}
+
+func TestSendStopsOnUnreadableParameter(t *testing.T) {
+	// A parameter that cannot be read fails the step before anything is
+	// sent; it used to send with the parameter at its zero value and report
+	// the error only afterwards.
+	lis, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = lis.Close() })
+	var accepted atomic.Int32
+	go func() {
+		for {
+			conn, err := lis.Accept()
+			if err != nil {
+				return
+			}
+			accepted.Add(1)
+			_ = conn.Close()
+		}
+	}()
+
+	_, err = Send(map[string]any{
+		"addr":              lis.Addr().String(),
+		"from":              "from@example.com",
+		"to":                "to@example.com",
+		"insecure_skip_tls": "invalid",
+	})
+	if err == nil {
+		t.Fatal("Send() succeeded with an unreadable insecure_skip_tls")
+	}
+	time.Sleep(100 * time.Millisecond)
+	if n := accepted.Load(); n != 0 {
+		t.Errorf("the server got %d connections, want none", n)
 	}
 }

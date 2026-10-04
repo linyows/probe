@@ -35,8 +35,10 @@ steps:
 | `session` | Integer | 任意 | `1` | 同時に開くSMTPセッション数 |
 | `message` | Integer | 任意 | `1` | 全セッション合計の送信通数。セッションに振り分けて送る |
 | `length` | Integer | 任意 | `0` | 生成する本文の末尾に付ける`*`の文字数 |
+| `starttls` | String | 任意 | `auto` | `auto`はサーバーが提示していれば`STARTTLS`でTLSに切り替え、`required`は提示しないサーバーのセッションを失敗させ、`off`は使わない |
+| `insecure_skip_tls` | Boolean | 任意 | `false` | `STARTTLS`の後、自己署名などどんな証明書も受け入れる |
 
-認証、TLS、CC/BCC、任意の本文やHTMLを指定するパラメータはありません。実行結果にレポートを出したい場合はステップの`echo`を使います。
+`STARTTLS`の後はサーバーの証明書を`addr`のホストで検証するため、自己署名の証明書やホストの合わない証明書は、`insecure_skip_tls`を指定しない限りセッションを失敗させます。ポート465のように最初からTLSで始まる接続には対応していません。認証、CC/BCC、任意の本文やHTMLを指定するパラメータはありません。実行結果にレポートを出したい場合はステップの`echo`を使います。
 
 生成するメッセージには`From`、`To`、`Date`、`Subject`のヘッダーが付きます。本文は`This is a test mail.`の後に`length`個の`*`を続けたもので、80文字ごとに改行します。
 

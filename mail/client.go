@@ -2,6 +2,7 @@ package mail
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/linyows/probe/binary"
@@ -17,8 +18,19 @@ type Req struct {
 	Session    int    `map:"session"`
 	Message    int    `map:"message"`
 	Length     int    `map:"length"`
-	cb         *Callback
+	// StartTLS is off, auto (use it when the server offers it) or required
+	// (fail when it does not).
+	StartTLS        string `map:"starttls"`
+	InsecureSkipTLS bool   `map:"insecure_skip_tls"`
+	cb              *Callback
 }
+
+// The values of starttls.
+const (
+	StartTLSOff      = "off"
+	StartTLSAuto     = "auto"
+	StartTLSRequired = "required"
+)
 
 type Res struct {
 	Code     int    `map:"code"`
@@ -46,9 +58,10 @@ type Callback struct {
 
 func NewReq() *Req {
 	return &Req{
-		Session: 1,
-		Message: 1,
-		Length:  0,
+		Session:  1,
+		Message:  1,
+		Length:   0,
+		StartTLS: StartTLSAuto,
 	}
 }
 
@@ -64,6 +77,15 @@ func (r *Req) Do() (*Result, error) {
 	}
 	if r.To == "" {
 		return result, fmt.Errorf("Req.To is required")
+	}
+	startTLS := strings.ToLower(strings.TrimSpace(r.StartTLS))
+	if startTLS == "" {
+		startTLS = StartTLSAuto
+	}
+	switch startTLS {
+	case StartTLSOff, StartTLSAuto, StartTLSRequired:
+	default:
+		return result, fmt.Errorf("invalid starttls %q: use off, auto or required", r.StartTLS)
 	}
 
 	// callback before
@@ -103,6 +125,8 @@ func (r *Req) Do() (*Result, error) {
 	if err != nil {
 		return result, fmt.Errorf("failed to create bulk mailer: %w", err)
 	}
+	bulk.StartTLS = startTLS
+	bulk.InsecureSkipTLS = r.InsecureSkipTLS
 
 	// Execute mail delivery
 	deliveryResult := bulk.DeliverWithResult()
@@ -174,24 +198,20 @@ func Send(data map[string]any, opts ...Option) (map[string]any, error) {
 	}
 	r.cb = cb
 
-	mapErr := mapping.MapToStructByTags(m, r)
+	// A parameter that cannot be read stops the step before anything is
+	// sent: going on would send with that parameter at its zero value, such
+	// as insecure_skip_tls left false.
+	if err := mapping.MapToStructByTags(m, r); err != nil {
+		return map[string]any{}, err
+	}
 
 	result, err := r.Do()
-	if err != nil || mapErr != nil {
+	if err != nil {
 		// Even on error, try to return a structured result if we have one
 		if result != nil {
-			mapResult, structErr := mapping.StructToMapByTags(result)
-			if structErr == nil {
-				// Return the original error (either mapErr or err)
-				if mapErr != nil {
-					return mapResult, mapErr
-				}
+			if mapResult, structErr := mapping.StructToMapByTags(result); structErr == nil {
 				return mapResult, err
 			}
-		}
-		// If we can't create a structured result, return the original error
-		if mapErr != nil {
-			return map[string]any{}, mapErr
 		}
 		return map[string]any{}, err
 	}
