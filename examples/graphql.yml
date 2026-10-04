@@ -1,0 +1,29 @@
+name: GraphQL with an external action
+description: |
+  Query a public GraphQL API with linyows/probe-graphql, an action that
+  lives in a repository of its own. Probe downloads it on first use and
+  checks it against the digest in action.yml at the pinned commit.
+jobs:
+- name: Countries API
+  steps:
+  - name: Look up Japan
+    id: jp
+    uses: github.com/linyows/probe-graphql@f9e7b841b87dccbcbe71ae10f8562aa637d52a51 # v0.1.0
+    with:
+      url: https://countries.trevorblades.com/graphql
+      query: |
+        query Country($code: ID!) {
+          country(code: $code) { name capital currency }
+        }
+      variables:
+        code: JP
+    test: res.code == 200 && len(res.errors) == 0 && res.data.country.capital == "Tokyo"
+    outputs:
+      currency: res.data.country.currency
+  - name: An unknown field is reported in res.errors
+    uses: github.com/linyows/probe-graphql@f9e7b841b87dccbcbe71ae10f8562aa637d52a51 # v0.1.0
+    with:
+      url: https://countries.trevorblades.com/graphql
+      query: '{ country(code: "JP") { nope } }'
+    test: len(res.errors) > 0
+    echo: "Japan pays in {{ outputs.jp.currency }}"
