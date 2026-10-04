@@ -234,7 +234,7 @@ jobs:
         test: res.code == 200
 ```
 
-Each run's steps read the outputs that the earlier steps of the same run published, also when `async` runs them at the same time. The jobs after it read the outputs of the last run.
+Each run's steps read the outputs that the earlier steps of the same run published, also when `async` runs them at the same time. The jobs after it read each output as the latest run that published it left it, so a step the last run skipped keeps the value of the run before.
 
 ## Steps
 

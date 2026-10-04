@@ -1,6 +1,7 @@
 package probe
 
 import (
+	"sort"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -113,8 +114,10 @@ func (e *Executor) executeJobRepeatLoopAsync(ctx JobContext) bool {
 
 	// The runs overlap, so each writes its outputs to a store of its own,
 	// in front of the workflow's, and reads its own before anyone else's.
-	// Once all are done, the outputs of the last run are published, as a
-	// job repeated in turn leaves them.
+	// Once all are done, every run's outputs are published in the order of
+	// the runs, so that a later run's value replaces an earlier one's and a
+	// value only an earlier run published stays, as a job repeated in turn
+	// leaves them.
 	var runsMu sync.Mutex
 	runs := make(map[int]*Outputs)
 
@@ -161,14 +164,15 @@ func (e *Executor) executeJobRepeatLoopAsync(ctx JobContext) bool {
 	// Wait for all goroutines to complete
 	wg.Wait()
 
-	last := -1
+	order := make([]int, 0, len(runs))
 	for i := range runs {
-		last = max(last, i)
+		order = append(order, i)
 	}
-	if last >= 0 {
+	sort.Ints(order)
+	for _, i := range order {
 		// Any taken name was warned about when the run wrote it, so the same
 		// warnings are not repeated here.
-		_ = ctx.Outputs.publish(runs[last])
+		_ = ctx.Outputs.publish(runs[i])
 	}
 
 	return overallSuccess.Load()

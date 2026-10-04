@@ -35,7 +35,8 @@ func (r *echoRunner) RunActions(name string, with map[string]any, opts RunOption
 }
 
 // repeatOutputsWorkflow repeats a job that publishes a value naming its run,
-// waits, and reads it back, followed by a job that reads it after.
+// waits, and reads it back, followed by a job that reads it after. One step
+// is skipped by the last run.
 func repeatOutputsWorkflow(runner ActionRunner, async bool) *Workflow {
 	repeated := Job{
 		Name: "repeated",
@@ -50,6 +51,14 @@ func repeatOutputsWorkflow(runner ActionRunner, async bool) *Workflow {
 				Name: "publish", ID: "pub", Uses: "hello", actionRunner: runner,
 				With:    map[string]any{"v": "run-{{repeat_index}}"},
 				Outputs: map[string]string{"v": "res.v"},
+			},
+			{
+				// The last run skips this one, so what the jobs after read is
+				// what the run before left.
+				Name: "early", ID: "early", Uses: "hello", actionRunner: runner,
+				SkipIf:  "repeat_index == 3",
+				With:    map[string]any{"e": "early-{{repeat_index}}"},
+				Outputs: map[string]string{"e": "res.e"},
 			},
 			{
 				// Long enough for the other runs to publish meanwhile.
@@ -70,8 +79,8 @@ func repeatOutputsWorkflow(runner ActionRunner, async bool) *Workflow {
 		Steps: []*Step{
 			{
 				Name: "read last", ID: "last", Uses: "hello", actionRunner: runner,
-				With: map[string]any{"got": "{{outputs.pub.v}}"},
-				Test: `res.got == "run-3"`,
+				With: map[string]any{"got": "{{outputs.pub.v}}", "early": "{{outputs.early.e}}"},
+				Test: `res.got == "run-3" && res.early == "early-2"`,
 			},
 		},
 	}
