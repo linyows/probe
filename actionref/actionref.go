@@ -237,6 +237,13 @@ func (r *Resolver) Resolve(uses, baseDir string) (*Executable, error) {
 		}
 		if res.err != nil {
 			res.err = fmt.Errorf("action %s: %w", uses, res.err)
+			// A failure is not remembered, so that a later run in the same
+			// process tries again once the cause is fixed.
+			r.mu.Lock()
+			if r.memo[key] == res {
+				delete(r.memo, key)
+			}
+			r.mu.Unlock()
 		}
 	})
 	return res.exe, res.err
@@ -257,6 +264,13 @@ func (r *Resolver) resolveLocal(dir string) (*Executable, error) {
 	}
 
 	exe := &Executable{Path: filepath.Join(dir, filepath.FromSlash(r.expand(m.Runs.Path)))}
+	info, err := os.Stat(exe.Path)
+	if err != nil {
+		return nil, err
+	}
+	if !info.Mode().IsRegular() || info.Mode().Perm()&0o111 == 0 {
+		return nil, fmt.Errorf("%s is not an executable file", exe.Path)
+	}
 	got, err := fileSHA256(exe.Path)
 	if err != nil {
 		return nil, err
@@ -269,25 +283,18 @@ func (r *Resolver) resolveLocal(dir string) (*Executable, error) {
 	return exe, nil
 }
 
+// resolveRemote reads action.yml at the pinned commit from GitHub every time,
+// rather than from the cache: it holds the digest the executable is checked
+// against, so a copy that anyone could have changed on disk cannot be trusted
+// in its place.
 func (r *Resolver) resolveRemote(ref Ref) (*Executable, error) {
-	cacheDir, err := r.cacheDir()
-	if err != nil {
+	url := strings.TrimSuffix(r.rawBaseURL(), "/") + "/" + path.Join(ref.Owner, ref.Repo, ref.SHA, ref.Dir, ManifestFile)
+	var buf bytes.Buffer
+	if err := r.fetch(url, &buf, maxManifestSize); err != nil {
 		return nil, err
 	}
 
-	manifestPath := filepath.Join(cacheDir, githubHost, ref.Owner, ref.Repo, ref.SHA, filepath.FromSlash(ref.Dir), ManifestFile)
-	data, err := os.ReadFile(manifestPath)
-	if err != nil {
-		url := strings.TrimSuffix(r.rawBaseURL(), "/") + "/" + path.Join(ref.Owner, ref.Repo, ref.SHA, ref.Dir, ManifestFile)
-		if data, err = r.fetch(url); err != nil {
-			return nil, err
-		}
-		if err := writeFileAtomic(manifestPath, bytes.NewReader(data), 0o644); err != nil {
-			return nil, err
-		}
-	}
-
-	m, err := ParseManifest(data)
+	m, err := ParseManifest(buf.Bytes())
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", ManifestFile, err)
 	}
@@ -315,40 +322,80 @@ func (r *Resolver) download(m *Manifest) (*Executable, error) {
 	exe := &Executable{Path: filepath.Join(cacheDir, "sha256", sum), SHA256: want}
 
 	if got, err := fileSHA256(exe.Path); err == nil && bytes.Equal(got, want) {
+		// The content is right, but the mode may not be, as after a cache
+		// is restored by a tool that drops it.
+		if err := os.Chmod(exe.Path, 0o755); err != nil {
+			return nil, err
+		}
 		return exe, nil
 	}
 
-	url := r.expand(m.Runs.URL)
-	data, err := r.fetch(url)
+	if err := os.MkdirAll(filepath.Dir(exe.Path), 0o755); err != nil {
+		return nil, err
+	}
+	tmp, err := os.CreateTemp(filepath.Dir(exe.Path), ".tmp-*")
 	if err != nil {
 		return nil, err
 	}
-	if got := sha256.Sum256(data); !bytes.Equal(got[:], want) {
+	defer func() { _ = os.Remove(tmp.Name()) }()
+
+	// The executable is hashed while it is written, so a large one is never
+	// held in memory.
+	url := r.expand(m.Runs.URL)
+	h := sha256.New()
+	err = r.fetch(url, io.MultiWriter(tmp, h), 0)
+	if cerr := tmp.Close(); err == nil {
+		err = cerr
+	}
+	if err != nil {
+		return nil, err
+	}
+	if got := h.Sum(nil); !bytes.Equal(got, want) {
 		return nil, fmt.Errorf("%s has SHA-256 %x, but %s says %s", url, got, ManifestFile, sum)
 	}
-	if err := writeFileAtomic(exe.Path, bytes.NewReader(data), 0o755); err != nil {
+	if err := os.Chmod(tmp.Name(), 0o755); err != nil {
+		return nil, err
+	}
+	if err := os.Rename(tmp.Name(), exe.Path); err != nil {
 		return nil, err
 	}
 	return exe, nil
 }
 
-func (r *Resolver) fetch(url string) ([]byte, error) {
+// maxManifestSize is the most of an action.yml that is read.
+const maxManifestSize = 1 << 20
+
+// fetch writes what url serves to w. When limit is positive, a response
+// longer than limit bytes is an error.
+func (r *Resolver) fetch(url string, w io.Writer, limit int64) error {
 	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	req.Header.Set("User-Agent", "probe")
 
 	res, err := r.client().Do(req)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	defer func() { _ = res.Body.Close() }()
 
 	if res.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("GET %s: %s", url, res.Status)
+		return fmt.Errorf("GET %s: %s", url, res.Status)
 	}
-	return io.ReadAll(res.Body)
+
+	var body io.Reader = res.Body
+	if limit > 0 {
+		body = io.LimitReader(res.Body, limit+1)
+	}
+	n, err := io.Copy(w, body)
+	if err != nil {
+		return err
+	}
+	if limit > 0 && n > limit {
+		return fmt.Errorf("GET %s: response is larger than %d bytes", url, limit)
+	}
+	return nil
 }
 
 func (r *Resolver) expand(s string) string {
@@ -410,30 +457,4 @@ func fileSHA256(name string) ([]byte, error) {
 		return nil, err
 	}
 	return h.Sum(nil), nil
-}
-
-// writeFileAtomic writes name so that a concurrent reader, such as another
-// probe sharing the cache, never sees it half written.
-func writeFileAtomic(name string, r io.Reader, perm os.FileMode) error {
-	if err := os.MkdirAll(filepath.Dir(name), 0o755); err != nil {
-		return err
-	}
-	tmp, err := os.CreateTemp(filepath.Dir(name), ".tmp-*")
-	if err != nil {
-		return err
-	}
-	defer func() { _ = os.Remove(tmp.Name()) }()
-
-	if _, err := io.Copy(tmp, r); err != nil {
-		_ = tmp.Close()
-		return err
-	}
-	if err := tmp.Chmod(perm); err != nil {
-		_ = tmp.Close()
-		return err
-	}
-	if err := tmp.Close(); err != nil {
-		return err
-	}
-	return os.Rename(tmp.Name(), name)
 }

@@ -739,7 +739,7 @@ An action can also live outside Probe, in a repository of its own. Probe downloa
 
 A remote action must be pinned to a full 40-character commit SHA. Tags and branches are refused, because they can be moved to other code after the workflow was reviewed. Only GitHub is supported for now. A local path is taken relative to the workflow file.
 
-Probe resolves every external action before the first job starts. A reference that cannot be resolved fails the run with exit code 2, and a download does not count against a step's timeout. Downloads are kept under `probe/actions` in the user's cache directory (`~/.cache` on Linux, `~/Library/Caches` on macOS), so an action is fetched once per commit.
+Probe resolves every external action before the first job starts. A reference that cannot be resolved fails the run with exit code 2, and a download does not count against a step's timeout. Executables are kept under `probe/actions` in the user's cache directory (`~/.cache` on Linux, `~/Library/Caches` on macOS), so each is downloaded once. `action.yml` is read from GitHub on every run instead, because it holds the digest the executable is checked against, and a copy on disk could have been changed.
 
 #### action.yml
 

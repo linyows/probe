@@ -178,15 +178,109 @@ runs:
 		t.Errorf("executable is not executable: %v %v", info.Mode(), err)
 	}
 
-	// A second resolver sharing the cache must not fetch anything again.
+	// A second resolver sharing the cache takes the executable from it, but
+	// reads action.yml again: only the copy at the pinned commit is trusted.
 	r2 := &Resolver{CacheDir: r.CacheDir, RawBaseURL: g.URL, OS: "linux", Arch: "arm64"}
 	if _, err := r2.Resolve(uses, ""); err != nil {
 		t.Fatalf("Resolve() from cache error = %v", err)
 	}
-	if n := g.hit("/o/r/" + sha + "/sub/action.yml"); n != 1 {
-		t.Errorf("action.yml fetched %d times, want 1", n)
+	if n := g.hit("/o/r/" + sha + "/sub/action.yml"); n != 2 {
+		t.Errorf("action.yml fetched %d times, want 2", n)
 	}
 	if n := g.hit("/bin/x_linux_arm64"); n != 1 {
+		t.Errorf("binary fetched %d times, want 1", n)
+	}
+
+	// Nothing but executables, named by their digest, is kept in the cache.
+	err = filepath.WalkDir(r.CacheDir, func(p string, d os.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return err
+		}
+		if want := filepath.Join(r.CacheDir, "sha256", digest(bin)); p != want {
+			t.Errorf("cache holds %s, want only %s", p, want)
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+// Once action.yml at the pinned commit changes what it points at, the
+// executable it now names runs, whatever an earlier run left in the cache.
+func TestResolveRemoteFollowsManifest(t *testing.T) {
+	g := newGitHub(t)
+	old, cur := []byte("old"), []byte("current")
+	g.files["/old"] = old
+	g.files["/current"] = cur
+	manifest := "runs:\n  using: binary\n  url: %s%s\n  checksums:\n    linux_arm64: %s\n"
+	g.files["/o/r/"+sha+"/action.yml"] = fmt.Appendf(nil, manifest, g.URL, "/old", digest(old))
+
+	r := newResolver(t, g)
+	if _, err := r.Resolve("github.com/o/r@"+sha, ""); err != nil {
+		t.Fatal(err)
+	}
+
+	g.mu.Lock()
+	g.files["/o/r/"+sha+"/action.yml"] = fmt.Appendf(nil, manifest, g.URL, "/current", digest(cur))
+	g.mu.Unlock()
+
+	r2 := &Resolver{CacheDir: r.CacheDir, RawBaseURL: g.URL, OS: "linux", Arch: "arm64"}
+	exe, err := r2.Resolve("github.com/o/r@"+sha, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if hex.EncodeToString(exe.SHA256) != digest(cur) {
+		t.Errorf("SHA256 = %x, want the digest action.yml names now, %s", exe.SHA256, digest(cur))
+	}
+}
+
+func TestResolveRemoteRetriesAfterFailure(t *testing.T) {
+	g := newGitHub(t)
+	bin := []byte("bin")
+	g.files["/o/r/"+sha+"/action.yml"] = fmt.Appendf(nil, "runs:\n  using: binary\n  url: %s/bin\n  checksums:\n    linux_arm64: %s\n", g.URL, digest(bin))
+
+	r := newResolver(t, g)
+	if _, err := r.Resolve("github.com/o/r@"+sha, ""); err == nil {
+		t.Fatal("Resolve() succeeded before the binary was published")
+	}
+
+	g.mu.Lock()
+	g.files["/bin"] = bin
+	g.mu.Unlock()
+
+	if _, err := r.Resolve("github.com/o/r@"+sha, ""); err != nil {
+		t.Fatalf("Resolve() after the binary was published error = %v", err)
+	}
+}
+
+func TestResolveRemoteRestoresMode(t *testing.T) {
+	g := newGitHub(t)
+	bin := []byte("bin")
+	g.files["/bin"] = bin
+	g.files["/o/r/"+sha+"/action.yml"] = fmt.Appendf(nil, "runs:\n  using: binary\n  url: %s/bin\n  checksums:\n    linux_arm64: %s\n", g.URL, digest(bin))
+
+	r := newResolver(t, g)
+	exe, err := r.Resolve("github.com/o/r@"+sha, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(exe.Path, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	r2 := &Resolver{CacheDir: r.CacheDir, RawBaseURL: g.URL, OS: "linux", Arch: "arm64"}
+	if _, err := r2.Resolve("github.com/o/r@"+sha, ""); err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Stat(exe.Path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Mode().Perm()&0o100 == 0 {
+		t.Errorf("mode = %v, want it executable again", info.Mode())
+	}
+	if n := g.hit("/bin"); n != 1 {
 		t.Errorf("binary fetched %d times, want 1", n)
 	}
 }
@@ -247,6 +341,13 @@ func TestResolveRemoteErrors(t *testing.T) {
 				return "runs:\n  using: binary\n  path: bin\n"
 			},
 			wantErr: "runs.path is only for local actions",
+		},
+		{
+			name: "action.yml too large",
+			manifest: func(string) string {
+				return "description: " + strings.Repeat("x", maxManifestSize) + "\n"
+			},
+			wantErr: "larger than",
 		},
 		{
 			name: "binary missing",
@@ -355,6 +456,31 @@ func TestResolveLocal(t *testing.T) {
 		}
 		if !strings.HasPrefix(exe.Path, r.CacheDir) {
 			t.Errorf("Path = %q, want one in the cache %q", exe.Path, r.CacheDir)
+		}
+	})
+
+	t.Run("not executable", func(t *testing.T) {
+		if err := os.WriteFile(filepath.Join(dir, "bin", "plain"), bin, 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, ManifestFile), []byte("runs:\n  using: binary\n  path: bin/plain\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		r := &Resolver{CacheDir: t.TempDir(), OS: "linux", Arch: "arm64"}
+		_, err := r.Resolve("./actions/x", base)
+		if err == nil || !strings.Contains(err.Error(), "not an executable file") {
+			t.Fatalf("Resolve() error = %v, want one saying the file is not executable", err)
+		}
+	})
+
+	t.Run("directory", func(t *testing.T) {
+		if err := os.WriteFile(filepath.Join(dir, ManifestFile), []byte("runs:\n  using: binary\n  path: bin\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		r := &Resolver{CacheDir: t.TempDir(), OS: "linux", Arch: "arm64"}
+		_, err := r.Resolve("./actions/x", base)
+		if err == nil || !strings.Contains(err.Error(), "not an executable file") {
+			t.Fatalf("Resolve() error = %v, want one saying the path is not an executable file", err)
 		}
 	})
 
