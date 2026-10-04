@@ -1,8 +1,10 @@
 flowchart LR
     subgraph build_app["Build App"]
+        direction TB
         build_app_step0["Compile app"]
     end
     subgraph build_lib["Build Lib"]
+        direction TB
         build_lib_step0["Compile lib"]
     end
 

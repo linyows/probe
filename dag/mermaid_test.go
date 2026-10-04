@@ -19,6 +19,8 @@ The golden tests cover comprehensive DAG patterns for Mermaid rendering:
 	Parallel              | parallel_roots           | [A], [B] (independent)
 	                      | parallel_chains          | [A→B], [C→D] (independent chains)
 	Mixed                 | mixed_standalone         | A → B, C (standalone)
+	Node IDs              | sanitized_id_collision   | "unit-test" → "unit.test", both "unit_test"
+	                      | step_id_collision        | A → "A_step0", a job named like A's step
 
 # Usage
 
@@ -486,6 +488,47 @@ func mermaidGoldenCases() []mermaidGoldenCase {
 				}},
 			}},
 		},
+		{
+			// Job IDs that sanitize to the same node ID stay separate nodes
+			name: "sanitized_id_collision",
+			graph: Graph{Jobs: []Job{
+				{ID: "unit-test", Name: "Unit (dash)", Steps: []Step{
+					{Name: "Run"},
+				}},
+				{ID: "unit.test", Name: "Unit (dot)", Needs: []string{"unit-test"}, Steps: []Step{
+					{Name: "Run"},
+				}},
+				{ID: "report", Name: "Report", Needs: []string{"unit.test"}},
+			}},
+		},
+		{
+			// A job whose ID is the node ID of another job's step stays apart
+			// from that step
+			name: "step_id_collision",
+			graph: Graph{Jobs: []Job{
+				{ID: "build", Name: "Build", Steps: []Step{
+					{Name: "Compile"},
+				}},
+				{ID: "build_step0", Name: "Package", Needs: []string{"build"}, Steps: []Step{
+					{Name: "Archive"},
+				}},
+			}},
+		},
+	}
+}
+
+func TestNodeIDs_Allocate(t *testing.T) {
+	ids := nodeIDs{}
+	for _, tt := range []struct{ base, want string }{
+		{"unit_test", "unit_test"},
+		{"unit_test", "unit_test_2"},
+		{"unit_test_2", "unit_test_2_2"},
+		{"unit_test", "unit_test_3"},
+		{"build", "build"},
+	} {
+		if got := ids.allocate(tt.base); got != tt.want {
+			t.Errorf("allocate(%q) = %q, want %q", tt.base, got, tt.want)
+		}
 	}
 }
 
@@ -521,5 +564,58 @@ func TestMermaid_Golden(t *testing.T) {
 				t.Errorf("output does not match golden file %s\n\nExpected:\n%s\n\nActual:\n%s\n\nRun with UPDATE_GOLDEN=1 to update", goldenPath, string(expected), actual)
 			}
 		})
+	}
+}
+
+// TestMermaid_LinksStepsInOrder pins the step edges inside a job.
+func TestMermaid_LinksStepsInOrder(t *testing.T) {
+	g := Graph{Jobs: []Job{{
+		ID:   "build",
+		Name: "Build",
+		Steps: []Step{
+			{Name: "Checkout"},
+			{Name: "Run job", Embedded: true, EmbeddedFile: "job.yml", EmbeddedSteps: []string{"Compile"}},
+			{Name: "Package"},
+		},
+	}}}
+
+	out := Mermaid{}.Render(g)
+	for _, want := range []string{
+		"        direction TB\n",
+		"        build_step0 --> build_step1\n",
+		"        build_step1 --> build_step2\n",
+		"        build_step2 --> build_step3\n",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("output should contain %q:\n%s", want, out)
+		}
+	}
+	if strings.Contains(out, "build_step3 -->") {
+		t.Errorf("the last step should not link onward:\n%s", out)
+	}
+}
+
+// TestMermaid_UnknownNeed checks that a need naming no job of the graph,
+// which the dag command does not reject, gets a node of its own: one that is
+// not a job or step drawn above, shared by every job that needs it.
+func TestMermaid_UnknownNeed(t *testing.T) {
+	g := Graph{Jobs: []Job{
+		{ID: "build", Name: "Build", Steps: []Step{{Name: "Compile"}}},
+		{ID: "test", Name: "Test", Needs: []string{"build_step0", "missing-job"}},
+		{ID: "lint", Name: "Lint", Needs: []string{"build_step0"}},
+	}}
+
+	out := Mermaid{}.Render(g)
+	for _, want := range []string{
+		"    build_step0_2 --> test\n",
+		"    missing_job --> test\n",
+		"    build_step0_2 --> lint\n",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("output should contain %q:\n%s", want, out)
+		}
+	}
+	if strings.Contains(out, "    build_step0 --> ") {
+		t.Errorf("an unknown need should not link from the step build_step0:\n%s", out)
 	}
 }

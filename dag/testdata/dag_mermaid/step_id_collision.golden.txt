@@ -3,9 +3,9 @@ flowchart LR
         direction TB
         build_step0["Compile"]
     end
-    subgraph test["Test"]
+    subgraph build_step0_2["Package"]
         direction TB
-        test_step0["Run tests"]
+        build_step0_2_step0["Archive"]
     end
 
-    build --> test
+    build --> build_step0_2

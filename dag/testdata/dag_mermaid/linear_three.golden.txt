@@ -1,11 +1,14 @@
 flowchart LR
     subgraph build["Build"]
+        direction TB
         build_step0["Compile"]
     end
     subgraph test["Test"]
+        direction TB
         test_step0["Run tests"]
     end
     subgraph deploy["Deploy"]
+        direction TB
         deploy_step0["Deploy app"]
     end
 

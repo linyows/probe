@@ -1,7 +1,10 @@
 flowchart LR
     subgraph deploy["Deploy"]
+        direction TB
         deploy_step0["Run job"]
         deploy_step1["Simple success step"]
         deploy_step2["Another success step"]
+        deploy_step0 --> deploy_step1
+        deploy_step1 --> deploy_step2
     end
 
