@@ -1465,44 +1465,74 @@ func (r *Req) parseFetchItems(dataitem string) (*imap.FetchOptions, error) {
 	opts := &imap.FetchOptions{}
 
 	dataitem = strings.TrimSpace(dataitem)
-
-	// Check for BODY[...] pattern first
-	if strings.HasPrefix(dataitem, "BODY[") && strings.HasSuffix(dataitem, "]") {
-		bodySection, err := r.parseBodySection(dataitem)
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse BODY section: %w", err)
-		}
-		opts.BodySection = []*imap.FetchItemBodySection{bodySection}
-		return opts, nil
+	// A list may be written in parentheses, as IMAP writes it.
+	if strings.HasPrefix(dataitem, "(") && strings.HasSuffix(dataitem, ")") {
+		dataitem = strings.TrimSpace(dataitem[1 : len(dataitem)-1])
+	}
+	if dataitem == "" {
+		return nil, fmt.Errorf("no fetch data item given")
 	}
 
-	// Check for BODY.PEEK[...] pattern
-	if strings.HasPrefix(dataitem, "BODY.PEEK[") && strings.HasSuffix(dataitem, "]") {
-		bodySection, err := r.parseBodySection(dataitem)
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse BODY.PEEK section: %w", err)
-		}
-		bodySection.Peek = true
-		opts.BodySection = []*imap.FetchItemBodySection{bodySection}
-		return opts, nil
-	}
-
+	// A macro stands alone.
 	switch strings.ToUpper(dataitem) {
 	case "ALL":
 		opts.Envelope = true
 		opts.Flags = true
 		opts.InternalDate = true
 		opts.RFC822Size = true
+		return opts, nil
 	case "FAST":
 		opts.Flags = true
 		opts.InternalDate = true
 		opts.RFC822Size = true
+		return opts, nil
 	case "FULL":
 		opts.Envelope = true
 		opts.Flags = true
 		opts.InternalDate = true
 		opts.RFC822Size = true
 		opts.BodyStructure = &imap.FetchItemBodyStructure{}
+		return opts, nil
+	}
+
+	for _, item := range splitFetchItems(dataitem) {
+		if err := r.addFetchItem(opts, item); err != nil {
+			return nil, err
+		}
+	}
+
+	return opts, nil
+}
+
+// fetchItemNames lists the data items addFetchItem takes, for its error.
+const fetchItemNames = "ENVELOPE, FLAGS, INTERNALDATE, RFC822, RFC822.HEADER, RFC822.SIZE, RFC822.TEXT, UID, BODYSTRUCTURE, BODY[...] or BODY.PEEK[...]"
+
+// bodySectionPartial matches a section with a partial range after it, as
+// IMAP writes it: BODY[TEXT]<0.512>.
+var bodySectionPartial = regexp.MustCompile(`^(BODY(?:\.PEEK)?\[.*)\](<\d+\.\d+>)$`)
+
+// addFetchItem adds one data item of a list to opts. An item it does not
+// know is an error: ignoring it fetched nothing for it without a word.
+func (r *Req) addFetchItem(opts *imap.FetchOptions, item string) error {
+	upper := strings.ToUpper(strings.TrimSpace(item))
+
+	if strings.HasPrefix(upper, "BODY[") || strings.HasPrefix(upper, "BODY.PEEK[") {
+		// parseBodySection takes the partial range inside the brackets.
+		if m := bodySectionPartial.FindStringSubmatch(upper); m != nil {
+			upper = m[1] + m[2] + "]"
+		}
+		if !strings.HasSuffix(upper, "]") {
+			return fmt.Errorf("invalid BODY section: %s", item)
+		}
+		bodySection, err := r.parseBodySection(upper)
+		if err != nil {
+			return fmt.Errorf("failed to parse BODY section: %w", err)
+		}
+		opts.BodySection = append(opts.BodySection, bodySection)
+		return nil
+	}
+
+	switch upper {
 	case "ENVELOPE":
 		opts.Envelope = true
 	case "FLAGS":
@@ -1515,72 +1545,19 @@ func (r *Req) parseFetchItems(dataitem string) (*imap.FetchOptions, error) {
 		opts.UID = true
 	case "BODYSTRUCTURE":
 		opts.BodyStructure = &imap.FetchItemBodyStructure{}
+	// The RFC822 items are the sections RFC 3501 defines them as.
 	case "RFC822":
-		// RFC822 is not directly supported in current v2 API
-		// For now, just fetch basic items
-		opts.Envelope = true
-		opts.Flags = true
+		opts.BodySection = append(opts.BodySection, &imap.FetchItemBodySection{})
 	case "RFC822.HEADER":
-		// RFC822.HEADER is not directly supported in current v2 API
-		opts.Envelope = true
+		opts.BodySection = append(opts.BodySection, &imap.FetchItemBodySection{Specifier: imap.PartSpecifierHeader, Peek: true})
 	case "RFC822.TEXT":
-		// RFC822.TEXT is not directly supported in current v2 API
-		opts.Flags = true
+		opts.BodySection = append(opts.BodySection, &imap.FetchItemBodySection{Specifier: imap.PartSpecifierText})
+	case "ALL", "FAST", "FULL":
+		return fmt.Errorf("fetch macro %s cannot be combined with other data items", upper)
 	default:
-		// For complex fetch items, try to parse them
-		items := splitFetchItems(dataitem)
-		for _, item := range items {
-			item = strings.TrimSpace(item)
-
-			// Check for BODY[...] in multi-item fetch
-			if strings.HasPrefix(item, "BODY[") && strings.HasSuffix(item, "]") {
-				bodySection, err := r.parseBodySection(item)
-				if err != nil {
-					return nil, fmt.Errorf("failed to parse BODY section in multi-item: %w", err)
-				}
-				opts.BodySection = append(opts.BodySection, bodySection)
-				continue
-			}
-
-			// Check for BODY.PEEK[...] in multi-item fetch
-			if strings.HasPrefix(item, "BODY.PEEK[") && strings.HasSuffix(item, "]") {
-				bodySection, err := r.parseBodySection(item)
-				if err != nil {
-					return nil, fmt.Errorf("failed to parse BODY.PEEK section in multi-item: %w", err)
-				}
-				bodySection.Peek = true
-				opts.BodySection = append(opts.BodySection, bodySection)
-				continue
-			}
-
-			switch item {
-			case "ENVELOPE":
-				opts.Envelope = true
-			case "FLAGS":
-				opts.Flags = true
-			case "INTERNALDATE":
-				opts.InternalDate = true
-			case "RFC822.SIZE":
-				opts.RFC822Size = true
-			case "UID":
-				opts.UID = true
-			case "BODYSTRUCTURE":
-				opts.BodyStructure = &imap.FetchItemBodyStructure{}
-			case "RFC822":
-				// RFC822 is not directly supported in current v2 API
-				opts.Envelope = true
-				opts.Flags = true
-			case "RFC822.HEADER":
-				// RFC822.HEADER is not directly supported in current v2 API
-				opts.Envelope = true
-			case "RFC822.TEXT":
-				// RFC822.TEXT is not directly supported in current v2 API
-				opts.Flags = true
-			}
-		}
+		return fmt.Errorf("unknown fetch data item %q: use %s, or one of the macros ALL, FAST and FULL alone", item, fetchItemNames)
 	}
-
-	return opts, nil
+	return nil
 }
 
 // parseBodySection parses BODY[...] or BODY.PEEK[...] sections

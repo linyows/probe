@@ -272,7 +272,7 @@ Retrieve messages by sequence number, or by UID with `uid fetch`. Without `seque
 - name: "uid fetch"     # The UIDs just found, with ALL
 ```
 
-`dataitem` is one of the macros `ALL`, `FAST` and `FULL`, or a space-separated list of `ENVELOPE`, `FLAGS`, `INTERNALDATE`, `RFC822.SIZE`, `UID`, `BODYSTRUCTURE` and `BODY[...]` or `BODY.PEEK[...]` sections. `ENVELOPE` fills `from`, `to` and `subject`; `RFC822.SIZE` fills `size`. A section fills these fields of the message:
+`dataitem` is one of the macros `ALL`, `FAST` and `FULL` alone, or a space-separated list of `ENVELOPE`, `FLAGS`, `INTERNALDATE`, `RFC822`, `RFC822.HEADER`, `RFC822.SIZE`, `RFC822.TEXT`, `UID`, `BODYSTRUCTURE` and `BODY[...]` or `BODY.PEEK[...]` sections. Case does not matter, and the list may be in parentheses, as in `(FLAGS UID)`. A section may end with a partial range, as in `BODY.PEEK[TEXT]<0.512>` for the first 512 bytes. An item not in this list fails the command. `ENVELOPE` fills `from`, `to` and `subject`; `RFC822.SIZE` fills `size`. `RFC822` is `BODY[]`, `RFC822.HEADER` is `BODY.PEEK[HEADER]` and `RFC822.TEXT` is `BODY[TEXT]`, as in IMAP. A section fills these fields of the message:
 
 | Section | Fills |
 |---------|-------|
