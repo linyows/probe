@@ -165,6 +165,8 @@ steps:
       Test Duration: {{outputs['app-test'].test_duration}}ms
 ```
 
+An output can also be read by its name alone, as `outputs.test_result`. That form names no step, so it works only while a single step publishes the name. Once a second step publishes the same name, `outputs.<name>` is no longer set, whichever step ran first, and Probe warns which steps share it; read each value through its step's id instead.
+
 ## Cross-Job Data Flow
 
 Data can flow between jobs through job-level outputs and dependencies.

@@ -1,21 +1,33 @@
 package probe
 
 import (
+	"errors"
 	"fmt"
 	"maps"
+	"slices"
+	"sort"
 	"sync"
 )
 
 // Outputs manages step outputs across the entire workflow
 type Outputs struct {
 	data map[string]any // stores both stepID->outputs and outputName->value
-	mu   sync.RWMutex
+	// owners records which step published each flat output name.
+	owners map[string]string
+	// ambiguous holds the names that more than one step published, with
+	// those steps. Such a name has no flat value: which step's it would be
+	// depends on the order the steps ran in, and for jobs that run at the
+	// same time that order is not fixed.
+	ambiguous map[string][]string
+	mu        sync.RWMutex
 }
 
 // NewOutputs creates a new Outputs instance
 func NewOutputs() *Outputs {
 	return &Outputs{
-		data: make(map[string]any),
+		data:      make(map[string]any),
+		owners:    make(map[string]string),
+		ambiguous: make(map[string][]string),
 	}
 }
 
@@ -40,18 +52,52 @@ func (o *Outputs) Set(stepID string, outputs map[string]any) error {
 		o.data[stepID] = outputs
 	}
 
-	// Store flat outputs if no conflicts (new functionality)
-	for outputName, value := range outputs {
-		// Skip if output name already exists
-		if _, exists := o.data[outputName]; exists {
+	// Store flat outputs, by name alone
+	var errs []error
+	if conflictError != nil {
+		errs = append(errs, conflictError)
+	}
+	names := make([]string, 0, len(outputs))
+	for outputName := range outputs {
+		names = append(names, outputName)
+	}
+	sort.Strings(names)
+	for _, outputName := range names {
+		value := outputs[outputName]
+
+		if steps, ok := o.ambiguous[outputName]; ok {
+			if !slices.Contains(steps, stepID) {
+				o.ambiguous[outputName] = append(steps, stepID)
+			}
 			continue
 		}
 
-		// Safe to store flat access
-		o.data[outputName] = value
+		owner, owned := o.owners[outputName]
+		switch {
+		case owned && owner == stepID:
+			// The same step publishing again is not a second publisher: the
+			// flat name follows its latest value, as outputs.<step_id>.<name>
+			// does.
+			o.data[outputName] = value
+		case owned:
+			// Another step publishes the name too, so the name alone no
+			// longer says which value is meant.
+			delete(o.data, outputName)
+			delete(o.owners, outputName)
+			o.ambiguous[outputName] = []string{owner, stepID}
+			errs = append(errs, fmt.Errorf("output '%s' is published by both '%s' and '%s', so outputs.%s is not set; read outputs.%s.%s or outputs.%s.%s instead",
+				outputName, owner, stepID, outputName, owner, outputName, stepID, outputName))
+		default:
+			// A step ID of the same name keeps the name for its outputs.
+			if _, exists := o.data[outputName]; exists {
+				continue
+			}
+			o.data[outputName] = value
+			o.owners[outputName] = stepID
+		}
 	}
 
-	return conflictError
+	return errors.Join(errs...)
 }
 
 // Get retrieves outputs for a step (existing functionality)

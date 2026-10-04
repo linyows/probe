@@ -69,4 +69,4 @@ After the embedded job finishes, `res` carries its result and its outputs.
 | `status` | Integer | Same as `res.code` |
 | `rt` | Object | Time spent running the embedded job |
 
-`res.outputs` is keyed by output name, so a value published as `mytoken` is read as `res.outputs.mytoken`. The same value is also under the id of the step that published it, as `res.outputs.get_token.mytoken`, which tells apart two steps that publish the same name.
+`res.outputs` is keyed by output name, so a value published as `mytoken` is read as `res.outputs.mytoken`. The same value is also under the id of the step that published it, as `res.outputs.get_token.mytoken`. When two steps publish the same name, the name alone is ambiguous, so `res.outputs.<name>` is left out and only the step-keyed form holds the values.

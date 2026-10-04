@@ -2,6 +2,7 @@ package probe
 
 import (
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -86,17 +87,18 @@ func TestOutputsFlatAccess(t *testing.T) {
 		"token": "profile_token", // Conflicts with existing "token"
 		"name":  "john_doe",
 	})
-	if err != nil {
-		t.Errorf("Unexpected error for profile step: %v", err)
+	if err == nil || !strings.Contains(err.Error(), "outputs.auth.token or outputs.profile.token") {
+		t.Errorf("Expected a warning naming both steps for profile, got: %v", err)
 	}
 
-	// Original flat access should be preserved
-	flatToken, exists = outputs.GetFlat("token")
-	if !exists {
-		t.Fatal("Expected flat access to 'token' to still exist")
+	// Two steps publish "token", so the name alone is ambiguous and gone
+	if flatToken, exists = outputs.GetFlat("token"); exists {
+		t.Errorf("Expected no flat access to the ambiguous 'token', got %v", flatToken)
 	}
-	if flatToken != "secret123" {
-		t.Errorf("Expected original flat token 'secret123', got %v", flatToken)
+
+	// Each step's own value is still there under its id
+	if profile, _ := outputs.Get("profile"); profile["token"] != "profile_token" {
+		t.Errorf("Expected profile token 'profile_token', got %v", profile["token"])
 	}
 
 	// New non-conflicting output should be accessible via flat access
@@ -241,5 +243,63 @@ func TestOutputsConflictWarning(t *testing.T) {
 	_, exists = outputs.Get("foo")
 	if exists {
 		t.Error("Expected step-based access to 'foo' to fail due to conflict")
+	}
+}
+
+func TestOutputsAmbiguousWhateverTheOrder(t *testing.T) {
+	// Jobs running at the same time publish in either order; the outcome
+	// must not depend on it.
+	for _, order := range [][]string{{"a", "b"}, {"b", "a"}} {
+		outputs := NewOutputs()
+		for _, step := range order {
+			_ = outputs.Set(step, map[string]any{"token": step + "-token"})
+		}
+		if v, exists := outputs.GetFlat("token"); exists {
+			t.Errorf("order %v: flat token = %v, want none", order, v)
+		}
+		if _, exists := outputs.GetAll()["token"]; exists {
+			t.Errorf("order %v: GetAll has a flat token", order)
+		}
+		for _, step := range order {
+			if got, _ := outputs.Get(step); got["token"] != step+"-token" {
+				t.Errorf("order %v: outputs.%s.token = %v", order, step, got["token"])
+			}
+		}
+	}
+}
+
+func TestOutputsStaysAmbiguous(t *testing.T) {
+	// A third step, or one of the two publishing again, does not bring the
+	// name back, and only the step that made it ambiguous is warned about.
+	outputs := NewOutputs()
+	_ = outputs.Set("a", map[string]any{"token": "a"})
+	if err := outputs.Set("b", map[string]any{"token": "b"}); err == nil {
+		t.Fatal("Expected a warning when the name became ambiguous")
+	}
+	if err := outputs.Set("c", map[string]any{"token": "c"}); err != nil {
+		t.Errorf("Unexpected warning for a name already ambiguous: %v", err)
+	}
+	if err := outputs.Set("a", map[string]any{"token": "a2"}); err != nil {
+		t.Errorf("Unexpected warning for a step publishing again: %v", err)
+	}
+	if v, exists := outputs.GetFlat("token"); exists {
+		t.Errorf("flat token = %v, want none", v)
+	}
+}
+
+func TestOutputsSameStepAgain(t *testing.T) {
+	// A step publishing again is not a conflict with itself, and its flat
+	// outputs follow its latest values as its step-keyed ones do.
+	outputs := NewOutputs()
+	for i := 1; i <= 3; i++ {
+		if err := outputs.Set("poll", map[string]any{"count": i}); err != nil {
+			t.Fatalf("run %d: unexpected warning: %v", i, err)
+		}
+	}
+	if v, _ := outputs.GetFlat("count"); v != 3 {
+		t.Errorf("flat count = %v, want 3", v)
+	}
+	if got, _ := outputs.Get("poll"); got["count"] != 3 {
+		t.Errorf("outputs.poll.count = %v, want 3", got["count"])
 	}
 }
