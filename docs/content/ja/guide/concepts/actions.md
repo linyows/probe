@@ -931,9 +931,119 @@ type Action interface {
 
 `with`にはステップの`with`パラメータが渡されます。返したマップは、組み込みアクションと同じくステップの`req`、`res`、`rt`、`status`になります。
 
-### カスタムアクションの提供
+### 外部アクション
 
-Probeはアクションごとに別のプロセスを使い、自身の実行ファイルを`<実行ファイル> builtin-actions <名前>`として起動し直します。そのため、カスタムアクションは独自にビルドしたProbeに組み込みます。Probeをライブラリとして使うプログラムを作り、このサブコマンドで自分のアクションを提供し、それ以外の名前は組み込みアクションに任せます。
+アクションはProbeの外、独立したリポジトリに置くこともできます。Probeはアクションを提供する実行ファイルをダウンロードし、組み込みアクションと同じように実行します。ステップではリポジトリとコミットでアクションを指定します：
+
+```yaml
+- name: Ask the API who I am
+  uses: github.com/linyows/probe-graphql@<40文字のコミットSHA>
+  with:
+    url: https://api.example.com/graphql
+    query: '{ viewer { login } }'
+  test: res.code == 200
+```
+
+`uses`で外部アクションを指定する形式は次の2つです。スラッシュを含まない名前は組み込みアクションです。
+
+| 形式 | 例 |
+|---|---|
+| `github.com/<owner>/<repo>[/<dir>]@<commit>` | `github.com/linyows/probe-graphql@3f2a…` |
+| `./`、`../`、`/`で始まるパス | `./actions/greet` |
+
+リモートのアクションは40文字のコミットSHAで固定する必要があります。タグやブランチは、ワークフローをレビューした後で別のコードを指すように動かせるため受け付けません。現在対応しているのはGitHubだけです。ローカルのパスはワークフローファイルからの相対パスです。
+
+Probeは最初のジョブを始める前にすべての外部アクションを解決します。解決できない参照があれば終了コード2で実行を止め、ダウンロードの時間はステップのタイムアウトに含まれません。実行ファイルはユーザーのキャッシュディレクトリ（Linuxでは`~/.cache`、macOSでは`~/Library/Caches`）の`probe/actions`に置かれるので、ダウンロードは1回で済みます。一方、`action.yml`は実行のたびにGitHubから読みます。実行ファイルを照合するダイジェストを持つファイルなので、ディスク上で書き換えられたかもしれない写しは信用しません。
+
+#### action.yml
+
+アクションのディレクトリには、どの実行ファイルがアクションを提供するかを書いた`action.yml`を置きます：
+
+```yaml
+name: graphql
+description: Send a GraphQL query over HTTP
+runs:
+  using: binary
+  url: https://github.com/linyows/probe-graphql/releases/download/v0.1.0/probe-graphql_{os}_{arch}
+  checksums:
+    darwin_amd64: <probe-graphql_darwin_amd64のSHA-256>
+    darwin_arm64: <probe-graphql_darwin_arm64のSHA-256>
+    linux_amd64: <probe-graphql_linux_amd64のSHA-256>
+    linux_arm64: <probe-graphql_linux_arm64のSHA-256>
+```
+
+| キー | 説明 |
+|---|---|
+| `runs.using` | `binary`のみ |
+| `runs.url` | 実行ファイルのダウンロード元。`{os}`と`{arch}`はGoの`GOOS`と`GOARCH`（`linux`、`arm64`など）に置き換わります |
+| `runs.path` | アクションのディレクトリからの相対パスで指す実行ファイル。プレースホルダーは`url`と同じです。ローカルのアクションでのみ使えます |
+| `runs.checksums` | `<os>_<arch>`ごとの実行ファイルのSHA-256ダイジェスト（小文字の16進数） |
+
+`runs`には`url`と`path`のどちらか一方だけを書きます。`url`の場合は実行中のプラットフォームのチェックサムが必須で、ダイジェストが一致しないダウンロードは拒否します。ダイジェストは実行ファイルを起動するたびにも確かめます。`uses`のコミットが`action.yml`を固定し、`action.yml`がダイジェストを固定するので、実行されるファイルはコミットで一意に決まります。
+
+`path`を使うローカルのアクションにチェックサムは不要です。書いた場合はリモートと同じく照合します。
+
+#### 外部アクションの作り方
+
+実行ファイルは`actionrpc.Serve`でアクションを提供します：
+
+```go
+package main
+
+import (
+    "fmt"
+    "time"
+
+    "github.com/hashicorp/go-hclog"
+    "github.com/linyows/probe/actionrpc"
+)
+
+// Greet は専用の実行ファイルで提供されるアクションです。
+type Greet struct {
+    log hclog.Logger
+}
+
+func (g *Greet) Run(with map[string]any) (map[string]any, error) {
+    start := time.Now()
+    actionrpc.LogParams(g.log, "greet received parameters", with)
+
+    name, _ := with["name"].(string)
+    return map[string]any{
+        "req":    with,
+        "res":    map[string]any{"message": fmt.Sprintf("Hello, %s!", name)},
+        "rt":     time.Since(start).String(),
+        "status": 0,
+    }, nil
+}
+
+func main() {
+    actionrpc.Serve(func(log hclog.Logger) actionrpc.Action {
+        return &Greet{log: log}
+    })
+}
+```
+
+対応するプラットフォームごとにビルドして実行ファイルを公開し、そのURLとダイジェストを書いた`action.yml`をコミットします。利用者はその`action.yml`を含むコミットを指定します。[linyows/probe-graphql](https://github.com/linyows/probe-graphql)では、GoReleaserと、リリースのたびにダイジェストをコミットするワークフローでこれを行っています。
+
+開発中は、ローカルの`action.yml`でビルドした実行ファイルを指します：
+
+```yaml
+runs:
+  using: binary
+  path: probe-greet
+```
+
+```yaml
+- name: Say hello
+  uses: ./greet
+  with:
+    name: probe
+  test: res.message == "Hello, probe!"
+```
+
+### Probeへのカスタムアクションの組み込み
+
+カスタムアクションをProbe自体に組み込むこともできます。Probeは組み込みアクションごとに別のプロセスを使い、自身の実行ファイルを`<実行ファイル> builtin-actions <名前>`として起動し直します。そのため、このようなアクションは独自にビルドしたProbeに組み込みます。Probeをライブラリとして使うプログラムを作り、このサブコマンドで自分のアクションを提供し、それ以外の名前は組み込みアクションに任せます。
 
 ```go
 package main

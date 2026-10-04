@@ -246,7 +246,7 @@ A step definition takes the properties below.
 
 | Property | Type | Required | Description |
 |----------|------|----------|-------------|
-| `uses` | String | Yes | Action to run, such as `http` or `shell` |
+| `uses` | String | Yes | Action to run: a built-in such as `http` or `shell`, or an [external action](/guide/concepts/actions#external-actions) |
 | `name` | String | No | Step name, shown in the report |
 | `id` | String | No | Identifier that namespaces this step's `outputs` |
 | `with` | Object | No | Action parameters |

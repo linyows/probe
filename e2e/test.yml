@@ -897,3 +897,71 @@ jobs:
     with: # Use Process Group ID
       cmd: "kill -TERM -{{ outputs.page_pid }}"
     test: status == 0
+
+# ------------------------------------------------------------------------
+- name: External Action Tests
+  id: external
+  needs: [setup]
+  steps:
+  # The action is downloaded from GitHub, but the endpoint it queries is an
+  # echo server here, so a public API being down does not fail the tests.
+  - name: Start echo server in background
+    uses: shell
+    with:
+      background: true
+      cmd: go run ./e2e/echo-server -addr 127.0.0.1:8091
+    test: status == -1
+    outputs:
+      echo_pid: res.pid
+    echo: |
+      PID: {{ res.pid }}
+      Log: {{ res.log }}
+  - name: Wait for echo server to be ready
+    uses: http
+    with:
+      url: http://127.0.0.1:8091
+      get: /
+    # go run builds the server first
+    retry:
+      max_attempts: 60
+      interval: "1s"
+      initial_delay: "1s"
+    test: res.code == 200
+  - name: external-action.yml downloads the action into an empty cache
+    uses: shell
+    with:
+      cmd: |
+        cache=$(mktemp -d)
+        XDG_CACHE_HOME="$cache" ./probe e2e/external-action.yml
+        code=$?
+        rm -rf "$cache"
+        exit $code
+      timeout: 2m
+    test: res.code == 0
+    echo: "{{res.stdout}}"
+  - name: An action pinned to a tag is refused
+    uses: shell
+    with:
+      cmd: |
+        dir=$(mktemp -d)
+        cat > "$dir/tag.yml" <<'YAML'
+        name: tag pin
+        jobs:
+        - name: tag
+          steps:
+          - uses: github.com/linyows/probe-graphql@v0.1.0
+            with:
+              url: http://127.0.0.1:8091/graphql
+              query: "{ a }"
+        YAML
+        ./probe "$dir/tag.yml" 2>&1
+        echo "exit=$?"
+        rm -rf "$dir"
+    test: |
+      res.stdout contains "exit=2" &&
+      res.stdout contains "full 40-character commit SHA"
+  - name: Stop echo server
+    uses: shell
+    with: # Use Process Group ID
+      cmd: "kill -TERM -{{ outputs.echo_pid }}"
+    test: status == 0

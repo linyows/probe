@@ -145,7 +145,7 @@ func (st *Step) executeSingleAction(runner ActionRunner, expW map[string]any, jC
 	done := beginBackground(jCtx.background, st.Uses)
 	go func() {
 		defer done()
-		ret, err := runner.RunActions(st.Uses, expW, RunOptions{Verbose: jCtx.Verbose, Quiet: quiet, Masker: masker})
+		ret, err := runner.RunActions(st.Uses, expW, RunOptions{Verbose: jCtx.Verbose, Quiet: quiet, Masker: masker, BaseDir: jCtx.baseDir})
 		if err == nil {
 			trackBackground(jCtx.background, st.Uses, ret)
 		}

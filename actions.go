@@ -4,6 +4,7 @@ import (
 	"os"
 
 	"github.com/hashicorp/go-hclog"
+	"github.com/linyows/probe/actionref"
 	"github.com/linyows/probe/actionrpc"
 	"github.com/linyows/probe/mask"
 )
@@ -19,6 +20,10 @@ type RunOptions struct {
 	Quiet bool
 	// Masker hides the workflow's secrets in the action's log records.
 	Masker *mask.Masker
+	// BaseDir is the directory a local action's path is relative to: the
+	// directory of the workflow file. The working directory is used when it
+	// is empty.
+	BaseDir string
 }
 
 // logLevel returns the level the action's log records are filtered at.
@@ -50,7 +55,14 @@ func (p *PluginActionRunner) RunActions(name string, with map[string]any, opts R
 		Output: opts.Masker.Writer(os.Stderr),
 		Level:  opts.logLevel(),
 	})
-	return actionrpc.Run(name, with, log)
+	if !actionref.IsExternal(name) {
+		return actionrpc.Run(name, with, log)
+	}
+	exe, err := actionref.Resolve(name, opts.BaseDir)
+	if err != nil {
+		return nil, err
+	}
+	return actionrpc.RunExecutable(exe.Path, exe.SHA256, with, log)
 }
 
 // MockActionRunner implements ActionRunner for testing
