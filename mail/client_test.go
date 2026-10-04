@@ -5,6 +5,7 @@ import (
 	"net/textproto"
 	"reflect"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -575,5 +576,41 @@ func TestSendStartTLSRequiredNotOffered(t *testing.T) {
 	_, err := Send(map[string]any{"addr": addr, "from": "from@example.com", "to": "to@example.com", "starttls": "required"})
 	if err == nil || !strings.Contains(err.Error(), "does not offer STARTTLS") {
 		t.Errorf("error = %v, want the server not offering STARTTLS", err)
+	}
+}
+
+func TestSendStopsOnUnreadableParameter(t *testing.T) {
+	// A parameter that cannot be read fails the step before anything is
+	// sent; it used to send with the parameter at its zero value and report
+	// the error only afterwards.
+	lis, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = lis.Close() })
+	var accepted atomic.Int32
+	go func() {
+		for {
+			conn, err := lis.Accept()
+			if err != nil {
+				return
+			}
+			accepted.Add(1)
+			_ = conn.Close()
+		}
+	}()
+
+	_, err = Send(map[string]any{
+		"addr":              lis.Addr().String(),
+		"from":              "from@example.com",
+		"to":                "to@example.com",
+		"insecure_skip_tls": "invalid",
+	})
+	if err == nil {
+		t.Fatal("Send() succeeded with an unreadable insecure_skip_tls")
+	}
+	time.Sleep(100 * time.Millisecond)
+	if n := accepted.Load(); n != 0 {
+		t.Errorf("the server got %d connections, want none", n)
 	}
 }
