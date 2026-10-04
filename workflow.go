@@ -6,6 +6,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/linyows/probe/actionref"
 	"github.com/linyows/probe/expr"
 	"github.com/linyows/probe/mask"
 	"github.com/linyows/probe/procgroup"
@@ -41,6 +42,13 @@ func (w *Workflow) Start(c Config) error {
 	// so they have to agree before anything keys off them.
 	scheduler, err := w.initJobScheduler()
 	if err != nil {
+		return err
+	}
+
+	// Fetch external actions before any job starts, so that a bad reference
+	// fails the run up front and a download does not count against a step's
+	// timeout.
+	if err := w.resolveExternalActions(); err != nil {
 		return err
 	}
 
@@ -287,5 +295,22 @@ func (w *Workflow) newJobContext(c Config, vars map[string]any, scheduler *JobSc
 		Outputs:      w.outputs,
 		countersMu:   &sync.Mutex{},
 		background:   procgroup.NewTracker(),
+		baseDir:      w.basePath,
 	}
+}
+
+// resolveExternalActions resolves every action the steps name outside Probe.
+func (w *Workflow) resolveExternalActions() error {
+	for _, job := range w.Jobs {
+		for _, st := range job.Steps {
+			if !actionref.IsExternal(st.Uses) {
+				continue
+			}
+			if _, err := actionref.Resolve(st.Uses, w.basePath); err != nil {
+				return NewConfigurationError("resolve_action", "failed to resolve an external action", err).
+					WithContext("uses", st.Uses)
+			}
+		}
+	}
+	return nil
 }

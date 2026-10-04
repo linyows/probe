@@ -73,6 +73,8 @@ type JobContext struct {
 	// Processes that steps left running in the background, stopped once the
 	// workflow is over
 	background *procgroup.Tracker
+	// Directory of the workflow file, which local actions are relative to
+	baseDir string
 }
 
 // SetFailed marks the job context as failed

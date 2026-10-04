@@ -246,7 +246,7 @@ jobs:
 
 | プロパティ | 型 | 必須 | 説明 |
 |---|---|---|---|
-| `uses` | String | 必須 | 実行するアクション名（`http`、`shell`など） |
+| `uses` | String | 必須 | 実行するアクション。`http`、`shell`などの組み込みアクションか、[外部アクション](/ja/guide/concepts/actions#外部アクション) |
 | `name` | String | 任意 | ステップ名 |
 | `id` | String | 任意 | このステップの`outputs`の名前空間になる識別子 |
 | `with` | Object | 任意 | アクション引数 |

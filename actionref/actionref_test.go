@@ -1,0 +1,377 @@
+package actionref
+
+import (
+	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"strings"
+	"sync"
+	"sync/atomic"
+	"testing"
+)
+
+const sha = "0123456789abcdef0123456789abcdef01234567"
+
+func TestIsExternal(t *testing.T) {
+	tests := map[string]bool{
+		"http":                          false,
+		"mail-latency":                  false,
+		"./actions/foo":                 true,
+		"github.com/linyows/foo@" + sha: true,
+	}
+	for uses, want := range tests {
+		if got := IsExternal(uses); got != want {
+			t.Errorf("IsExternal(%q) = %v, want %v", uses, got, want)
+		}
+	}
+}
+
+func TestParse(t *testing.T) {
+	tests := []struct {
+		uses    string
+		want    Ref
+		wantErr string
+	}{
+		{uses: "./actions/foo", want: Ref{Local: "./actions/foo"}},
+		{uses: "../foo", want: Ref{Local: "../foo"}},
+		{uses: "/opt/foo", want: Ref{Local: "/opt/foo"}},
+		{uses: "github.com/linyows/probe-graphql@" + sha, want: Ref{Owner: "linyows", Repo: "probe-graphql", SHA: sha}},
+		{uses: "github.com/o/r/a/b@" + sha, want: Ref{Owner: "o", Repo: "r", Dir: "a/b", SHA: sha}},
+		{uses: "gitlab.com/o/r@" + sha, wantErr: "unsupported action"},
+		{uses: "actions/foo", wantErr: "unsupported action"},
+		{uses: "github.com/o/r", wantErr: "must be pinned to a commit"},
+		{uses: "github.com/o/r@", wantErr: "must be pinned to a commit"},
+		{uses: "github.com/o/r@v1.0.0", wantErr: "full 40-character commit SHA"},
+		{uses: "github.com/o/r@0123456", wantErr: "full 40-character commit SHA"},
+		{uses: "github.com/o/r@" + strings.ToUpper(sha), wantErr: "full 40-character commit SHA"},
+		{uses: "github.com/o@" + sha, wantErr: "must name a repository"},
+		{uses: "github.com/o/r/../x@" + sha, wantErr: "invalid path element"},
+		{uses: "github.com/o//r@" + sha, wantErr: "invalid path element"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.uses, func(t *testing.T) {
+			got, err := Parse(tt.uses)
+			if tt.wantErr != "" {
+				if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+					t.Fatalf("Parse(%q) error = %v, want one containing %q", tt.uses, err, tt.wantErr)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("Parse(%q) error = %v", tt.uses, err)
+			}
+			if got != tt.want {
+				t.Errorf("Parse(%q) = %+v, want %+v", tt.uses, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestParseManifest(t *testing.T) {
+	sum := strings.Repeat("a", 64)
+	tests := []struct {
+		name    string
+		yml     string
+		wantErr string
+	}{
+		{name: "url", yml: "runs:\n  using: binary\n  url: https://example.com/x_{os}_{arch}\n  checksums:\n    linux_amd64: " + sum + "\n"},
+		{name: "path", yml: "runs:\n  using: binary\n  path: bin/x\n"},
+		{name: "no using", yml: "runs:\n  url: https://example.com/x\n", wantErr: "runs.using must be"},
+		{name: "go", yml: "runs:\n  using: go\n  path: ./cmd/x\n", wantErr: "runs.using must be"},
+		{name: "neither", yml: "runs:\n  using: binary\n", wantErr: "exactly one of url and path"},
+		{name: "both", yml: "runs:\n  using: binary\n  url: https://example.com/x\n  path: x\n", wantErr: "exactly one of url and path"},
+		{name: "bad checksum", yml: "runs:\n  using: binary\n  url: https://example.com/x\n  checksums:\n    linux_amd64: abc\n", wantErr: "runs.checksums.linux_amd64"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := ParseManifest([]byte(tt.yml))
+			if tt.wantErr == "" {
+				if err != nil {
+					t.Fatalf("ParseManifest() error = %v", err)
+				}
+				return
+			}
+			if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+				t.Fatalf("ParseManifest() error = %v, want one containing %q", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+// github serves an action.yml from a fake raw.githubusercontent.com and the
+// binaries it points to, and counts the requests for each path.
+type github struct {
+	*httptest.Server
+	mu    sync.Mutex
+	files map[string][]byte
+	hits  map[string]int
+}
+
+func newGitHub(t *testing.T) *github {
+	g := &github{files: map[string][]byte{}, hits: map[string]int{}}
+	g.Server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		g.mu.Lock()
+		defer g.mu.Unlock()
+		g.hits[r.URL.Path]++
+		data, ok := g.files[r.URL.Path]
+		if !ok {
+			http.NotFound(w, r)
+			return
+		}
+		_, _ = w.Write(data)
+	}))
+	t.Cleanup(g.Close)
+	return g
+}
+
+func (g *github) hit(path string) int {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	return g.hits[path]
+}
+
+func digest(b []byte) string {
+	s := sha256.Sum256(b)
+	return hex.EncodeToString(s[:])
+}
+
+func newResolver(t *testing.T, g *github) *Resolver {
+	return &Resolver{CacheDir: t.TempDir(), RawBaseURL: g.URL, OS: "linux", Arch: "arm64"}
+}
+
+func TestResolveRemote(t *testing.T) {
+	g := newGitHub(t)
+	bin := []byte("#!/bin/sh\necho linux arm64\n")
+	g.files["/bin/x_linux_arm64"] = bin
+	g.files["/o/r/"+sha+"/sub/action.yml"] = fmt.Appendf(nil, `name: x
+runs:
+  using: binary
+  url: %s/bin/x_{os}_{arch}
+  checksums:
+    linux_arm64: %s
+    darwin_arm64: %s
+`, g.URL, digest(bin), strings.Repeat("f", 64))
+
+	r := newResolver(t, g)
+	uses := "github.com/o/r/sub@" + sha
+	exe, err := r.Resolve(uses, "")
+	if err != nil {
+		t.Fatalf("Resolve() error = %v", err)
+	}
+
+	got, err := os.ReadFile(exe.Path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(got, bin) {
+		t.Errorf("executable = %q, want %q", got, bin)
+	}
+	if hex.EncodeToString(exe.SHA256) != digest(bin) {
+		t.Errorf("SHA256 = %x, want %s", exe.SHA256, digest(bin))
+	}
+	if info, err := os.Stat(exe.Path); err != nil || info.Mode().Perm()&0o100 == 0 {
+		t.Errorf("executable is not executable: %v %v", info.Mode(), err)
+	}
+
+	// A second resolver sharing the cache must not fetch anything again.
+	r2 := &Resolver{CacheDir: r.CacheDir, RawBaseURL: g.URL, OS: "linux", Arch: "arm64"}
+	if _, err := r2.Resolve(uses, ""); err != nil {
+		t.Fatalf("Resolve() from cache error = %v", err)
+	}
+	if n := g.hit("/o/r/" + sha + "/sub/action.yml"); n != 1 {
+		t.Errorf("action.yml fetched %d times, want 1", n)
+	}
+	if n := g.hit("/bin/x_linux_arm64"); n != 1 {
+		t.Errorf("binary fetched %d times, want 1", n)
+	}
+}
+
+func TestResolveRemoteOnce(t *testing.T) {
+	g := newGitHub(t)
+	bin := []byte("bin")
+	g.files["/bin"] = bin
+	g.files["/o/r/"+sha+"/action.yml"] = fmt.Appendf(nil, "runs:\n  using: binary\n  url: %s/bin\n  checksums:\n    linux_arm64: %s\n", g.URL, digest(bin))
+
+	r := newResolver(t, g)
+	var wg sync.WaitGroup
+	var failed atomic.Int32
+	for range 8 {
+		wg.Go(func() {
+			if _, err := r.Resolve("github.com/o/r@"+sha, ""); err != nil {
+				failed.Add(1)
+			}
+		})
+	}
+	wg.Wait()
+	if failed.Load() != 0 {
+		t.Fatalf("%d resolutions failed", failed.Load())
+	}
+	if n := g.hit("/bin"); n != 1 {
+		t.Errorf("binary fetched %d times, want 1", n)
+	}
+}
+
+func TestResolveRemoteErrors(t *testing.T) {
+	bin := []byte("bin")
+	tests := []struct {
+		name     string
+		manifest func(url string) string
+		wantErr  string
+	}{
+		{
+			name:    "no action.yml",
+			wantErr: "404",
+		},
+		{
+			name: "checksum mismatch",
+			manifest: func(url string) string {
+				return fmt.Sprintf("runs:\n  using: binary\n  url: %s/bin\n  checksums:\n    linux_arm64: %s\n", url, strings.Repeat("f", 64))
+			},
+			wantErr: "has SHA-256",
+		},
+		{
+			name: "unsupported platform",
+			manifest: func(url string) string {
+				return fmt.Sprintf("runs:\n  using: binary\n  url: %s/bin\n  checksums:\n    darwin_arm64: %s\n", url, digest(bin))
+			},
+			wantErr: "no checksum for linux_arm64",
+		},
+		{
+			name: "path",
+			manifest: func(string) string {
+				return "runs:\n  using: binary\n  path: bin\n"
+			},
+			wantErr: "runs.path is only for local actions",
+		},
+		{
+			name: "binary missing",
+			manifest: func(url string) string {
+				return fmt.Sprintf("runs:\n  using: binary\n  url: %s/missing\n  checksums:\n    linux_arm64: %s\n", url, digest(bin))
+			},
+			wantErr: "404",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			g := newGitHub(t)
+			g.files["/bin"] = bin
+			if tt.manifest != nil {
+				g.files["/o/r/"+sha+"/action.yml"] = []byte(tt.manifest(g.URL))
+			}
+			r := newResolver(t, g)
+			_, err := r.Resolve("github.com/o/r@"+sha, "")
+			if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+				t.Fatalf("Resolve() error = %v, want one containing %q", err, tt.wantErr)
+			}
+			if !strings.Contains(err.Error(), "github.com/o/r@"+sha) {
+				t.Errorf("error %q does not name the action", err)
+			}
+		})
+	}
+}
+
+func TestResolveRemoteRedownloadsCorruptCache(t *testing.T) {
+	g := newGitHub(t)
+	bin := []byte("bin")
+	g.files["/bin"] = bin
+	g.files["/o/r/"+sha+"/action.yml"] = fmt.Appendf(nil, "runs:\n  using: binary\n  url: %s/bin\n  checksums:\n    linux_arm64: %s\n", g.URL, digest(bin))
+
+	r := newResolver(t, g)
+	exe, err := r.Resolve("github.com/o/r@"+sha, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(exe.Path, []byte("tampered"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	r2 := &Resolver{CacheDir: r.CacheDir, RawBaseURL: g.URL, OS: "linux", Arch: "arm64"}
+	if _, err := r2.Resolve("github.com/o/r@"+sha, ""); err != nil {
+		t.Fatal(err)
+	}
+	got, _ := os.ReadFile(exe.Path)
+	if !bytes.Equal(got, bin) {
+		t.Errorf("cached executable = %q, want %q", got, bin)
+	}
+}
+
+func TestResolveLocal(t *testing.T) {
+	base := t.TempDir()
+	dir := filepath.Join(base, "actions", "x")
+	if err := os.MkdirAll(filepath.Join(dir, "bin"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	bin := []byte("local")
+	if err := os.WriteFile(filepath.Join(dir, "bin", "x_linux_arm64"), bin, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	t.Run("path", func(t *testing.T) {
+		if err := os.WriteFile(filepath.Join(dir, ManifestFile), []byte("runs:\n  using: binary\n  path: bin/x_{os}_{arch}\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		r := &Resolver{CacheDir: t.TempDir(), OS: "linux", Arch: "arm64"}
+		exe, err := r.Resolve("./actions/x", base)
+		if err != nil {
+			t.Fatalf("Resolve() error = %v", err)
+		}
+		if want := filepath.Join(dir, "bin", "x_linux_arm64"); exe.Path != want {
+			t.Errorf("Path = %q, want %q", exe.Path, want)
+		}
+		if len(exe.SHA256) != 0 {
+			t.Errorf("SHA256 = %x, want none", exe.SHA256)
+		}
+	})
+
+	t.Run("path with checksum", func(t *testing.T) {
+		if err := os.WriteFile(filepath.Join(dir, ManifestFile), fmt.Appendf(nil, "runs:\n  using: binary\n  path: bin/x_{os}_{arch}\n  checksums:\n    linux_arm64: %s\n", digest(bin)), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		r := &Resolver{CacheDir: t.TempDir(), OS: "linux", Arch: "arm64"}
+		exe, err := r.Resolve("./actions/x", base)
+		if err != nil {
+			t.Fatalf("Resolve() error = %v", err)
+		}
+		if hex.EncodeToString(exe.SHA256) != digest(bin) {
+			t.Errorf("SHA256 = %x, want %s", exe.SHA256, digest(bin))
+		}
+	})
+
+	t.Run("url", func(t *testing.T) {
+		g := newGitHub(t)
+		g.files["/bin"] = bin
+		if err := os.WriteFile(filepath.Join(dir, ManifestFile), fmt.Appendf(nil, "runs:\n  using: binary\n  url: %s/bin\n  checksums:\n    linux_arm64: %s\n", g.URL, digest(bin)), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		r := newResolver(t, g)
+		exe, err := r.Resolve("./actions/x", base)
+		if err != nil {
+			t.Fatalf("Resolve() error = %v", err)
+		}
+		if !strings.HasPrefix(exe.Path, r.CacheDir) {
+			t.Errorf("Path = %q, want one in the cache %q", exe.Path, r.CacheDir)
+		}
+	})
+
+	t.Run("missing executable", func(t *testing.T) {
+		if err := os.WriteFile(filepath.Join(dir, ManifestFile), []byte("runs:\n  using: binary\n  path: bin/nope\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		r := &Resolver{CacheDir: t.TempDir(), OS: "linux", Arch: "arm64"}
+		if _, err := r.Resolve("./actions/x", base); err == nil {
+			t.Fatal("Resolve() succeeded with a missing executable")
+		}
+	})
+
+	t.Run("missing action.yml", func(t *testing.T) {
+		r := &Resolver{CacheDir: t.TempDir()}
+		if _, err := r.Resolve("./nowhere", base); err == nil {
+			t.Fatal("Resolve() succeeded without an action.yml")
+		}
+	})
+}

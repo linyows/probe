@@ -717,9 +717,119 @@ type Action interface {
 
 `with` holds the step's `with` parameters. The returned map becomes the step's `req`, `res`, `rt` and `status`, as with the built-in actions.
 
-### Serving a Custom Action
+### External Actions
 
-Probe runs each action in a process of its own, by starting its own executable again as `<executable> builtin-actions <name>`. A custom action therefore lives in your own build of Probe: a program that uses Probe as a library, serves your action under that subcommand, and hands the other names to the built-in actions.
+An action can also live outside Probe, in a repository of its own. Probe downloads the executable that serves it and runs it as it runs a built-in action. A step names the action by repository and commit:
+
+```yaml
+- name: Ask the API who I am
+  uses: github.com/linyows/probe-graphql@<40-character commit SHA>
+  with:
+    url: https://api.example.com/graphql
+    query: '{ viewer { login } }'
+  test: res.code == 200
+```
+
+`uses` names an external action in one of two forms. A name without a slash is a built-in action.
+
+| Form | Example |
+|---|---|
+| `github.com/<owner>/<repo>[/<dir>]@<commit>` | `github.com/linyows/probe-graphql@3f2a…` |
+| A path starting with `./`, `../` or `/` | `./actions/greet` |
+
+A remote action must be pinned to a full 40-character commit SHA. Tags and branches are refused, because they can be moved to other code after the workflow was reviewed. Only GitHub is supported for now. A local path is taken relative to the workflow file.
+
+Probe resolves every external action before the first job starts. A reference that cannot be resolved fails the run with exit code 2, and a download does not count against a step's timeout. Downloads are kept under `probe/actions` in the user's cache directory (`~/.cache` on Linux, `~/Library/Caches` on macOS), so an action is fetched once per commit.
+
+#### action.yml
+
+The action's directory holds an `action.yml` that says which executable serves it:
+
+```yaml
+name: graphql
+description: Send a GraphQL query over HTTP
+runs:
+  using: binary
+  url: https://github.com/linyows/probe-graphql/releases/download/v0.1.0/probe-graphql_{os}_{arch}
+  checksums:
+    darwin_amd64: <SHA-256 of probe-graphql_darwin_amd64>
+    darwin_arm64: <SHA-256 of probe-graphql_darwin_arm64>
+    linux_amd64: <SHA-256 of probe-graphql_linux_amd64>
+    linux_arm64: <SHA-256 of probe-graphql_linux_arm64>
+```
+
+| Key | Description |
+|---|---|
+| `runs.using` | Must be `binary` |
+| `runs.url` | Where the executable is downloaded from. `{os}` and `{arch}` become Go's `GOOS` and `GOARCH`, such as `linux` and `arm64` |
+| `runs.path` | The executable, relative to the action's directory, with the same placeholders. Only a local action can use it |
+| `runs.checksums` | SHA-256 digest of the executable for each `<os>_<arch>`, in lowercase hex |
+
+`runs` takes exactly one of `url` and `path`. With `url`, a checksum for the running platform is required, and a download with another digest is refused. The digest is checked again each time the executable is started. The commit in `uses` fixes `action.yml`, and `action.yml` fixes the digest, so the commit decides exactly which executable runs.
+
+A local action with `path` needs no checksum. Give one to have the executable checked as a remote one is.
+
+#### Writing an External Action
+
+The executable serves the action with `actionrpc.Serve`:
+
+```go
+package main
+
+import (
+    "fmt"
+    "time"
+
+    "github.com/hashicorp/go-hclog"
+    "github.com/linyows/probe/actionrpc"
+)
+
+// Greet is served by an executable of its own.
+type Greet struct {
+    log hclog.Logger
+}
+
+func (g *Greet) Run(with map[string]any) (map[string]any, error) {
+    start := time.Now()
+    actionrpc.LogParams(g.log, "greet received parameters", with)
+
+    name, _ := with["name"].(string)
+    return map[string]any{
+        "req":    with,
+        "res":    map[string]any{"message": fmt.Sprintf("Hello, %s!", name)},
+        "rt":     time.Since(start).String(),
+        "status": 0,
+    }, nil
+}
+
+func main() {
+    actionrpc.Serve(func(log hclog.Logger) actionrpc.Action {
+        return &Greet{log: log}
+    })
+}
+```
+
+Build it for every platform it supports, publish the executables, and commit an `action.yml` with their URLs and digests. Users then pin the commit that holds that `action.yml`. [linyows/probe-graphql](https://github.com/linyows/probe-graphql) does this with GoReleaser and a workflow that commits the digests after each release.
+
+While developing, point a local `action.yml` at the executable you build:
+
+```yaml
+runs:
+  using: binary
+  path: probe-greet
+```
+
+```yaml
+- name: Say hello
+  uses: ./greet
+  with:
+    name: probe
+  test: res.message == "Hello, probe!"
+```
+
+### Building a Custom Action into Probe
+
+A custom action can instead be built into Probe itself. Probe runs each built-in action in a process of its own, by starting its own executable again as `<executable> builtin-actions <name>`. Such an action therefore lives in your own build of Probe: a program that uses Probe as a library, serves your action under that subcommand, and hands the other names to the built-in actions.
 
 ```go
 package main
