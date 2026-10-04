@@ -207,7 +207,7 @@ with:
 - name: "uid fetch"     # 直前に見つかったUIDをALLで取得
 ```
 
-`dataitem`には、マクロの`ALL`、`FAST`、`FULL`のいずれか、または`ENVELOPE`、`FLAGS`、`INTERNALDATE`、`RFC822.SIZE`、`UID`、`BODYSTRUCTURE`と、`BODY[...]`か`BODY.PEEK[...]`のセクションを空白で区切って並べます。`ENVELOPE`は`from`、`to`、`subject`を、`RFC822.SIZE`は`size`を埋めます。セクションはメッセージの以下のフィールドを埋めます。
+`dataitem`には、マクロの`ALL`、`FAST`、`FULL`のいずれかを単独で書くか、`ENVELOPE`、`FLAGS`、`INTERNALDATE`、`RFC822`、`RFC822.HEADER`、`RFC822.SIZE`、`RFC822.TEXT`、`UID`、`BODYSTRUCTURE`と、`BODY[...]`か`BODY.PEEK[...]`のセクションを空白で区切って並べます。大文字と小文字は区別せず、`(FLAGS UID)`のように括弧で囲んでも構いません。セクションの後ろには、先頭512バイトを取る`BODY.PEEK[TEXT]<0.512>`のように部分範囲を付けられます。これら以外の項目を書くとコマンドは失敗します。`ENVELOPE`は`from`、`to`、`subject`を、`RFC822.SIZE`は`size`を埋めます。IMAPと同じく、`RFC822`は`BODY[]`、`RFC822.HEADER`は`BODY.PEEK[HEADER]`、`RFC822.TEXT`は`BODY[TEXT]`です。セクションはメッセージの以下のフィールドを埋めます。
 
 | セクション | 埋めるフィールド |
 |-----------|----------------|

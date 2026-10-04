@@ -13,6 +13,7 @@ import (
 	"math/big"
 	"net"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -1557,5 +1558,152 @@ func TestSearchSeveralNumbers(t *testing.T) {
 		if search["count"] != 2 {
 			t.Errorf("%s [1 3]: search = %v, want two matches", key, search)
 		}
+	}
+}
+
+func TestParseFetchItemsUnknown(t *testing.T) {
+	// An item that is not known used to fetch nothing for it, without a word.
+	r := NewReq()
+	for _, dataitem := range []string{"ENVELOP", "FLAGS ENVELOP", "BODY[TEXT", "()", "", "FLAGS ALL"} {
+		if _, err := r.parseFetchItems(dataitem); err == nil {
+			t.Errorf("parseFetchItems(%q) succeeded, want an error", dataitem)
+		}
+	}
+	_, err := r.parseFetchItems("FLAGS ENVELOP")
+	if err == nil || !strings.Contains(err.Error(), `"ENVELOP"`) || !strings.Contains(err.Error(), "RFC822.SIZE") {
+		t.Errorf("error = %v, want it to name the item and the items there are", err)
+	}
+}
+
+func TestParseFetchItemsForms(t *testing.T) {
+	r := NewReq()
+
+	// Lists are read whatever the case, and may be in parentheses
+	for _, dataitem := range []string{"flags uid", "(FLAGS UID)", "( flags Uid )"} {
+		opts, err := r.parseFetchItems(dataitem)
+		if err != nil {
+			t.Fatalf("parseFetchItems(%q) error: %v", dataitem, err)
+		}
+		if !opts.Flags || !opts.UID {
+			t.Errorf("parseFetchItems(%q) = %+v, want FLAGS and UID", dataitem, opts)
+		}
+	}
+
+	// A macro alone, whatever the case
+	opts, err := r.parseFetchItems("fast")
+	if err != nil || !opts.Flags || !opts.InternalDate || !opts.RFC822Size || opts.Envelope {
+		t.Errorf("parseFetchItems(fast) = %+v, %v, want FLAGS INTERNALDATE RFC822.SIZE", opts, err)
+	}
+
+	// The partial range of a section comes after it, as IMAP writes it
+	opts, err = r.parseFetchItems("UID BODY.PEEK[TEXT]<0.512>")
+	if err != nil {
+		t.Fatalf("parseFetchItems() error: %v", err)
+	}
+	if len(opts.BodySection) != 1 || opts.BodySection[0].Partial == nil {
+		t.Fatalf("BodySection = %+v, want one with a partial range", opts.BodySection)
+	}
+	if p := opts.BodySection[0].Partial; p.Offset != 0 || p.Size != 512 || !opts.BodySection[0].Peek {
+		t.Errorf("section = %+v, partial = %+v, want a peek at 0.512", opts.BodySection[0], p)
+	}
+}
+
+func TestParseFetchItemsRFC822(t *testing.T) {
+	// The RFC822 items are fetched as the sections RFC 3501 defines them as,
+	// rather than as unrelated items standing in for them.
+	r := NewReq()
+	tests := []struct {
+		item      string
+		specifier imap.PartSpecifier
+		peek      bool
+	}{
+		{item: "RFC822", specifier: imap.PartSpecifierNone, peek: false},
+		{item: "RFC822.HEADER", specifier: imap.PartSpecifierHeader, peek: true},
+		{item: "RFC822.TEXT", specifier: imap.PartSpecifierText, peek: false},
+	}
+	for _, tt := range tests {
+		opts, err := r.parseFetchItems(tt.item)
+		if err != nil {
+			t.Fatalf("parseFetchItems(%q) error: %v", tt.item, err)
+		}
+		if len(opts.BodySection) != 1 {
+			t.Fatalf("%s: BodySection = %+v, want one section", tt.item, opts.BodySection)
+		}
+		s := opts.BodySection[0]
+		if s.Specifier != tt.specifier || s.Peek != tt.peek {
+			t.Errorf("%s: section = %+v, want specifier %q, peek %v", tt.item, s, tt.specifier, tt.peek)
+		}
+		if opts.Envelope || opts.Flags {
+			t.Errorf("%s: also fetches ENVELOPE or FLAGS, which it used to stand for", tt.item)
+		}
+	}
+}
+
+func TestFetchRFC822Items(t *testing.T) {
+	// RFC822.HEADER gives the headers and, like BODY.PEEK, leaves the
+	// message unread; RFC822.TEXT gives the body.
+	host, port := plainIMAPServer(t, 1)
+	fetch := func(dataitem string) map[string]any {
+		t.Helper()
+		ret, err := runCommands(t, host, port,
+			map[string]any{"name": "select", "mailbox": "INBOX"},
+			map[string]any{"name": "fetch", "sequence": "1", "dataitem": dataitem},
+		)
+		if err != nil {
+			t.Fatalf("%s: Request() error: %v", dataitem, err)
+		}
+		data := ret["res"].(map[string]any)["data"].(map[string]any)
+		return data["fetch"].(map[string]any)["messages"].([]any)[0].(map[string]any)
+	}
+
+	header := fetch("RFC822.HEADER")
+	var subject any
+	switch h := header["headers"].(type) {
+	case map[string]string:
+		subject = h["subject"]
+	case map[string]any:
+		subject = h["subject"]
+	}
+	if subject != "message 1" {
+		t.Errorf("RFC822.HEADER headers = %v, want the subject", header["headers"])
+	}
+	flagsOf := func() []string {
+		t.Helper()
+		got := fetch("FLAGS")["flags"]
+		flags, ok := got.([]string)
+		if !ok && got != nil {
+			t.Fatalf("flags = %#v, want []string", got)
+		}
+		return flags
+	}
+	if flags := flagsOf(); slices.Contains(flags, `\Seen`) {
+		t.Errorf("flags = %v after RFC822.HEADER, want the message still unread", flags)
+	}
+
+	text := fetch("RFC822.TEXT")
+	if body, _ := text["body"].(string); !strings.Contains(body, "body 1") || strings.Contains(body, "Subject:") {
+		t.Errorf("RFC822.TEXT body = %q, want the body without the headers", body)
+	}
+
+	// RFC822.TEXT is BODY[TEXT], which marks the message read, so the check
+	// above does tell a read message apart.
+	if flags := flagsOf(); !slices.Contains(flags, `\Seen`) {
+		t.Errorf("flags = %v after RFC822.TEXT, want the message read", flags)
+	}
+}
+
+func TestFetchUnknownItemFails(t *testing.T) {
+	// The command fails, rather than fetching nothing for the item.
+	host, port := plainIMAPServer(t, 1)
+	ret, err := runCommands(t, host, port,
+		map[string]any{"name": "select", "mailbox": "INBOX"},
+		map[string]any{"name": "fetch", "sequence": "1", "dataitem": "FLAGS ENVELOP"},
+	)
+	if err != nil {
+		t.Fatalf("Request() error: %v", err)
+	}
+	res := ret["res"].(map[string]any)
+	if res["code"] != 1 || !strings.Contains(fmt.Sprint(res["error"]), "ENVELOP") {
+		t.Errorf("res = code %v, error %v; want the fetch to fail naming the item", res["code"], res["error"])
 	}
 }
