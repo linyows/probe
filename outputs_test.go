@@ -1,6 +1,7 @@
 package probe
 
 import (
+	"errors"
 	"reflect"
 	"strings"
 	"testing"
@@ -174,12 +175,14 @@ func TestOutputsNoFlatAccessForStepIDConflict(t *testing.T) {
 		t.Errorf("Unexpected error: %v", err)
 	}
 
-	// Try to create another step with output name "token"
+	// Try to create another step with output name "token": a warning, since
+	// the name stays the step's
 	err = outputs.Set("auth", map[string]any{
 		"token": "auth_token",
 	})
-	if err != nil {
-		t.Errorf("Unexpected error: %v", err)
+	var taken *NameTakenError
+	if !errors.As(err, &taken) {
+		t.Errorf("Expected a name-taken warning, got: %v", err)
 	}
 
 	// Flat access to "token" should not work because "token" is a step ID
@@ -279,5 +282,64 @@ func TestOutputsSameStepAgain(t *testing.T) {
 	}
 	if v, _ := outputs.GetFlat("count"); v != 3 {
 		t.Errorf("flat count = %v, want 3", v)
+	}
+}
+
+func TestOutputsNameTakenByStepID(t *testing.T) {
+	// A name that is a step's id holds that step's outputs; each step that
+	// publishes the name is told, rather than its value dropping silently.
+	outputs := NewOutputs()
+	_ = outputs.Set("token", map[string]any{"value": "v"})
+	for _, step := range []string{"auth", "profile"} {
+		err := outputs.Set(step, map[string]any{"token": step})
+		var taken *NameTakenError
+		if !errors.As(err, &taken) {
+			t.Fatalf("%s: got %v, want a name-taken warning", step, err)
+		}
+		msg := taken.Error()
+		if !strings.Contains(msg, "has the name of the step 'token'") || !strings.Contains(msg, "read outputs."+step+".token") {
+			t.Errorf("%s: warning = %q, want it to name the step and the way to read the value", step, msg)
+		}
+	}
+	if got, _ := outputs.Get("token"); got["value"] != "v" {
+		t.Errorf("outputs.token = %v, want the step's outputs", got)
+	}
+}
+
+func TestOutputsNameTakenAdviceWhenStepIDTaken(t *testing.T) {
+	// "first" publishes the names "second" and "token". The step "second"
+	// then cannot be read through its id, so the warning must not send the
+	// reader there.
+	outputs := NewOutputs()
+	_ = outputs.Set("first", map[string]any{"second": "x", "token": "first-token"})
+	err := outputs.Set("second", map[string]any{"token": "second-token"})
+	if err == nil {
+		t.Fatal("Expected a conflict for the step id and a warning for the name")
+	}
+	if strings.Contains(err.Error(), "read outputs.second.token") {
+		t.Errorf("warning points to outputs.second.token, which does not exist: %v", err)
+	}
+	if !strings.Contains(err.Error(), "this one cannot be read") {
+		t.Errorf("warning = %v, want it to say the value cannot be read", err)
+	}
+}
+
+func TestOutputsWarningsAndErrorsApart(t *testing.T) {
+	// A taken name is a warning, a taken step id an error, so the caller can
+	// report each as what it is.
+	outputs := NewOutputs()
+	_ = outputs.Set("first", map[string]any{"second": "x", "token": "t"})
+	err := outputs.Set("second", map[string]any{"token": "u"})
+	var warnings, others int
+	for _, e := range unwrapJoined(err) {
+		var taken *NameTakenError
+		if errors.As(e, &taken) {
+			warnings++
+		} else {
+			others++
+		}
+	}
+	if warnings != 1 || others != 1 {
+		t.Errorf("got %d warnings and %d errors, want 1 and 1: %v", warnings, others, err)
 	}
 }

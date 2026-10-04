@@ -846,6 +846,14 @@ func (st *Step) createFailedStepResult(name string, jCtx *JobContext, repeatCoun
 	return result
 }
 
+// unwrapJoined returns the errors joined into err, or err alone.
+func unwrapJoined(err error) []error {
+	if joined, ok := err.(interface{ Unwrap() []error }); ok {
+		return joined.Unwrap()
+	}
+	return []error{err}
+}
+
 // saveOutputs evaluates and saves step outputs to JobContext
 func (st *Step) saveOutputs(jCtx *JobContext) {
 	if len(st.Outputs) == 0 || st.ID == "" {
@@ -865,8 +873,18 @@ func (st *Step) saveOutputs(jCtx *JobContext) {
 
 	// Save outputs to the unified Outputs structure
 	if jCtx.Outputs != nil {
+		// A name taken before is a warning; the step's value is still kept.
+		// A step id taken by an output name is an error: the step's outputs
+		// cannot be read through it.
 		if err := jCtx.Outputs.Set(st.ID, outputs); err != nil {
-			jCtx.Printer.PrintError("Output conflict warning: %v", err)
+			for _, e := range unwrapJoined(err) {
+				var taken *NameTakenError
+				if errors.As(e, &taken) {
+					jCtx.Printer.LogWarn("%v", taken)
+				} else {
+					jCtx.Printer.PrintError("Output conflict: %v", e)
+				}
+			}
 		}
 	}
 

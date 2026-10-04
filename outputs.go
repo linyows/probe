@@ -60,25 +60,44 @@ func (o *Outputs) Set(stepID string, outputs map[string]any) error {
 	sort.Strings(names)
 	for _, outputName := range names {
 		owner, owned := o.owners[outputName]
+		_, isStep := o.data[outputName].(map[string]any)
+
+		// Where this value can still be read when the name alone is taken:
+		// through the step's id, unless that was taken as well above.
+		instead := fmt.Sprintf("read outputs.%s.%s for this one", stepID, outputName)
+		if stepIDConflictsWithFlat {
+			instead = fmt.Sprintf("this one cannot be read, since outputs.%s is an output name too", stepID)
+		}
 		switch {
 		case owned && owner == stepID:
 			// The same step publishing again keeps the name, with its
 			// latest value, as outputs.<step_id>.<name> has.
 			o.data[outputName] = outputs[outputName]
 		case owned:
-			errs = append(errs, fmt.Errorf("output '%s' of '%s' is also published by '%s', which came first, so outputs.%s keeps the value of '%s'; read outputs.%s.%s for this one",
-				outputName, stepID, owner, outputName, owner, stepID, outputName))
-		default:
+			errs = append(errs, &NameTakenError{fmt.Sprintf("output '%s' of '%s' is also published by '%s', which came first, so outputs.%s keeps the value of '%s'; %s",
+				outputName, stepID, owner, outputName, owner, instead)})
+		case isStep:
 			// A step ID of the same name keeps the name for its outputs.
-			if _, exists := o.data[outputName]; exists {
-				continue
-			}
+			errs = append(errs, &NameTakenError{fmt.Sprintf("output '%s' of '%s' has the name of the step '%s', so outputs.%s is that step's outputs; %s",
+				outputName, stepID, outputName, outputName, instead)})
+		default:
 			o.data[outputName] = outputs[outputName]
 			o.owners[outputName] = stepID
 		}
 	}
 
 	return errors.Join(errs...)
+}
+
+// NameTakenError reports an output whose name was taken before it was
+// published, so that outputs.<name> holds something else. It is a warning:
+// the step's value is kept under its id when that can be.
+type NameTakenError struct {
+	msg string
+}
+
+func (e *NameTakenError) Error() string {
+	return e.msg
 }
 
 // Get retrieves outputs for a step (existing functionality)
