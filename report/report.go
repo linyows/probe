@@ -123,14 +123,14 @@ const (
 // Report is the result of a workflow run in a form meant for machines: the
 // JSON file is this structure as is, and the other formats are rendered from it.
 type Report struct {
-	Name        string        `json:"name"`
-	Description string        `json:"description,omitempty"`
-	Status      string        `json:"status"`
-	StartedAt   time.Time     `json:"started_at"`
-	FinishedAt  time.Time     `json:"finished_at"`
-	DurationMs  int64         `json:"duration_ms"`
-	Summary     Summary `json:"summary"`
-	Jobs        []Job   `json:"jobs"`
+	Name        string    `json:"name"`
+	Description string    `json:"description,omitempty"`
+	Status      string    `json:"status"`
+	StartedAt   time.Time `json:"started_at"`
+	FinishedAt  time.Time `json:"finished_at"`
+	DurationMs  int64     `json:"duration_ms"`
+	Summary     Summary   `json:"summary"`
+	Jobs        []Job     `json:"jobs"`
 }
 
 // Summary counts jobs and steps by status.
@@ -150,24 +150,24 @@ type Count struct {
 
 // Job is one job of a Report.
 type Job struct {
-	ID         string       `json:"id"`
-	Name       string       `json:"name"`
-	Status     string       `json:"status"`
-	StartedAt  time.Time    `json:"started_at"`
-	DurationMs int64        `json:"duration_ms"`
-	Steps      []Step `json:"steps"`
+	ID         string    `json:"id"`
+	Name       string    `json:"name"`
+	Status     string    `json:"status"`
+	StartedAt  time.Time `json:"started_at"`
+	DurationMs int64     `json:"duration_ms"`
+	Steps      []Step    `json:"steps"`
 }
 
 // Step is one step of a Job.
 type Step struct {
-	Index      int            `json:"index"`
-	Name       string         `json:"name"`
-	Status     string         `json:"status"`
-	Test       string         `json:"test,omitempty"`
-	DurationMs int64          `json:"duration_ms"`
+	Index      int      `json:"index"`
+	Name       string   `json:"name"`
+	Status     string   `json:"status"`
+	Test       string   `json:"test,omitempty"`
+	DurationMs int64    `json:"duration_ms"`
 	Retry      *Retry   `json:"retry,omitempty"`
 	Repeat     *Repeat  `json:"repeat,omitempty"`
-	Echo       string         `json:"echo,omitempty"`
+	Echo       string   `json:"echo,omitempty"`
 	Failure    *Failure `json:"failure,omitempty"`
 }
 
