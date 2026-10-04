@@ -609,7 +609,7 @@ func parseExitStatus(status any) int {
 	case int:
 		return v
 	case int64:
-		// Handle integers converted from protobuf float64 by convertFloatToInt
+		// Handle integers converted from protobuf float64 by the actionrpc client
 		return int(v)
 	case float64:
 		// Handle JSON numbers which are parsed as float64

@@ -14,6 +14,15 @@ code that imports them has to be updated as follows.
 
 | Before | After |
 |---|---|
+| `probe.Actions` | `actionrpc.Action` |
+| `probe.ActionsPlugin` | `actionrpc.Plugin` |
+| `probe.ActionsClient` | `actionrpc.Client` |
+| `probe.ActionsServer` | `actionrpc.Server` |
+| `probe.Handshake` | `actionrpc.Handshake` |
+| `probe.PluginMap` | `actionrpc.PluginMap` |
+| `probe.BuiltinCmd` | `actionrpc.BuiltinCmd` |
+| `probe.LogActionParams` | `actionrpc.LogParams` |
+| `probe.LogActionOutcome` | `actionrpc.LogOutcome` |
 | `probe.Expr` | `expr.Expr` |
 | `probe.MatchJSON` | `jsonutil.Match` |
 | `probe.DiffJSON` | `jsonutil.Diff` |
@@ -30,7 +39,12 @@ code that imports them has to be updated as follows.
 `Printer.SetMasker`, `Printer.Masker`, `Report.Mask` and `RunOptions.Masker`
 now take or return a `*mask.Masker`, and `Step.Expr` is a `*expr.Expr`.
 
-The packages are imported from `github.com/linyows/probe/expr`,
-`github.com/linyows/probe/jsonutil`, `github.com/linyows/probe/mask` and
-`github.com/linyows/probe/truncate`. Two more new packages, `safefile` and
-`procgroup`, hold what used to be unexported in the root package.
+`probe.ActionsArgs` and `probe.ActionsParams` are removed; nothing used them.
+An action is now served with `actionrpc.Serve`, which builds the logger and
+the plugin that each action used to build for itself.
+
+The packages are imported from `github.com/linyows/probe/actionrpc`,
+`github.com/linyows/probe/expr`, `github.com/linyows/probe/jsonutil`,
+`github.com/linyows/probe/mask` and `github.com/linyows/probe/truncate`. Two
+more new packages, `safefile` and `procgroup`, hold what used to be
+unexported in the root package.

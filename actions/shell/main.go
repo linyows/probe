@@ -7,8 +7,7 @@ import (
 	"syscall"
 
 	"github.com/hashicorp/go-hclog"
-	"github.com/hashicorp/go-plugin"
-	"github.com/linyows/probe"
+	"github.com/linyows/probe/actionrpc"
 	"github.com/linyows/probe/shell"
 )
 
@@ -22,7 +21,7 @@ func (a *Action) Run(with map[string]any) (map[string]any, error) {
 		return map[string]any{}, errors.New("shell action requires parameters in 'with' section. Please specify command details like cmd")
 	}
 
-	probe.LogActionParams(a.log, "received shell request parameters", with)
+	actionrpc.LogParams(a.log, "received shell request parameters", with)
 
 	before := shell.WithBefore(func(cmd string, shell string, workdir string) {
 		a.log.Debug("shell command prepared", "cmd", cmd, "shell", shell, "workdir", workdir)
@@ -32,7 +31,7 @@ func (a *Action) Run(with map[string]any) (map[string]any, error) {
 	})
 	ret, err := shell.Execute(with, before, after)
 
-	probe.LogActionOutcome(a.log, "shell command", ret, err)
+	actionrpc.LogOutcome(a.log, "shell command", ret, err)
 
 	return ret, err
 }
@@ -40,20 +39,8 @@ func (a *Action) Run(with map[string]any) (map[string]any, error) {
 func Serve() {
 	stopStartedOnSignal()
 
-	log := hclog.New(&hclog.LoggerOptions{
-		Level:      hclog.Debug,
-		Output:     os.Stderr,
-		JSONFormat: true,
-	})
-
-	pl := &probe.ActionsPlugin{
-		Impl: &Action{log: log},
-	}
-
-	plugin.Serve(&plugin.ServeConfig{
-		HandshakeConfig: probe.Handshake,
-		Plugins:         map[string]plugin.Plugin{"actions": pl},
-		GRPCServer:      plugin.DefaultGRPCServer,
+	actionrpc.Serve(func(log hclog.Logger) actionrpc.Action {
+		return &Action{log: log}
 	})
 }
 
