@@ -19,6 +19,8 @@ The golden tests cover comprehensive DAG patterns for Mermaid rendering:
 	Parallel              | parallel_roots           | [A], [B] (independent)
 	                      | parallel_chains          | [A→B], [C→D] (independent chains)
 	Mixed                 | mixed_standalone         | A → B, C (standalone)
+	Node IDs              | sanitized_id_collision   | "unit-test" → "unit.test", both "unit_test"
+	                      | step_id_collision        | A → "A_step0", a job named like A's step
 
 # Usage
 
@@ -486,6 +488,47 @@ func mermaidGoldenCases() []mermaidGoldenCase {
 				}},
 			}},
 		},
+		{
+			// Job IDs that sanitize to the same node ID stay separate nodes
+			name: "sanitized_id_collision",
+			graph: Graph{Jobs: []Job{
+				{ID: "unit-test", Name: "Unit (dash)", Steps: []Step{
+					{Name: "Run"},
+				}},
+				{ID: "unit.test", Name: "Unit (dot)", Needs: []string{"unit-test"}, Steps: []Step{
+					{Name: "Run"},
+				}},
+				{ID: "report", Name: "Report", Needs: []string{"unit.test"}},
+			}},
+		},
+		{
+			// A job whose ID is the node ID of another job's step stays apart
+			// from that step
+			name: "step_id_collision",
+			graph: Graph{Jobs: []Job{
+				{ID: "build", Name: "Build", Steps: []Step{
+					{Name: "Compile"},
+				}},
+				{ID: "build_step0", Name: "Package", Needs: []string{"build"}, Steps: []Step{
+					{Name: "Archive"},
+				}},
+			}},
+		},
+	}
+}
+
+func TestNodeIDs_Allocate(t *testing.T) {
+	ids := nodeIDs{}
+	for _, tt := range []struct{ base, want string }{
+		{"unit_test", "unit_test"},
+		{"unit_test", "unit_test_2"},
+		{"unit_test_2", "unit_test_2_2"},
+		{"unit_test", "unit_test_3"},
+		{"build", "build"},
+	} {
+		if got := ids.allocate(tt.base); got != tt.want {
+			t.Errorf("allocate(%q) = %q, want %q", tt.base, got, tt.want)
+		}
 	}
 }
 

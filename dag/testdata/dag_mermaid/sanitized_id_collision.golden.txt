@@ -1,0 +1,11 @@
+flowchart LR
+    subgraph unit_test["Unit (dash)"]
+        unit_test_step0["Run"]
+    end
+    subgraph unit_test_2["Unit (dot)"]
+        unit_test_2_step0["Run"]
+    end
+    report["Report"]
+
+    unit_test --> unit_test_2
+    unit_test_2 --> report

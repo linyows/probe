@@ -21,9 +21,20 @@ func (m Mermaid) Render(g Graph) string {
 	// Mermaid flowchart header (left-right direction)
 	sb.WriteString("flowchart LR\n")
 
+	// Jobs and steps share one namespace of node IDs, and sanitizing can map
+	// different job IDs to the same one, so every node is given its own ID
+	// here and edges look the job's up.
+	ids := nodeIDs{}
+	safeIDs := make([]string, len(g.Jobs))
+	byJobID := make(map[string]string, len(g.Jobs))
+
 	// Render node definitions with subgraphs for steps
-	for _, job := range g.Jobs {
-		safeID := m.sanitizeID(job.ID)
+	for i, job := range g.Jobs {
+		safeID := ids.allocate(m.sanitizeID(job.ID))
+		safeIDs[i] = safeID
+		if _, ok := byJobID[job.ID]; !ok {
+			byJobID[job.ID] = safeID
+		}
 		displayName := m.escapeLabel(job.Name)
 
 		// Create subgraph for job with steps
@@ -31,14 +42,14 @@ func (m Mermaid) Render(g Graph) string {
 			fmt.Fprintf(&sb, "    subgraph %s[\"%s\"]\n", safeID, displayName)
 			stepIndex := 0
 			for _, step := range job.Steps {
-				stepID := fmt.Sprintf("%s_step%d", safeID, stepIndex)
+				stepID := ids.allocate(fmt.Sprintf("%s_step%d", safeID, stepIndex))
 				stepLabel := m.escapeLabel(step.Name)
 				fmt.Fprintf(&sb, "        %s[\"%s\"]\n", stepID, stepLabel)
 				stepIndex++
 
 				// Render the steps of an embedded job after the step that runs it
 				for _, embStepName := range step.EmbeddedSteps {
-					embStepID := fmt.Sprintf("%s_step%d", safeID, stepIndex)
+					embStepID := ids.allocate(fmt.Sprintf("%s_step%d", safeID, stepIndex))
 					embStepLabel := m.escapeLabel(embStepName)
 					fmt.Fprintf(&sb, "        %s[\"%s\"]\n", embStepID, embStepLabel)
 					stepIndex++
@@ -54,16 +65,15 @@ func (m Mermaid) Render(g Graph) string {
 	sb.WriteString("\n")
 
 	// Render edges (dependencies)
-	for _, job := range g.Jobs {
-		if len(job.Needs) == 0 {
-			continue
-		}
-
-		safeJobID := m.sanitizeID(job.ID)
-
+	for i, job := range g.Jobs {
 		for _, need := range job.Needs {
-			safeNeedID := m.sanitizeID(need)
-			fmt.Fprintf(&sb, "    %s --> %s\n", safeNeedID, safeJobID)
+			safeNeedID, ok := byJobID[need]
+			if !ok {
+				// A need that names no job of the graph still gets an edge,
+				// to a node Mermaid creates for it.
+				safeNeedID = m.sanitizeID(need)
+			}
+			fmt.Fprintf(&sb, "    %s --> %s\n", safeNeedID, safeIDs[i])
 		}
 	}
 
@@ -73,9 +83,8 @@ func (m Mermaid) Render(g Graph) string {
 // sanitizeID converts a job ID/name to a valid Mermaid node ID
 // Mermaid IDs should be alphanumeric with underscores
 //
-// NOTE: Original job/step IDs are validated for uniqueness when a workflow is loaded.
-// However, sanitized IDs may collide (e.g., "unit-test" and "unit.test" both become "unit_test").
-// This is acceptable as such naming conflicts are rare in practice.
+// Different IDs can sanitize to the same one (e.g., "unit-test" and
+// "unit.test" both become "unit_test"); nodeIDs keeps the nodes apart.
 func (Mermaid) sanitizeID(id string) string {
 	// Replace non-alphanumeric characters with underscores
 	reg := regexp.MustCompile(`[^a-zA-Z0-9_]`)
@@ -99,4 +108,18 @@ func (Mermaid) escapeLabel(label string) string {
 	// Escape double quotes
 	label = strings.ReplaceAll(label, "\"", "#quot;")
 	return label
+}
+
+// nodeIDs hands out the node IDs of one flowchart, each at most once. An ID
+// already taken gets the first free numeric suffix, so "unit_test" becomes
+// "unit_test_2", and a flowchart without collisions keeps its IDs as they are.
+type nodeIDs map[string]bool
+
+func (ids nodeIDs) allocate(base string) string {
+	id := base
+	for n := 2; ids[id]; n++ {
+		id = fmt.Sprintf("%s_%d", base, n)
+	}
+	ids[id] = true
+	return id
 }
