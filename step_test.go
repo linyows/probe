@@ -3,12 +3,15 @@ package probe
 import (
 	"bytes"
 	"fmt"
+	"os/exec"
 	"strings"
 	"sync"
+	"syscall"
 	"testing"
 	"time"
 
 	"github.com/fatih/color"
+	"github.com/linyows/probe/procgroup"
 
 	"github.com/hashicorp/go-hclog"
 )
@@ -1784,5 +1787,146 @@ func TestSaveOutputsWarnsAboutTakenName(t *testing.T) {
 	out := errOut.String()
 	if !strings.Contains(out, "[WARN]") || strings.Contains(out, "Error:") {
 		t.Errorf("output = %q, want a warning and no error", out)
+	}
+}
+
+// startGroup starts cmd in a process group of its own, as the shell action
+// does for a background step, and returns its pid.
+func startGroup(t *testing.T, cmd string) int {
+	t.Helper()
+	c := exec.Command("/bin/sh", "-c", cmd)
+	c.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
+	if err := c.Start(); err != nil {
+		t.Fatalf("start %q: %v", cmd, err)
+	}
+	// Reap the process once it is stopped, so that the group is really gone.
+	go func() { _ = c.Wait() }()
+	pid := c.Process.Pid
+	t.Cleanup(func() { _ = syscall.Kill(-pid, syscall.SIGKILL) })
+	return pid
+}
+
+// waitGroupGone reports whether the group led by pid is gone within a second.
+// A killed process stays visible until it is reaped, which happens on its
+// own schedule.
+func waitGroupGone(pid int) bool {
+	deadline := time.Now().Add(time.Second)
+	for syscall.Kill(-pid, 0) == nil {
+		if time.Now().After(deadline) {
+			return false
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	return true
+}
+
+func backgroundResult(pid int, log string) map[string]any {
+	return map[string]any{
+		"req": map[string]any{"cmd": "sleep 60", "background": true},
+		"res": map[string]any{"code": int64(-1), "pid": int64(pid), "log": log},
+	}
+}
+
+func TestBackgroundProcess(t *testing.T) {
+	tests := []struct {
+		name string
+		uses string
+		ret  map[string]any
+		want int
+		log  string
+	}{
+		{
+			name: "background shell step",
+			uses: "shell",
+			ret:  backgroundResult(123, "/tmp/a.log"),
+			want: 123,
+			log:  "/tmp/a.log",
+		},
+		{
+			name: "foreground shell step",
+			uses: "shell",
+			ret: map[string]any{
+				"req": map[string]any{"cmd": "true", "background": false},
+				"res": map[string]any{"code": int64(0), "pid": int64(123)},
+			},
+		},
+		{
+			name: "other action",
+			uses: "http",
+			ret:  backgroundResult(123, "/tmp/a.log"),
+		},
+		{
+			name: "no pid",
+			uses: "shell",
+			ret: map[string]any{
+				"req": map[string]any{"background": true},
+				"res": map[string]any{},
+			},
+		},
+		{
+			name: "empty result",
+			uses: "shell",
+			ret:  nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			pid, log, ok := backgroundProcess(tt.uses, tt.ret)
+			if ok != (tt.want != 0) || pid != tt.want || log != tt.log {
+				t.Errorf("backgroundProcess() = (%d, %q, %v), want (%d, %q, %v)", pid, log, ok, tt.want, tt.log, tt.want != 0)
+			}
+		})
+	}
+}
+
+func TestBeginBackgroundOtherAction(t *testing.T) {
+	// Only shell actions start background processes, so nothing else is
+	// waited for.
+	b := procgroup.NewTracker()
+	done := beginBackground(b, "http")
+	defer done()
+
+	start := time.Now()
+	b.Stop()
+	if elapsed := time.Since(start); elapsed >= procgroup.StopGrace {
+		t.Errorf("stop waited %v for an action that cannot start a process", elapsed)
+	}
+}
+
+// lateBackgroundRunner starts a process the way a background shell step does,
+// but only after delay, so that the step has already timed out.
+type lateBackgroundRunner struct {
+	t     *testing.T
+	delay time.Duration
+	pid   chan int
+}
+
+func (r *lateBackgroundRunner) RunActions(name string, with map[string]any, opts RunOptions) (map[string]any, error) {
+	time.Sleep(r.delay)
+	pid := startGroup(r.t, "sleep 60")
+	r.pid <- pid
+	return backgroundResult(pid, ""), nil
+}
+
+func TestStepTimeoutStillTracksBackground(t *testing.T) {
+	step := &Step{
+		Uses:    "shell",
+		Timeout: Interval{Duration: 100 * time.Millisecond},
+		Expr:    &Expr{},
+	}
+	runner := &lateBackgroundRunner{t: t, delay: 300 * time.Millisecond, pid: make(chan int, 1)}
+	jCtx := &JobContext{background: procgroup.NewTracker()}
+
+	if _, err := step.executeSingleAction(runner, map[string]any{}, jCtx, false); err == nil {
+		t.Fatal("expected the step to time out")
+	}
+
+	// The workflow ends while the action is still running.
+	jCtx.background.Stop()
+
+	pid := <-runner.pid
+	if !waitGroupGone(pid) {
+		t.Errorf("process group %d started after the step timed out is still running", pid)
 	}
 }

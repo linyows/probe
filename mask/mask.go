@@ -1,4 +1,5 @@
-package probe
+// Package mask hides secret values in everything Probe prints or writes.
+package mask
 
 import (
 	"encoding/json"
@@ -34,10 +35,10 @@ type Masker struct {
 	replacer *strings.Replacer
 }
 
-// NewMasker builds a Masker for the environment variables named in secrets.
+// New builds a Masker for the environment variables named in secrets.
 // Each value is replaced by <secret:NAME>. A name that is not set, or set to
 // an empty string, has nothing to hide and is skipped.
-func NewMasker(secrets []string, env map[string]string) *Masker {
+func New(secrets []string, env map[string]string) *Masker {
 	m := &Masker{labels: make(map[string]string)}
 	for _, name := range secrets {
 		m.addLocked(env[name], "<secret:"+name+">")

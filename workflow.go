@@ -5,6 +5,10 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/linyows/probe/mask"
+
+	"github.com/linyows/probe/procgroup"
 )
 
 type Workflow struct {
@@ -54,7 +58,7 @@ func (w *Workflow) Start(c Config) error {
 	}
 
 	// Install the masker before anything is printed, the header included.
-	w.printer.SetMasker(NewMasker(w.Secrets, w.Env()))
+	w.printer.SetMasker(mask.New(w.Secrets, w.Env()))
 
 	// A reporter tracks how far the report has been emitted, which is state
 	// for this run alone, so every run gets a fresh one.
@@ -79,9 +83,9 @@ func (w *Workflow) Start(c Config) error {
 	// for later steps and jobs to use, but not after the workflow, and not
 	// after probe is interrupted. The watch for signals is deferred first so
 	// that it ends last, still on while the processes are being stopped.
-	endWatch := ctx.background.stopOnSignal()
+	endWatch := ctx.background.StopOnSignal()
 	defer endWatch()
-	defer ctx.background.stop()
+	defer ctx.background.Stop()
 
 	if err := w.startJobsWithDependencies(ctx); err != nil {
 		return err
@@ -281,7 +285,7 @@ func (w *Workflow) newJobContext(c Config, vars map[string]any, scheduler *JobSc
 		JobScheduler: scheduler,
 		Outputs:      w.outputs,
 		countersMu:   &sync.Mutex{},
-		background:   newBackgroundProcs(),
+		background:   procgroup.NewTracker(),
 	}
 }
 

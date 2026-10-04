@@ -9,6 +9,10 @@ import (
 	"reflect"
 	"time"
 
+	"github.com/linyows/probe/truncate"
+
+	"github.com/linyows/probe/mask"
+
 	"github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/go-plugin"
 	"github.com/linyows/probe/pb"
@@ -283,7 +287,7 @@ type RunOptions struct {
 	// level even though the step goes on to succeed.
 	Quiet bool
 	// Masker hides the workflow's secrets in the action's log records.
-	Masker *Masker
+	Masker *mask.Masker
 }
 
 // logLevel returns the level the action's log records are filtered at.
@@ -394,7 +398,7 @@ func (m *MockActionRunner) RunActions(name string, with map[string]any, opts Run
 // separate processes, so their log records reach the workflow runner as JSON
 // on stderr and are re-filtered there by the runner's own level.
 func LogActionParams(log hclog.Logger, msg string, with map[string]any) {
-	log.Debug(msg, "params", TruncateMapStringAny(with, MaxLogStringLength))
+	log.Debug(msg, "params", truncate.Map(with, truncate.MaxLogLength))
 }
 
 // LogActionOutcome records how an action finished. subject names what was
@@ -404,5 +408,5 @@ func LogActionOutcome(log hclog.Logger, subject string, ret map[string]any, err 
 		log.Error(subject+" failed", "error", err)
 		return
 	}
-	log.Debug(subject+" completed successfully", "result", TruncateMapStringAny(ret, MaxLogStringLength))
+	log.Debug(subject+" completed successfully", "result", truncate.Map(ret, truncate.MaxLogLength))
 }

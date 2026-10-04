@@ -8,6 +8,10 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/linyows/probe/procgroup"
+
+	"github.com/linyows/probe/jsonutil"
 )
 
 const (
@@ -138,12 +142,12 @@ func (st *Step) executeSingleAction(runner ActionRunner, expW map[string]any, jC
 	// A process the action starts in the background is tracked here rather
 	// than after the select, so that one started after the step timed out is
 	// still stopped with the others.
-	done := jCtx.background.begin(st.Uses)
+	done := beginBackground(jCtx.background, st.Uses)
 	go func() {
 		defer done()
 		ret, err := runner.RunActions(st.Uses, expW, RunOptions{Verbose: jCtx.Verbose, Quiet: quiet, Masker: masker})
 		if err == nil {
-			jCtx.background.track(st.Uses, ret)
+			trackBackground(jCtx.background, st.Uses, ret)
 		}
 		resultCh <- result{ret: ret, err: err}
 	}()
@@ -154,6 +158,55 @@ func (st *Step) executeSingleAction(runner ActionRunner, expW map[string]any, jC
 		return res.ret, res.err
 	case <-ctx.Done():
 		return nil, errors.New("action execution timed out after " + timeout.String())
+	}
+}
+
+// beginBackground tells the tracker that an action that can start a
+// background process is about to run. Only the shell action starts one.
+func beginBackground(t *procgroup.Tracker, uses string) func() {
+	if uses != "shell" {
+		return func() {}
+	}
+	return t.Begin()
+}
+
+// trackBackground records the process an action left running, if it did.
+func trackBackground(t *procgroup.Tracker, uses string, ret map[string]any) {
+	if pid, log, ok := backgroundProcess(uses, ret); ok {
+		t.Track(pid, log)
+	}
+}
+
+// backgroundProcess returns the process group a step's action started in the
+// background, and the file its output goes to. Only a shell step asked to run
+// in the background starts one.
+func backgroundProcess(uses string, ret map[string]any) (pid int, log string, ok bool) {
+	if uses != "shell" {
+		return 0, "", false
+	}
+	req, _ := ret["req"].(map[string]any)
+	if bg, _ := req["background"].(bool); !bg {
+		return 0, "", false
+	}
+	res, _ := ret["res"].(map[string]any)
+	pid = toInt(res["pid"])
+	if pid <= 0 {
+		return 0, "", false
+	}
+	log, _ = res["log"].(string)
+	return pid, log, true
+}
+
+func toInt(v any) int {
+	switch n := v.(type) {
+	case int:
+		return n
+	case int64:
+		return int(n)
+	case float64:
+		return int(n)
+	default:
+		return 0
 	}
 }
 
@@ -279,9 +332,9 @@ func (st *Step) processActionResult(actionResult map[string]any, jCtx *JobContex
 
 	if okres {
 		body, okbody := res["body"].(string)
-		if okbody && isJSON(body) {
+		if okbody && jsonutil.LooksLikeJSON(body) {
 			res["rawbody"] = body
-			res["body"] = mustMarshalJSON(body)
+			res["body"] = jsonutil.Decode(body)
 		}
 	}
 

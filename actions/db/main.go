@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/linyows/probe/truncate"
+
 	"github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/go-plugin"
 	"github.com/linyows/probe"
@@ -15,8 +17,8 @@ type Action struct {
 }
 
 func (a *Action) Run(with map[string]any) (map[string]any, error) {
-	truncateLength := probe.MaxLogStringLength
-	truncatedParams := probe.TruncateMapStringAny(with, truncateLength)
+	truncateLength := truncate.MaxLogLength
+	truncatedParams := truncate.Map(with, truncateLength)
 	a.log.Debug("received db request parameters", "params", truncatedParams)
 
 	// Validate required parameters
@@ -52,7 +54,7 @@ func (a *Action) Run(with map[string]any) (map[string]any, error) {
 		return result, err
 	}
 
-	truncatedResult := probe.TruncateMapStringAny(result, truncateLength)
+	truncatedResult := truncate.Map(result, truncateLength)
 	a.log.Debug("database query completed", "result", truncatedResult)
 
 	return result, nil

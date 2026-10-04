@@ -3,6 +3,7 @@ package probe
 import (
 	"io"
 	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -769,4 +770,20 @@ func TestProbe_validateIDs_ErrorMessages(t *testing.T) {
 			t.Errorf("error message should contain step location info, got: %s", errMsg)
 		}
 	})
+}
+
+func TestProbe_LoadSecrets(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "w.yml")
+	yml := "name: s\nsecrets:\n- API_TOKEN\n- DB_PASSWORD\njobs:\n- name: j\n  steps:\n  - name: s\n    uses: hello\n"
+	if err := os.WriteFile(path, []byte(yml), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	p := New(path, false)
+	if err := p.Load(); err != nil {
+		t.Fatal(err)
+	}
+	if want := []string{"API_TOKEN", "DB_PASSWORD"}; !reflect.DeepEqual(p.workflow.Secrets, want) {
+		t.Errorf("Secrets = %v, want %v", p.workflow.Secrets, want)
+	}
 }

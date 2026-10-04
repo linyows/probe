@@ -1,4 +1,4 @@
-package probe
+package safefile
 
 import (
 	"io"
@@ -62,17 +62,17 @@ func umaskMode(t *testing.T) os.FileMode {
 	return info.Mode().Perm()
 }
 
-func TestReplaceFile_RefusesLinkedParentDirectory(t *testing.T) {
+func TestReplace_RefusesLinkedParentDirectory(t *testing.T) {
 	victim := checkout(t)
 
-	err := replaceFile("out/victim", writeText("report"))
+	err := Replace("out/victim", writeText("report"))
 	if err == nil || !strings.Contains(err.Error(), "path escapes") {
 		t.Errorf("error = %v, want the linked directory refused", err)
 	}
 	unchanged(t, victim)
 
 	// A deeper directory created under the link is refused the same way.
-	if err := replaceFile("out/new/report.json", writeText("report")); err == nil {
+	if err := Replace("out/new/report.json", writeText("report")); err == nil {
 		t.Error("creating a directory through the link should be refused")
 	}
 	if _, err := os.Stat(filepath.Join(filepath.Dir(victim), "new")); err == nil {
@@ -80,12 +80,12 @@ func TestReplaceFile_RefusesLinkedParentDirectory(t *testing.T) {
 	}
 }
 
-func TestReplaceFile_ReplacesLinkToDirectory(t *testing.T) {
+func TestReplace_ReplacesLinkToDirectory(t *testing.T) {
 	checkout(t)
 
 	// "out" itself is a link to a directory: as the final component it is
 	// replaced by the file, not refused as a directory.
-	if err := replaceFile("out", writeText("report")); err != nil {
+	if err := Replace("out", writeText("report")); err != nil {
 		t.Fatalf("a link at the path should be replaced: %v", err)
 	}
 	info, err := os.Lstat("out")
@@ -97,21 +97,21 @@ func TestReplaceFile_ReplacesLinkToDirectory(t *testing.T) {
 	}
 }
 
-func TestReplaceFile_RefusesRealDirectory(t *testing.T) {
+func TestReplace_RefusesRealDirectory(t *testing.T) {
 	t.Chdir(t.TempDir())
 	if err := os.Mkdir("dir", 0o755); err != nil {
 		t.Fatal(err)
 	}
-	err := replaceFile("dir", writeText("report"))
+	err := Replace("dir", writeText("report"))
 	if err == nil || !strings.Contains(err.Error(), "is a directory") {
 		t.Errorf("error = %v, want a directory refused", err)
 	}
 }
 
-func TestReplaceFile_Modes(t *testing.T) {
+func TestReplace_Modes(t *testing.T) {
 	t.Chdir(t.TempDir())
 
-	if err := replaceFile("new.json", writeText("a")); err != nil {
+	if err := Replace("new.json", writeText("a")); err != nil {
 		t.Fatal(err)
 	}
 	if info, _ := os.Stat("new.json"); info.Mode().Perm() != umaskMode(t) {
@@ -124,7 +124,7 @@ func TestReplaceFile_Modes(t *testing.T) {
 	if err := os.Chmod("private.json", 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if err := replaceFile("private.json", writeText("new")); err != nil {
+	if err := Replace("private.json", writeText("new")); err != nil {
 		t.Fatal(err)
 	}
 	info, _ := os.Stat("private.json")
@@ -136,11 +136,11 @@ func TestReplaceFile_Modes(t *testing.T) {
 	}
 }
 
-func TestReplaceFile_OutsideTheWorkingDirectory(t *testing.T) {
+func TestReplace_OutsideTheWorkingDirectory(t *testing.T) {
 	t.Chdir(t.TempDir())
 	outside := filepath.Join(t.TempDir(), "nested", "report.json")
 
-	if err := replaceFile(outside, writeText("report")); err != nil {
+	if err := Replace(outside, writeText("report")); err != nil {
 		t.Fatalf("an explicit path outside the working directory should be written: %v", err)
 	}
 	if data, _ := os.ReadFile(outside); string(data) != "report" {
@@ -151,13 +151,13 @@ func TestReplaceFile_OutsideTheWorkingDirectory(t *testing.T) {
 func TestOpenForAppend_RefusesLinkedParentDirectory(t *testing.T) {
 	victim := checkout(t)
 
-	if _, _, err := openForAppend("out/victim", true); err == nil {
+	if _, _, err := OpenForAppend("out/victim", true); err == nil {
 		t.Error("appending through a linked directory should be refused")
 	}
 	unchanged(t, victim)
 
 	// Without confine, as for GITHUB_STEP_SUMMARY, the path is used as given.
-	f, _, err := openForAppend("out/victim", false)
+	f, _, err := OpenForAppend("out/victim", false)
 	if err != nil {
 		t.Fatalf("an unconfined path should be opened as given: %v", err)
 	}

@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/linyows/probe/truncate"
+
 	"github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/go-plugin"
 	"github.com/linyows/probe"
@@ -22,11 +24,11 @@ func (a *Action) Run(with map[string]any) (map[string]any, error) {
 	}
 
 	// Use default truncate length, can be overridden by caller
-	truncateLength := probe.MaxLogStringLength
+	truncateLength := truncate.MaxLogLength
 
 	// Truncate long parameters for logging to prevent log bloat
 	// Note: Sensitive data like passwords and keys are excluded from logs for security
-	truncatedParams := probe.TruncateMapStringAny(with, truncateLength)
+	truncatedParams := truncate.Map(with, truncateLength)
 
 	// Remove sensitive information from logs
 	logParams := make(map[string]string)
@@ -83,7 +85,7 @@ func (a *Action) Run(with map[string]any) (map[string]any, error) {
 		a.log.Error("ssh command failed", "error", err)
 	} else {
 		// Truncate result for logging to prevent log bloat
-		truncatedResult := probe.TruncateMapStringAny(ret, truncateLength)
+		truncatedResult := truncate.Map(ret, truncateLength)
 		a.log.Debug("ssh command completed successfully", "result_keys", getMapKeys(truncatedResult))
 	}
 
