@@ -566,3 +566,31 @@ func TestMermaid_Golden(t *testing.T) {
 		})
 	}
 }
+
+// TestMermaid_LinksStepsInOrder pins the step edges inside a job.
+func TestMermaid_LinksStepsInOrder(t *testing.T) {
+	g := Graph{Jobs: []Job{{
+		ID:   "build",
+		Name: "Build",
+		Steps: []Step{
+			{Name: "Checkout"},
+			{Name: "Run job", Embedded: true, EmbeddedFile: "job.yml", EmbeddedSteps: []string{"Compile"}},
+			{Name: "Package"},
+		},
+	}}}
+
+	out := Mermaid{}.Render(g)
+	for _, want := range []string{
+		"        direction TB\n",
+		"        build_step0 --> build_step1\n",
+		"        build_step1 --> build_step2\n",
+		"        build_step2 --> build_step3\n",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("output should contain %q:\n%s", want, out)
+		}
+	}
+	if strings.Contains(out, "build_step3 -->") {
+		t.Errorf("the last step should not link onward:\n%s", out)
+	}
+}

@@ -6,8 +6,9 @@ import (
 	"strings"
 )
 
-// Mermaid draws a Graph as a Mermaid flowchart: a subgraph of steps for each
-// job, and an edge from each job to the jobs that need it.
+// Mermaid draws a Graph as a Mermaid flowchart: a subgraph for each job with
+// its steps linked in run order, and an edge from each job to the jobs that
+// need it.
 type Mermaid struct{}
 
 // Render draws g, or returns an empty string when it has no jobs.
@@ -40,11 +41,16 @@ func (m Mermaid) Render(g Graph) string {
 		// Create subgraph for job with steps
 		if len(job.Steps) > 0 {
 			fmt.Fprintf(&sb, "    subgraph %s[\"%s\"]\n", safeID, displayName)
+			// Jobs flow left to right; the steps inside a job run top to
+			// bottom, in the order the edges below link them.
+			sb.WriteString("        direction TB\n")
 			stepIndex := 0
+			var stepIDs []string
 			for _, step := range job.Steps {
 				stepID := ids.allocate(fmt.Sprintf("%s_step%d", safeID, stepIndex))
 				stepLabel := m.escapeLabel(step.Name)
 				fmt.Fprintf(&sb, "        %s[\"%s\"]\n", stepID, stepLabel)
+				stepIDs = append(stepIDs, stepID)
 				stepIndex++
 
 				// Render the steps of an embedded job after the step that runs it
@@ -52,8 +58,13 @@ func (m Mermaid) Render(g Graph) string {
 					embStepID := ids.allocate(fmt.Sprintf("%s_step%d", safeID, stepIndex))
 					embStepLabel := m.escapeLabel(embStepName)
 					fmt.Fprintf(&sb, "        %s[\"%s\"]\n", embStepID, embStepLabel)
+					stepIDs = append(stepIDs, embStepID)
 					stepIndex++
 				}
+			}
+			// Link the steps in the order they run, embedded ones included.
+			for i := 1; i < len(stepIDs); i++ {
+				fmt.Fprintf(&sb, "        %s --> %s\n", stepIDs[i-1], stepIDs[i])
 			}
 			sb.WriteString("    end\n")
 		} else {

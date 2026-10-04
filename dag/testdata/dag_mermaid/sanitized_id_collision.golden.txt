@@ -1,8 +1,10 @@
 flowchart LR
     subgraph unit_test["Unit (dash)"]
+        direction TB
         unit_test_step0["Run"]
     end
     subgraph unit_test_2["Unit (dot)"]
+        direction TB
         unit_test_2_step0["Run"]
     end
     report["Report"]

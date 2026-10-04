@@ -1,14 +1,18 @@
 flowchart LR
     subgraph build_linux["Build Linux"]
+        direction TB
         build_linux_step0["Compile"]
     end
     subgraph build_mac["Build Mac"]
+        direction TB
         build_mac_step0["Compile"]
     end
     subgraph build_win["Build Win"]
+        direction TB
         build_win_step0["Compile"]
     end
     subgraph release["Release"]
+        direction TB
         release_step0["Upload"]
     end
 

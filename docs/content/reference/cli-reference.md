@@ -235,15 +235,21 @@ probe dag --mermaid <workflow-file>
 ```mermaid
 flowchart LR
     subgraph build["Build"]
+        direction TB
         build_step0["Compile"]
+        build_step1["Package"]
+        build_step0 --> build_step1
     end
     subgraph unit_test["Unit Test"]
+        direction TB
         unit_test_step0["Run unit"]
     end
     subgraph lint["Lint"]
+        direction TB
         lint_step0["Run lint"]
     end
     subgraph deploy["Deploy"]
+        direction TB
         deploy_step0["Deploy app"]
     end
 

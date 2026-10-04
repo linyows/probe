@@ -52,7 +52,7 @@ steps of each, and the jobs each one needs. A `Renderer` draws it as text.
 | Renderer | Output |
 |----------|--------|
 | `ASCII` | Boxes of jobs and their steps, joined by lines to the jobs that need them |
-| `Mermaid` | A Mermaid flowchart with a subgraph of steps for each job |
+| `Mermaid` | A Mermaid flowchart with a subgraph for each job, its steps linked in run order |
 
 ```go
 g := dag.Graph{Jobs: []dag.Job{

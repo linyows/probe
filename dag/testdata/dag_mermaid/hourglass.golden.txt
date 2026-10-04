@@ -1,17 +1,22 @@
 flowchart LR
     subgraph build_linux["Build Linux"]
+        direction TB
         build_linux_step0["Compile"]
     end
     subgraph build_mac["Build Mac"]
+        direction TB
         build_mac_step0["Compile"]
     end
     subgraph integration["Integration"]
+        direction TB
         integration_step0["Test all"]
     end
     subgraph deploy_prod["Deploy Prod"]
+        direction TB
         deploy_prod_step0["Deploy"]
     end
     subgraph deploy_stage["Deploy Stage"]
+        direction TB
         deploy_stage_step0["Deploy"]
     end
 

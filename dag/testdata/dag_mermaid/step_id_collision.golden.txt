@@ -1,8 +1,10 @@
 flowchart LR
     subgraph build["Build"]
+        direction TB
         build_step0["Compile"]
     end
     subgraph build_step0_2["Package"]
+        direction TB
         build_step0_2_step0["Archive"]
     end
 
