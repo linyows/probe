@@ -256,7 +256,7 @@ func (st *Step) handleActionError(err error, name string, jCtx *JobContext) {
 	}
 
 	// Standard execution: create result for failed step
-	stepResult := st.createFailedStepResult(name, jCtx, nil)
+	stepResult := st.createFailedStepResult(name, jCtx)
 
 	// Add step result to workflow buffer
 	if jCtx.Result != nil {
@@ -309,7 +309,7 @@ func (st *Step) finalize(name string, actionResult map[string]any, jCtx *JobCont
 	}
 
 	// Standard execution: create result
-	stepResult := st.createStepResult(name, jCtx, nil)
+	stepResult := st.createStepResult(name, jCtx)
 
 	// Add step result to workflow buffer
 	if jCtx.Result != nil {
@@ -322,16 +322,15 @@ func (st *Step) finalize(name string, actionResult map[string]any, jCtx *JobCont
 }
 
 // createStepResult creates a StepResult from step execution
-func (st *Step) createStepResult(name string, jCtx *JobContext, repeatCounter *StepRepeatCounter) StepResult {
+func (st *Step) createStepResult(name string, jCtx *JobContext) StepResult {
 	result := StepResult{
-		Index:         st.Idx,
-		Name:          name,
-		HasTest:       st.Test != "",
-		RT:            "",
-		WaitTime:      st.getWaitTimeForDisplay(),
-		RepeatCounter: repeatCounter,
-		Test:          st.Test,
-		Elapsed:       st.elapsed(),
+		Index:    st.Idx,
+		Name:     name,
+		HasTest:  st.Test != "",
+		RT:       "",
+		WaitTime: st.getWaitTimeForDisplay(),
+		Test:     st.Test,
+		Elapsed:  st.elapsed(),
 	}
 
 	if st.Retry != nil && st.retryAttempt > 0 {
@@ -369,7 +368,7 @@ func (st *Step) createStepResult(name string, jCtx *JobContext, repeatCounter *S
 		result.Status = StatusWarning
 	}
 
-	if st.Echo != "" && repeatCounter == nil {
+	if st.Echo != "" {
 		result.EchoOutput = st.getEchoOutput(jCtx.Printer)
 	}
 
@@ -386,13 +385,12 @@ func (st *Step) handleRepeatExecution(jCtx *JobContext, name string, hasError bo
 	// Execute test first (outside of lock)
 	hasTest := st.Test != ""
 	testResult := true
-	var testOutput string
 
 	// If there was an error, always count as failure
 	if hasError {
 		testResult = false
 	} else if hasTest {
-		testOutput, testResult = st.DoTest(jCtx.Printer)
+		_, testResult = st.DoTest(jCtx.Printer)
 		if !testResult {
 			jCtx.SetFailed()
 			jCtx.Result.recordFailure(st.failure.Kind)
@@ -430,25 +428,10 @@ func (st *Step) handleRepeatExecution(jCtx *JobContext, name string, hasError bo
 		counter.EchoOutputs = append(counter.EchoOutputs, echoFormatted)
 	}
 
-	// Store updated counter back to map
+	// Store updated counter back to map. The step's result is made from the
+	// counter once every run is done (Executor.appendRepeatStepResults).
 	jCtx.StepCounters[st.Idx] = counter
 	jCtx.countersMu.Unlock()
-
-	// Display on first execution and final execution only
-	isFinalExecution := jCtx.RepeatCurrent == jCtx.RepeatTotal
-
-	if isFinalExecution {
-		// Create StepResult with repeat counter for final execution
-		stepResult := st.createStepResult(name, jCtx, &counter)
-		if hasTest && !testResult {
-			stepResult.TestOutput = testOutput
-		}
-
-		// Add step result to workflow buffer
-		if jCtx.Result != nil {
-			jCtx.Result.AddStepResult(jCtx.CurrentJobID, stepResult)
-		}
-	}
 
 	if st.Echo != "" {
 		if echoErr != nil {
@@ -752,7 +735,7 @@ func (st *Step) handleSkip(name string, jCtx *JobContext) {
 	}
 
 	// Create step result for skipped step
-	stepResult := st.createSkippedStepResult(name, jCtx, nil)
+	stepResult := st.createSkippedStepResult(name, jCtx)
 
 	// Add step result to workflow buffer
 	if jCtx.Result != nil {
@@ -776,48 +759,35 @@ func (st *Step) handleSkipRepeatExecution(jCtx *JobContext, name string) {
 	counter.SuccessCount++
 	counter.LastResult = true
 
-	// Store updated counter back to map
+	// Store updated counter back to map. The step's result is made from the
+	// counter once every run is done (Executor.appendRepeatStepResults).
 	jCtx.StepCounters[st.Idx] = counter
 	jCtx.countersMu.Unlock()
-
-	// Display on first execution and final execution only
-	isFinalExecution := jCtx.RepeatCurrent == jCtx.RepeatTotal
-
-	if isFinalExecution {
-		stepResult := st.createSkippedStepResult(name, jCtx, &counter)
-
-		// Add step result to workflow buffer
-		if jCtx.Result != nil {
-			jCtx.Result.AddStepResult(jCtx.CurrentJobID, stepResult)
-		}
-	}
 }
 
 // createSkippedStepResult creates a StepResult for a skipped step
-func (st *Step) createSkippedStepResult(name string, jCtx *JobContext, repeatCounter *StepRepeatCounter) StepResult {
+func (st *Step) createSkippedStepResult(name string, jCtx *JobContext) StepResult {
 	return StepResult{
-		Index:         st.Idx,
-		Name:          name + " (SKIPPED)",
-		Status:        StatusSkipped,
-		RT:            "",
-		WaitTime:      st.getWaitTimeForDisplay(),
-		HasTest:       false,
-		RepeatCounter: repeatCounter,
+		Index:    st.Idx,
+		Name:     name + " (SKIPPED)",
+		Status:   StatusSkipped,
+		RT:       "",
+		WaitTime: st.getWaitTimeForDisplay(),
+		HasTest:  false,
 	}
 }
 
 // createFailedStepResult creates a StepResult for a failed step
-func (st *Step) createFailedStepResult(name string, jCtx *JobContext, repeatCounter *StepRepeatCounter) StepResult {
+func (st *Step) createFailedStepResult(name string, jCtx *JobContext) StepResult {
 	result := StepResult{
-		Index:         st.Idx,
-		Name:          name,
-		Status:        StatusError,
-		RT:            "",
-		WaitTime:      st.getWaitTimeForDisplay(),
-		HasTest:       st.Test != "",
-		RepeatCounter: repeatCounter,
-		Test:          st.Test,
-		Elapsed:       st.elapsed(),
+		Index:    st.Idx,
+		Name:     name,
+		Status:   StatusError,
+		RT:       "",
+		WaitTime: st.getWaitTimeForDisplay(),
+		HasTest:  st.Test != "",
+		Test:     st.Test,
+		Elapsed:  st.elapsed(),
 	}
 
 	if st.Retry != nil && st.retryAttempt > 0 {

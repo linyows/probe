@@ -381,7 +381,7 @@ func TestStep_createSkippedStepResult(t *testing.T) {
 	jCtx := &JobContext{}
 	name := "Test Step"
 
-	result := step.createSkippedStepResult(name, jCtx, nil)
+	result := step.createSkippedStepResult(name, jCtx)
 
 	if result.Index != 1 {
 		t.Errorf("Index = %v, want %v", result.Index, 1)
@@ -403,34 +403,7 @@ func TestStep_createSkippedStepResult(t *testing.T) {
 	}
 }
 
-func TestStep_createSkippedStepResult_WithRepeatCounter(t *testing.T) {
-	step := &Step{
-		Idx:  1,
-		Wait: "2s",
-	}
-	jCtx := &JobContext{}
-	name := "Test Step"
-	counter := &StepRepeatCounter{
-		SuccessCount: 5,
-		FailureCount: 2,
-		Name:         "Test Counter",
-		LastResult:   true,
-	}
-
-	result := step.createSkippedStepResult(name, jCtx, counter)
-
-	if result.RepeatCounter == nil {
-		t.Error("RepeatCounter should not be nil when provided")
-	}
-	if result.RepeatCounter != counter {
-		t.Error("RepeatCounter should be the same instance that was passed")
-	}
-	if result.RepeatCounter.SuccessCount != 5 {
-		t.Errorf("RepeatCounter.SuccessCount = %v, want %v", result.RepeatCounter.SuccessCount, 5)
-	}
-}
-
-func TestStep_createStepResult_WithRepeatCounter(t *testing.T) {
+func TestStep_createStepResult_Timing(t *testing.T) {
 	step := &Step{
 		Idx:  1,
 		Test: "res.status == 200",
@@ -449,33 +422,22 @@ func TestStep_createStepResult_WithRepeatCounter(t *testing.T) {
 		Config:  Config{Timing: true},
 		Printer: newBufferPrinter(),
 	}
-	name := "Test Step"
-	counter := &StepRepeatCounter{
-		SuccessCount: 3,
-		FailureCount: 1,
-		Name:         "Test Counter",
-		LastResult:   true,
-	}
 
-	result := step.createStepResult(name, jCtx, counter)
+	result := step.createStepResult("Test Step", jCtx)
 
-	if result.RepeatCounter == nil {
-		t.Error("RepeatCounter should not be nil when provided")
-	}
-	if result.RepeatCounter != counter {
-		t.Error("RepeatCounter should be the same instance that was passed")
-	}
-	if result.RepeatCounter.SuccessCount != 3 {
-		t.Errorf("RepeatCounter.SuccessCount = %v, want %v", result.RepeatCounter.SuccessCount, 3)
-	}
 	if result.RT != "250ms" {
 		t.Errorf("RT = %v, want %v", result.RT, "250ms")
 	}
 	if result.RTSec != 0.25 {
 		t.Errorf("RTSec = %v, want %v", result.RTSec, 0.25)
 	}
+	if !strings.Contains(result.EchoOutput, "Hello World") {
+		t.Errorf("EchoOutput = %q, want the echo", result.EchoOutput)
+	}
+	if result.RepeatCounter != nil {
+		t.Errorf("RepeatCounter = %v, want nil", result.RepeatCounter)
+	}
 }
-
 func TestStep_createFailedStepResult(t *testing.T) {
 	testErr := fmt.Errorf("test error message")
 	step := &Step{
@@ -496,7 +458,7 @@ func TestStep_createFailedStepResult(t *testing.T) {
 	}
 	name := "Failed Step"
 
-	result := step.createFailedStepResult(name, jCtx, nil)
+	result := step.createFailedStepResult(name, jCtx)
 
 	if result.Index != 2 {
 		t.Errorf("Index = %v, want %v", result.Index, 2)
@@ -530,50 +492,6 @@ func TestStep_createFailedStepResult(t *testing.T) {
 	}
 }
 
-func TestStep_createFailedStepResult_WithRepeatCounter(t *testing.T) {
-	testErr := fmt.Errorf("connection timeout")
-	step := &Step{
-		Idx:  3,
-		Test: "res.status < 400",
-		Wait: "1s",
-		err:  testErr,
-		ctx: StepContext{
-			RT: ResponseTime{
-				Duration: "10s",
-				Sec:      10.0,
-			},
-		},
-	}
-	jCtx := &JobContext{
-		Config: Config{Timing: true},
-	}
-	name := "Timeout Step"
-	counter := &StepRepeatCounter{
-		SuccessCount: 1,
-		FailureCount: 4,
-		Name:         "Timeout Counter",
-		LastResult:   false,
-	}
-
-	result := step.createFailedStepResult(name, jCtx, counter)
-
-	if result.RepeatCounter == nil {
-		t.Error("RepeatCounter should not be nil when provided")
-	}
-	if result.RepeatCounter != counter {
-		t.Error("RepeatCounter should be the same instance that was passed")
-	}
-	if result.RepeatCounter.FailureCount != 4 {
-		t.Errorf("RepeatCounter.FailureCount = %v, want %v", result.RepeatCounter.FailureCount, 4)
-	}
-	if result.Status != StatusError {
-		t.Errorf("Status = %v, want %v", result.Status, StatusError)
-	}
-	if result.TestOutput != "connection timeout" {
-		t.Errorf("TestOutput = %v, want %v", result.TestOutput, "connection timeout")
-	}
-}
-
 func TestStep_createFailedStepResult_NoTest(t *testing.T) {
 	step := &Step{
 		Idx: 1,
@@ -583,7 +501,7 @@ func TestStep_createFailedStepResult_NoTest(t *testing.T) {
 	jCtx := &JobContext{}
 	name := "No Test Step"
 
-	result := step.createFailedStepResult(name, jCtx, nil)
+	result := step.createFailedStepResult(name, jCtx)
 
 	if result.HasTest != false {
 		t.Errorf("HasTest = %v, want %v", result.HasTest, false)
@@ -1601,10 +1519,11 @@ func TestStep_handleRepeatExecution_AccumulatesEchoOutputs(t *testing.T) {
 	}
 	jCtx.Result.Jobs["job-1"] = &JobResult{JobID: "job-1"}
 
-	for i := 1; i <= 3; i++ {
+	// Runs are counted from 0, as the executor counts them.
+	for i := 0; i < 3; i++ {
 		jCtx.RepeatCurrent = i
 		step.ctx = StepContext{
-			Vars: map[string]any{"i": i},
+			Vars: map[string]any{"i": i + 1},
 		}
 		step.handleRepeatExecution(jCtx, "Repeat Step", false)
 	}
@@ -1622,6 +1541,14 @@ func TestStep_handleRepeatExecution_AccumulatesEchoOutputs(t *testing.T) {
 			t.Errorf("EchoOutputs[%d] = %q, want to contain %q", i, out, want)
 		}
 	}
+
+	// The runs themselves add no result; the executor makes one from the
+	// counter once they are done.
+	if got := len(jCtx.Result.Jobs["job-1"].StepResults); got != 0 {
+		t.Fatalf("StepResults length = %d after the runs, want 0", got)
+	}
+	e := &Executor{job: &Job{ID: "job-1", Steps: []*Step{{Name: "first"}, step}}}
+	e.appendRepeatStepResults(jCtx)
 
 	stepResults := jCtx.Result.Jobs["job-1"].StepResults
 	if len(stepResults) != 1 {
