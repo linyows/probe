@@ -1,4 +1,4 @@
-package probe
+package report
 
 import (
 	"fmt"
@@ -47,7 +47,7 @@ func (r *Report) markdownWithCuts(payloads bool) (string, []int) {
 	for _, job := range r.Jobs {
 		var passed int
 		for _, st := range job.Steps {
-			if st.Status == ReportPassed {
+			if st.Status == Passed {
 				passed++
 			}
 		}
@@ -58,7 +58,7 @@ func (r *Report) markdownWithCuts(payloads bool) (string, []int) {
 	failures := false
 	for _, job := range r.Jobs {
 		for _, st := range job.Steps {
-			if st.Status != ReportFailed {
+			if st.Status != Failed {
 				continue
 			}
 			if !failures {
@@ -75,7 +75,7 @@ func (r *Report) markdownWithCuts(payloads bool) (string, []int) {
 	return strings.TrimRight(b.String(), "\n") + "\n", cuts
 }
 
-func writeMarkdownFailure(b *strings.Builder, job JobReport, st StepReport, payloads bool) {
+func writeMarkdownFailure(b *strings.Builder, job Job, st Step, payloads bool) {
 	fmt.Fprintf(b, "### %s / %d. %s\n\n", job.Name, st.Index, st.Name)
 
 	if st.Failure != nil {
@@ -117,7 +117,7 @@ func writeFence(b *strings.Builder, lang, content string) {
 }
 
 func markdownStatus(status string) string {
-	if status == ReportFailed {
+	if status == Failed {
 		return "Failed"
 	}
 	return "Passed"
@@ -125,7 +125,7 @@ func markdownStatus(status string) string {
 
 // countPhrase renders a tally such as "3 total, 2 passed, 1 failed", leaving
 // out the statuses nothing has.
-func countPhrase(c ReportCount) string {
+func countPhrase(c Count) string {
 	parts := []string{fmt.Sprintf("%d total", c.Total)}
 	for _, p := range []struct {
 		n     int

@@ -1,4 +1,4 @@
-package probe
+package report
 
 import (
 	"encoding/xml"
@@ -89,10 +89,10 @@ func (r *Report) WriteJUnit(w io.Writer) error {
 				tc.SystemOut = &junitText{Text: st.Echo}
 			}
 			switch st.Status {
-			case ReportFailed:
+			case Failed:
 				failedStep = true
 				tc.Failure, tc.Error = junitFailure(st)
-			case ReportSkipped:
+			case Skipped:
 				tc.Skipped = &junitSkipped{}
 			}
 			suite.add(tc)
@@ -102,14 +102,14 @@ func (r *Report) WriteJUnit(w io.Writer) error {
 		// step. Give either a testcase of its own, or the job would read as an
 		// empty, passing suite.
 		switch {
-		case job.Status == ReportSkipped && len(job.Steps) == 0:
+		case job.Status == Skipped && len(job.Steps) == 0:
 			suite.add(junitTestCase{
 				Name:      job.Name,
 				ClassName: job.Name,
 				Time:      junitTime(0),
 				Skipped:   &junitSkipped{Message: "job skipped"},
 			})
-		case job.Status == ReportFailed && !failedStep:
+		case job.Status == Failed && !failedStep:
 			suite.add(junitTestCase{
 				Name:      job.Name,
 				ClassName: job.Name,
@@ -152,7 +152,7 @@ func (s *junitTestSuite) add(tc junitTestCase) {
 
 // junitFailure maps a failed step to a <failure> when its test was false and
 // to an <error> otherwise.
-func junitFailure(st StepReport) (failure, errElem *junitProblem) {
+func junitFailure(st Step) (failure, errElem *junitProblem) {
 	p := &junitProblem{Body: failureDetail(st)}
 	if st.Failure == nil {
 		p.Message = "step failed"

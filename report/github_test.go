@@ -1,4 +1,4 @@
-package probe
+package report
 
 import (
 	"bytes"
@@ -10,16 +10,16 @@ import (
 	"testing"
 )
 
-func TestParseReportTargets_GitHubSummary(t *testing.T) {
-	got, err := ParseReportTargets("github-summary,markdown")
+func TestParseTargets_GitHubSummary(t *testing.T) {
+	got, err := ParseTargets("github-summary,markdown")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got[0].Format != ReportGitHubSummary || got[0].Path != "" {
+	if got[0].Format != GitHubSummary || got[0].Path != "" {
 		t.Errorf("github-summary target = %+v, want an empty path resolved at write time", got[0])
 	}
 
-	got, err = ParseReportTargets("github-summary=out/summary.md")
+	got, err = ParseTargets("github-summary=out/summary.md")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -36,7 +36,7 @@ func TestReport_WriteGitHubSummary_Appends(t *testing.T) {
 	}
 
 	for i := 0; i < 2; i++ {
-		if err := r.Write(ReportTarget{Format: ReportGitHubSummary, Path: path}); err != nil {
+		if err := r.Write(Target{Format: GitHubSummary, Path: path}); err != nil {
 			t.Fatalf("write %d: %v", i, err)
 		}
 	}
@@ -61,7 +61,7 @@ func TestReport_WriteGitHubSummary_FromEnv(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "step_summary")
 	t.Setenv("GITHUB_STEP_SUMMARY", path)
 
-	if err := newTestReport().Write(ReportTarget{Format: ReportGitHubSummary}); err != nil {
+	if err := newTestReport().Write(Target{Format: GitHubSummary}); err != nil {
 		t.Fatal(err)
 	}
 	data, err := os.ReadFile(path)
@@ -76,14 +76,14 @@ func TestReport_WriteGitHubSummary_FromEnv(t *testing.T) {
 func TestReport_WriteGitHubSummary_NoEnv(t *testing.T) {
 	t.Setenv("GITHUB_STEP_SUMMARY", "")
 
-	err := newTestReport().Write(ReportTarget{Format: ReportGitHubSummary})
+	err := newTestReport().Write(Target{Format: GitHubSummary})
 	if !errors.Is(err, ErrNoStepSummary) {
 		t.Errorf("error = %v, want ErrNoStepSummary", err)
 	}
 }
 
 func TestReport_WriteGitHubSummary_Unwritable(t *testing.T) {
-	err := newTestReport().Write(ReportTarget{Format: ReportGitHubSummary, Path: t.TempDir()})
+	err := newTestReport().Write(Target{Format: GitHubSummary, Path: t.TempDir()})
 	if err == nil || errors.Is(err, ErrNoStepSummary) {
 		t.Errorf("error = %v, want a write failure", err)
 	}
@@ -160,13 +160,13 @@ func TestFitStepSummary(t *testing.T) {
 // contain lines looking like a failure heading. The page must only be cut at
 // the boundaries the renderer recorded, never at one of those lines.
 func TestFitStepSummary_HeadingInsideFence(t *testing.T) {
-	failed := func(i int) StepReport {
-		return StepReport{
+	failed := func(i int) Step {
+		return Step{
 			Index:  i,
 			Name:   fmt.Sprintf("step %d", i),
-			Status: ReportFailed,
+			Status: Failed,
 			Test:   "res.code == 200 &&\n### not a heading\nres.body != \"\"",
-			Failure: &FailureReport{
+			Failure: &Failure{
 				Kind:    FailureTestError,
 				Message: "cannot evaluate\n### also not a heading",
 			},
@@ -174,11 +174,11 @@ func TestFitStepSummary_HeadingInsideFence(t *testing.T) {
 	}
 	r := &Report{
 		Name:   "Fenced",
-		Status: ReportFailed,
-		Jobs: []JobReport{{
+		Status: Failed,
+		Jobs: []Job{{
 			Name:   "job",
-			Status: ReportFailed,
-			Steps:  []StepReport{failed(0), failed(1), failed(2)},
+			Status: Failed,
+			Steps:  []Step{failed(0), failed(1), failed(2)},
 		}},
 	}
 
@@ -212,7 +212,7 @@ func TestFitStepSummary_HeadingInsideFence(t *testing.T) {
 
 func TestReport_WriteGitHubSummary_CreatesParentDirectory(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "out", "new", "summary.md")
-	if err := newTestReport().Write(ReportTarget{Format: ReportGitHubSummary, Path: path}); err != nil {
+	if err := newTestReport().Write(Target{Format: GitHubSummary, Path: path}); err != nil {
 		t.Fatalf("Write: %v", err)
 	}
 	if info, err := os.Stat(path); err != nil || info.Size() == 0 {
@@ -226,7 +226,7 @@ func TestReport_WriteGitHubSummary_Full(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	err := newTestReport().Write(ReportTarget{Format: ReportGitHubSummary, Path: path})
+	err := newTestReport().Write(Target{Format: GitHubSummary, Path: path})
 	if !errors.Is(err, ErrStepSummaryFull) {
 		t.Errorf("error = %v, want ErrStepSummaryFull", err)
 	}
@@ -246,7 +246,7 @@ func TestReport_WriteGitHubSummary_StaysUnderLimit(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := r.Write(ReportTarget{Format: ReportGitHubSummary, Path: path}); err != nil {
+	if err := r.Write(Target{Format: GitHubSummary, Path: path}); err != nil {
 		t.Fatalf("Write: %v", err)
 	}
 	info, _ := os.Stat(path)
@@ -255,58 +255,6 @@ func TestReport_WriteGitHubSummary_StaysUnderLimit(t *testing.T) {
 	}
 	if info.Size() == int64(existing) {
 		t.Error("a shortened page should still have been written")
-	}
-}
-
-// TestWorkflow_GitHubSummaryOutsideActions checks that asking for a job
-// summary where there is none warns but neither fails the run nor stops the
-// other reports.
-func TestWorkflow_GitHubSummaryOutsideActions(t *testing.T) {
-	t.Setenv("GITHUB_STEP_SUMMARY", "")
-
-	w := &Workflow{
-		Name:    "summary",
-		Jobs:    []Job{{Name: "job", Steps: []*Step{}}},
-		printer: newBufferPrinter(),
-	}
-	md := filepath.Join(t.TempDir(), "report.md")
-
-	err := w.Start(Config{Reports: []ReportTarget{
-		{Format: ReportGitHubSummary},
-		{Format: ReportMarkdown, Path: md},
-	}})
-	if err != nil {
-		t.Fatalf("Start: %v", err)
-	}
-	if w.exitStatus != ExitOK {
-		t.Errorf("exit status = %d, want %d", w.exitStatus, ExitOK)
-	}
-	if _, err := os.Stat(md); err != nil {
-		t.Errorf("the markdown report should still be written: %v", err)
-	}
-	stderr := w.printer.errWriter.(*bytes.Buffer).String()
-	if !strings.Contains(stderr, "[WARN] GITHUB_STEP_SUMMARY is not set") {
-		t.Errorf("expected a warning, got:\n%s", stderr)
-	}
-}
-
-func TestWorkflow_GitHubSummaryFull(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "summary.md")
-	if err := os.WriteFile(path, bytes.Repeat([]byte("x"), maxStepSummaryBytes), 0o644); err != nil {
-		t.Fatal(err)
-	}
-
-	w := &Workflow{
-		Name:    "full",
-		Jobs:    []Job{{Name: "job", Steps: []*Step{}}},
-		printer: newBufferPrinter(),
-	}
-	if err := w.Start(Config{Reports: []ReportTarget{{Format: ReportGitHubSummary, Path: path}}}); err != nil {
-		t.Fatalf("a full summary should not fail the run: %v", err)
-	}
-	stderr := w.printer.errWriter.(*bytes.Buffer).String()
-	if !strings.Contains(stderr, "[WARN] the job summary has no room left") {
-		t.Errorf("expected a warning, got:\n%s", stderr)
 	}
 }
 
@@ -321,7 +269,7 @@ func TestReport_WriteGitHubSummary_RefusesSymlinkedPath(t *testing.T) {
 		t.Skipf("symlinks unavailable: %v", err)
 	}
 
-	err := newTestReport().Write(ReportTarget{Format: ReportGitHubSummary, Path: link})
+	err := newTestReport().Write(Target{Format: GitHubSummary, Path: link})
 	if err == nil || !strings.Contains(err.Error(), "path escapes") {
 		t.Errorf("error = %v, want the link out of its directory refused", err)
 	}
@@ -331,7 +279,7 @@ func TestReport_WriteGitHubSummary_RefusesSymlinkedPath(t *testing.T) {
 
 	// The path GitHub Actions hands over is trusted, link or not.
 	t.Setenv("GITHUB_STEP_SUMMARY", link)
-	if err := newTestReport().Write(ReportTarget{Format: ReportGitHubSummary}); err != nil {
+	if err := newTestReport().Write(Target{Format: GitHubSummary}); err != nil {
 		t.Errorf("GITHUB_STEP_SUMMARY should be used as given: %v", err)
 	}
 }

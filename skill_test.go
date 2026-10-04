@@ -175,3 +175,43 @@ func TestInstallSkill_RefusesLinkedDirectory(t *testing.T) {
 		t.Error("SKILL.md was written outside the project")
 	}
 }
+
+// checkout makes a working directory with a file outside it and a symlink
+// "out" inside it pointing at the outside directory, as a checked-out
+// project could carry. It returns the outside file.
+func checkout(t *testing.T) (outsideFile string) {
+	t.Helper()
+	base := t.TempDir()
+	outside := filepath.Join(base, "outside")
+	project := filepath.Join(base, "project")
+	for _, d := range []string{outside, project} {
+		if err := os.Mkdir(d, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	outsideFile = filepath.Join(outside, "victim")
+	if err := os.WriteFile(outsideFile, []byte("keep me"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, filepath.Join(project, "out")); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+	t.Chdir(project)
+	return outsideFile
+}
+
+// umaskMode is the mode os.Create gives a new file under the current umask.
+func umaskMode(t *testing.T) os.FileMode {
+	t.Helper()
+	ref := filepath.Join(t.TempDir(), "ref")
+	f, err := os.Create(ref)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = f.Close()
+	info, err := os.Stat(ref)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return info.Mode().Perm()
+}

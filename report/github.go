@@ -1,4 +1,4 @@
-package probe
+package report
 
 import (
 	"errors"
@@ -22,12 +22,14 @@ var ErrNoStepSummary = errors.New("GITHUB_STEP_SUMMARY is not set; skipping the 
 // GitHub's limit and lose what the earlier steps wrote, so nothing is written.
 var ErrStepSummaryFull = errors.New("the job summary has no room left under GitHub's 1 MiB limit; skipping the github-summary report")
 
-// writeGitHubSummary appends the Markdown page to the job summary file. It
+// stepSummaryWriter appends the Markdown page to the job summary file. It
 // appends because earlier steps, and other tools in the same step, write to
 // the same file. When the page would push the file past GitHub's limit, it
 // leaves out the requests and responses, and if that is still too large it
 // cuts the page short and says so.
-func (r *Report) writeGitHubSummary(path string) error {
+type stepSummaryWriter struct{}
+
+func (stepSummaryWriter) write(r *Report, path string) error {
 	// An explicit path can sit in a checked-out project, so it is kept inside
 	// the current directory the way report files are. The path GitHub Actions
 	// provides in GITHUB_STEP_SUMMARY is trusted and used as given.

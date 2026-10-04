@@ -3,168 +3,16 @@ package probe
 import (
 	"encoding/json"
 	"fmt"
-	"io"
 	"strings"
 	"time"
 
-	"github.com/linyows/probe/mask"
-	"github.com/linyows/probe/safefile"
+	"github.com/linyows/probe/report"
 )
-
-// ReportFormat names a report file format.
-type ReportFormat string
-
-const (
-	ReportJSON     ReportFormat = "json"
-	ReportJUnit    ReportFormat = "junit"
-	ReportMarkdown ReportFormat = "markdown"
-	// ReportGitHubSummary appends the Markdown page to the GitHub Actions job
-	// summary, the file GITHUB_STEP_SUMMARY names.
-	ReportGitHubSummary ReportFormat = "github-summary"
-)
-
-// defaultReportPaths is where a format is written when no path is given.
-var defaultReportPaths = map[ReportFormat]string{
-	ReportJSON:     "probe-report.json",
-	ReportJUnit:    "probe-junit.xml",
-	ReportMarkdown: "probe-report.md",
-	// Resolved when the report is written, from GITHUB_STEP_SUMMARY.
-	ReportGitHubSummary: "",
-}
-
-// ReportTarget is one report file to write after a run.
-type ReportTarget struct {
-	Format ReportFormat
-	Path   string
-}
-
-// ParseReportTargets parses a comma separated list of format[=path] entries,
-// such as "junit=out/junit.xml,json". A format without a path is written to
-// its default file name in the current directory.
-func ParseReportTargets(s string) ([]ReportTarget, error) {
-	var targets []ReportTarget
-	seen := make(map[ReportFormat]bool)
-
-	for _, entry := range strings.Split(s, ",") {
-		entry = strings.TrimSpace(entry)
-		if entry == "" {
-			continue
-		}
-
-		name, path, _ := strings.Cut(entry, "=")
-		format := ReportFormat(strings.ToLower(strings.TrimSpace(name)))
-		path = strings.TrimSpace(path)
-
-		def, ok := defaultReportPaths[format]
-		if !ok {
-			return nil, fmt.Errorf("unknown report format: %s (expected json, junit, markdown or github-summary)", name)
-		}
-		if seen[format] {
-			return nil, fmt.Errorf("report format given more than once: %s", format)
-		}
-		seen[format] = true
-
-		if path == "" {
-			path = def
-		}
-		targets = append(targets, ReportTarget{Format: format, Path: path})
-	}
-
-	return targets, nil
-}
-
-// Report statuses for the workflow, jobs and steps.
-const (
-	ReportPassed   = "passed"
-	ReportFailed   = "failed"
-	ReportSkipped  = "skipped"
-	ReportUntested = "untested" // A step that ran but has no test expression
-)
-
-// Report is the result of a workflow run in a form meant for machines: the
-// JSON file is this structure as is, and the other formats are rendered from it.
-type Report struct {
-	Name        string        `json:"name"`
-	Description string        `json:"description,omitempty"`
-	Status      string        `json:"status"`
-	StartedAt   time.Time     `json:"started_at"`
-	FinishedAt  time.Time     `json:"finished_at"`
-	DurationMs  int64         `json:"duration_ms"`
-	Summary     ReportSummary `json:"summary"`
-	Jobs        []JobReport   `json:"jobs"`
-}
-
-// ReportSummary counts jobs and steps by status.
-type ReportSummary struct {
-	Jobs  ReportCount `json:"jobs"`
-	Steps ReportCount `json:"steps"`
-}
-
-// ReportCount is a tally by status.
-type ReportCount struct {
-	Total    int `json:"total"`
-	Passed   int `json:"passed"`
-	Failed   int `json:"failed"`
-	Skipped  int `json:"skipped"`
-	Untested int `json:"untested,omitempty"`
-}
-
-// JobReport is one job of a Report.
-type JobReport struct {
-	ID         string       `json:"id"`
-	Name       string       `json:"name"`
-	Status     string       `json:"status"`
-	StartedAt  time.Time    `json:"started_at"`
-	DurationMs int64        `json:"duration_ms"`
-	Steps      []StepReport `json:"steps"`
-}
-
-// StepReport is one step of a JobReport.
-type StepReport struct {
-	Index      int            `json:"index"`
-	Name       string         `json:"name"`
-	Status     string         `json:"status"`
-	Test       string         `json:"test,omitempty"`
-	DurationMs int64          `json:"duration_ms"`
-	Retry      *RetryReport   `json:"retry,omitempty"`
-	Repeat     *RepeatReport  `json:"repeat,omitempty"`
-	Echo       string         `json:"echo,omitempty"`
-	Failure    *FailureReport `json:"failure,omitempty"`
-}
-
-// RetryReport records how many attempts a retried step took.
-type RetryReport struct {
-	Attempts int `json:"attempts"`
-	Max      int `json:"max"`
-}
-
-// RepeatReport records the outcome of every iteration of a repeated job.
-type RepeatReport struct {
-	Total   int `json:"total"`
-	Success int `json:"success"`
-	Failure int `json:"failure"`
-}
-
-// FailureReport says why a step failed.
-type FailureReport struct {
-	Kind     string         `json:"kind"`
-	Message  string         `json:"message"`
-	Request  map[string]any `json:"request,omitempty"`
-	Response map[string]any `json:"response,omitempty"`
-}
 
 // BuildReport assembles a Report from the results of a run. Jobs are listed in
 // the given order, which is the order they are declared in the workflow.
-func BuildReport(name, description string, rs *Result, order []string, startedAt, finishedAt time.Time) *Report {
-	r := &Report{
-		Name:        name,
-		Description: description,
-		Status:      ReportPassed,
-		StartedAt:   startedAt,
-		FinishedAt:  finishedAt,
-		DurationMs:  finishedAt.Sub(startedAt).Milliseconds(),
-		Jobs:        []JobReport{},
-	}
+func BuildReport(name, description string, rs *Result, order []string, startedAt, finishedAt time.Time) *report.Report {
+	r := report.New(name, description, startedAt, finishedAt)
 	if rs == nil {
 		return r
 	}
@@ -174,54 +22,31 @@ func BuildReport(name, description string, rs *Result, order []string, startedAt
 		if !ok {
 			continue
 		}
-		job := buildJobReport(jr)
-		r.Jobs = append(r.Jobs, job)
-
-		r.Summary.Jobs.add(job.Status)
-		for _, st := range job.Steps {
-			r.Summary.Steps.add(st.Status)
-		}
-		if job.Status == ReportFailed {
-			r.Status = ReportFailed
-		}
+		r.AddJob(buildJobReport(jr))
 	}
 
 	return r
 }
 
-func (c *ReportCount) add(status string) {
-	c.Total++
-	switch status {
-	case ReportPassed:
-		c.Passed++
-	case ReportFailed:
-		c.Failed++
-	case ReportSkipped:
-		c.Skipped++
-	case ReportUntested:
-		c.Untested++
-	}
-}
-
-func buildJobReport(jr *JobResult) JobReport {
+func buildJobReport(jr *JobResult) report.Job {
 	jr.mutex.Lock()
 	defer jr.mutex.Unlock()
 
-	status := ReportPassed
+	status := report.Passed
 	switch {
 	case jr.Status == "skipped":
-		status = ReportSkipped
+		status = report.Skipped
 	case !jr.Success:
-		status = ReportFailed
+		status = report.Failed
 	}
 
-	job := JobReport{
+	job := report.Job{
 		ID:         jr.JobID,
 		Name:       jr.JobName,
 		Status:     status,
 		StartedAt:  jr.StartTime,
 		DurationMs: jr.EndTime.Sub(jr.StartTime).Milliseconds(),
-		Steps:      make([]StepReport, 0, len(jr.StepResults)),
+		Steps:      make([]report.Step, 0, len(jr.StepResults)),
 	}
 	for _, sr := range jr.StepResults {
 		job.Steps = append(job.Steps, buildStepReport(sr))
@@ -230,8 +55,8 @@ func buildJobReport(jr *JobResult) JobReport {
 	return job
 }
 
-func buildStepReport(sr StepResult) StepReport {
-	step := StepReport{
+func buildStepReport(sr StepResult) report.Step {
+	step := report.Step{
 		Index:      sr.Index,
 		Name:       sr.Name,
 		Test:       sr.Test,
@@ -240,25 +65,25 @@ func buildStepReport(sr StepResult) StepReport {
 
 	switch sr.Status {
 	case StatusSuccess:
-		step.Status = ReportPassed
+		step.Status = report.Passed
 	case StatusError:
-		step.Status = ReportFailed
+		step.Status = report.Failed
 	case StatusSkipped:
-		step.Status = ReportSkipped
+		step.Status = report.Skipped
 		// The terminal report marks a skipped step in its name; here the
 		// status already says so.
 		step.Name = strings.TrimSuffix(sr.Name, " (SKIPPED)")
 	default:
-		step.Status = ReportUntested
+		step.Status = report.Untested
 	}
 
 	if sr.RetryAttempt > 0 {
-		step.Retry = &RetryReport{Attempts: sr.RetryAttempt, Max: sr.RetryMax}
+		step.Retry = &report.Retry{Attempts: sr.RetryAttempt, Max: sr.RetryMax}
 	}
 
 	if c := sr.RepeatCounter; c != nil {
 		step.Name = c.Name
-		step.Repeat = &RepeatReport{
+		step.Repeat = &report.Repeat{
 			Total:   c.SuccessCount + c.FailureCount,
 			Success: c.SuccessCount,
 			Failure: c.FailureCount,
@@ -267,18 +92,18 @@ func buildStepReport(sr StepResult) StepReport {
 		// a warning. Any failing iteration fails the job, so it fails the step.
 		switch {
 		case c.FailureCount > 0:
-			step.Status = ReportFailed
+			step.Status = report.Failed
 		case sr.HasTest:
-			step.Status = ReportPassed
+			step.Status = report.Passed
 		default:
-			step.Status = ReportUntested
+			step.Status = report.Untested
 		}
 	} else {
 		step.Echo = unindentEcho(sr.EchoOutput)
 	}
 
-	if f := sr.Failure; f != nil && step.Status == ReportFailed {
-		step.Failure = &FailureReport{
+	if f := sr.Failure; f != nil && step.Status == report.Failed {
+		step.Failure = &report.Failure{
 			Kind:     f.Kind,
 			Message:  f.Message,
 			Request:  jsonSafeMap(f.Request),
@@ -287,31 +112,6 @@ func buildStepReport(sr StepResult) StepReport {
 	}
 
 	return step
-}
-
-// Mask hides secrets in every text the report carries, and credential
-// headers in failed steps' requests and responses. It masks the data before
-// it is rendered, because JSON and XML escape quotes, backslashes and
-// ampersands, and a secret containing one would no longer match in the
-// rendered file.
-func (r *Report) Mask(m *mask.Masker) {
-	r.Name = m.String(r.Name)
-	r.Description = m.String(r.Description)
-	for i := range r.Jobs {
-		job := &r.Jobs[i]
-		job.Name = m.String(job.Name)
-		for j := range job.Steps {
-			st := &job.Steps[j]
-			st.Name = m.String(st.Name)
-			st.Test = m.String(st.Test)
-			st.Echo = m.String(st.Echo)
-			if f := st.Failure; f != nil {
-				f.Message = m.String(f.Message)
-				f.Request = m.Map(f.Request)
-				f.Response = m.Map(f.Response)
-			}
-		}
-	}
 }
 
 // unindentEcho strips the indentation the terminal report puts on echo lines.
@@ -348,79 +148,4 @@ func jsonSafeMap(m map[string]any) map[string]any {
 		safe[k] = v
 	}
 	return safe
-}
-
-// WriteJSON writes the report as indented JSON.
-func (r *Report) WriteJSON(w io.Writer) error {
-	// Responses are full of HTML and comparisons; the report is not embedded
-	// in a page, so keep <, > and & readable.
-	enc := json.NewEncoder(w)
-	enc.SetEscapeHTML(false)
-	enc.SetIndent("", "  ")
-	return enc.Encode(r)
-}
-
-// Write renders the report in the target's format and writes it to the
-// target's path, creating parent directories as needed.
-func (r *Report) Write(t ReportTarget) error {
-	if t.Format == ReportGitHubSummary {
-		return r.writeGitHubSummary(t.Path)
-	}
-
-	var render func(io.Writer) error
-	switch t.Format {
-	case ReportJSON:
-		render = r.WriteJSON
-	case ReportJUnit:
-		render = r.WriteJUnit
-	case ReportMarkdown:
-		render = r.WriteMarkdown
-	default:
-		return fmt.Errorf("unknown report format: %s", t.Format)
-	}
-
-	// safefile.Replace keeps a symlink in the current directory, at the file or
-	// any directory on the way, from redirecting the report elsewhere.
-	if err := safefile.Replace(t.Path, render); err != nil {
-		return fmt.Errorf("failed to create %s report: %w", t.Format, err)
-	}
-	return nil
-}
-
-// failureDetail renders a failure as plain text for formats that embed it in
-// a text block: the test, the message, then the request and response.
-func failureDetail(st StepReport) string {
-	var b strings.Builder
-	if st.Test != "" {
-		fmt.Fprintf(&b, "test: %s\n", st.Test)
-	}
-	if st.Repeat != nil {
-		fmt.Fprintf(&b, "repeat: %d/%d succeeded\n", st.Repeat.Success, st.Repeat.Total)
-	}
-	if st.Failure == nil {
-		return b.String()
-	}
-	fmt.Fprintf(&b, "%s: %s\n", st.Failure.Kind, st.Failure.Message)
-	if st.Failure.Request != nil {
-		fmt.Fprintf(&b, "\nrequest:\n%s\n", indentJSON(st.Failure.Request))
-	}
-	if st.Failure.Response != nil {
-		fmt.Fprintf(&b, "\nresponse:\n%s\n", indentJSON(st.Failure.Response))
-	}
-	return b.String()
-}
-
-func indentJSON(v any) string {
-	var b strings.Builder
-	enc := json.NewEncoder(&b)
-	enc.SetEscapeHTML(false)
-	enc.SetIndent("", "  ")
-	if err := enc.Encode(v); err != nil {
-		return fmt.Sprintf("%v", v)
-	}
-	return strings.TrimRight(b.String(), "\n")
-}
-
-func msToSec(ms int64) float64 {
-	return float64(ms) / 1000
 }

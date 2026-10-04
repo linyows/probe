@@ -10,6 +10,7 @@ import (
 
 	"github.com/go-playground/validator/v10"
 	"github.com/goccy/go-yaml"
+	"github.com/linyows/probe/report"
 	"github.com/mattn/go-isatty"
 )
 
@@ -26,7 +27,7 @@ type Config struct {
 	// Output selects how the report is delivered while jobs run.
 	Output OutputMode
 	// Reports lists the report files written once the run has finished.
-	Reports []ReportTarget
+	Reports []report.Target
 }
 
 func New(path string, v bool) *Probe {
