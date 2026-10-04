@@ -1,4 +1,5 @@
-// Package dag provides generic graph algorithms that work with any data structure.
+// Package dag provides generic graph algorithms that work with any data
+// structure, and the renderers that draw a workflow's jobs as a graph.
 package dag
 
 // DetectCycleFn detects a cycle in a graph using a higher-order function.

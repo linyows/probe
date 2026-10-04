@@ -6,24 +6,18 @@ import (
 	"path/filepath"
 
 	"github.com/goccy/go-yaml"
+	"github.com/linyows/probe/dag"
 	"github.com/linyows/probe/expr"
 )
 
-// DagRendererBase provides common functionality for DAG renderers
-type DagRendererBase struct {
+// graphBuilder resolves the files that embedded steps run, for Workflow.Graph.
+type graphBuilder struct {
 	workflow      *Workflow
 	evaluatedVars map[string]any // cached evaluated vars (lazy loaded)
 }
 
-// NewDagRendererBase creates a new DagRendererBase
-func NewDagRendererBase(w *Workflow) DagRendererBase {
-	return DagRendererBase{
-		workflow: w,
-	}
-}
-
-// GetEvaluatedVars returns evaluated vars with lazy loading
-func (b *DagRendererBase) GetEvaluatedVars() map[string]any {
+// vars returns the workflow's evaluated vars, evaluating them on first use.
+func (b *graphBuilder) vars() map[string]any {
 	if b.evaluatedVars == nil {
 		vars, err := b.workflow.evalVars()
 		if err == nil {
@@ -33,9 +27,9 @@ func (b *DagRendererBase) GetEvaluatedVars() map[string]any {
 	return b.evaluatedVars
 }
 
-// ExpandPath expands template variables in the path using evaluated workflow vars
-func (b *DagRendererBase) ExpandPath(path string) string {
-	vars := b.GetEvaluatedVars()
+// expandPath expands template variables in the path using evaluated workflow vars
+func (b *graphBuilder) expandPath(path string) string {
+	vars := b.vars()
 	if vars == nil {
 		return path
 	}
@@ -53,7 +47,7 @@ func (b *DagRendererBase) ExpandPath(path string) string {
 	return expanded
 }
 
-// ResolvePath resolves a (potentially relative) path using a fixed priority order:
+// resolvePath resolves a (potentially relative) path using a fixed priority order:
 //  1. If the path is absolute, it is returned as-is.
 //  2. If workflow.basePath is set, first try the path relative to the workflow
 //     directory (workflow.basePath/path).
@@ -61,7 +55,7 @@ func (b *DagRendererBase) ExpandPath(path string) string {
 //     (for project-root relative paths; parentDir/path).
 //  4. If still not found, fall back to resolving the path from the current working
 //     directory using filepath.Abs, which matches the runtime's default behavior.
-func (b *DagRendererBase) ResolvePath(path string) string {
+func (b *graphBuilder) resolvePath(path string) string {
 	if filepath.IsAbs(path) {
 		return path
 	}
@@ -110,4 +104,53 @@ func LoadEmbeddedJob(path string) (*Job, error) {
 	}
 
 	return job, nil
+}
+
+// Graph returns the jobs and steps of the workflow in the form the DAG
+// renderers draw. The steps of an embedded job are read from its file, at the
+// path its `with.path` names after the workflow's vars are expanded.
+func (w *Workflow) Graph() dag.Graph {
+	b := &graphBuilder{workflow: w}
+	g := dag.Graph{Jobs: make([]dag.Job, 0, len(w.Jobs))}
+	for _, job := range w.Jobs {
+		id := job.ID
+		if id == "" {
+			id = job.Name
+		}
+		gj := dag.Job{ID: id, Name: job.Name, Needs: job.Needs, Steps: make([]dag.Step, 0, len(job.Steps))}
+		for _, st := range job.Steps {
+			gj.Steps = append(gj.Steps, b.step(st))
+		}
+		g.Jobs = append(g.Jobs, gj)
+	}
+	return g
+}
+
+// step returns the graph step for st, with the steps of the job it embeds.
+func (b *graphBuilder) step(st *Step) dag.Step {
+	s := dag.Step{Name: st.Name, Embedded: st.Uses == "embedded"}
+	if s.Name == "" {
+		s.Name = st.Uses
+	}
+	if !s.Embedded {
+		return s
+	}
+	path, ok := st.With["path"].(string)
+	if !ok {
+		return s
+	}
+	expanded := b.expandPath(path)
+	job, err := LoadEmbeddedJob(b.resolvePath(expanded))
+	if err != nil || len(job.Steps) == 0 {
+		return s
+	}
+	s.EmbeddedFile = filepath.Base(expanded)
+	for _, es := range job.Steps {
+		name := es.Name
+		if name == "" {
+			name = es.Uses
+		}
+		s.EmbeddedSteps = append(s.EmbeddedSteps, name)
+	}
+	return s
 }

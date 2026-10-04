@@ -10,6 +10,7 @@ import (
 
 	"github.com/go-playground/validator/v10"
 	"github.com/goccy/go-yaml"
+	"github.com/linyows/probe/dag"
 	"github.com/linyows/probe/report"
 	"github.com/mattn/go-isatty"
 )
@@ -64,7 +65,7 @@ func (p *Probe) DagAscii() (string, error) {
 	if err := p.Load(); err != nil {
 		return "", err
 	}
-	return p.workflow.RenderDagAscii(), nil
+	return dag.ASCII{}.Render(p.workflow.Graph()), nil
 }
 
 // DagMermaid returns the Mermaid format representation of the workflow job dependencies
@@ -72,7 +73,7 @@ func (p *Probe) DagMermaid() (string, error) {
 	if err := p.Load(); err != nil {
 		return "", err
 	}
-	return p.workflow.RenderDagMermaid(), nil
+	return dag.Mermaid{}.Render(p.workflow.Graph()), nil
 }
 
 func (p *Probe) Load() error {
