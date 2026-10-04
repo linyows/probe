@@ -2,6 +2,8 @@ package probe
 
 import (
 	"testing"
+
+	"github.com/linyows/probe/expr"
 )
 
 func TestResponseTimeExpressions(t *testing.T) {
@@ -16,10 +18,10 @@ func TestResponseTimeExpressions(t *testing.T) {
 		},
 	}
 
-	expr := &Expr{}
+	ev := &expr.Expr{}
 
 	t.Run("access rt.duration", func(t *testing.T) {
-		result, err := expr.Eval(`rt.duration`, ctx)
+		result, err := ev.Eval(`rt.duration`, ctx)
 		if err != nil {
 			t.Fatalf("Expected no error, got %v", err)
 		}
@@ -29,7 +31,7 @@ func TestResponseTimeExpressions(t *testing.T) {
 	})
 
 	t.Run("access rt.sec", func(t *testing.T) {
-		result, err := expr.Eval(`rt.sec`, ctx)
+		result, err := ev.Eval(`rt.sec`, ctx)
 		if err != nil {
 			t.Fatalf("Expected no error, got %v", err)
 		}
@@ -39,7 +41,7 @@ func TestResponseTimeExpressions(t *testing.T) {
 	})
 
 	t.Run("compare rt.sec with threshold", func(t *testing.T) {
-		result, err := expr.Eval(`rt.sec < vars.threshold`, ctx)
+		result, err := ev.Eval(`rt.sec < vars.threshold`, ctx)
 		if err != nil {
 			t.Fatalf("Expected no error, got %v", err)
 		}
@@ -50,7 +52,7 @@ func TestResponseTimeExpressions(t *testing.T) {
 
 	t.Run("use rt in template", func(t *testing.T) {
 		template := "Response took {{ rt.duration }} ({{ rt.sec }}s)"
-		result, err := expr.EvalTemplate(template, ctx)
+		result, err := ev.EvalTemplate(template, ctx)
 		if err != nil {
 			t.Fatalf("Expected no error, got %v", err)
 		}

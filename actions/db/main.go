@@ -4,12 +4,11 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/linyows/probe/truncate"
-
 	"github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/go-plugin"
 	"github.com/linyows/probe"
 	cl "github.com/linyows/probe/db"
+	"github.com/linyows/probe/truncate"
 )
 
 type Action struct {

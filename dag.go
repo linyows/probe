@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 
 	"github.com/goccy/go-yaml"
+	"github.com/linyows/probe/expr"
 )
 
 // DagRendererBase provides common functionality for DAG renderers
@@ -44,8 +45,8 @@ func (b *DagRendererBase) ExpandPath(path string) string {
 		"vars": vars,
 	}
 
-	expr := &Expr{}
-	expanded, err := expr.EvalTemplate(path, env)
+	ev := &expr.Expr{}
+	expanded, err := ev.EvalTemplate(path, env)
 	if err != nil {
 		return path // Return original path if expansion fails
 	}

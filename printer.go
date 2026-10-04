@@ -9,10 +9,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/linyows/probe/mask"
-
 	"github.com/briandowns/spinner"
 	"github.com/fatih/color"
+	"github.com/linyows/probe/mask"
 )
 
 // Color Functions

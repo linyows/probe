@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/linyows/probe/expr"
 	"github.com/linyows/probe/mask"
 )
 
@@ -592,7 +593,7 @@ func TestStep_DoTestRecordsFailure(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			st := &Step{
 				Test: tt.test,
-				Expr: &Expr{},
+				Expr: &expr.Expr{},
 				ctx: StepContext{
 					Req: map[string]any{"path": "/"},
 					Res: map[string]any{"code": 200},

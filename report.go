@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/linyows/probe/mask"
-
 	"github.com/linyows/probe/safefile"
 )
 

@@ -5,11 +5,11 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/hashicorp/go-hclog"
+	"github.com/linyows/probe/expr"
 	"github.com/linyows/probe/pb"
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/types/known/structpb"
-
-	"github.com/hashicorp/go-hclog"
 )
 
 // MockActions implements the Actions interface for testing
@@ -340,7 +340,7 @@ func TestStepWithMockRunner(t *testing.T) {
 	}
 
 	// Initialize expression evaluator
-	step.Expr = &Expr{}
+	step.Expr = &expr.Expr{}
 	step.ctx = StepContext{}
 
 	// Execute action

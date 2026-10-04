@@ -1,4 +1,5 @@
-package probe
+// Package expr evaluates the expressions and {{ }} templates of a workflow.
+package expr
 
 import (
 	"encoding/base64"
@@ -8,12 +9,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/linyows/probe/truncate"
-
-	"github.com/linyows/probe/jsonutil"
-
 	ex "github.com/expr-lang/expr"
 	"github.com/expr-lang/expr/vm"
+	"github.com/linyows/probe/jsonutil"
+	"github.com/linyows/probe/truncate"
 )
 
 var (
@@ -28,6 +27,8 @@ var (
 	maxStringLength = 1000000
 )
 
+// Expr evaluates expressions and templates against an environment such as
+// a step's context.
 type Expr struct{}
 
 // Options builds the expr options used to compile every workflow expression.
