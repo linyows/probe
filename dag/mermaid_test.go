@@ -594,3 +594,28 @@ func TestMermaid_LinksStepsInOrder(t *testing.T) {
 		t.Errorf("the last step should not link onward:\n%s", out)
 	}
 }
+
+// TestMermaid_UnknownNeed checks that a need naming no job of the graph,
+// which the dag command does not reject, gets a node of its own: one that is
+// not a job or step drawn above, shared by every job that needs it.
+func TestMermaid_UnknownNeed(t *testing.T) {
+	g := Graph{Jobs: []Job{
+		{ID: "build", Name: "Build", Steps: []Step{{Name: "Compile"}}},
+		{ID: "test", Name: "Test", Needs: []string{"build_step0", "missing-job"}},
+		{ID: "lint", Name: "Lint", Needs: []string{"build_step0"}},
+	}}
+
+	out := Mermaid{}.Render(g)
+	for _, want := range []string{
+		"    build_step0_2 --> test\n",
+		"    missing_job --> test\n",
+		"    build_step0_2 --> lint\n",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("output should contain %q:\n%s", want, out)
+		}
+	}
+	if strings.Contains(out, "    build_step0 --> ") {
+		t.Errorf("an unknown need should not link from the step build_step0:\n%s", out)
+	}
+}

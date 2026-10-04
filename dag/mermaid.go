@@ -81,8 +81,11 @@ func (m Mermaid) Render(g Graph) string {
 			safeNeedID, ok := byJobID[need]
 			if !ok {
 				// A need that names no job of the graph still gets an edge,
-				// to a node Mermaid creates for it.
-				safeNeedID = m.sanitizeID(need)
+				// to a node Mermaid creates for it. The node gets an ID of
+				// its own, so that it is not taken for a job or step drawn
+				// above, and every reference to the same need shares it.
+				safeNeedID = ids.allocate(m.sanitizeID(need))
+				byJobID[need] = safeNeedID
 			}
 			fmt.Fprintf(&sb, "    %s --> %s\n", safeNeedID, safeIDs[i])
 		}
