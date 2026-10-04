@@ -2,12 +2,10 @@ package hello
 
 import (
 	"maps"
-	"os"
 	"time"
 
 	"github.com/hashicorp/go-hclog"
-	"github.com/hashicorp/go-plugin"
-	"github.com/linyows/probe"
+	"github.com/linyows/probe/actionrpc"
 )
 
 type Action struct {
@@ -36,19 +34,7 @@ func (a *Action) Run(with map[string]any) (map[string]any, error) {
 }
 
 func Serve() {
-	log := hclog.New(&hclog.LoggerOptions{
-		Level:      hclog.Debug,
-		Output:     os.Stderr,
-		JSONFormat: true,
-	})
-
-	pl := &probe.ActionsPlugin{
-		Impl: &Action{log: log},
-	}
-
-	plugin.Serve(&plugin.ServeConfig{
-		HandshakeConfig: probe.Handshake,
-		Plugins:         map[string]plugin.Plugin{"actions": pl},
-		GRPCServer:      plugin.DefaultGRPCServer,
+	actionrpc.Serve(func(log hclog.Logger) actionrpc.Action {
+		return &Action{log: log}
 	})
 }

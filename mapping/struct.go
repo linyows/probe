@@ -381,7 +381,7 @@ func StructToMapByTags(src any) (map[string]any, error) {
 	return result, nil
 }
 
-// AssignStruct assigns values from an ActionsParams map to a struct using struct tags.
+// AssignStruct assigns values from an action's parameter map to a struct using struct tags.
 // Supports string and int fields with validation. Used for legacy action parameter assignment.
 //
 // Example:

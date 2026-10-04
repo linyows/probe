@@ -2,11 +2,9 @@ package embedded
 
 import (
 	"errors"
-	"os"
 
 	"github.com/hashicorp/go-hclog"
-	"github.com/hashicorp/go-plugin"
-	"github.com/linyows/probe"
+	"github.com/linyows/probe/actionrpc"
 	"github.com/linyows/probe/embedded"
 )
 
@@ -20,7 +18,7 @@ func (a *Action) Run(with map[string]any) (map[string]any, error) {
 		return map[string]any{}, errors.New("embedded action requires parameters in 'with' section. Please specify embedded job details like path")
 	}
 
-	probe.LogActionParams(a.log, "received embedded request parameters", with)
+	actionrpc.LogParams(a.log, "received embedded request parameters", with)
 
 	before := embedded.WithBefore(func(path string, vars map[string]any) {
 		a.log.Debug("embedded job prepared", "path", path, "vars", vars)
@@ -30,25 +28,13 @@ func (a *Action) Run(with map[string]any) (map[string]any, error) {
 	})
 	ret, err := embedded.Execute(with, before, after)
 
-	probe.LogActionOutcome(a.log, "embedded job", ret, err)
+	actionrpc.LogOutcome(a.log, "embedded job", ret, err)
 
 	return ret, err
 }
 
 func Serve() {
-	log := hclog.New(&hclog.LoggerOptions{
-		Level:      hclog.Debug,
-		Output:     os.Stderr,
-		JSONFormat: true,
-	})
-
-	pl := &probe.ActionsPlugin{
-		Impl: &Action{log: log},
-	}
-
-	plugin.Serve(&plugin.ServeConfig{
-		HandshakeConfig: probe.Handshake,
-		Plugins:         map[string]plugin.Plugin{"actions": pl},
-		GRPCServer:      plugin.DefaultGRPCServer,
+	actionrpc.Serve(func(log hclog.Logger) actionrpc.Action {
+		return &Action{log: log}
 	})
 }

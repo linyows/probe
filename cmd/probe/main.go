@@ -11,6 +11,7 @@ import (
 
 	"github.com/fatih/color"
 	"github.com/linyows/probe"
+	"github.com/linyows/probe/actionrpc"
 	"github.com/linyows/probe/actions"
 	"github.com/linyows/probe/oas"
 )
@@ -241,7 +242,7 @@ func (c *Cmd) printOptions() {
 }
 
 func (c *Cmd) start(args []string) int {
-	if len(args) >= 3 && args[1] == probe.BuiltinCmd {
+	if len(args) >= 3 && args[1] == actionrpc.BuiltinCmd {
 		c.runBuiltinActions(args[2])
 		return 0
 	}

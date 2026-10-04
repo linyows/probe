@@ -10,8 +10,7 @@ import (
 	"time"
 
 	"github.com/hashicorp/go-hclog"
-	"github.com/hashicorp/go-plugin"
-	"github.com/linyows/probe"
+	"github.com/linyows/probe/actionrpc"
 	"github.com/linyows/probe/mail"
 )
 
@@ -105,19 +104,7 @@ func writeNewFile(dir, timestamp string, data []byte) (string, error) {
 }
 
 func Serve() {
-	log := hclog.New(&hclog.LoggerOptions{
-		Level:      hclog.Debug,
-		Output:     os.Stderr,
-		JSONFormat: true,
-	})
-
-	pl := &probe.ActionsPlugin{
-		Impl: &Action{log: log},
-	}
-
-	plugin.Serve(&plugin.ServeConfig{
-		HandshakeConfig: probe.Handshake,
-		Plugins:         map[string]plugin.Plugin{"actions": pl},
-		GRPCServer:      plugin.DefaultGRPCServer,
+	actionrpc.Serve(func(log hclog.Logger) actionrpc.Action {
+		return &Action{log: log}
 	})
 }
