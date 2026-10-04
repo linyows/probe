@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"sync"
 	"time"
+
+	"github.com/linyows/probe/procgroup"
 )
 
 type Job struct {
@@ -248,14 +250,14 @@ func (j *Job) RunIndependently(vars map[string]any, printer *Printer, jobID stri
 		},
 		Printer:    printer,
 		countersMu: &sync.Mutex{},
-		background: newBackgroundProcs(),
+		background: procgroup.NewTracker(),
 	}
 	// This job runs inside the plugin process of the step that embeds it,
 	// which exits once the job is done, so its background processes go then.
 	// The watch for signals ends after the stop, as in a workflow.
-	endWatch := ctx.background.stopOnSignal()
+	endWatch := ctx.background.StopOnSignal()
 	defer endWatch()
-	defer ctx.background.stop()
+	defer ctx.background.Stop()
 
 	success := true
 	errorMsg := ""

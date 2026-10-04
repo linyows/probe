@@ -1,11 +1,11 @@
-package probe
+package jsonutil
 
 import (
 	"reflect"
 	"testing"
 )
 
-func TestMatchJSON(t *testing.T) {
+func TestMatch(t *testing.T) {
 	tests := []struct {
 		name   string
 		src    map[string]any
@@ -178,7 +178,7 @@ func TestMatchJSON(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := MatchJSON(tt.src, tt.target)
+			got := Match(tt.src, tt.target)
 			if got != tt.want {
 				t.Errorf("deepMatch() = %v, want %v (src: %v, target: %v)", got, tt.want, tt.src, tt.target)
 			}
@@ -186,7 +186,7 @@ func TestMatchJSON(t *testing.T) {
 	}
 }
 
-func TestParseJSON(t *testing.T) {
+func TestParse(t *testing.T) {
 	tests := []struct {
 		name     string
 		input    string
@@ -257,22 +257,22 @@ func TestParseJSON(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := ParseJSON(tt.input)
+			got, err := Parse(tt.input)
 
 			if tt.wantErr {
 				if err == nil {
-					t.Errorf("ParseJSON() expected error but got none, result: %v", got)
+					t.Errorf("Parse() expected error but got none, result: %v", got)
 				}
 				return
 			}
 
 			if err != nil {
-				t.Errorf("ParseJSON() unexpected error: %v", err)
+				t.Errorf("Parse() unexpected error: %v", err)
 				return
 			}
 
 			if !reflect.DeepEqual(got, tt.expected) {
-				t.Errorf("ParseJSON() = %v, want %v", got, tt.expected)
+				t.Errorf("Parse() = %v, want %v", got, tt.expected)
 			}
 		})
 	}

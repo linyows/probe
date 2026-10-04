@@ -1,4 +1,6 @@
-package probe
+// Package safefile writes files that a symlink planted in the current
+// directory must not redirect.
+package safefile
 
 import (
 	"crypto/rand"
@@ -59,12 +61,12 @@ func mkdirParent(root *os.Root, name string) error {
 	return nil
 }
 
-// replaceFile writes path with write, by writing a temporary file next to it
+// Replace writes path with write, by writing a temporary file next to it
 // and renaming it over. A rename replaces the directory entry, so a symlink
 // at path is replaced rather than written through. A new file gets the mode
 // the umask allows, as os.Create would give it; an existing regular file
 // keeps its own, so a report someone made private stays private.
-func replaceFile(path string, write func(io.Writer) error) error {
+func Replace(path string, write func(io.Writer) error) error {
 	root, name, err := openTarget(path)
 	if err != nil {
 		return err
@@ -112,11 +114,11 @@ func replaceFile(path string, write func(io.Writer) error) error {
 	return nil
 }
 
-// openForAppend opens path to append to, creating it and its directory as
+// OpenForAppend opens path to append to, creating it and its directory as
 // needed, and returns its size before the append. With confine, the path is
 // resolved as openTarget resolves it, so a link leading out of the current
 // directory is refused; without it, the path is used as given.
-func openForAppend(path string, confine bool) (*os.File, int64, error) {
+func OpenForAppend(path string, confine bool) (*os.File, int64, error) {
 	if !confine {
 		if dir := filepath.Dir(path); dir != "." {
 			if err := os.MkdirAll(dir, 0o755); err != nil {

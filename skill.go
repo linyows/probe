@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"io"
 	"path/filepath"
+
+	"github.com/linyows/probe/safefile"
 )
 
 // skill is the agent skill in skills/probe/SKILL.md. It lives there so that
@@ -28,7 +30,7 @@ func Skill() string {
 // upgrade brings the skill up to date.
 //
 // The default directory is inside the project, which the user may have
-// checked out from anywhere, so the file is written through replaceFile: a
+// checked out from anywhere, so the file is written through safefile.Replace: a
 // symlink at SKILL.md, or at .claude or another directory on the way, cannot
 // redirect it to a file elsewhere.
 func InstallSkill(dir string) (string, error) {
@@ -36,7 +38,7 @@ func InstallSkill(dir string) (string, error) {
 		dir = DefaultSkillDir
 	}
 	path := filepath.Join(dir, "SKILL.md")
-	err := replaceFile(path, func(w io.Writer) error {
+	err := safefile.Replace(path, func(w io.Writer) error {
 		_, err := io.WriteString(w, skill)
 		return err
 	})

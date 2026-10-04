@@ -1,4 +1,5 @@
-package probe
+// Package jsonutil decodes and compares the JSON values that actions return.
+package jsonutil
 
 import (
 	"encoding/json"
@@ -6,26 +7,22 @@ import (
 	"strings"
 )
 
-// mustMarshalJSON attempts to unmarshal a JSON string into either a
-// map[string]any (object input) or []any (array input). On failure it
-// returns a map[string]any with an error_message instead of panicking
-// so callers can surface the parse error.
-//
-// (The "Marshal" in the name is a legacy misnomer: this is an Unmarshal
-// helper. Renaming is intentionally left for a follow-up to keep this
-// change focused on the array-parsing fix.)
+// Decode unmarshals a JSON string into either a map[string]any (object
+// input) or []any (array input). On failure it returns a map[string]any
+// with an error_message instead of an error, so callers can surface the
+// parse error in place of the data.
 //
 // Example:
 //
-//	result := mustMarshalJSON(`{"name": "John"}`)
+//	result := Decode(`{"name": "John"}`)
 //	// result: map[string]any{"name": "John"}
 //
-//	result := mustMarshalJSON(`[{"id": 1}, {"id": 2}]`)
+//	result := Decode(`[{"id": 1}, {"id": 2}]`)
 //	// result: []any{map[string]any{"id": float64(1)}, map[string]any{"id": float64(2)}}
 //
-//	result := mustMarshalJSON(`invalid json`)
+//	result := Decode(`invalid json`)
 //	// result: map[string]any{"error_message": "mustMarshalJSON error: ..."}
-func mustMarshalJSON(st string) any {
+func Decode(st string) any {
 	// Pick the target type from the first non-space byte so callers
 	// that handed us an array body don't get their data replaced by
 	// the unmarshal error from the (object-only) default branch.
@@ -49,16 +46,16 @@ func mustMarshalJSON(st string) any {
 	return obj
 }
 
-// isJSON checks if a string appears to be JSON by examining its first and last characters.
+// LooksLikeJSON checks if a string appears to be JSON by examining its first and last characters.
 // This is a simple heuristic check and does not validate actual JSON syntax.
 //
 // Example:
 //
-//	isJSON(`{"key": "value"}`)  // true
-//	isJSON(`["item1", "item2"]`) // true
-//	isJSON(`{key: value}`)       // true (note: this is actually invalid JSON but has JSON-like brackets)
-//	isJSON(`hello world`)        // false
-func isJSON(st string) bool {
+//	LooksLikeJSON(`{"key": "value"}`)  // true
+//	LooksLikeJSON(`["item1", "item2"]`) // true
+//	LooksLikeJSON(`{key: value}`)       // true (note: this is actually invalid JSON but has JSON-like brackets)
+//	LooksLikeJSON(`hello world`)        // false
+func LooksLikeJSON(st string) bool {
 	trimmed := strings.TrimSpace(st)
 	if len(trimmed) < 2 {
 		return false

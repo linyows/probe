@@ -1,4 +1,4 @@
-package probe
+package procgroup
 
 import "golang.org/x/sys/unix"
 

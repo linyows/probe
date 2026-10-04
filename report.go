@@ -6,6 +6,10 @@ import (
 	"io"
 	"strings"
 	"time"
+
+	"github.com/linyows/probe/mask"
+
+	"github.com/linyows/probe/safefile"
 )
 
 // ReportFormat names a report file format.
@@ -291,7 +295,7 @@ func buildStepReport(sr StepResult) StepReport {
 // it is rendered, because JSON and XML escape quotes, backslashes and
 // ampersands, and a secret containing one would no longer match in the
 // rendered file.
-func (r *Report) Mask(m *Masker) {
+func (r *Report) Mask(m *mask.Masker) {
 	r.Name = m.String(r.Name)
 	r.Description = m.String(r.Description)
 	for i := range r.Jobs {
@@ -376,9 +380,9 @@ func (r *Report) Write(t ReportTarget) error {
 		return fmt.Errorf("unknown report format: %s", t.Format)
 	}
 
-	// replaceFile keeps a symlink in the current directory, at the file or
+	// safefile.Replace keeps a symlink in the current directory, at the file or
 	// any directory on the way, from redirecting the report elsewhere.
-	if err := replaceFile(t.Path, render); err != nil {
+	if err := safefile.Replace(t.Path, render); err != nil {
 		return fmt.Errorf("failed to create %s report: %w", t.Format, err)
 	}
 	return nil

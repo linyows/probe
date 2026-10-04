@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"os"
+	"path/filepath"
 	"reflect"
 	"regexp"
 	"strings"
@@ -1108,3 +1109,84 @@ func stripDurations(report string) string {
 }
 
 var durationPattern = regexp.MustCompile(`[0-9]+\.[0-9]+s`)
+
+// TestWorkflow_MasksSecrets runs a workflow end to end and checks that a
+// declared secret and a credential header stay out of the terminal output and
+// the report, while the action still receives the real values.
+func TestWorkflow_MasksSecrets(t *testing.T) {
+	runner := &recordingRunner{result: map[string]any{
+		"req": map[string]any{
+			"url":     "http://api.test/?key=sekret-key",
+			"headers": map[string]any{"authorization": "Bearer runtime-tok"},
+		},
+		"res": map[string]any{"code": 500, "body": "echo sekret-key"},
+	}}
+
+	w := &Workflow{
+		Name:    "masking",
+		Secrets: []string{"API_KEY"},
+		env:     map[string]string{"API_KEY": "sekret-key"},
+		Vars:    map[string]any{"key": "{{API_KEY}}"},
+		Jobs: []Job{{
+			Name: "job",
+			Steps: []*Step{{
+				Name: "call {{vars.key}}",
+				Uses: "http",
+				With: map[string]any{
+					"url":     "http://api.test/?key={{vars.key}}",
+					"headers": map[string]any{"authorization": "Bearer runtime-tok"},
+				},
+				Test:         "res.code == 200",
+				Echo:         "body was {{res.body}}",
+				actionRunner: runner,
+			}},
+		}},
+		printer: newBufferPrinter(),
+	}
+	w.printer.verbose = true
+
+	path := filepath.Join(t.TempDir(), "report.json")
+	if err := w.Start(Config{Verbose: true, Reports: []ReportTarget{{Format: ReportJSON, Path: path}}}); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+
+	if got := runner.with["url"]; got != "http://api.test/?key=sekret-key" {
+		t.Errorf("the action should receive the real value, got %v", got)
+	}
+	if runner.opts.Masker == nil {
+		t.Error("the action should be given the masker for its log records")
+	}
+
+	report, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := w.printer.outWriter.(*bytes.Buffer).String() +
+		w.printer.errWriter.(*bytes.Buffer).String() +
+		string(report)
+
+	for _, leak := range []string{"sekret-key", "runtime-tok"} {
+		if strings.Contains(out, leak) {
+			t.Errorf("%q leaked:\n%s", leak, out)
+		}
+	}
+	if !strings.Contains(out, "<secret:API_KEY>") {
+		t.Errorf("expected the secret's marker in the output:\n%s", out)
+	}
+}
+
+// recordingRunner returns a fixed result and keeps what it was called with.
+type recordingRunner struct {
+	mu     sync.Mutex
+	result map[string]any
+	with   map[string]any
+	opts   RunOptions
+}
+
+func (r *recordingRunner) RunActions(name string, with map[string]any, opts RunOptions) (map[string]any, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.with = with
+	r.opts = opts
+	return r.result, nil
+}

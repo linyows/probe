@@ -1,4 +1,4 @@
-package probe
+package jsonutil
 
 import (
 	"encoding/json"
@@ -9,15 +9,15 @@ import (
 	"github.com/linyows/probe/mapping"
 )
 
-// MatchJSON compares two `map[string]any` objects strictly.
+// Match compares two `map[string]any` objects strictly.
 // All fields in `src` and `target` must match, including structure and values.
-func MatchJSON(src, target map[string]any) bool {
+func Match(src, target map[string]any) bool {
 	var diffs []string
 	return deepMatch(src, target, &diffs, "")
 }
 
-// DiffJSON compares two `map[string]any` objects strictly and collects differences.
-func DiffJSON(src, target map[string]any) string {
+// Diff compares two `map[string]any` objects strictly and collects differences.
+func Diff(src, target map[string]any) string {
 	var diffs []string
 	if match := deepMatch(src, target, &diffs, ""); match {
 		return "No diff"
@@ -140,8 +140,8 @@ func deepMatch(src, target any, diffs *[]string, path string) bool {
 	}
 }
 
-// ParseJSON parses a JSON string into a map[string]any or []any.
-func ParseJSON(s string) (any, error) {
+// Parse parses a JSON string into a map[string]any or []any.
+func Parse(s string) (any, error) {
 	s = strings.TrimSpace(s)
 	if len(s) == 0 {
 		return nil, fmt.Errorf("parse_json: empty string")

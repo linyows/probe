@@ -1,4 +1,4 @@
-package probe
+package procgroup
 
 import (
 	"os"
@@ -39,78 +39,14 @@ func waitGroupGone(pid int) bool {
 	return true
 }
 
-func backgroundResult(pid int, log string) map[string]any {
-	return map[string]any{
-		"req": map[string]any{"cmd": "sleep 60", "background": true},
-		"res": map[string]any{"code": int64(-1), "pid": int64(pid), "log": log},
-	}
-}
-
-func TestBackgroundProcsTrack(t *testing.T) {
-	tests := []struct {
-		name string
-		uses string
-		ret  map[string]any
-		want []backgroundProc
-	}{
-		{
-			name: "background shell step",
-			uses: "shell",
-			ret:  backgroundResult(123, "/tmp/a.log"),
-			want: []backgroundProc{{pid: 123, log: "/tmp/a.log"}},
-		},
-		{
-			name: "foreground shell step",
-			uses: "shell",
-			ret: map[string]any{
-				"req": map[string]any{"cmd": "true", "background": false},
-				"res": map[string]any{"code": int64(0), "pid": int64(123)},
-			},
-		},
-		{
-			name: "other action",
-			uses: "http",
-			ret:  backgroundResult(123, "/tmp/a.log"),
-		},
-		{
-			name: "no pid",
-			uses: "shell",
-			ret: map[string]any{
-				"req": map[string]any{"background": true},
-				"res": map[string]any{},
-			},
-		},
-		{
-			name: "empty result",
-			uses: "shell",
-			ret:  nil,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			b := newBackgroundProcs()
-			b.track(tt.uses, tt.ret)
-			if len(b.procs) != len(tt.want) {
-				t.Fatalf("procs = %v, want %v", b.procs, tt.want)
-			}
-			for i := range tt.want {
-				if b.procs[i] != tt.want[i] {
-					t.Errorf("procs[%d] = %v, want %v", i, b.procs[i], tt.want[i])
-				}
-			}
-		})
-	}
-}
-
-func TestBackgroundProcsNil(t *testing.T) {
+func TestTrackerNil(t *testing.T) {
 	// A JobContext built without a tracker must not panic.
-	var b *backgroundProcs
-	b.track("shell", backgroundResult(123, ""))
-	b.stop()
+	var b *Tracker
+	b.Track(123, "")
+	b.Stop()
 }
 
-func TestBackgroundProcsStop(t *testing.T) {
+func TestTrackerStop(t *testing.T) {
 	dir := t.TempDir()
 	log := filepath.Join(dir, "probe-shell-action.1.log")
 	if err := os.WriteFile(log, []byte("output\n"), 0o600); err != nil {
@@ -121,9 +57,9 @@ func TestBackgroundProcsStop(t *testing.T) {
 	// have to go.
 	pid := startGroup(t, "sleep 60 & wait")
 
-	b := newBackgroundProcs()
-	b.track("shell", backgroundResult(pid, log))
-	b.stop()
+	b := NewTracker()
+	b.Track(pid, log)
+	b.Stop()
 
 	if !waitGroupGone(pid) {
 		t.Errorf("process group %d is still running", pid)
@@ -136,7 +72,7 @@ func TestBackgroundProcsStop(t *testing.T) {
 	}
 }
 
-func TestBackgroundProcsStopIgnoringTerm(t *testing.T) {
+func TestTrackerStopIgnoringTerm(t *testing.T) {
 	if testing.Short() {
 		t.Skip("waits for the grace period")
 	}
@@ -144,33 +80,33 @@ func TestBackgroundProcsStopIgnoringTerm(t *testing.T) {
 	// Give the shell time to install the trap.
 	time.Sleep(200 * time.Millisecond)
 
-	b := newBackgroundProcs()
-	b.track("shell", backgroundResult(pid, ""))
+	b := NewTracker()
+	b.Track(pid, "")
 
 	start := time.Now()
-	b.stop()
+	b.Stop()
 	elapsed := time.Since(start)
 
 	if !waitGroupGone(pid) {
 		t.Errorf("process group %d survived SIGKILL", pid)
 	}
-	if elapsed < backgroundStopGrace {
-		t.Errorf("stopped after %v, want SIGKILL only after the %v grace", elapsed, backgroundStopGrace)
+	if elapsed < StopGrace {
+		t.Errorf("stopped after %v, want SIGKILL only after the %v grace", elapsed, StopGrace)
 	}
 }
 
-func TestBackgroundProcsStopExited(t *testing.T) {
+func TestTrackerStopExited(t *testing.T) {
 	// A process that already finished is skipped without waiting.
 	pid := startGroup(t, "true")
 	if !waitGroupGone(pid) {
 		t.Fatalf("process group %d did not exit", pid)
 	}
 
-	b := newBackgroundProcs()
-	b.track("shell", backgroundResult(pid, ""))
+	b := NewTracker()
+	b.Track(pid, "")
 
 	start := time.Now()
-	b.stop()
+	b.Stop()
 	if elapsed := time.Since(start); elapsed > time.Second {
 		t.Errorf("stop took %v for a process that had exited", elapsed)
 	}
@@ -195,7 +131,7 @@ func TestProcessStartTime(t *testing.T) {
 	}
 }
 
-func TestBackgroundProcsStopReusedPid(t *testing.T) {
+func TestTrackerStopReusedPid(t *testing.T) {
 	// A process with the recorded pid that started at another time is not the
 	// one the step started, and must be left alone.
 	pid := startGroup(t, "sleep 60")
@@ -204,16 +140,16 @@ func TestBackgroundProcsStopReusedPid(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	b := newBackgroundProcs()
-	b.procs = []backgroundProc{{pid: pid, started: started + 1}}
-	b.stop()
+	b := NewTracker()
+	b.procs = []proc{{pid: pid, started: started + 1}}
+	b.Stop()
 
 	if !groupAlive(pid) {
 		t.Errorf("process group %d was signalled although its leader is not the recorded one", pid)
 	}
 }
 
-func TestBackgroundProcsStopLeaderGone(t *testing.T) {
+func TestTrackerStopLeaderGone(t *testing.T) {
 	// The shell exits at once and leaves sleep running in its group. The pid
 	// cannot have been reused while the group lives, so the group is stopped.
 	pid := startGroup(t, "sleep 60 & exit 0")
@@ -228,23 +164,23 @@ func TestBackgroundProcsStopLeaderGone(t *testing.T) {
 		t.Fatalf("process group %d is gone before the test", pid)
 	}
 
-	b := newBackgroundProcs()
-	b.track("shell", backgroundResult(pid, ""))
-	b.stop()
+	b := NewTracker()
+	b.Track(pid, "")
+	b.Stop()
 
 	if !waitGroupGone(pid) {
 		t.Errorf("process group %d is still running", pid)
 	}
 }
 
-func TestBackgroundProcsTrackAfterStop(t *testing.T) {
+func TestTrackerTrackAfterStop(t *testing.T) {
 	// A step that timed out can report its process after the workflow has
 	// stopped the others; it is stopped right away.
-	b := newBackgroundProcs()
-	b.stop()
+	b := NewTracker()
+	b.Stop()
 
 	pid := startGroup(t, "sleep 60")
-	b.track("shell", backgroundResult(pid, ""))
+	b.Track(pid, "")
 
 	if !waitGroupGone(pid) {
 		t.Errorf("process group %d reported after stop is still running", pid)
@@ -254,69 +190,21 @@ func TestBackgroundProcsTrackAfterStop(t *testing.T) {
 	}
 }
 
-func TestBackgroundProcsStopWaitsForPending(t *testing.T) {
+func TestTrackerStopWaitsForPending(t *testing.T) {
 	// An action still running when the workflow ends gets a moment to report
 	// the process it started.
-	b := newBackgroundProcs()
-	done := b.begin("shell")
+	b := NewTracker()
+	done := b.Begin()
 	pid := startGroup(t, "sleep 60")
 	go func() {
 		time.Sleep(200 * time.Millisecond)
-		b.track("shell", backgroundResult(pid, ""))
+		b.Track(pid, "")
 		done()
 	}()
 
-	b.stop()
+	b.Stop()
 
 	if !waitGroupGone(pid) {
 		t.Errorf("process group %d started by a pending action is still running", pid)
-	}
-}
-
-func TestBackgroundProcsBeginOtherAction(t *testing.T) {
-	// Only shell actions start background processes, so nothing else is
-	// waited for.
-	b := newBackgroundProcs()
-	done := b.begin("http")
-	defer done()
-	if n := b.pendingCount(); n != 0 {
-		t.Errorf("pending = %d, want 0", n)
-	}
-}
-
-// lateBackgroundRunner starts a process the way a background shell step does,
-// but only after delay, so that the step has already timed out.
-type lateBackgroundRunner struct {
-	t     *testing.T
-	delay time.Duration
-	pid   chan int
-}
-
-func (r *lateBackgroundRunner) RunActions(name string, with map[string]any, opts RunOptions) (map[string]any, error) {
-	time.Sleep(r.delay)
-	pid := startGroup(r.t, "sleep 60")
-	r.pid <- pid
-	return backgroundResult(pid, ""), nil
-}
-
-func TestStepTimeoutStillTracksBackground(t *testing.T) {
-	step := &Step{
-		Uses:    "shell",
-		Timeout: Interval{Duration: 100 * time.Millisecond},
-		Expr:    &Expr{},
-	}
-	runner := &lateBackgroundRunner{t: t, delay: 300 * time.Millisecond, pid: make(chan int, 1)}
-	jCtx := &JobContext{background: newBackgroundProcs()}
-
-	if _, err := step.executeSingleAction(runner, map[string]any{}, jCtx, false); err == nil {
-		t.Fatal("expected the step to time out")
-	}
-
-	// The workflow ends while the action is still running.
-	jCtx.background.stop()
-
-	pid := <-runner.pid
-	if !waitGroupGone(pid) {
-		t.Errorf("process group %d started after the step timed out is still running", pid)
 	}
 }

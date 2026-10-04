@@ -11,6 +11,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/linyows/probe/mask"
 )
 
 func TestParseReportTargets(t *testing.T) {
@@ -696,4 +698,86 @@ func TestReport_WriteRefusesLinkedDirectory(t *testing.T) {
 		t.Errorf("error = %v, want the report refused", err)
 	}
 	unchanged(t, victim)
+}
+
+// checkout makes a working directory with a file outside it and a symlink
+// "out" inside it pointing at the outside directory, as a checked-out
+// project could carry. It returns the outside file.
+func checkout(t *testing.T) (outsideFile string) {
+	t.Helper()
+	base := t.TempDir()
+	outside := filepath.Join(base, "outside")
+	project := filepath.Join(base, "project")
+	for _, d := range []string{outside, project} {
+		if err := os.Mkdir(d, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	outsideFile = filepath.Join(outside, "victim")
+	if err := os.WriteFile(outsideFile, []byte("keep me"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, filepath.Join(project, "out")); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+	t.Chdir(project)
+	return outsideFile
+}
+
+func unchanged(t *testing.T, path string) {
+	t.Helper()
+	if data, _ := os.ReadFile(path); string(data) != "keep me" {
+		t.Errorf("%s was changed to %.40q", path, data)
+	}
+}
+
+// umaskMode is the mode os.Create gives a new file under the current umask.
+func umaskMode(t *testing.T) os.FileMode {
+	t.Helper()
+	ref := filepath.Join(t.TempDir(), "ref")
+	f, err := os.Create(ref)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = f.Close()
+	info, err := os.Stat(ref)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return info.Mode().Perm()
+}
+
+func TestReport_Mask(t *testing.T) {
+	m := mask.New([]string{"S"}, map[string]string{"S": "sekret"})
+	r := &Report{
+		Name:        "run sekret",
+		Description: "desc sekret",
+		Jobs: []JobReport{{
+			Name: "job sekret",
+			Steps: []StepReport{{
+				Name: "step sekret",
+				Test: `res.body == "sekret"`,
+				Echo: "echo sekret",
+				Failure: &FailureReport{
+					Kind:     FailureAssertion,
+					Message:  "msg sekret",
+					Request:  map[string]any{"authorization": "Bearer z", "q": "sekret"},
+					Response: map[string]any{"body": "sekret"},
+				},
+			}},
+		}},
+	}
+
+	r.Mask(m)
+
+	var buf bytes.Buffer
+	if err := r.WriteJSON(&buf); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(buf.String(), "sekret") || strings.Contains(buf.String(), "Bearer z") {
+		t.Errorf("report still shows a secret:\n%s", buf.String())
+	}
+	if got := strings.Count(buf.String(), "<secret:S>"); got != 9 {
+		t.Errorf("masked %d values, want 9:\n%s", got, buf.String())
+	}
 }

@@ -1,19 +1,16 @@
-package probe
+package mask
 
 import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"os"
-	"path/filepath"
-	"reflect"
 	"strconv"
 	"strings"
 	"sync"
 	"testing"
 )
 
-func TestNewMasker(t *testing.T) {
+func TestNew(t *testing.T) {
 	env := map[string]string{
 		"TOKEN":   "tok-123",
 		"LONG":    "tok-123-and-more",
@@ -22,7 +19,7 @@ func TestNewMasker(t *testing.T) {
 		"PASS":    "hunter2",
 		"PASSDUP": "hunter2",
 	}
-	m := NewMasker([]string{"TOKEN", "LONG", "EMPTY", "MISSING", "PASS", "PASSDUP"}, env)
+	m := New([]string{"TOKEN", "LONG", "EMPTY", "MISSING", "PASS", "PASSDUP"}, env)
 
 	tests := []struct {
 		in, want string
@@ -52,7 +49,7 @@ func TestMasker_NilAndEmpty(t *testing.T) {
 		t.Error("a nil masker should return the writer unchanged")
 	}
 
-	empty := NewMasker(nil, nil)
+	empty := New(nil, nil)
 	if got := empty.String("anything"); got != "anything" {
 		t.Errorf("empty String = %q", got)
 	}
@@ -90,7 +87,7 @@ func TestEscapedForms(t *testing.T) {
 
 func TestMasker_StringHidesEscapedForms(t *testing.T) {
 	secret := `s3cr"et\value`
-	m := NewMasker([]string{"S"}, map[string]string{"S": secret})
+	m := New([]string{"S"}, map[string]string{"S": secret})
 
 	inputs := []string{
 		fmt.Sprintf("%q", secret),
@@ -106,7 +103,7 @@ func TestMasker_StringHidesEscapedForms(t *testing.T) {
 }
 
 func TestMasker_Map(t *testing.T) {
-	m := NewMasker([]string{"S"}, map[string]string{"S": "sekret"})
+	m := New([]string{"S"}, map[string]string{"S": "sekret"})
 	original := map[string]any{
 		"url": "http://x/?k=sekret",
 		"headers": map[string]any{
@@ -158,7 +155,7 @@ func TestMasker_Map(t *testing.T) {
 }
 
 func TestMasker_Learn(t *testing.T) {
-	m := NewMasker(nil, nil)
+	m := New(nil, nil)
 	m.Learn(map[string]any{
 		"url": "http://x",
 		"headers": map[string]any{
@@ -182,7 +179,7 @@ func TestMasker_Learn(t *testing.T) {
 	}
 
 	// A declared secret keeps its label even when it is also learned.
-	d := NewMasker([]string{"T"}, map[string]string{"T": "Bearer tok"})
+	d := New([]string{"T"}, map[string]string{"T": "Bearer tok"})
 	d.Learn(map[string]any{"authorization": "Bearer tok"})
 	if got := d.String("Bearer tok"); got != "<secret:T>" {
 		t.Errorf("declared label should win, got %q", got)
@@ -190,7 +187,7 @@ func TestMasker_Learn(t *testing.T) {
 }
 
 func TestMasker_ConcurrentLearnAndString(t *testing.T) {
-	m := NewMasker(nil, nil)
+	m := New(nil, nil)
 	var wg sync.WaitGroup
 	for i := 0; i < 20; i++ {
 		wg.Add(2)
@@ -213,7 +210,7 @@ func TestMasker_ConcurrentLearnAndString(t *testing.T) {
 }
 
 func TestMasker_Writer(t *testing.T) {
-	m := NewMasker([]string{"S"}, map[string]string{"S": "sekret"})
+	m := New([]string{"S"}, map[string]string{"S": "sekret"})
 	var buf bytes.Buffer
 	w := m.Writer(&buf)
 
@@ -231,169 +228,5 @@ func TestMasker_Writer(t *testing.T) {
 	_, _ = w.Write([]byte("late-cookie\n"))
 	if !strings.HasSuffix(buf.String(), "<redacted>\n") {
 		t.Errorf("learned value not hidden: %q", buf.String())
-	}
-}
-
-func TestPrinter_MasksOutput(t *testing.T) {
-	p := newBufferPrinter()
-	p.SetMasker(NewMasker([]string{"S"}, map[string]string{"S": `pa"ss`}))
-
-	p.Fprint(p.outWriter, "a pa\"ss b")
-	p.Fprintf(p.outWriter, " %s", `pa"ss`)
-	p.Fprintln(p.outWriter, " pa\"ss")
-	p.PrintError("failed with %q", `pa"ss`)
-
-	failure := p.generateTestFailure("t", false,
-		map[string]any{"headers": map[string]any{"authorization": "Bearer x"}, "body": `pa"ss`},
-		map[string]any{"body": `pa"ss`})
-	p.Fprint(p.outWriter, failure)
-
-	p.verbose = true
-	p.PrintTestResult(false, "t", StepContext{
-		Req: map[string]any{"cookie": "c=1"},
-		Res: map[string]any{"body": `pa"ss`},
-	})
-
-	out := p.outWriter.(*bytes.Buffer).String() + p.errWriter.(*bytes.Buffer).String()
-	if strings.Contains(out, "pa") {
-		t.Errorf("output still shows the secret:\n%s", out)
-	}
-	if strings.Contains(out, "Bearer x") || strings.Contains(out, "c=1") {
-		t.Errorf("output still shows a credential header:\n%s", out)
-	}
-	if !strings.Contains(out, "<secret:S>") || !strings.Contains(out, redactedValue) {
-		t.Errorf("expected masked markers in:\n%s", out)
-	}
-}
-
-func TestReport_Mask(t *testing.T) {
-	m := NewMasker([]string{"S"}, map[string]string{"S": "sekret"})
-	r := &Report{
-		Name:        "run sekret",
-		Description: "desc sekret",
-		Jobs: []JobReport{{
-			Name: "job sekret",
-			Steps: []StepReport{{
-				Name: "step sekret",
-				Test: `res.body == "sekret"`,
-				Echo: "echo sekret",
-				Failure: &FailureReport{
-					Kind:     FailureAssertion,
-					Message:  "msg sekret",
-					Request:  map[string]any{"authorization": "Bearer z", "q": "sekret"},
-					Response: map[string]any{"body": "sekret"},
-				},
-			}},
-		}},
-	}
-
-	r.Mask(m)
-
-	var buf bytes.Buffer
-	if err := r.WriteJSON(&buf); err != nil {
-		t.Fatal(err)
-	}
-	if strings.Contains(buf.String(), "sekret") || strings.Contains(buf.String(), "Bearer z") {
-		t.Errorf("report still shows a secret:\n%s", buf.String())
-	}
-	if got := strings.Count(buf.String(), "<secret:S>"); got != 9 {
-		t.Errorf("masked %d values, want 9:\n%s", got, buf.String())
-	}
-}
-
-// TestWorkflow_MasksSecrets runs a workflow end to end and checks that a
-// declared secret and a credential header stay out of the terminal output and
-// the report, while the action still receives the real values.
-func TestWorkflow_MasksSecrets(t *testing.T) {
-	runner := &recordingRunner{result: map[string]any{
-		"req": map[string]any{
-			"url":     "http://api.test/?key=sekret-key",
-			"headers": map[string]any{"authorization": "Bearer runtime-tok"},
-		},
-		"res": map[string]any{"code": 500, "body": "echo sekret-key"},
-	}}
-
-	w := &Workflow{
-		Name:    "masking",
-		Secrets: []string{"API_KEY"},
-		env:     map[string]string{"API_KEY": "sekret-key"},
-		Vars:    map[string]any{"key": "{{API_KEY}}"},
-		Jobs: []Job{{
-			Name: "job",
-			Steps: []*Step{{
-				Name: "call {{vars.key}}",
-				Uses: "http",
-				With: map[string]any{
-					"url":     "http://api.test/?key={{vars.key}}",
-					"headers": map[string]any{"authorization": "Bearer runtime-tok"},
-				},
-				Test:         "res.code == 200",
-				Echo:         "body was {{res.body}}",
-				actionRunner: runner,
-			}},
-		}},
-		printer: newBufferPrinter(),
-	}
-	w.printer.verbose = true
-
-	path := filepath.Join(t.TempDir(), "report.json")
-	if err := w.Start(Config{Verbose: true, Reports: []ReportTarget{{Format: ReportJSON, Path: path}}}); err != nil {
-		t.Fatalf("Start: %v", err)
-	}
-
-	if got := runner.with["url"]; got != "http://api.test/?key=sekret-key" {
-		t.Errorf("the action should receive the real value, got %v", got)
-	}
-	if runner.opts.Masker == nil {
-		t.Error("the action should be given the masker for its log records")
-	}
-
-	report, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	out := w.printer.outWriter.(*bytes.Buffer).String() +
-		w.printer.errWriter.(*bytes.Buffer).String() +
-		string(report)
-
-	for _, leak := range []string{"sekret-key", "runtime-tok"} {
-		if strings.Contains(out, leak) {
-			t.Errorf("%q leaked:\n%s", leak, out)
-		}
-	}
-	if !strings.Contains(out, "<secret:API_KEY>") {
-		t.Errorf("expected the secret's marker in the output:\n%s", out)
-	}
-}
-
-// recordingRunner returns a fixed result and keeps what it was called with.
-type recordingRunner struct {
-	mu     sync.Mutex
-	result map[string]any
-	with   map[string]any
-	opts   RunOptions
-}
-
-func (r *recordingRunner) RunActions(name string, with map[string]any, opts RunOptions) (map[string]any, error) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	r.with = with
-	r.opts = opts
-	return r.result, nil
-}
-
-func TestProbe_LoadSecrets(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "w.yml")
-	yml := "name: s\nsecrets:\n- API_TOKEN\n- DB_PASSWORD\njobs:\n- name: j\n  steps:\n  - name: s\n    uses: hello\n"
-	if err := os.WriteFile(path, []byte(yml), 0o600); err != nil {
-		t.Fatal(err)
-	}
-
-	p := New(path, false)
-	if err := p.Load(); err != nil {
-		t.Fatal(err)
-	}
-	if want := []string{"API_TOKEN", "DB_PASSWORD"}; !reflect.DeepEqual(p.workflow.Secrets, want) {
-		t.Errorf("Secrets = %v, want %v", p.workflow.Secrets, want)
 	}
 }

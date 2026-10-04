@@ -8,6 +8,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/linyows/probe/truncate"
+
+	"github.com/linyows/probe/jsonutil"
+
 	ex "github.com/expr-lang/expr"
 	"github.com/expr-lang/expr/vm"
 )
@@ -60,7 +64,7 @@ func (e *Expr) Options(env any) []ex.Option {
 				if !ok1 || !ok2 {
 					return false, fmt.Errorf("match_json parameters must be objects")
 				}
-				return MatchJSON(src, target), nil
+				return jsonutil.Match(src, target), nil
 			},
 		),
 		ex.Function(
@@ -74,7 +78,7 @@ func (e *Expr) Options(env any) []ex.Option {
 				if !ok1 || !ok2 {
 					return nil, fmt.Errorf("diff_json parameters must be objects")
 				}
-				return DiffJSON(src, target), nil
+				return jsonutil.Diff(src, target), nil
 			},
 		),
 		ex.Function(
@@ -211,7 +215,7 @@ func (e *Expr) Options(env any) []ex.Option {
 				if len(s) > maxStringLength {
 					return nil, fmt.Errorf("parse_json parameter exceeds maximum length (%d chars)", maxStringLength)
 				}
-				return ParseJSON(s)
+				return jsonutil.Parse(s)
 			},
 		),
 		ex.Function(
@@ -372,7 +376,7 @@ func (e *Expr) EvalTemplate(input string, env any) (string, error) {
 		// Convert the output to string with size limit
 		outputStr := fmt.Sprintf("%v", output)
 		if len(outputStr) > maxStringLength {
-			outputStr = outputStr[:maxStringLength] + GetTruncationMessage()
+			outputStr = outputStr[:maxStringLength] + truncate.Message()
 		}
 		b.WriteString(outputStr)
 	}

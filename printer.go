@@ -9,6 +9,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/linyows/probe/mask"
+
 	"github.com/briandowns/spinner"
 	"github.com/fatih/color"
 )
@@ -48,53 +50,6 @@ func colorNoTest() *color.Color {
 	return color.RGB(0, 102, 204)
 }
 
-// String truncation utilities
-
-const (
-	// MaxLogStringLength is the maximum length for log output to prevent log bloat
-	MaxLogStringLength = 200
-	// MaxStringLength is the maximum length for general string processing
-	MaxStringLength = 1000000
-)
-
-// GetTruncationMessage returns a colored truncation message
-func GetTruncationMessage() string {
-	return "... [" + colorWarning().Sprintf("⚠︎ probe truncated") + "]"
-}
-
-// TruncateString truncates a string if it exceeds the maximum length
-func TruncateString(s string, maxLen int) string {
-	if len(s) <= maxLen {
-		return s
-	}
-	return s[:maxLen] + GetTruncationMessage()
-}
-
-// TruncateMapStringString truncates long values in map[string]string for logging
-func TruncateMapStringString(params map[string]string, maxLen int) map[string]string {
-	truncated := make(map[string]string)
-	for key, value := range params {
-		truncated[key] = TruncateString(value, maxLen)
-	}
-	return truncated
-}
-
-// TruncateMapStringAny truncates long values in map[string]any for logging
-func TruncateMapStringAny(params map[string]any, maxLen int) map[string]any {
-	truncated := make(map[string]any)
-	for key, value := range params {
-		switch v := value.(type) {
-		case string:
-			truncated[key] = TruncateString(v, maxLen)
-		default:
-			// For non-string values, convert to string first, then truncate
-			str := fmt.Sprintf("%v", v)
-			truncated[key] = TruncateString(str, maxLen)
-		}
-	}
-	return truncated
-}
-
 // Icon constants
 const (
 	IconSuccess  = "✓ "
@@ -132,17 +87,17 @@ type Printer struct {
 	writeMu sync.Mutex
 	// masker hides the workflow's secrets in everything written through the
 	// printer. Nil hides nothing.
-	masker *Masker
+	masker *mask.Masker
 }
 
 // SetMasker installs the masker applied to everything the printer writes.
-func (p *Printer) SetMasker(m *Masker) {
+func (p *Printer) SetMasker(m *mask.Masker) {
 	p.masker = m
 }
 
 // Masker returns the masker the printer applies. It is nil when none was
 // installed, and on a nil Printer, which some contexts run without.
-func (p *Printer) Masker() *Masker {
+func (p *Printer) Masker() *mask.Masker {
 	if p == nil {
 		return nil
 	}

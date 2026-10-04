@@ -4,6 +4,8 @@ import (
 	"errors"
 	"fmt"
 	"os"
+
+	"github.com/linyows/probe/safefile"
 )
 
 // maxStepSummaryBytes is the most GitHub accepts in one step's job summary.
@@ -37,7 +39,7 @@ func (r *Report) writeGitHubSummary(path string) error {
 		return ErrNoStepSummary
 	}
 
-	f, existing, err := openForAppend(path, confine)
+	f, existing, err := safefile.OpenForAppend(path, confine)
 	if err != nil {
 		return fmt.Errorf("failed to open the job summary %s: %w", path, err)
 	}

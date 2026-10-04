@@ -1,6 +1,10 @@
 package probe
 
-import "sync"
+import (
+	"sync"
+
+	"github.com/linyows/probe/procgroup"
+)
 
 // ResponseTime provides response time information for expressions
 type ResponseTime struct {
@@ -68,7 +72,7 @@ type JobContext struct {
 	Outputs *Outputs `expr:"outputs"`
 	// Processes that steps left running in the background, stopped once the
 	// workflow is over
-	background *backgroundProcs
+	background *procgroup.Tracker
 }
 
 // SetFailed marks the job context as failed
