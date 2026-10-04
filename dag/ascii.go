@@ -1,7 +1,6 @@
-package probe
+package dag
 
 import (
-	"path/filepath"
 	"slices"
 	"strings"
 )
@@ -49,8 +48,8 @@ const (
 	fixedNodeWidth = 25
 )
 
-// DagAsciiJobNode represents a rendered job node
-type DagAsciiJobNode struct {
+// asciiNode is a job drawn as a box.
+type asciiNode struct {
 	Job         *Job
 	JobID       string
 	Level       int      // Depth in DAG (0 = root)
@@ -60,41 +59,43 @@ type DagAsciiJobNode struct {
 	HasChildren bool     // Whether this job has dependent jobs
 }
 
-// DagAsciiRenderer renders detailed workflow graphs with job nodes and steps
-type DagAsciiRenderer struct {
-	DagRendererBase
-	nodes      []*DagAsciiJobNode
+// ASCII draws a Graph as boxes of jobs and their steps, joined by lines from
+// each job to the jobs that need it.
+type ASCII struct{}
+
+// Render draws g, or returns an empty string when it has no jobs.
+func (ASCII) Render(g Graph) string {
+	return newASCIIRenderer(g).render()
+}
+
+// asciiRenderer holds the layout of one Graph while it is drawn.
+type asciiRenderer struct {
+	graph      Graph
+	nodes      []*asciiNode
 	levels     [][]int             // levels[level] = []jobIndex
-	jobIDToIdx map[string]int      // jobID -> index in workflow.Jobs
+	jobIDToIdx map[string]int      // jobID -> index in graph.Jobs
 	children   map[string][]string // jobID -> list of child jobIDs (jobs that depend on this job)
 	parents    map[string][]string // jobID -> list of parent jobIDs (jobs this job depends on)
 }
 
-// NewDagAsciiRenderer creates a new DagAsciiRenderer
-func NewDagAsciiRenderer(w *Workflow) *DagAsciiRenderer {
-	r := &DagAsciiRenderer{
-		DagRendererBase: NewDagRendererBase(w),
-		nodes:           make([]*DagAsciiJobNode, len(w.Jobs)),
-		jobIDToIdx:      make(map[string]int),
-		children:        make(map[string][]string),
-		parents:         make(map[string][]string),
+func newASCIIRenderer(g Graph) *asciiRenderer {
+	r := &asciiRenderer{
+		graph:      g,
+		nodes:      make([]*asciiNode, len(g.Jobs)),
+		jobIDToIdx: make(map[string]int),
+		children:   make(map[string][]string),
+		parents:    make(map[string][]string),
 	}
 
 	// Build job ID to index mapping
-	for i, job := range w.Jobs {
+	for i, job := range g.Jobs {
 		id := job.ID
-		if id == "" {
-			id = job.Name
-		}
 		r.jobIDToIdx[id] = i
 	}
 
 	// Build parent-child relationships
-	for _, job := range w.Jobs {
+	for _, job := range g.Jobs {
 		jobID := job.ID
-		if jobID == "" {
-			jobID = job.Name
-		}
 		for _, need := range job.Needs {
 			r.children[need] = append(r.children[need], jobID)
 			r.parents[jobID] = append(r.parents[jobID], need)
@@ -104,9 +105,9 @@ func NewDagAsciiRenderer(w *Workflow) *DagAsciiRenderer {
 	return r
 }
 
-// Render generates the detailed ASCII art graph
-func (r *DagAsciiRenderer) Render() string {
-	if len(r.workflow.Jobs) == 0 {
+// render draws the graph.
+func (r *asciiRenderer) render() string {
+	if len(r.graph.Jobs) == 0 {
 		return ""
 	}
 
@@ -131,7 +132,7 @@ func (r *DagAsciiRenderer) Render() string {
 }
 
 // calculateLevels assigns each job to a level based on dependencies (Sugiyama-style)
-func (r *DagAsciiRenderer) calculateLevels() {
+func (r *asciiRenderer) calculateLevels() {
 	jobLevels := make(map[string]int)
 
 	// Calculate level for each job
@@ -146,7 +147,7 @@ func (r *DagAsciiRenderer) calculateLevels() {
 			return 0
 		}
 
-		job := r.workflow.Jobs[idx]
+		job := r.graph.Jobs[idx]
 		if len(job.Needs) == 0 {
 			jobLevels[jobID] = 0
 			return 0
@@ -167,11 +168,8 @@ func (r *DagAsciiRenderer) calculateLevels() {
 
 	// Calculate levels for all jobs
 	maxLevel := 0
-	for _, job := range r.workflow.Jobs {
+	for _, job := range r.graph.Jobs {
 		jobID := job.ID
-		if jobID == "" {
-			jobID = job.Name
-		}
 		level := calcLevel(jobID)
 		if level > maxLevel {
 			maxLevel = level
@@ -180,11 +178,8 @@ func (r *DagAsciiRenderer) calculateLevels() {
 
 	// Group jobs by level
 	r.levels = make([][]int, maxLevel+1)
-	for i, job := range r.workflow.Jobs {
+	for i, job := range r.graph.Jobs {
 		jobID := job.ID
-		if jobID == "" {
-			jobID = job.Name
-		}
 		level := jobLevels[jobID]
 		r.levels[level] = append(r.levels[level], i)
 	}
@@ -196,11 +191,8 @@ func (r *DagAsciiRenderer) calculateLevels() {
 		withoutChildren := []int{}
 
 		for _, idx := range jobIndices {
-			job := r.workflow.Jobs[idx]
+			job := r.graph.Jobs[idx]
 			jobID := job.ID
-			if jobID == "" {
-				jobID = job.Name
-			}
 			if len(r.children[jobID]) > 0 {
 				withChildren = append(withChildren, idx)
 			} else {
@@ -212,19 +204,16 @@ func (r *DagAsciiRenderer) calculateLevels() {
 	}
 }
 
-// createNodes creates DagAsciiJobNode for each job
-func (r *DagAsciiRenderer) createNodes() {
-	for i, job := range r.workflow.Jobs {
+// createNodes creates an asciiNode for each job
+func (r *asciiRenderer) createNodes() {
+	for i, job := range r.graph.Jobs {
 		jobID := job.ID
-		if jobID == "" {
-			jobID = job.Name
-		}
 
 		// Check if this job has children (other jobs depend on it)
 		hasChildren := len(r.children[jobID]) > 0
 
-		node := &DagAsciiJobNode{
-			Job:         &r.workflow.Jobs[i],
+		node := &asciiNode{
+			Job:         &r.graph.Jobs[i],
 			JobID:       jobID,
 			Width:       fixedNodeWidth, // Use fixed width for all nodes
 			HasChildren: hasChildren,
@@ -237,13 +226,13 @@ func (r *DagAsciiRenderer) createNodes() {
 			}
 		}
 
-		node.Lines = r.renderDagAsciiJobNode(node)
+		node.Lines = r.renderNode(node)
 		r.nodes[i] = node
 	}
 }
 
-// renderDagAsciiJobNode renders a single job node
-func (r *DagAsciiRenderer) renderDagAsciiJobNode(node *DagAsciiJobNode) []string {
+// renderNode draws the box of a job.
+func (r *asciiRenderer) renderNode(node *asciiNode) []string {
 	var lines []string
 	width := node.Width
 	innerWidth := width - 2 // Width inside borders
@@ -264,12 +253,9 @@ func (r *DagAsciiRenderer) renderDagAsciiJobNode(node *DagAsciiJobNode) []string
 	// Steps
 	for _, step := range node.Job.Steps {
 		stepName := step.Name
-		if stepName == "" {
-			stepName = step.Uses
-		}
 		// Use different bullet for embedded actions
 		bullet := stepBullet
-		if step.Uses == "embedded" {
+		if step.Embedded {
 			bullet = stepBulletEmbedded
 		}
 		// Format: " ○ stepname" or " ↗ stepname" with truncation
@@ -286,62 +272,46 @@ func (r *DagAsciiRenderer) renderDagAsciiJobNode(node *DagAsciiJobNode) []string
 		lines = append(lines, nodeVertical+stepLine+nodeVertical)
 
 		// Render embedded steps if this is an embedded action
-		if step.Uses == "embedded" {
-			if pathVal, ok := step.With["path"]; ok {
-				if pathStr, ok := pathVal.(string); ok {
-					// Expand template variables in path and resolve relative to workflow directory
-					expandedPath := r.ExpandPath(pathStr)
-					resolvedPath := r.ResolvePath(expandedPath)
-					embeddedJob, err := LoadEmbeddedJob(resolvedPath)
-					if err == nil && len(embeddedJob.Steps) > 0 {
-						// Render each embedded step with tree characters
-						for i, embStep := range embeddedJob.Steps {
-							embStepName := embStep.Name
-							if embStepName == "" {
-								embStepName = embStep.Uses
-							}
-
-							// Use ├ for non-last items, └ for last item
-							var treeChar string
-							if i == len(embeddedJob.Steps)-1 {
-								treeChar = treeEnd
-							} else {
-								treeChar = treeBranch
-							}
-
-							// Format: "   ├ stepname" or "   └ stepname"
-							embPrefix := "   " + treeChar + " "
-							embPrefixWidth := runeWidth(embPrefix)
-							maxEmbStepNameWidth := innerWidth - embPrefixWidth
-							truncatedEmbStepName := truncateWithEllipsis(embStepName, maxEmbStepNameWidth)
-							embStepLine := embPrefix + truncatedEmbStepName
-
-							// Pad to inner width
-							embStepLineWidth := runeWidth(embStepLine)
-							if embStepLineWidth < innerWidth {
-								embStepLine = embStepLine + strings.Repeat(" ", innerWidth-embStepLineWidth)
-							}
-							lines = append(lines, nodeVertical+embStepLine+nodeVertical)
-						}
-
-						// Add filename at the end with dim color (aligned with tree characters)
-						filename := filepath.Base(expandedPath)
-						filePrefix := "   "
-						filePrefixWidth := runeWidth(filePrefix)
-						maxFilenameWidth := innerWidth - filePrefixWidth
-						truncatedFilename := truncateWithEllipsis(filename, maxFilenameWidth)
-						// Apply dim color
-						dimFilename := ansiDim + truncatedFilename + ansiReset
-						// Calculate padding based on non-colored text length
-						fileLine := filePrefix + dimFilename
-						actualWidth := filePrefixWidth + runeWidth(truncatedFilename)
-						if actualWidth < innerWidth {
-							fileLine = filePrefix + dimFilename + strings.Repeat(" ", innerWidth-actualWidth)
-						}
-						lines = append(lines, nodeVertical+fileLine+nodeVertical)
-					}
+		if len(step.EmbeddedSteps) > 0 {
+			// Render each embedded step with tree characters
+			for i, embStepName := range step.EmbeddedSteps {
+				// Use ├ for non-last items, └ for last item
+				var treeChar string
+				if i == len(step.EmbeddedSteps)-1 {
+					treeChar = treeEnd
+				} else {
+					treeChar = treeBranch
 				}
+
+				// Format: "   ├ stepname" or "   └ stepname"
+				embPrefix := "   " + treeChar + " "
+				embPrefixWidth := runeWidth(embPrefix)
+				maxEmbStepNameWidth := innerWidth - embPrefixWidth
+				truncatedEmbStepName := truncateWithEllipsis(embStepName, maxEmbStepNameWidth)
+				embStepLine := embPrefix + truncatedEmbStepName
+
+				// Pad to inner width
+				embStepLineWidth := runeWidth(embStepLine)
+				if embStepLineWidth < innerWidth {
+					embStepLine = embStepLine + strings.Repeat(" ", innerWidth-embStepLineWidth)
+				}
+				lines = append(lines, nodeVertical+embStepLine+nodeVertical)
 			}
+
+			// Add filename at the end with dim color (aligned with tree characters)
+			filePrefix := "   "
+			filePrefixWidth := runeWidth(filePrefix)
+			maxFilenameWidth := innerWidth - filePrefixWidth
+			truncatedFilename := truncateWithEllipsis(step.EmbeddedFile, maxFilenameWidth)
+			// Apply dim color
+			dimFilename := ansiDim + truncatedFilename + ansiReset
+			// Calculate padding based on non-colored text length
+			fileLine := filePrefix + dimFilename
+			actualWidth := filePrefixWidth + runeWidth(truncatedFilename)
+			if actualWidth < innerWidth {
+				fileLine = filePrefix + dimFilename + strings.Repeat(" ", innerWidth-actualWidth)
+			}
+			lines = append(lines, nodeVertical+fileLine+nodeVertical)
 		}
 	}
 
@@ -418,14 +388,14 @@ func flagsToChar(flags int) rune {
 }
 
 // renderLevel renders all nodes at a given level side by side
-func (r *DagAsciiRenderer) renderLevel(level int) []string {
+func (r *asciiRenderer) renderLevel(level int) []string {
 	jobIndices := r.levels[level]
 	if len(jobIndices) == 0 {
 		return nil
 	}
 
 	// Get nodes for this level
-	var levelNodes []*DagAsciiJobNode
+	var levelNodes []*asciiNode
 	for _, idx := range jobIndices {
 		levelNodes = append(levelNodes, r.nodes[idx])
 	}
@@ -476,7 +446,7 @@ func (r *DagAsciiRenderer) renderLevel(level int) []string {
 }
 
 // renderConnections renders connection lines between levels
-func (r *DagAsciiRenderer) renderConnections(fromLevel int) []string {
+func (r *asciiRenderer) renderConnections(fromLevel int) []string {
 	if fromLevel >= len(r.levels)-1 {
 		return nil
 	}
@@ -515,7 +485,7 @@ func (r *DagAsciiRenderer) renderConnections(fromLevel int) []string {
 }
 
 // buildConnectionMap builds a map of childIdx -> []parentIdx for dependencies at the given level
-func (r *DagAsciiRenderer) buildConnectionMap(parentIndices, childIndices []int) map[int][]int {
+func (r *asciiRenderer) buildConnectionMap(parentIndices, childIndices []int) map[int][]int {
 	connections := make(map[int][]int)
 	for _, childIdx := range childIndices {
 		childNode := r.nodes[childIdx]
@@ -530,7 +500,7 @@ func (r *DagAsciiRenderer) buildConnectionMap(parentIndices, childIndices []int)
 }
 
 // calculateLevelPositions calculates the center X positions for each job at a level
-func (r *DagAsciiRenderer) calculateLevelPositions(jobIndices []int) (positions map[int]int, totalWidth int) {
+func (r *asciiRenderer) calculateLevelPositions(jobIndices []int) (positions map[int]int, totalWidth int) {
 	const spacing = 2
 	positions = make(map[int]int)
 	currentX := 0
@@ -546,7 +516,7 @@ func (r *DagAsciiRenderer) calculateLevelPositions(jobIndices []int) (positions 
 }
 
 // getConnectedParents returns a set of parent indices that have connections
-func (r *DagAsciiRenderer) getConnectedParents(connections map[int][]int) map[int]bool {
+func (r *asciiRenderer) getConnectedParents(connections map[int][]int) map[int]bool {
 	parentsWithConnections := make(map[int]bool)
 	for _, parentList := range connections {
 		for _, parentIdx := range parentList {
@@ -557,7 +527,7 @@ func (r *DagAsciiRenderer) getConnectedParents(connections map[int][]int) map[in
 }
 
 // needsRoutingLines checks if routing lines are needed (when parent and child positions differ)
-func (r *DagAsciiRenderer) needsRoutingLines(connections map[int][]int, parentPositions, childPositions map[int]int) bool {
+func (r *asciiRenderer) needsRoutingLines(connections map[int][]int, parentPositions, childPositions map[int]int) bool {
 	for childIdx, parents := range connections {
 		childPos := childPositions[childIdx]
 		for _, parentIdx := range parents {
@@ -570,7 +540,7 @@ func (r *DagAsciiRenderer) needsRoutingLines(connections map[int][]int, parentPo
 }
 
 // renderVerticalLine renders a line with vertical bars at the specified positions
-func (r *DagAsciiRenderer) renderVerticalLine(positions map[int]int, connectedIndices map[int]bool, totalWidth int) string {
+func (r *asciiRenderer) renderVerticalLine(positions map[int]int, connectedIndices map[int]bool, totalWidth int) string {
 	line := make([]rune, totalWidth)
 	for i := range line {
 		line[i] = ' '
@@ -584,7 +554,7 @@ func (r *DagAsciiRenderer) renderVerticalLine(positions map[int]int, connectedIn
 }
 
 // renderRoutingLine renders the routing line with appropriate box-drawing characters
-func (r *DagAsciiRenderer) renderRoutingLine(connections map[int][]int, parentPositions, childPositions map[int]int, totalWidth int) string {
+func (r *asciiRenderer) renderRoutingLine(connections map[int][]int, parentPositions, childPositions map[int]int, totalWidth int) string {
 	// Collect connection flags for each position
 	// Flags: 1=from_above, 2=to_below, 4=from_left, 8=to_right
 	posFlags := make(map[int]int)
@@ -629,7 +599,7 @@ func (r *DagAsciiRenderer) renderRoutingLine(connections map[int][]int, parentPo
 }
 
 // renderArrowLine renders the arrow line pointing to child positions
-func (r *DagAsciiRenderer) renderArrowLine(childPositions map[int]int, connections map[int][]int, totalWidth int) string {
+func (r *asciiRenderer) renderArrowLine(childPositions map[int]int, connections map[int][]int, totalWidth int) string {
 	line := make([]rune, totalWidth)
 	for i := range line {
 		line[i] = ' '

@@ -23,6 +23,8 @@ code that imports them has to be updated as follows.
 | `probe.BuiltinCmd` | `actionrpc.BuiltinCmd` |
 | `probe.LogActionParams` | `actionrpc.LogParams` |
 | `probe.LogActionOutcome` | `actionrpc.LogOutcome` |
+| `Workflow.RenderDagAscii()` | `dag.ASCII{}.Render(w.Graph())` |
+| `Workflow.RenderDagMermaid()` | `dag.Mermaid{}.Render(w.Graph())` |
 | `probe.Expr` | `expr.Expr` |
 | `probe.Report` | `report.Report` |
 | `probe.ReportSummary` | `report.Summary` |
@@ -60,9 +62,14 @@ now take or return a `*mask.Masker`, and `Step.Expr` is a `*expr.Expr`.
 An action is now served with `actionrpc.Serve`, which builds the logger and
 the plugin that each action used to build for itself.
 
-The packages are imported from `github.com/linyows/probe/actionrpc`,
+`probe.DagRendererBase`, `probe.DagAsciiRenderer`, `probe.DagAsciiJobNode`,
+`probe.DagMermaidRenderer` and their constructors are removed. The renderers
+are now `dag.ASCII` and `dag.Mermaid`, which draw the `dag.Graph` that
+`Workflow.Graph` returns.
+
+The new packages are imported from `github.com/linyows/probe/actionrpc`,
 `github.com/linyows/probe/expr`, `github.com/linyows/probe/jsonutil`,
 `github.com/linyows/probe/mask`, `github.com/linyows/probe/report` and
-`github.com/linyows/probe/truncate`. Two
-more new packages, `safefile` and `procgroup`, hold what used to be
-unexported in the root package.
+`github.com/linyows/probe/truncate`, and the renderers from the existing
+`github.com/linyows/probe/dag`. Two more new packages, `safefile` and
+`procgroup`, hold what used to be unexported in the root package.

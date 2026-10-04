@@ -289,13 +289,3 @@ func (w *Workflow) newJobContext(c Config, vars map[string]any, scheduler *JobSc
 		background:   procgroup.NewTracker(),
 	}
 }
-
-// RenderDagAscii renders the workflow job dependencies as ASCII art with steps
-func (w *Workflow) RenderDagAscii() string {
-	if len(w.Jobs) == 0 {
-		return ""
-	}
-
-	renderer := NewDagAsciiRenderer(w)
-	return renderer.Render()
-}
