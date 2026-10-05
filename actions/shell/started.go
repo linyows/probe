@@ -46,20 +46,26 @@ func StopStarted() {
 	started.procs = nil
 	started.Unlock()
 
-	for _, pid := range groups {
+	stopGroups(groups)
+	for _, log := range logs {
+		_ = os.Remove(log)
+	}
+}
+
+// stopGroups sends SIGTERM to each process group led by one of pids, and
+// SIGKILL to those still alive stopGrace later.
+func stopGroups(pids []int) {
+	for _, pid := range pids {
 		_ = syscall.Kill(-pid, syscall.SIGTERM)
 	}
 	deadline := time.Now().Add(stopGrace)
-	for _, pid := range groups {
+	for _, pid := range pids {
 		for groupAlive(pid) && time.Now().Before(deadline) {
 			time.Sleep(50 * time.Millisecond)
 		}
 		if groupAlive(pid) {
 			_ = syscall.Kill(-pid, syscall.SIGKILL)
 		}
-	}
-	for _, log := range logs {
-		_ = os.Remove(log)
 	}
 }
 
