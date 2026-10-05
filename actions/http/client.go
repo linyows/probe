@@ -1,6 +1,7 @@
 package http
 
 import (
+	"bytes"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -31,6 +32,9 @@ type Req struct {
 	Body    string            `map:"body"` // Changed from []byte to string for text data
 	Timeout string            `map:"timeout"`
 	cb      *Callback
+	// payload is sent in place of Body when it is set. It holds a multipart
+	// body, which may carry the bytes of files, and is never shown.
+	payload []byte
 }
 
 type Res struct {
@@ -130,7 +134,11 @@ func (r *Req) Do() (*Result, error) {
 		return nil, err
 	}
 
-	req, err := hp.NewRequest(r.Method, r.URL, strings.NewReader(r.Body))
+	var reqBody io.Reader = strings.NewReader(r.Body)
+	if r.payload != nil {
+		reqBody = bytes.NewReader(r.payload)
+	}
+	req, err := hp.NewRequest(r.Method, r.URL, reqBody)
 	if err != nil {
 		return nil, err
 	}
@@ -344,6 +352,12 @@ func Request(data map[string]any, opts ...Option) (map[string]any, error) {
 		return map[string]any{}, err
 	}
 
+	// form and multipart are turned into the body they stand for.
+	payload, multipartSpec, contentType, err := takeFormBody(m)
+	if err != nil {
+		return map[string]any{}, err
+	}
+
 	// Handle body conversion for JSON content-type
 	MarshalBodyIfJSON(data, m)
 
@@ -353,7 +367,8 @@ func Request(data map[string]any, opts ...Option) (map[string]any, error) {
 	var customHeaders map[string]string
 	if headersInterface, exists := m["headers"]; exists {
 		if headers, ok := headersInterface.(map[string]string); ok {
-			customHeaders = headers
+			// A copy, since basic_auth, form and multipart change it.
+			customHeaders = maps.Clone(headers)
 		} else if headersInterfaceMap, ok := headersInterface.(map[string]any); ok {
 			// Convert map[string]interface{} to map[string]string
 			customHeaders = make(map[string]string)
@@ -383,6 +398,21 @@ func Request(data map[string]any, opts ...Option) (map[string]any, error) {
 		customHeaders["authorization"] = value
 	}
 
+	// The body built from form or multipart is sent with its own Content-Type,
+	// which replaces one set for the job's other requests, such as JSON in
+	// defaults; a multipart one also carries the boundary only it knows.
+	if contentType != "" {
+		for k := range customHeaders {
+			if strings.EqualFold(k, "content-type") {
+				delete(customHeaders, k)
+			}
+		}
+		if customHeaders == nil {
+			customHeaders = make(map[string]string)
+		}
+		customHeaders["content-type"] = contentType
+	}
+
 	// Create new request with merged headers
 	r := NewReq()
 	r.Header = mergeHeaders(r.Header, customHeaders)
@@ -399,6 +429,7 @@ func Request(data map[string]any, opts ...Option) (map[string]any, error) {
 	if err := mapping.MapToStructByTags(m, r); err != nil {
 		return map[string]any{}, err
 	}
+	r.payload = payload
 
 	ret, err := r.Do()
 	if err != nil {
@@ -408,6 +439,13 @@ func Request(data map[string]any, opts ...Option) (map[string]any, error) {
 	mapRet, err := mapping.StructToMapByTags(ret)
 	if err != nil {
 		return map[string]any{}, err
+	}
+
+	// A multipart request shows what was written in place of the body sent.
+	if multipartSpec != nil {
+		if req, ok := mapRet["req"].(map[string]any); ok {
+			req["multipart"] = multipartSpec
+		}
 	}
 
 	// Return the result directly without flattening

@@ -1,0 +1,41 @@
+name: Form and Upload Example
+vars:
+  url: "{{URL ?? 'http://localhost:8080'}}"
+
+jobs:
+- name: "Send forms to {{vars.url}}"
+  defaults:
+    http:
+      url: "{{vars.url}}"
+      headers:
+        accept: application/json
+  steps:
+  # form sends an application/x-www-form-urlencoded body
+  - name: Post a form
+    uses: http
+    with:
+      post: /post
+      form:
+        user: alice
+        scope: [read, write]
+    test: |
+      res.code == 200 &&
+      res.body.form.user == "alice"
+
+  # multipart sends text fields and files as multipart/form-data;
+  # a file path is relative to the working directory
+  - name: Upload a file
+    uses: http
+    with:
+      post: /post
+      multipart:
+        title: logo
+        logo:
+          file: ./docs/public/probe-logo.svg
+        note:
+          content: "uploaded by probe"
+          filename: note.txt
+    test: |
+      res.code == 200 &&
+      res.body.form.title == "logo" &&
+      res.body.files.logo contains "<svg"

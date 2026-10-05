@@ -28,6 +28,8 @@ The fields below describe the request. All of them accept template expressions.
 | `body` | String or Object | No | - | Request body. An object is serialized as JSON when `content-type` is a JSON type: `application/json`, with or without parameters such as `charset`, or one ending in `+json` |
 | `timeout` | Duration | No | `30s` | Time limit for the whole request, including reading the response |
 | `basic_auth` | Object | No | - | `username` and `password` for HTTP Basic authentication, sent as the `Authorization` header |
+| `form` | Object | No | - | Form fields, sent as an `application/x-www-form-urlencoded` body. See [Sending a Form](#sending-a-form) |
+| `multipart` | Object | No | - | Form fields and files, sent as a `multipart/form-data` body. See [Uploading Files](#uploading-files) |
 
 There are no parameters for redirects or TLS verification. Redirects are followed by default.
 
@@ -96,6 +98,60 @@ jobs:
             name: "{{vars.user_name}}"
         test: res.code == 201
 ```
+
+### Sending a Form
+
+`form` sends its fields as an `application/x-www-form-urlencoded` body, as an HTML form does. A field takes a string, a number or a boolean, and a list sends the field once for each of its values.
+
+```yaml
+  - name: Log in with a form
+    uses: http
+    with:
+      post: /login
+      form:
+        user: "{{vars.user}}"
+        password: "{{vars.password}}"
+        scope: [read, write]
+    test: res.code == 302
+```
+
+The fields are sorted by name and percent-encoded, and `req.body` shows them as they were sent.
+
+### Uploading Files
+
+`multipart` sends text fields and files as a `multipart/form-data` body. A field written as a string, a number or a boolean is a text field. A field written as a map is a file, read from `file` or given inline as `content`. A list sends the field once for each of its values, so several files can go under one name.
+
+```yaml
+  - name: Upload an avatar
+    uses: http
+    with:
+      post: /api/images
+      multipart:
+        title: avatar
+        image:
+          file: ./fixtures/logo.png
+        attachments:
+          - file: ./fixtures/terms.pdf
+          - content: "a,b\n1,2\n"
+            filename: data.csv
+            content_type: text/csv
+    test: res.code == 201
+```
+
+A file takes these keys:
+
+| Key | Description |
+|-----|-------------|
+| `file` | Path to the file to send, relative to the working directory, as the paths of other actions are |
+| `content` | The content to send, in place of `file` |
+| `filename` | Filename sent with the file. Defaults to the base name of `file`, or the field name for `content` |
+| `content_type` | Media type of the file. Defaults to the one the extension of `filename` names, or `application/octet-stream` |
+
+Text fields are sent first and files after them, each sorted by name, since some servers, such as S3 for a POST upload, read only the fields that come before the file. The values of a list keep their order among the text fields or among the files, so a list that holds both sends its text values first. A file is read each time the step runs, so a retried step sends the file as it is then.
+
+The body is sent with its length, and is not shown: `req.body` is empty and `req.multipart` shows what was written instead.
+
+`form` and `multipart` each set the `Content-Type` header, which replaces one given in `headers` or in a job's `defaults`, such as `application/json`. Neither can be given together with `body`, nor with each other.
 
 ## Response Object
 

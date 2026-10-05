@@ -119,7 +119,8 @@ func (m *Masker) rebuildLocked() {
 }
 
 // escapedForms returns value as written and in the escaped forms it takes
-// when Go quotes it, JSON encodes it, or a log line escapes its double quotes.
+// when Go quotes it, JSON encodes it, a log line escapes its double quotes,
+// or a form body percent-encodes it.
 // The escapes are also applied on top of each other, because an error that Go
 // quoted is often quoted again by the logger that prints it.
 func escapedForms(value string) []string {
@@ -143,6 +144,8 @@ func escapedForms(value string) []string {
 		func(s string) string {
 			return strings.ReplaceAll(s, `"`, `\"`)
 		},
+		// A form body sends each value percent-encoded.
+		url.QueryEscape,
 	}
 
 	seen := map[string]bool{value: true}

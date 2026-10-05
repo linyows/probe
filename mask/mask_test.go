@@ -68,6 +68,7 @@ func TestEscapedForms(t *testing.T) {
 		`a\"b\c`,                      // a log line escaping only quotes
 		`a\\"b\\c`,                    // Go quoted, then quotes escaped by the logger
 		`a\\\"b\\\\c`,                 // quoted twice
+		`a%22b%5Cc`,                   // percent-encoded in a form body
 	} {
 		found := false
 		for _, f := range forms {
@@ -251,6 +252,21 @@ func TestMasker_LearnCredentialParams(t *testing.T) {
 	r := New(nil, nil).Map(map[string]any{"password": "p", "user": "alice"})
 	if r["password"] != redactedValue || r["user"] != "alice" {
 		t.Errorf("Map() = %v, want the password redacted and the user kept", r)
+	}
+}
+
+// TestMasker_LearnFormPassword checks that a password sent in a form body,
+// where it is percent-encoded, is hidden there as well.
+func TestMasker_LearnFormPassword(t *testing.T) {
+	m := New(nil, nil)
+	m.Learn(map[string]any{
+		"form": map[string]any{"user": "alice", "password": "p@ss word&x"},
+	})
+
+	got := m.String("password=p%40ss+word%26x&user=alice")
+	want := "password=<redacted>&user=alice"
+	if got != want {
+		t.Errorf("String() = %q, want %q", got, want)
 	}
 }
 
