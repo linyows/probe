@@ -5,7 +5,6 @@ import (
 
 	"github.com/hashicorp/go-hclog"
 	"github.com/linyows/probe/actionrpc"
-	cl "github.com/linyows/probe/db"
 )
 
 type Action struct {
@@ -37,11 +36,11 @@ func (a *Action) Run(with map[string]any) (map[string]any, error) {
 	}
 
 	// Execute database query with logger callbacks
-	result, err := cl.ExecuteQuery(with,
-		cl.WithBefore(func(query string, params []any) {
+	result, err := ExecuteQuery(with,
+		WithBefore(func(query string, params []any) {
 			a.log.Debug("executing database query", "query", query, "params", params)
 		}),
-		cl.WithAfter(func(result *cl.Result) {
+		WithAfter(func(result *Result) {
 			a.log.Debug("database query completed", "rows_affected", result.Res.RowsAffected, "duration", result.RT)
 		}),
 	)

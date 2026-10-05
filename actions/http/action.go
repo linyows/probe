@@ -6,7 +6,6 @@ import (
 
 	"github.com/hashicorp/go-hclog"
 	"github.com/linyows/probe/actionrpc"
-	"github.com/linyows/probe/http"
 )
 
 type Action struct {
@@ -21,13 +20,13 @@ func (a *Action) Run(with map[string]any) (map[string]any, error) {
 
 	actionrpc.LogParams(a.log, "received request parameters", with)
 
-	before := http.WithBefore(func(req *hp.Request) {
+	before := WithBefore(func(req *hp.Request) {
 		a.log.Debug("http request prepared", "request", req)
 	})
-	after := http.WithAfter(func(res *hp.Response) {
+	after := WithAfter(func(res *hp.Response) {
 		a.log.Debug("http response received", "response", res)
 	})
-	ret, err := http.Request(with, before, after)
+	ret, err := Request(with, before, after)
 
 	actionrpc.LogOutcome(a.log, "http request", ret, err)
 

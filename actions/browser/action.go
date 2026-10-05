@@ -5,7 +5,6 @@ import (
 
 	"github.com/hashicorp/go-hclog"
 	"github.com/linyows/probe/actionrpc"
-	br "github.com/linyows/probe/browser"
 )
 
 type Action struct {
@@ -15,17 +14,17 @@ type Action struct {
 func (a *Action) Run(with map[string]any) (map[string]any, error) {
 	actionrpc.LogParams(a.log, "received browser action request", with)
 
-	within := br.WithInBrowser(func(s string, i ...any) {
+	within := WithInBrowser(func(s string, i ...any) {
 		a.log.Debug("chromedp", "message", fmt.Sprintf(s, i...))
 	})
-	before := br.WithBefore(func(req *br.Req) {
+	before := WithBefore(func(req *Req) {
 		a.log.Debug("chromedp request prepared", "request", req)
 	})
-	after := br.WithAfter(func(res *br.Res) {
+	after := WithAfter(func(res *Res) {
 		a.log.Debug("chromedp response received", "response", res)
 	})
 
-	ret, err := br.Request(with, within, before, after)
+	ret, err := Request(with, within, before, after)
 
 	actionrpc.LogOutcome(a.log, "browser request", ret, err)
 

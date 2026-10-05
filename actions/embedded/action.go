@@ -5,7 +5,6 @@ import (
 
 	"github.com/hashicorp/go-hclog"
 	"github.com/linyows/probe/actionrpc"
-	"github.com/linyows/probe/embedded"
 )
 
 type Action struct {
@@ -20,13 +19,13 @@ func (a *Action) Run(with map[string]any) (map[string]any, error) {
 
 	actionrpc.LogParams(a.log, "received embedded request parameters", with)
 
-	before := embedded.WithBefore(func(path string, vars map[string]any) {
+	before := WithBefore(func(path string, vars map[string]any) {
 		a.log.Debug("embedded job prepared", "path", path, "vars", vars)
 	})
-	after := embedded.WithAfter(func(result *embedded.Result) {
+	after := WithAfter(func(result *Result) {
 		a.log.Debug("embedded job completed", "result", result)
 	})
-	ret, err := embedded.Execute(with, before, after)
+	ret, err := Execute(with, before, after)
 
 	actionrpc.LogOutcome(a.log, "embedded job", ret, err)
 

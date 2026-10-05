@@ -6,6 +6,6 @@ jobs:
   - name: Mail Latency Analysis
     uses: mail-latency
     with:
-      mail_dir: "mail/testdata/mail"
+      mail_dir: "actions/mail-latency/testdata/mail"
       output_dir: "/tmp"
     test: res.status == 0 && res.output_file != ""

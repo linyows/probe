@@ -5,7 +5,6 @@ import (
 
 	"github.com/hashicorp/go-hclog"
 	"github.com/linyows/probe/actionrpc"
-	"github.com/linyows/probe/mail"
 )
 
 type Action struct {
@@ -20,13 +19,13 @@ func (a *Action) Run(with map[string]any) (map[string]any, error) {
 
 	actionrpc.LogParams(a.log, "received smtp request parameters", with)
 
-	before := mail.WithBefore(func(from string, to string, subject string) {
+	before := WithBefore(func(from string, to string, subject string) {
 		a.log.Debug("email prepared", "from", from, "to", to, "subject", subject)
 	})
-	after := mail.WithAfter(func(result *mail.Result) {
+	after := WithAfter(func(result *Result) {
 		a.log.Debug("email delivery completed", "result", result)
 	})
-	ret, err := mail.Send(with, before, after)
+	ret, err := Send(with, before, after)
 
 	actionrpc.LogOutcome(a.log, "email delivery", ret, err)
 

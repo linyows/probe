@@ -32,10 +32,10 @@ browser_server:
 	python3 -m http.server 8090 --bind 127.0.0.1 --directory e2e/browser
 
 grpc_server:
-	go run grpc/testserver/*.go
+	go run actions/grpc/testserver/*.go
 
 grpc_server_tls:
-	go run grpc/testserver/*.go \
+	go run actions/grpc/testserver/*.go \
 		-tls \
 		-cert="./e2e/certs/server.crt" \
 		-key="./e2e/certs/server.key" \
@@ -45,5 +45,5 @@ gen_server_keys:
 	e2e/gen.sh
 
 gen_grpc_server:
-	@cd grpc/testserver && \
+	@cd actions/grpc/testserver && \
 		protoc --go_out=. --go-grpc_out=. ./pb/user_service.proto

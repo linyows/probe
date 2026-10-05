@@ -6,7 +6,6 @@ import (
 
 	"github.com/hashicorp/go-hclog"
 	"github.com/linyows/probe/actionrpc"
-	grpcpkg "github.com/linyows/probe/grpc"
 )
 
 type Action struct {
@@ -21,13 +20,13 @@ func (a *Action) Run(with map[string]any) (map[string]any, error) {
 
 	actionrpc.LogParams(a.log, "received grpc request parameters", with)
 
-	before := grpcpkg.WithBefore(func(ctx context.Context, service, method string) {
+	before := WithBefore(func(ctx context.Context, service, method string) {
 		a.log.Debug("grpc request prepared", "service", service, "method", method)
 	})
-	after := grpcpkg.WithAfter(func(res *grpcpkg.Res) {
+	after := WithAfter(func(res *Res) {
 		a.log.Debug("grpc response received", "status", res.StatusCode)
 	})
-	ret, err := grpcpkg.Request(with, before, after)
+	ret, err := Request(with, before, after)
 
 	actionrpc.LogOutcome(a.log, "grpc request", ret, err)
 

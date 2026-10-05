@@ -101,7 +101,7 @@ func TestParseParams(t *testing.T) {
 	}
 }
 
-// Note: NewReq() function doesn't exist in db/client.go, so we skip this test
+// Note: NewReq() function doesn't exist in client.go, so we skip this test
 func TestReqStruct(t *testing.T) {
 	req := &Req{
 		DSN:     "mysql://user:pass@localhost:3306/testdb",

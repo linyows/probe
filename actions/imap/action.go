@@ -5,7 +5,6 @@ import (
 
 	"github.com/hashicorp/go-hclog"
 	"github.com/linyows/probe/actionrpc"
-	"github.com/linyows/probe/imap"
 )
 
 type Action struct {
@@ -20,13 +19,13 @@ func (a *Action) Run(with map[string]any) (map[string]any, error) {
 
 	actionrpc.LogParams(a.log, "received imap request parameters", with)
 
-	before := imap.WithBefore(func(req *imap.Req) {
+	before := WithBefore(func(req *Req) {
 		a.log.Debug("imap request prepared", "request", req)
 	})
-	after := imap.WithAfter(func(res *imap.Res) {
+	after := WithAfter(func(res *Res) {
 		a.log.Debug("imap response received", "response", res)
 	})
-	ret, err := imap.Request(with, before, after)
+	ret, err := Request(with, before, after)
 
 	actionrpc.LogOutcome(a.log, "imap request", ret, err)
 

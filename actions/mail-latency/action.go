@@ -11,7 +11,6 @@ import (
 
 	"github.com/hashicorp/go-hclog"
 	"github.com/linyows/probe/actionrpc"
-	"github.com/linyows/probe/mail"
 )
 
 type Action struct {
@@ -43,7 +42,7 @@ func (a *Action) Run(with map[string]any) (map[string]any, error) {
 	// Measure execution time
 	start := time.Now()
 	// Get latencies and write to buffer
-	if err := mail.GetLatencies(mailDir, &csvBuffer); err != nil {
+	if err := GetLatencies(mailDir, &csvBuffer); err != nil {
 		a.log.Error("mail-latency request failed", "error", err)
 		return map[string]any{}, err
 	}
