@@ -376,3 +376,45 @@ func TestHoldsCredential(t *testing.T) {
 		}
 	}
 }
+
+func TestLearn_BasicAuth(t *testing.T) {
+	// "Basic " + base64("alice@example.test:pa55-word")
+	const header = "Basic YWxpY2VAZXhhbXBsZS50ZXN0OnBhNTUtd29yZA=="
+	const token = "YWxpY2VAZXhhbXBsZS50ZXN0OnBhNTUtd29yZA=="
+
+	m := New(nil, nil)
+	m.Learn(map[string]any{
+		"url": "http://localhost",
+		"basic_auth": map[string]any{
+			"username": "alice@example.test",
+			"password": "pa55-word",
+		},
+	})
+
+	for _, in := range []string{
+		"authorization: " + header,
+		"map[authorization:" + header + "]",
+		"credentials " + token,
+		"password pa55-word",
+	} {
+		got := m.String(in)
+		if strings.Contains(got, token) || strings.Contains(got, "pa55-word") {
+			t.Errorf("String(%q) = %q, the credentials are not hidden", in, got)
+		}
+	}
+	if got := m.String("user alice@example.test"); got != "user alice@example.test" {
+		t.Errorf("the username alone should stay visible, got %q", got)
+	}
+}
+
+func TestLearn_BasicAuthNumericPassword(t *testing.T) {
+	// "Basic " + base64("bob:1000000"), as the http action sends a password
+	// decoded as a float.
+	const token = "Ym9iOjEwMDAwMDA="
+
+	m := New(nil, nil)
+	m.Learn(map[string]any{"basic_auth": map[string]any{"username": "bob", "password": float64(1000000)}})
+	if got := m.String("Basic " + token); strings.Contains(got, token) {
+		t.Errorf("the header of a numeric password is not hidden: %q", got)
+	}
+}

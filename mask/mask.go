@@ -2,6 +2,7 @@
 package mask
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -42,6 +43,12 @@ func HoldsCredential(key string) bool {
 	k := strings.ToLower(key)
 	return sensitiveKeys[k] || k == dsnKey
 }
+
+// basicAuthKey names the parameter of the http action that holds the username
+// and password of HTTP Basic authentication. The action sends them in an
+// Authorization header it builds itself, so the value of that header is never
+// in the parameters the masker learns from, and is worked out here.
+const basicAuthKey = "basic_auth"
 
 // Masker hides secret values in everything Probe prints or writes. It starts
 // with the secrets the workflow declares and learns the values of credential
@@ -189,6 +196,9 @@ func collectSensitive(v any, found *[]string) {
 	switch val := v.(type) {
 	case map[string]any:
 		for k, e := range val {
+			if auth, ok := e.(map[string]any); ok && strings.ToLower(k) == basicAuthKey {
+				*found = append(*found, basicAuthValues(auth)...)
+			}
 			if sensitiveKeys[strings.ToLower(k)] {
 				collectStrings(e, found)
 				continue
@@ -212,6 +222,30 @@ func collectSensitive(v any, found *[]string) {
 		for _, e := range val {
 			collectSensitive(e, found)
 		}
+	}
+}
+
+// basicAuthValues returns the Authorization header the http action builds from
+// auth, and the encoded credentials alone, as they are shown when the header
+// is split. The username and password are formatted as the action formats
+// them; without a username the action sends nothing.
+func basicAuthValues(auth map[string]any) []string {
+	username, password := basicAuthField(auth["username"]), basicAuthField(auth["password"])
+	if username == "" {
+		return nil
+	}
+	token := base64.StdEncoding.EncodeToString([]byte(username + ":" + password))
+	return []string{"Basic " + token, token}
+}
+
+func basicAuthField(v any) string {
+	switch v := v.(type) {
+	case nil:
+		return ""
+	case float64:
+		return strconv.FormatFloat(v, 'f', -1, 64)
+	default:
+		return fmt.Sprint(v)
 	}
 }
 

@@ -1,6 +1,7 @@
 package http
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -364,6 +365,24 @@ func Request(data map[string]any, opts ...Option) (map[string]any, error) {
 		}
 	}
 
+	// basic_auth is turned into the Authorization header it stands for.
+	if auth, exists := m["basic_auth"]; exists {
+		delete(m, "basic_auth")
+		value, err := basicAuthHeader(auth)
+		if err != nil {
+			return map[string]any{}, err
+		}
+		for k := range customHeaders {
+			if strings.EqualFold(k, "authorization") {
+				return map[string]any{}, errors.New("basic_auth and an authorization header cannot be given together")
+			}
+		}
+		if customHeaders == nil {
+			customHeaders = make(map[string]string)
+		}
+		customHeaders["authorization"] = value
+	}
+
 	// Create new request with merged headers
 	r := NewReq()
 	r.Header = mergeHeaders(r.Header, customHeaders)
@@ -393,6 +412,55 @@ func Request(data map[string]any, opts ...Option) (map[string]any, error) {
 
 	// Return the result directly without flattening
 	return mapRet, nil
+}
+
+// basicAuthHeader builds the value of an Authorization header for HTTP Basic
+// authentication from basic_auth, a map of username and password, as RFC 7617
+// defines it. A password may be a number, as a YAML value written without
+// quotes is, and may be empty; a username may not hold a colon, which would
+// end it early.
+func basicAuthHeader(v any) (string, error) {
+	auth, ok := v.(map[string]any)
+	if !ok {
+		return "", errors.New("basic_auth must be a map of username and password")
+	}
+	for k := range auth {
+		if k != "username" && k != "password" {
+			return "", fmt.Errorf("basic_auth takes username and password, not %s", k)
+		}
+	}
+	username, err := basicAuthField(auth, "username")
+	if err != nil {
+		return "", err
+	}
+	if username == "" {
+		return "", errors.New("basic_auth.username is required")
+	}
+	if strings.Contains(username, ":") {
+		return "", errors.New("basic_auth.username must not contain a colon")
+	}
+	password, err := basicAuthField(auth, "password")
+	if err != nil {
+		return "", err
+	}
+	return "Basic " + base64.StdEncoding.EncodeToString([]byte(username+":"+password)), nil
+}
+
+// basicAuthField returns the field key of basic_auth as a string: a string
+// as it is, a number or a boolean as written, and a missing one as empty.
+func basicAuthField(auth map[string]any, key string) (string, error) {
+	switch v := auth[key].(type) {
+	case nil:
+		return "", nil
+	case string:
+		return v, nil
+	case float64:
+		return strconv.FormatFloat(v, 'f', -1, 64), nil
+	case int, int64, uint64, bool:
+		return fmt.Sprint(v), nil
+	default:
+		return "", fmt.Errorf("basic_auth.%s must be a string", key)
+	}
 }
 
 func WithBefore(f func(req *hp.Request)) Option {

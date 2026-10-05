@@ -27,6 +27,7 @@ The fields below describe the request. All of them accept template expressions.
 | `headers` | Object | No | - | Request headers |
 | `body` | String or Object | No | - | Request body. An object is serialized as JSON when `content-type` is a JSON type: `application/json`, with or without parameters such as `charset`, or one ending in `+json` |
 | `timeout` | Duration | No | `30s` | Time limit for the whole request, including reading the response |
+| `basic_auth` | Object | No | - | `username` and `password` for HTTP Basic authentication, sent as the `Authorization` header |
 
 There are no parameters for redirects or TLS verification. Redirects are followed by default.
 
@@ -169,6 +170,26 @@ The token is captured as an output of the login step and read by the steps that 
         authorization: "Bearer {{outputs.auth.token}}"
     test: res.code == 200
 ```
+
+A server that takes HTTP Basic authentication is given the username and password with `basic_auth`, which builds the `Authorization` header from them. Set in a job's `defaults`, it applies to every request of the job.
+
+```yaml
+- name: Admin API
+  defaults:
+    http:
+      url: "{{vars.api_url}}"
+      basic_auth:
+        username: "{{vars.admin_user}}"
+        password: "{{vars.admin_password}}"
+  steps:
+    - name: List users
+      uses: http
+      with:
+        get: /admin/users
+      test: res.code == 200 && len(res.body) > 0
+```
+
+A username must not contain a colon, which would end it early, and a password may be empty. `basic_auth` cannot be given together with an `authorization` header, since only one of them could be sent. The password and the header built from it are hidden in the output as other credentials are.
 
 ### Checking an Error Response
 

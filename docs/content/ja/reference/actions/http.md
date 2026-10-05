@@ -27,6 +27,7 @@ steps:
 | `headers` | Object | 任意 | - | リクエストヘッダー |
 | `body` | StringまたはObject | 任意 | - | リクエストボディ。`content-type`がJSONの型のとき、オブジェクトはJSONにシリアライズされます。JSONの型とは、`charset`などのパラメータの有無を問わない`application/json`と、`+json`で終わる型です |
 | `timeout` | Duration | 任意 | `30s` | レスポンスの読み取りまで含めた、リクエスト全体の制限時間 |
+| `basic_auth` | Object | 任意 | - | HTTP Basic認証の`username`と`password`。`Authorization`ヘッダーとして送ります |
 
 リダイレクトとTLS検証を指定するパラメータはありません。リダイレクトは既定で追跡します。
 
@@ -176,6 +177,26 @@ Basic認証は`encode_base64`で組み立てます。
       headers:
         authorization: "Basic {{encode_base64(vars.user + ':' + vars.password)}}"
 ```
+
+HTTP Basic認証を受け付けるサーバーには、`basic_auth`でユーザー名とパスワードを渡します。`basic_auth`はそこから`Authorization`ヘッダーを組み立てます。ジョブの`defaults`に書けば、ジョブのすべてのリクエストに適用されます。
+
+```yaml
+- name: Admin API
+  defaults:
+    http:
+      url: "{{vars.api_url}}"
+      basic_auth:
+        username: "{{vars.admin_user}}"
+        password: "{{vars.admin_password}}"
+  steps:
+    - name: List users
+      uses: http
+      with:
+        get: /admin/users
+      test: res.code == 200 && len(res.body) > 0
+```
+
+ユーザー名にはコロンを含められません。そこでユーザー名が終わったと解釈されるためです。パスワードは空でも構いません。送れるのはどちらか一方なので、`basic_auth`と`authorization`ヘッダーは同時に指定できません。パスワードと、そこから組み立てたヘッダーは、ほかの資格情報と同じく出力では伏せられます。
 
 ### エラーレスポンスの検証
 
