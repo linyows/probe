@@ -28,10 +28,11 @@ on:
       - 'examples/**'
       - '.github/workflows/e2e-test.yml'
 
+# A newer push to a pull request supersedes the run in progress. Every other
+# run gets a group of its own: a group holds one pending run at most, so a
+# shared one would drop a push to main that was waiting behind another.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  # A newer push to a pull request supersedes the run in progress; runs on
-  # main all finish.
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
