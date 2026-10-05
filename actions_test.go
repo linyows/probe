@@ -158,7 +158,7 @@ func (r *countingRunner) RunActions(name string, with map[string]any, opts RunOp
 func (r *countingRunner) RunActionsWithState(name string, with, state map[string]any, opts RunOptions) (map[string]any, map[string]any, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	n, _ := state["n"].(int)
+	n, _ := state["n"].(int64)
 	got := "-"
 	if state != nil {
 		got = fmt.Sprint(n)

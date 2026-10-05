@@ -549,7 +549,8 @@ func TestSendable(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	want := map[string]any{"tags": []any{"a"}, "labels": map[string]any{"k": "v"}, "n": 1}
+	// Numbers come back as they do from an action in its own process.
+	want := map[string]any{"tags": []any{"a"}, "labels": map[string]any{"k": "v"}, "n": int64(1)}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("Sendable() = %#v, want %#v", got, want)
 	}
@@ -564,5 +565,10 @@ func TestSendable(t *testing.T) {
 	}
 	if _, err := Sendable(map[string]any{"bad": map[struct{}]int{{}: 1}}); err == nil {
 		t.Error("a map keyed by structs cannot be sent")
+	}
+	for name, v := range map[string]any{"a channel": make(chan int), "a function": func() {}, "a complex number": complex(1, 2)} {
+		if _, err := Sendable(map[string]any{"bad": v}); err == nil {
+			t.Errorf("%s cannot be sent", name)
+		}
 	}
 }

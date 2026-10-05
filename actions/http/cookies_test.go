@@ -114,6 +114,33 @@ func TestRequestWithStateKeepsCookies(t *testing.T) {
 	}
 }
 
+// TestRequestKeepsOnlyCookiesTheJarTakes checks that a cookie the jar
+// refuses, such as one with a domain that is not valid, is not sent in a
+// later step either.
+func TestRequestKeepsOnlyCookiesTheJarTakes(t *testing.T) {
+	srv := httptest.NewServer(hp.HandlerFunc(func(w hp.ResponseWriter, r *hp.Request) {
+		if r.URL.Path == "/set" {
+			w.Header().Add("Set-Cookie", "bad=1; Domain=bad_domain; Path=/")
+			w.Header().Add("Set-Cookie", "good=1; Path=/")
+			return
+		}
+		_, _ = w.Write([]byte(r.Header.Get("Cookie")))
+	}))
+	defer srv.Close()
+
+	_, state, err := RequestWithState(map[string]any{"url": srv.URL, "get": "/set", "keep_cookies": true}, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	ret, _, err := RequestWithState(map[string]any{"url": srv.URL, "get": "/echo", "keep_cookies": true}, state)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if body := resOf(t, ret)["body"]; body != "good=1" {
+		t.Errorf("Cookie header = %q, want only the cookie the jar took", body)
+	}
+}
+
 func TestRequestSendsGivenCookies(t *testing.T) {
 	srv := newLoginServer(t)
 	_, state, err := RequestWithState(map[string]any{"url": srv.URL, "post": "/login", "keep_cookies": true}, nil)
@@ -212,7 +239,7 @@ func TestCompactCookiesDomainCookie(t *testing.T) {
 	}
 }
 
-func TestCookieJarTurnsMaxAgeIntoExpires(t *testing.T) {
+func TestCookieJarCountsMaxAgeFromWhenItWasSet(t *testing.T) {
 	now := time.Date(2026, 10, 5, 12, 0, 0, 0, time.UTC)
 	j, err := newCookieJar("http://a.test/", nil, nil)
 	if err != nil {
@@ -222,16 +249,42 @@ func TestCookieJarTurnsMaxAgeIntoExpires(t *testing.T) {
 	u := mustParseURL(t, "http://a.test/login")
 	j.SetCookies(u, []*hp.Cookie{{Name: "session", Value: "abc", Path: "/", MaxAge: 60}})
 
-	got := j.Stored(nil)
-	if len(got) != 1 {
-		t.Fatalf("Stored() = %v", got)
+	stored := j.Stored(nil)
+	if len(stored) != 1 || stored[0].Received != now.Unix() {
+		t.Fatalf("Stored() = %v", stored)
 	}
-	c, err := hp.ParseSetCookie(got[0].SetCookie)
-	if err != nil {
-		t.Fatal(err)
+
+	// Half a minute later, half of the minute is left.
+	_, c, ok := stored[0].cookieAt(now.Add(30 * time.Second))
+	if !ok || c.MaxAge != 30 {
+		t.Errorf("cookieAt() = %v, %v, want a Max-Age of 30", c, ok)
 	}
-	if c.MaxAge != 0 || !c.Expires.Equal(now.Add(time.Minute)) {
-		t.Errorf("the cookie should end at a fixed time, got %q", got[0].SetCookie)
+	if got := compactCookies(stored, now.Add(30*time.Second)); len(got) != 1 {
+		t.Errorf("the cookie should be kept before it runs out, got %v", got)
+	}
+
+	// Once the minute is over, it is removed.
+	_, c, ok = stored[0].cookieAt(now.Add(time.Minute))
+	if !ok || c.MaxAge != -1 {
+		t.Errorf("cookieAt() = %v, %v, want the cookie removed", c, ok)
+	}
+	if got := compactCookies(stored, now.Add(time.Minute)); len(got) != 0 {
+		t.Errorf("the cookie should be dropped once it runs out, got %v", got)
+	}
+}
+
+// TestCookiesTravelInState checks that the cookies kept come back from the
+// state as they went in, with the time they were set as it arrives from an
+// action in a process of its own.
+func TestCookiesTravelInState(t *testing.T) {
+	in := []storedCookie{{URL: "http://a.test/", SetCookie: "a=1; Max-Age=60", Received: 1759665600}}
+	state := cookiesToState(in)
+	if got := cookiesFromState(state); !reflect.DeepEqual(got, in) {
+		t.Errorf("cookiesFromState() = %v, want %v", got, in)
+	}
+	sent := map[string]any{"cookies": []any{map[string]any{"url": "http://a.test/", "set_cookie": "a=1; Max-Age=60", "received": float64(1759665600)}}}
+	if got := cookiesFromState(sent); !reflect.DeepEqual(got, in) {
+		t.Errorf("cookiesFromState() = %v, want %v", got, in)
 	}
 }
 

@@ -18,12 +18,51 @@ import (
 // stateCookiesKey names the cookies in the state the action keeps in a job.
 const stateCookiesKey = "cookies"
 
-// storedCookie is a cookie a server set, as the Set-Cookie header it came in
-// and the URL of the response it came with, which together are what a jar
-// needs to set it again.
+// storedCookie is a cookie a server set, as the Set-Cookie header it came in,
+// the URL of the response it came with, and when it came, which together are
+// what a jar needs to set it again later as it was set then. The header is
+// kept as it came, since one the jar refused, such as one with a domain that
+// is not valid, must be refused again rather than set without the domain.
 type storedCookie struct {
 	URL       string
 	SetCookie string
+	// Received is when the cookie was set, in Unix seconds, which a Max-Age
+	// counts from.
+	Received int64
+}
+
+// cookieAt returns the URL the cookie was set from and the cookie as it
+// stands at now, with a Max-Age counted from when it was set: one that has
+// run out removes the cookie. ok is false when the cookie cannot be read.
+func (s storedCookie) cookieAt(now time.Time) (u *url.URL, c *hp.Cookie, ok bool) {
+	u, err := url.Parse(s.URL)
+	if err != nil {
+		return nil, nil, false
+	}
+	c, err = hp.ParseSetCookie(s.SetCookie)
+	if err != nil {
+		return nil, nil, false
+	}
+	if c.MaxAge > 0 {
+		c.MaxAge -= int(now.Unix() - s.Received)
+		if c.MaxAge <= 0 {
+			c.MaxAge = -1
+		}
+	}
+	return u, c, true
+}
+
+// removedAt reports whether c, as cookieAt returns it, is removed or has
+// expired at now. A Max-Age is used in place of Expires when there is one.
+func removedAt(c *hp.Cookie, now time.Time) bool {
+	switch {
+	case c.MaxAge < 0:
+		return true
+	case c.MaxAge > 0:
+		return false
+	default:
+		return !c.Expires.IsZero() && !c.Expires.After(now)
+	}
 }
 
 // cookieJar is the jar of one request. It sends the cookies kept in the job
@@ -57,16 +96,11 @@ func newCookieJar(rawURL string, explicit map[string]string, stored []storedCook
 	for _, name := range slices.Sorted(maps.Keys(explicit)) {
 		j.explicit = append(j.explicit, &hp.Cookie{Name: name, Value: explicit[name]})
 	}
+	now := j.now()
 	for _, s := range stored {
-		u, err := url.Parse(s.URL)
-		if err != nil {
-			continue
+		if u, c, ok := s.cookieAt(now); ok {
+			jar.SetCookies(u, []*hp.Cookie{c})
 		}
-		c, err := hp.ParseSetCookie(s.SetCookie)
-		if err != nil {
-			continue
-		}
-		jar.SetCookies(u, []*hp.Cookie{c})
 	}
 	return j, nil
 }
@@ -85,21 +119,21 @@ func (j *cookieJar) Cookies(u *url.URL) []*hp.Cookie {
 	return append(out, j.explicit...)
 }
 
-// SetCookies stores the cookies a response to u set, and records them. A
-// Max-Age is turned into the time it ends at, since the cookie is set again
-// later, in the next step, where it would otherwise start over.
+// SetCookies stores the cookies a response to u set, and records them with
+// the time they came, as the Set-Cookie headers they came in.
 func (j *cookieJar) SetCookies(u *url.URL, cookies []*hp.Cookie) {
 	j.jar.SetCookies(u, cookies)
 	j.mu.Lock()
 	defer j.mu.Unlock()
+	received := j.now().Unix()
 	for _, c := range cookies {
 		j.values[c.Name] = c.Value
-		stored := *c
-		if stored.MaxAge > 0 {
-			stored.Expires = j.now().Add(time.Duration(stored.MaxAge) * time.Second)
-			stored.MaxAge = 0
+		// Raw is the header as it came; a cookie built otherwise has none.
+		header := c.Raw
+		if header == "" {
+			header = c.String()
 		}
-		j.received = append(j.received, storedCookie{URL: u.String(), SetCookie: stored.String()})
+		j.received = append(j.received, storedCookie{URL: u.String(), SetCookie: header, Received: received})
 	}
 }
 
@@ -132,12 +166,8 @@ func compactCookies(all []storedCookie, now time.Time) []storedCookie {
 	var keys []string
 	last := map[string]entry{}
 	for _, s := range all {
-		u, err := url.Parse(s.URL)
-		if err != nil {
-			continue
-		}
-		c, err := hp.ParseSetCookie(s.SetCookie)
-		if err != nil {
+		u, c, ok := s.cookieAt(now)
+		if !ok {
 			continue
 		}
 		p := c.Path
@@ -160,7 +190,7 @@ func compactCookies(all []storedCookie, now time.Time) []storedCookie {
 	var out []storedCookie
 	for _, k := range keys {
 		e := last[k]
-		if e.parsed.MaxAge < 0 || (!e.parsed.Expires.IsZero() && !e.parsed.Expires.After(now)) {
+		if removedAt(e.parsed, now) {
 			continue
 		}
 		out = append(out, e.cookie)
@@ -192,7 +222,7 @@ func cookiesFromState(state map[string]any) []storedCookie {
 		if u == "" || sc == "" {
 			continue
 		}
-		out = append(out, storedCookie{URL: u, SetCookie: sc})
+		out = append(out, storedCookie{URL: u, SetCookie: sc, Received: unixSeconds(m["received"])})
 	}
 	return out
 }
@@ -201,9 +231,24 @@ func cookiesFromState(state map[string]any) []storedCookie {
 func cookiesToState(cookies []storedCookie) map[string]any {
 	list := make([]any, 0, len(cookies))
 	for _, c := range cookies {
-		list = append(list, map[string]any{"url": c.URL, "set_cookie": c.SetCookie})
+		list = append(list, map[string]any{"url": c.URL, "set_cookie": c.SetCookie, "received": c.Received})
 	}
 	return map[string]any{stateCookiesKey: list}
+}
+
+// unixSeconds returns a time kept in the state as Unix seconds, which reaches
+// the action as an int64, or as another number when it did not travel.
+func unixSeconds(v any) int64 {
+	switch n := v.(type) {
+	case int64:
+		return n
+	case int:
+		return int64(n)
+	case float64:
+		return int64(n)
+	default:
+		return 0
+	}
 }
 
 // takeCookies removes cookies and keep_cookies from m and returns the cookies
