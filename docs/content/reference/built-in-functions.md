@@ -373,7 +373,7 @@ Expression evaluation is bounded for safety:
 - An expression may be at most 1000000 characters long.
 - Evaluation times out after 5 seconds.
 - `parse_json`, `encode_base64`, `decode_base64` and `template` reject an argument longer than 1000000 characters, and `file` a file larger than 1000000 bytes.
-- `template` calls nest at most 10 levels deep.
+- `template` calls nest at most 10 levels deep. Each returns at most 1000000 characters, and the calls nested in one expand at most 10000000 characters in all.
 
 ## See Also
 

@@ -11,6 +11,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	ex "github.com/expr-lang/expr"
@@ -33,13 +34,27 @@ var (
 	// maxTemplateDepth bounds how deep template() calls may nest, as they do
 	// when a file expands a template that reads another file.
 	maxTemplateDepth = 10
+
+	// maxTemplateOutput bounds the text the template() calls nested in one
+	// call expand in all. Each result is bounded on its own, but a template
+	// that calls template twice, at every level, would expand twice as much
+	// at each.
+	maxTemplateOutput = int64(maxStringLength) * int64(maxTemplateDepth)
 )
 
 // Expr evaluates expressions and templates against an environment such as
 // a step's context.
 type Expr struct {
+	// BeforeTemplate, when it is set, is called with the text template() is
+	// about to expand, at any depth. An error it returns stops the
+	// evaluation, and is found in the error returned with errors.As.
+	BeforeTemplate func(text string) error
+
 	// depth is how many template() calls this evaluation is inside.
 	depth int
+	// expanded counts the text the template() calls nested in the outermost
+	// one have expanded, which they share.
+	expanded *atomic.Int64
 }
 
 // Options builds the expr options used to compile every workflow expression.
@@ -279,10 +294,29 @@ func (e *Expr) Options(env any) []ex.Option {
 				if e.depth >= maxTemplateDepth {
 					return nil, fmt.Errorf("template calls nest deeper than %d", maxTemplateDepth)
 				}
+				if e.BeforeTemplate != nil {
+					if err := e.BeforeTemplate(s); err != nil {
+						return nil, err
+					}
+				}
+				expanded := e.expanded
+				if expanded == nil {
+					expanded = &atomic.Int64{}
+				}
 				// The templates in s are evaluated against the same
 				// environment as the expression that calls template.
-				nested := &Expr{depth: e.depth + 1}
-				return nested.EvalTemplate(s, env)
+				nested := &Expr{BeforeTemplate: e.BeforeTemplate, depth: e.depth + 1, expanded: expanded}
+				out, err := nested.EvalTemplate(s, env)
+				if err != nil {
+					return nil, err
+				}
+				if len(out) > maxStringLength {
+					return nil, fmt.Errorf("template result exceeds maximum length (%d chars)", maxStringLength)
+				}
+				if expanded.Add(int64(len(out))) > maxTemplateOutput {
+					return nil, fmt.Errorf("template calls expand more than %d chars in all", maxTemplateOutput)
+				}
+				return out, nil
 			},
 		),
 	}

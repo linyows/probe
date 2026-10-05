@@ -1563,3 +1563,59 @@ func TestTemplateFunctionNestsBoundedly(t *testing.T) {
 		t.Errorf("a template that reads itself should fail at once, took %v", time.Since(start))
 	}
 }
+
+func TestTemplateFunctionBoundsWhatItExpands(t *testing.T) {
+	dir := t.TempDir()
+	leaf := filepath.Join(dir, "leaf.txt")
+	if err := os.WriteFile(leaf, []byte(strings.Repeat("x", 300000)), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	e := &Expr{}
+	env := map[string]any{"vars": map[string]any{"leaf": leaf}}
+
+	// A result larger than a string may be is an error, not cut short.
+	big := strings.Repeat("{{ template(file(vars.leaf)) }}", 4)
+	if _, err := e.Eval("template('"+big+"')", env); err == nil || !strings.Contains(err.Error(), "template result exceeds maximum length (1000000 chars)") {
+		t.Errorf("error = %v, want one about the result", err)
+	}
+
+	// Results that are not kept still count against what may be expanded
+	// in all.
+	wide := strings.Repeat("{{ len(template(file(vars.leaf))) }} ", 40)
+	if _, err := e.Eval("template('"+wide+"')", env); err == nil || !strings.Contains(err.Error(), "template calls expand more than 10000000 chars in all") {
+		t.Errorf("error = %v, want one about the total", err)
+	}
+
+	// Each outermost call has a budget of its own.
+	few := strings.Repeat("{{ len(template(file(vars.leaf))) }} ", 3)
+	for i := 0; i < 20; i++ {
+		if _, err := e.Eval("template('"+few+"')", env); err != nil {
+			t.Fatalf("run %d: unexpected error: %v", i, err)
+		}
+	}
+}
+
+func TestBeforeTemplate(t *testing.T) {
+	var seen []string
+	stop := errors.New("stop")
+	e := &Expr{BeforeTemplate: func(text string) error {
+		seen = append(seen, text)
+		if strings.Contains(text, "deny") {
+			return stop
+		}
+		return nil
+	}}
+	env := map[string]any{"inner": "{{ 1 + 1 }}"}
+
+	got, err := e.EvalTemplate("{{ template('a {{ template(inner) }}') }}", env)
+	if err != nil || got != "a 2" {
+		t.Fatalf("EvalTemplate() = %q, %v", got, err)
+	}
+	if want := []string{"a {{ template(inner) }}", "{{ 1 + 1 }}"}; !reflect.DeepEqual(seen, want) {
+		t.Errorf("BeforeTemplate saw %q, want %q at every depth", seen, want)
+	}
+
+	if _, err := e.EvalTemplate("{{ template('deny') }}", env); !errors.Is(err, stop) {
+		t.Errorf("error = %v, want the error BeforeTemplate returned", err)
+	}
+}

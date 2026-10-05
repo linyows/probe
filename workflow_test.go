@@ -909,6 +909,52 @@ func Test_evalVarsWithTemplatesFromFiles(t *testing.T) {
 	}
 }
 
+// Test_evalVarsTemplateReadsALaterTemplateVar checks that a var whose
+// template reads another var that expands a template, and would come first
+// by name, is evaluated after it, and that a cycle between them is reported.
+func Test_evalVarsTemplateReadsALaterTemplateVar(t *testing.T) {
+	dir := t.TempDir()
+	write := func(name, content string) string {
+		path := filepath.Join(dir, name)
+		if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		return path
+	}
+	first := write("a.tmpl", "a sees {{ vars.z }}")
+	last := write("z.tmpl", "z is {{ vars.n }}-{{ random_str(8) }}")
+
+	wf := &Workflow{
+		Name: "Test",
+		Vars: map[string]any{
+			"a": "{{ template(file('" + first + "')) }}",
+			"n": 1,
+			"z": "{{ template(file('" + last + "')) }}",
+		},
+		env: map[string]string{"UNUSED": ""},
+	}
+	actual, err := wf.evalVars()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	z, _ := actual["z"].(string)
+	if !strings.HasPrefix(z, "z is 1-") || actual["a"] != "a sees "+z {
+		t.Errorf("a should see the value z holds, got a = %q, z = %q", actual["a"], z)
+	}
+
+	cyclic := &Workflow{
+		Name: "Test",
+		Vars: map[string]any{
+			"a": "{{ template(file('" + write("ca.tmpl", "{{ vars.b }}") + "')) }}",
+			"b": "{{ template(file('" + write("cb.tmpl", "{{ vars.a }}") + "')) }}",
+		},
+		env: map[string]string{"UNUSED": ""},
+	}
+	if _, err := cyclic.evalVars(); err == nil || !strings.Contains(err.Error(), "vars: circular reference: a -> b -> a") {
+		t.Errorf("error = %v, want the cycle", err)
+	}
+}
+
 func Test_evalVarsCycleIsReproducible(t *testing.T) {
 	// a reads b and c through the values of a map, and both read a back, so
 	// the cycle reported depends on which of them is visited first.
