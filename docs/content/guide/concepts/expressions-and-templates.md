@@ -265,8 +265,8 @@ test: res.body.user.email matches "[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2
 # Array testing
 test: len(res.body.users) == 5
 test: res.body.tags contains "production"
-test: all(res.body.permissions, #.active == true)
-test: any(res.body.items, #.price > 100)
+test: 'all(res.body.permissions, #.active == true)'
+test: 'any(res.body.items, #.price > 100)'
 
 # Object property testing
 test: '"id" in res.body.user && "email" in res.body.user'
@@ -663,7 +663,7 @@ test: res.code == 200 && res.body.success == true
 # Good: Pre-compute complex values
 outputs:
   user_count: len(res.body.users)
-  active_users: len(filter(res.body.users, #.active == true))
+  active_users: 'len(filter(res.body.users, #.active == true))'
 ```
 
 ### Template Optimization

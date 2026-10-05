@@ -113,8 +113,8 @@ Outputs can contain various data types:
     metrics: res.body.metrics
     
     # Arrays
-    active_users: filter(res.body.users, #.active == true)
-    error_codes: map(res.body.errors, #.code)
+    active_users: 'filter(res.body.users, #.active == true)'
+    error_codes: 'map(res.body.errors, #.code)'
     
     # Computed values
     success_rate: (res.body.successful_requests / res.body.total_requests) * 100
@@ -489,12 +489,12 @@ Ensure data quality in outputs:
   outputs:
     # Validated outputs
     user_count: len(res.body.users)
-    valid_users: filter(res.body.users, #.id != null && #.email != null)
-    admin_users: filter(res.body.users, #.role == "admin")
+    valid_users: 'filter(res.body.users, #.id != null && #.email != null)'
+    admin_users: 'filter(res.body.users, #.role == "admin")'
     
     # Data quality metrics
-    data_completeness: len(filter(res.body.users, #.id != null && #.email != null)) / len(res.body.users)
-    has_admin_users: any(res.body.users, #.role == "admin")
+    data_completeness: 'len(filter(res.body.users, #.id != null && #.email != null)) / len(res.body.users)'
+    has_admin_users: 'any(res.body.users, #.role == "admin")'
     
     # Response metadata
     data_freshness: res.headers["Last-Modified"]
@@ -542,8 +542,8 @@ outputs:
 
 # Good: Single computation with reuse
 outputs:
-  active_users: filter(res.body.users, #.active == true)
-  active_user_count: len(filter(res.body.users, #.active == true))
+  active_users: 'filter(res.body.users, #.active == true)'
+  active_user_count: 'len(filter(res.body.users, #.active == true))'
 
 # Avoid: Repeated expensive computations
 # outputs:
@@ -558,7 +558,7 @@ Be mindful of large data sets:
 ```yaml
 # Good: Extract essential data only
 outputs:
-  user_ids: map(res.body.users, #.id)
+  user_ids: 'map(res.body.users, #.id)'
   user_count: len(res.body.users)
   first_user: res.body.users[0]
 
@@ -585,12 +585,12 @@ Extract only needed data:
     status: res.body.metadata.status
     
     # Extract specific records by criteria
-    critical_items: filter(res.body.data, #.priority == "critical")
-    error_items: filter(res.body.data, #.status == "error")
+    critical_items: 'filter(res.body.data, #.priority == "critical")'
+    error_items: 'filter(res.body.data, #.status == "error")'
     
     # Compute aggregates
-    avg_score: sum(map(res.body.data, #.score)) / len(res.body.data)
-    max_score: max(map(res.body.data, #.score))
+    avg_score: 'sum(map(res.body.data, #.score)) / len(res.body.data)'
+    max_score: 'max(map(res.body.data, #.score))'
     
     # Don't store the entire dataset
     # full_dataset: res.body.data  # Avoid this for large datasets

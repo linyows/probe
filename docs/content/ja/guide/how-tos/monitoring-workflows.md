@@ -802,7 +802,7 @@ description: |
     url: "{{vars.SERVICE_REGISTRY_URL}}/services"
   test: res.code == 200 && len(res.body.services) > 0
   outputs:
-    available_services: map(res.body.services, #.name)
+    available_services: 'map(res.body.services, #.name)'
     service_count: len(res.body.services)
 ```
 

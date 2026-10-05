@@ -40,5 +40,5 @@ outputs:
 要素の存在確認には`in`演算子も使えます。
 
 ```yaml
-test: '"admin" in map(res.body.users,' #.role)
+test: '"admin" in map(res.body.users, #.role)'
 ```

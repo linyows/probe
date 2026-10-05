@@ -19,6 +19,10 @@ var yamlBlock = regexp.MustCompile("(?s)```ya?ml[^\n]*\n(.*?)```")
 // ": ", as an unquoted a ? b : c does, or one that starts with a quote and
 // goes on after it, is a YAML error.
 //
+// A value written without quotes ends at " #", which YAML takes for a
+// comment, so an expression such as all(res.body.items, #.active) loses its
+// predicate and is left with an open parenthesis; such a value is reported.
+//
 // A block may repeat a key, as one that shows several ways to write a test
 // does, and Probe itself loads a workflow that does. An alias whose anchor is
 // defined in another file is an example of merging files, and is skipped.
@@ -44,11 +48,14 @@ func TestDocsYAMLBlocks(t *testing.T) {
 		}
 		for _, m := range yamlBlock.FindAllSubmatchIndex(data, -1) {
 			count++
+			line := strings.Count(string(data[:m[2]]), "\n") + 1
 			var v any
 			err := yaml.UnmarshalWithOptions(data[m[2]:m[3]], &v, yaml.AllowDuplicateMapKey())
 			if err != nil && !strings.Contains(err.Error(), "alias") {
-				line := strings.Count(string(data[:m[2]]), "\n") + 1
 				t.Errorf("%s:%d: %s", path, line, strings.SplitN(err.Error(), "\n", 2)[0])
+			}
+			for _, s := range cutShort(v) {
+				t.Errorf("%s:%d: a value cut short by a comment, quote it: %q", path, line, s)
 			}
 		}
 		return nil
@@ -59,4 +66,26 @@ func TestDocsYAMLBlocks(t *testing.T) {
 	if count == 0 {
 		t.Fatalf("no yaml block found under %s", root)
 	}
+}
+
+// cutShort returns the strings in v, at any depth, that open more
+// parentheses than they close, as an expression does when YAML has cut it at
+// " #".
+func cutShort(v any) []string {
+	var found []string
+	switch v := v.(type) {
+	case string:
+		if strings.Count(v, "(") > strings.Count(v, ")") {
+			found = append(found, v)
+		}
+	case map[string]any:
+		for _, e := range v {
+			found = append(found, cutShort(e)...)
+		}
+	case []any:
+		for _, e := range v {
+			found = append(found, cutShort(e)...)
+		}
+	}
+	return found
 }

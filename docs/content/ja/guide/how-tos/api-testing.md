@@ -584,8 +584,8 @@ jobs:
         all(filter(res.body.orders, #.status == "completed"), #.completed_at != null)
       outputs:
         order_count: len(res.body.orders)
-        completed_orders: len(filter(res.body.orders, #.status == "completed"))
-        total_spent: sum(map(filter(res.body.orders, #.status == "completed"), #.total))
+        completed_orders: 'len(filter(res.body.orders, #.status == "completed"))'
+        total_spent: 'sum(map(filter(res.body.orders, #.status == "completed"), #.total))'
 
     - name: Validation Summary
       uses: hello
