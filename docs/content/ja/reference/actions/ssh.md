@@ -80,6 +80,7 @@ SSH Actionは以下の値を返します：
 |-----------|---|------|
 | `res.code` | int | 終了コード（0 = 成功） |
 | `res.stdout` | string | 標準出力 |
+| `res.json` | any | `res.stdout`全体が1つのJSONオブジェクトまたは配列のときにデコードした値。それ以外では設定されない |
 | `res.stderr` | string | 標準エラー出力 |
 | `res.timed_out` | bool | コマンドが`timeout`で停止されたときに`true` |
 | `status` | int | 実行ステータス（0 = 成功、1 = 失敗） |

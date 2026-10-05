@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"os/exec"
+	"reflect"
 	"strings"
 	"sync"
 	"syscall"
@@ -1928,5 +1929,60 @@ func TestStepTimeoutStillTracksBackground(t *testing.T) {
 	pid := <-runner.pid
 	if !waitGroupGone(pid) {
 		t.Errorf("process group %d started after the step timed out is still running", pid)
+	}
+}
+
+func TestStep_processActionResultStdoutJSON(t *testing.T) {
+	tests := []struct {
+		name   string
+		res    map[string]any
+		want   any
+		wantOK bool
+	}{
+		{
+			name:   "an object with a trailing newline",
+			res:    map[string]any{"stdout": "{\"id\":\"m1\",\"count\":2}\n"},
+			want:   map[string]any{"id": "m1", "count": float64(2)},
+			wantOK: true,
+		},
+		{
+			name:   "an array",
+			res:    map[string]any{"stdout": ` ["a", {"b": true}] `},
+			want:   []any{"a", map[string]any{"b": true}},
+			wantOK: true,
+		},
+		{name: "plain text", res: map[string]any{"stdout": "hello\n"}},
+		{name: "empty", res: map[string]any{"stdout": ""}},
+		{name: "JSON Lines", res: map[string]any{"stdout": "{\"a\":1}\n{\"a\":2}\n"}},
+		{name: "braces that are not JSON", res: map[string]any{"stdout": "{key: value}"}},
+		{name: "a scalar", res: map[string]any{"stdout": "42\n"}},
+		{name: "no stdout", res: map[string]any{"code": 0}},
+		{name: "stdout that is not a string", res: map[string]any{"stdout": 1}},
+		{
+			name:   "a json field the action set itself",
+			res:    map[string]any{"stdout": `{"a":1}`, "json": "the action's own"},
+			want:   "the action's own",
+			wantOK: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			stdout, hadStdout := tt.res["stdout"]
+			step := &Step{Expr: &expr.Expr{}}
+			jCtx := &JobContext{Printer: newBufferPrinter()}
+			step.processActionResult(map[string]any{"res": tt.res}, jCtx)
+
+			got, ok := step.ctx.Res["json"]
+			if ok != tt.wantOK {
+				t.Fatalf("res.json present = %v, want %v (%#v)", ok, tt.wantOK, got)
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("res.json = %#v, want %#v", got, tt.want)
+			}
+			if hadStdout && !reflect.DeepEqual(step.ctx.Res["stdout"], stdout) {
+				t.Errorf("res.stdout = %#v, want it kept as %#v", step.ctx.Res["stdout"], stdout)
+			}
+		})
 	}
 }

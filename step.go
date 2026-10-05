@@ -2,6 +2,7 @@ package probe
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"regexp"
@@ -336,6 +337,15 @@ func (st *Step) processActionResult(actionResult map[string]any, jCtx *JobContex
 			res["rawbody"] = body
 			res["body"] = jsonutil.Decode(body)
 		}
+
+		// A command that prints a JSON object or array, such as a CLI asked
+		// for JSON output, is read as res.json. stdout is kept as it is, for
+		// tests that read the text.
+		if _, taken := res["json"]; !taken {
+			if v, ok := decodeStdoutJSON(res["stdout"]); ok {
+				res["json"] = v
+			}
+		}
 	}
 
 	// A response can hand out a credential too, such as a session cookie.
@@ -343,6 +353,17 @@ func (st *Step) processActionResult(actionResult map[string]any, jCtx *JobContex
 
 	// Update context with status
 	st.updateCtx(nil, req, res, rt, status)
+}
+
+// decodeStdoutJSON decodes stdout when the whole of it is one JSON object or
+// array, surrounding whitespace aside. Anything else, such as plain text,
+// JSON Lines or a scalar, is not decoded.
+func decodeStdoutJSON(stdout any) (any, bool) {
+	s, ok := stdout.(string)
+	if !ok || !jsonutil.LooksLikeJSON(s) || !json.Valid([]byte(s)) {
+		return nil, false
+	}
+	return jsonutil.Decode(s), true
 }
 
 // finalize handles the final phase: test, echo, output save, and result creation
