@@ -438,7 +438,10 @@ func AssignStruct(pa map[string]any, st any) error {
 			}
 		}
 
-		if required && v.Field(i).String() == "" {
+		// A required field has to be given, as MapToStructByTags requires; a
+		// string also has to be non-empty. Value.String is "" only for an
+		// empty string, never for an int, so it cannot tell a missing int.
+		if required && (!ok || (fType.Kind() == reflect.String && v.Field(i).String() == "")) {
 			e.AddMessage(fmt.Sprintf("params '%s' is required", mapKey))
 		}
 	}
