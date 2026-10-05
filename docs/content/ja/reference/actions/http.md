@@ -28,6 +28,8 @@ steps:
 | `body` | StringまたはObject | 任意 | - | リクエストボディ。`content-type`がJSONの型のとき、オブジェクトはJSONにシリアライズされます。JSONの型とは、`charset`などのパラメータの有無を問わない`application/json`と、`+json`で終わる型です |
 | `timeout` | Duration | 任意 | `30s` | レスポンスの読み取りまで含めた、リクエスト全体の制限時間 |
 | `basic_auth` | Object | 任意 | - | HTTP Basic認証の`username`と`password`。`Authorization`ヘッダーとして送ります |
+| `form` | Object | 任意 | - | フォームのフィールド。`application/x-www-form-urlencoded`のボディとして送ります。[フォームの送信](#フォームの送信)を参照 |
+| `multipart` | Object | 任意 | - | フォームのフィールドとファイル。`multipart/form-data`のボディとして送ります。[ファイルのアップロード](#ファイルのアップロード)を参照 |
 
 リダイレクトとTLS検証を指定するパラメータはありません。リダイレクトは既定で追跡します。
 
@@ -96,6 +98,60 @@ jobs:
             name: "{{vars.user_name}}"
         test: res.code == 201
 ```
+
+### フォームの送信
+
+`form`は、HTMLのフォームと同じく、フィールドを`application/x-www-form-urlencoded`のボディとして送ります。フィールドの値には文字列、数値、真偽値を書けます。リストを書くと、その値ごとに同じ名前のフィールドを送ります。
+
+```yaml
+  - name: Log in with a form
+    uses: http
+    with:
+      post: /login
+      form:
+        user: "{{vars.user}}"
+        password: "{{vars.password}}"
+        scope: [read, write]
+    test: res.code == 302
+```
+
+フィールドは名前順に並べてパーセントエンコードします。`req.body`には送った内容がそのまま入ります。
+
+### ファイルのアップロード
+
+`multipart`は、テキストのフィールドとファイルを`multipart/form-data`のボディとして送ります。文字列、数値、真偽値で書いたフィールドはテキストのフィールドです。マップで書いたフィールドはファイルで、中身は`file`のパスから読むか、`content`に直接書きます。リストを書くと、その値ごとに同じ名前のフィールドを送るので、1つの名前で複数のファイルを送れます。
+
+```yaml
+  - name: Upload an avatar
+    uses: http
+    with:
+      post: /api/images
+      multipart:
+        title: avatar
+        image:
+          file: ./fixtures/logo.png
+        attachments:
+          - file: ./fixtures/terms.pdf
+          - content: "a,b\n1,2\n"
+            filename: data.csv
+            content_type: text/csv
+    test: res.code == 201
+```
+
+ファイルには次のキーを書けます。
+
+| キー | 説明 |
+|---|---|
+| `file` | 送るファイルのパス。ほかのアクションのパスと同じく、カレントディレクトリからの相対パスです |
+| `content` | `file`の代わりに送る中身 |
+| `filename` | ファイルとともに送るファイル名。既定は`file`のベース名、`content`の場合はフィールド名です |
+| `content_type` | ファイルのメディアタイプ。既定は`filename`の拡張子から決まるもので、決まらなければ`application/octet-stream`です |
+
+テキストのフィールドを先に、ファイルを後に、それぞれ名前順で送ります。S3へのPOSTアップロードのように、ファイルより前にあるフィールドしか読まないサーバーがあるためです。リストの値は書いた順に送ります。ファイルはステップを実行するたびに読むので、リトライしたステップはその時点のファイルを送ります。
+
+ボディは長さを付けて送り、表示はしません。`req.body`は空になり、代わりに`req.multipart`に書いた内容が入ります。
+
+`form`と`multipart`はそれぞれ`Content-Type`ヘッダーを設定し、`headers`やジョブの`defaults`で指定したもの（`application/json`など）を置き換えます。どちらも`body`とは同時に指定できず、互いに同時に指定することもできません。
 
 ## レスポンスオブジェクト
 
