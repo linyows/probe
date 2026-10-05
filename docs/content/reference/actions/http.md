@@ -30,6 +30,8 @@ The fields below describe the request. All of them accept template expressions.
 | `basic_auth` | Object | No | - | `username` and `password` for HTTP Basic authentication, sent as the `Authorization` header |
 | `form` | Object | No | - | Form fields, sent as an `application/x-www-form-urlencoded` body. See [Sending a Form](#sending-a-form) |
 | `multipart` | Object | No | - | Form fields and files, sent as a `multipart/form-data` body. See [Uploading Files](#uploading-files) |
+| `cookies` | Object | No | - | Cookies to send, by name. See [Cookies](#cookies) |
+| `keep_cookies` | Boolean | No | `false` | Keep the cookies the server sets in the job, and send them in the following steps that keep cookies. See [Cookies](#cookies) |
 
 There are no parameters for redirects or TLS verification. Redirects are followed by default.
 
@@ -165,6 +167,7 @@ After the request, `res` holds what came back.
 | `res.body` | Any | Response body. Parsed into an object or array when the response is JSON, otherwise the raw string |
 | `res.rawbody` | String | The unparsed body, present when the body was parsed as JSON |
 | `res.filepath` | String | Path to the saved file when the response is binary |
+| `res.cookies` | Object | The cookies the server set, by name, on redirects included |
 | `rt.duration` | String | Round-trip time, such as `"120ms"` |
 | `rt.sec` | Float | Round-trip time in seconds |
 | `status` | Integer | `0` when the status code is 2xx, `1` otherwise |
@@ -246,6 +249,51 @@ A server that takes HTTP Basic authentication is given the username and password
 ```
 
 A username must not contain a colon, which would end it early, and a password may be empty. `basic_auth` cannot be given together with an `authorization` header, since only one of them could be sent. The password and the header built from it are hidden in the output as other credentials are.
+
+### Cookies
+
+A cookie a server sets is sent on to where a redirect leads, as a browser sends it, so a login that sets a session cookie and redirects reaches the page it redirects to. The cookies set are in `res.cookies` by name, those set on a redirect included.
+
+With `keep_cookies: true`, the job keeps the cookies the server sets, and sends them in the following steps of the job that keep cookies too. Which cookies go to which URL follows their domain, path, expiry and `Secure` flag, as in a browser, and a cookie the server removes or that expires is no longer sent. Set in a job's `defaults`, it applies to every request of the job.
+
+```yaml
+- name: Logged-in pages
+  defaults:
+    http:
+      url: "{{vars.api_url}}"
+      keep_cookies: true
+  steps:
+    - name: Log in
+      uses: http
+      with:
+        post: /login
+        form:
+          user: "{{vars.user}}"
+          password: "{{vars.password}}"
+      test: res.code == 200 && res.cookies.session != ""
+
+    - name: My page
+      uses: http
+      with:
+        get: /me
+      test: res.code == 200
+```
+
+Each job keeps its own cookies, so jobs that run at the same time do not see each other's. Each run of a repeated job, and a job run by the [embedded](/reference/actions/embedded) action, starts with none. A cookie is passed to another job as an output, and sent there with `cookies`.
+
+`cookies` sends cookies by name, with or without `keep_cookies`, in place of a kept cookie of the same name. They are sent only to the host of the request, not to another host a redirect leads to. A `cookie` header is sent as well.
+
+```yaml
+    - name: Someone else's session
+      uses: http
+      with:
+        get: /me
+        cookies:
+          session: "{{outputs.other.session}}"
+      test: res.code == 200
+```
+
+The values of `cookies` and `res.cookies` are hidden in the output as other credentials are, with their names shown.
 
 ### Checking an Error Response
 

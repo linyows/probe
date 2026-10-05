@@ -13,9 +13,16 @@ type Action struct {
 }
 
 func (a *Action) Run(with map[string]any) (map[string]any, error) {
+	ret, _, err := a.RunWithState(with, nil)
+	return ret, err
+}
+
+// RunWithState runs the request with the cookies the job keeps, when the
+// step asks for keep_cookies, and returns the cookies to keep.
+func (a *Action) RunWithState(with, state map[string]any) (map[string]any, map[string]any, error) {
 	// Validate that required parameters are provided
 	if len(with) == 0 {
-		return map[string]any{}, errors.New("http action requires parameters in 'with' section. Please specify request details like url, method, or use method fields (get, post, etc.)")
+		return map[string]any{}, nil, errors.New("http action requires parameters in 'with' section. Please specify request details like url, method, or use method fields (get, post, etc.)")
 	}
 
 	actionrpc.LogParams(a.log, "received request parameters", with)
@@ -26,11 +33,11 @@ func (a *Action) Run(with map[string]any) (map[string]any, error) {
 	after := WithAfter(func(res *hp.Response) {
 		a.log.Debug("http response received", "response", res)
 	})
-	ret, err := Request(with, before, after)
+	ret, newState, err := RequestWithState(with, state, before, after)
 
 	actionrpc.LogOutcome(a.log, "http request", ret, err)
 
-	return ret, err
+	return ret, newState, err
 }
 
 func Serve() {

@@ -42,6 +42,9 @@ func errStepsFailed(jobName string) error {
 func (j *Job) run(ctx JobContext) (failed bool, err error) {
 	// Set current job ID in context (already set by Executor.setJobID())
 	ctx.CurrentJobID = j.ID
+	// Each run of the job starts with no state, as a repeated run is a run
+	// of its own and an embedded job a job of its own.
+	ctx.states = newActionStates()
 
 	// Use local pointer instead of j.ctx to avoid race conditions in async mode
 	ctxPtr := &ctx

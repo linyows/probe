@@ -447,6 +447,21 @@ jobs:
       res.code == 0 &&
       res.stderr contains "password=<redacted>" &&
       !(res.stdout contains "e2e-form") && !(res.stderr contains "e2e-form")
+  - name: http-cookies.yml
+    uses: shell
+    with:
+      cmd: ./probe examples/http-cookies.yml
+    test: res.code == 0
+    echo: "{{res.stdout}}"
+  - name: secrets-cookies.yml hides the cookies given and kept
+    uses: shell
+    with:
+      cmd: ./probe e2e/secrets-cookies.yml --verbose
+    test: |
+      res.code == 0 &&
+      res.stderr contains "<redacted>" &&
+      !(res.stdout contains "e2e-given-cookie") && !(res.stderr contains "e2e-given-cookie") &&
+      !(res.stdout contains "e2e-kept-cookie") && !(res.stderr contains "e2e-kept-cookie")
   - name: Stop HTTP server
     uses: shell
     with:

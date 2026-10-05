@@ -1,0 +1,68 @@
+name: Cookie Example
+vars:
+  url: "{{URL ?? 'http://localhost:8080'}}"
+
+jobs:
+# keep_cookies keeps the cookies the server sets in the job and sends them
+# in the following steps that keep cookies, as a browser does
+- name: Keep cookies across steps
+  defaults:
+    http:
+      url: "{{vars.url}}"
+      keep_cookies: true
+      headers:
+        accept: application/json
+  steps:
+  # the cookie is set on a redirect, and sent on to where it leads
+  - name: Set a cookie
+    uses: http
+    with:
+      get: /cookies/set?session=abc
+    test: |
+      res.code == 200 &&
+      res.cookies.session == "abc" &&
+      res.body.cookies.session == "abc"
+
+  - name: The kept cookie is sent
+    uses: http
+    with:
+      get: /cookies
+    test: res.body.cookies.session == "abc"
+
+  # cookies are sent as given, in place of a kept one of the same name
+  - name: Send cookies of the step's own
+    uses: http
+    with:
+      get: /cookies
+      cookies:
+        session: other
+        lang: ja
+    test: |
+      res.body.cookies.session == "other" &&
+      res.body.cookies.lang == "ja"
+
+  - name: A removed cookie is no longer kept
+    uses: http
+    with:
+      get: /cookies/delete?session=
+    test: res.code == 200 && len(res.body.cookies) == 0
+
+# without keep_cookies, each step starts with no cookies
+- name: Without keep_cookies
+  defaults:
+    http:
+      url: "{{vars.url}}"
+      headers:
+        accept: application/json
+  steps:
+  - name: Set a cookie
+    uses: http
+    with:
+      get: /cookies/set?session=abc
+    test: res.body.cookies.session == "abc"
+
+  - name: Nothing is sent
+    uses: http
+    with:
+      get: /cookies
+    test: len(res.body.cookies) == 0

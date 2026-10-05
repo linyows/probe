@@ -23,8 +23,10 @@ const (
 )
 
 type RunRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	With          *structpb.Struct       `protobuf:"bytes,2,opt,name=with,proto3" json:"with,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	With  *structpb.Struct       `protobuf:"bytes,2,opt,name=with,proto3" json:"with,omitempty"`
+	// The state the action left in the job before, for a stateful action.
+	State         *structpb.Struct `protobuf:"bytes,3,opt,name=state,proto3" json:"state,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -66,9 +68,18 @@ func (x *RunRequest) GetWith() *structpb.Struct {
 	return nil
 }
 
+func (x *RunRequest) GetState() *structpb.Struct {
+	if x != nil {
+		return x.State
+	}
+	return nil
+}
+
 type RunResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Result        *structpb.Struct       `protobuf:"bytes,1,opt,name=result,proto3" json:"result,omitempty"`
+	state  protoimpl.MessageState `protogen:"open.v1"`
+	Result *structpb.Struct       `protobuf:"bytes,1,opt,name=result,proto3" json:"result,omitempty"`
+	// The state the action leaves in the job, or none to keep it as it was.
+	State         *structpb.Struct `protobuf:"bytes,3,opt,name=state,proto3" json:"state,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -110,16 +121,25 @@ func (x *RunResponse) GetResult() *structpb.Struct {
 	return nil
 }
 
+func (x *RunResponse) GetState() *structpb.Struct {
+	if x != nil {
+		return x.State
+	}
+	return nil
+}
+
 var File_pb_actions_proto protoreflect.FileDescriptor
 
 const file_pb_actions_proto_rawDesc = "" +
 	"\n" +
-	"\x10pb/actions.proto\x12\x02pb\x1a\x1cgoogle/protobuf/struct.proto\"E\n" +
+	"\x10pb/actions.proto\x12\x02pb\x1a\x1cgoogle/protobuf/struct.proto\"t\n" +
 	"\n" +
 	"RunRequest\x12+\n" +
-	"\x04with\x18\x02 \x01(\v2\x17.google.protobuf.StructR\x04withJ\x04\b\x01\x10\x02R\x04args\"K\n" +
+	"\x04with\x18\x02 \x01(\v2\x17.google.protobuf.StructR\x04with\x12-\n" +
+	"\x05state\x18\x03 \x01(\v2\x17.google.protobuf.StructR\x05stateJ\x04\b\x01\x10\x02R\x04args\"z\n" +
 	"\vRunResponse\x12/\n" +
-	"\x06result\x18\x01 \x01(\v2\x17.google.protobuf.StructR\x06resultJ\x04\b\x02\x10\x03R\x05error21\n" +
+	"\x06result\x18\x01 \x01(\v2\x17.google.protobuf.StructR\x06result\x12-\n" +
+	"\x05state\x18\x03 \x01(\v2\x17.google.protobuf.StructR\x05stateJ\x04\b\x02\x10\x03R\x05error21\n" +
 	"\aActions\x12&\n" +
 	"\x03Run\x12\x0e.pb.RunRequest\x1a\x0f.pb.RunResponseB\x06Z\x04./pbb\x06proto3"
 
@@ -143,14 +163,16 @@ var file_pb_actions_proto_goTypes = []any{
 }
 var file_pb_actions_proto_depIdxs = []int32{
 	2, // 0: pb.RunRequest.with:type_name -> google.protobuf.Struct
-	2, // 1: pb.RunResponse.result:type_name -> google.protobuf.Struct
-	0, // 2: pb.Actions.Run:input_type -> pb.RunRequest
-	1, // 3: pb.Actions.Run:output_type -> pb.RunResponse
-	3, // [3:4] is the sub-list for method output_type
-	2, // [2:3] is the sub-list for method input_type
-	2, // [2:2] is the sub-list for extension type_name
-	2, // [2:2] is the sub-list for extension extendee
-	0, // [0:2] is the sub-list for field type_name
+	2, // 1: pb.RunRequest.state:type_name -> google.protobuf.Struct
+	2, // 2: pb.RunResponse.result:type_name -> google.protobuf.Struct
+	2, // 3: pb.RunResponse.state:type_name -> google.protobuf.Struct
+	0, // 4: pb.Actions.Run:input_type -> pb.RunRequest
+	1, // 5: pb.Actions.Run:output_type -> pb.RunResponse
+	5, // [5:6] is the sub-list for method output_type
+	4, // [4:5] is the sub-list for method input_type
+	4, // [4:4] is the sub-list for extension type_name
+	4, // [4:4] is the sub-list for extension extendee
+	0, // [0:4] is the sub-list for field type_name
 }
 
 func init() { file_pb_actions_proto_init() }

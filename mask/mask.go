@@ -22,11 +22,13 @@ const redactedValue = "<redacted>"
 // a login step, is never declared as a secret, but it reaches the target
 // through one of these headers; a password written in a step's `with` need
 // not be declared either. Their values are hidden wherever they are shown.
+// cookies holds the cookies the http action sends and receives, by name.
 var sensitiveKeys = map[string]bool{
 	"authorization":       true,
 	"proxy-authorization": true,
 	"cookie":              true,
 	"set-cookie":          true,
+	"cookies":             true,
 	"password":            true,
 	"key_passphrase":      true,
 }
@@ -368,6 +370,14 @@ func collectStrings(v any, found *[]string) {
 		}
 	case []string:
 		*found = append(*found, val...)
+	case map[string]any:
+		for _, e := range val {
+			collectStrings(e, found)
+		}
+	case map[string]string:
+		for _, e := range val {
+			*found = append(*found, e)
+		}
 	}
 }
 
@@ -396,12 +406,34 @@ func (m *Masker) Map(data map[string]any) map[string]any {
 	out := make(map[string]any, len(data))
 	for k, v := range data {
 		if sensitiveKeys[strings.ToLower(k)] {
-			out[k] = redactedValue
+			out[k] = redacted(v)
 			continue
 		}
 		out[k] = m.value(v)
 	}
 	return out
+}
+
+// redacted returns what a credential v is shown as. A map, such as the
+// cookies of a request, keeps its keys, which name the credentials and help
+// to tell what was sent, and has its values hidden.
+func redacted(v any) any {
+	switch val := v.(type) {
+	case map[string]any:
+		out := make(map[string]any, len(val))
+		for k := range val {
+			out[k] = redactedValue
+		}
+		return out
+	case map[string]string:
+		out := make(map[string]any, len(val))
+		for k := range val {
+			out[k] = redactedValue
+		}
+		return out
+	default:
+		return redactedValue
+	}
 }
 
 func (m *Masker) value(v any) any {

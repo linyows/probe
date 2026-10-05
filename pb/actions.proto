@@ -8,12 +8,16 @@ message RunRequest {
     reserved 1;
     reserved "args";
     google.protobuf.Struct with = 2;
+    // The state the action left in the job before, for a stateful action.
+    google.protobuf.Struct state = 3;
 }
 
 message RunResponse {
     reserved 2;
     reserved "error";
     google.protobuf.Struct result = 1;
+    // The state the action leaves in the job, or none to keep it as it was.
+    google.protobuf.Struct state = 3;
 }
 
 service Actions {
