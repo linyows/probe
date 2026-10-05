@@ -235,7 +235,8 @@ jobs:
       checks[6].status == "untested" &&
       r.jobs[1].id == "downstream" && r.jobs[1].status == "skipped" &&
       r.jobs[2].steps[0].status == "failed" &&
-      r.jobs[2].steps[0].repeat.total == 3 && r.jobs[2].steps[0].repeat.failure == 1
+      r.jobs[2].steps[0].repeat.total == 3 && r.jobs[2].steps[0].repeat.failure == 1 &&
+      r.jobs[2].steps[0].failure.kind == "assertion"
   - name: JUnit is well-formed XML with the expected totals
     uses: shell
     with:
@@ -248,7 +249,7 @@ jobs:
       res.stdout contains `<failure message="test evaluated to false" type="assertion">` &&
       res.stdout contains `type="action">` &&
       res.stdout contains `<skipped message="job skipped">` &&
-      res.stdout contains `<failure message="1 of 3 iterations failed" type="assertion">`
+      res.stdout contains `<failure message="1 of 3 iterations failed; the first: test evaluated to false" type="assertion">`
   - name: Markdown lists the jobs and every failed step
     uses: shell
     with:
