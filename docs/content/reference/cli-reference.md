@@ -161,7 +161,7 @@ A step's status is `passed`, `failed`, `skipped`, or `untested` when it ran with
 | `action` | The action returned an error, such as a refused connection | `<error>` |
 | `template` | A template in the step's `with`, `vars` or `name` could not be evaluated, so the action did not run | `<error>` |
 
-A step in a job with `repeat` fails when any iteration fails, and reports how many iterations passed. When an action sets `dump: false` on its response, the request and response are left out of the report as they are left out of the terminal.
+A step in a job with `repeat` fails when any iteration fails, and reports how many iterations passed and why the first failing one failed. When an action sets `dump: false` on its response, the request and response are left out of the report as they are left out of the terminal.
 
 The value can also come from the `PROBE_REPORT` environment variable, and the flag wins over it. If a report file cannot be written, the others are still written and Probe exits with status 2.
 

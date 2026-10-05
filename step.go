@@ -13,6 +13,7 @@ import (
 
 	"github.com/linyows/probe/expr"
 	"github.com/linyows/probe/jsonutil"
+	"github.com/linyows/probe/mask"
 	"github.com/linyows/probe/procgroup"
 )
 
@@ -50,6 +51,13 @@ type Step struct {
 }
 
 func (st *Step) Do(jCtx *JobContext) {
+	// An iteration runs the same Step again, so what the last run left must
+	// not be reported as this one's, above all when it fails before its
+	// action runs.
+	st.startedAt = time.Time{}
+	st.retryAttempt = 0
+	st.err = nil
+
 	// 1. Preparation phase: validation, wait, skip check
 	name, shouldContinue := st.prepare(jCtx)
 	if !shouldContinue {
@@ -111,7 +119,11 @@ func (st *Step) prepare(jCtx *JobContext) (string, bool) {
 func (st *Step) executeAction(name string, jCtx *JobContext) (map[string]any, error) {
 	expW, err := st.Expr.EvalTemplateMap(st.With, st.ctx)
 	if err != nil {
-		return nil, prefixFieldErrors(err, "with.")
+		// The credentials that could be evaluated are learned, so that an
+		// error about another value cannot show them, and the details of a
+		// credential's own error are left out.
+		jCtx.Printer.Masker().Learn(expW)
+		return nil, redactCredentialErrors(prefixFieldErrors(err, "with."))
 	}
 
 	runner := st.actionRunner
@@ -473,6 +485,14 @@ func (st *Step) handleRepeatExecution(jCtx *JobContext, name string, hasError bo
 		}
 	}
 
+	var failure *StepFailure
+	switch {
+	case hasError && st.err != nil:
+		failure = st.newFailure(failureKindOf(st.err), st.err.Error())
+	case hasTest && !testResult:
+		failure = st.failure
+	}
+
 	// Evaluate echo before taking the lock so we can store the formatted
 	// output on the counter alongside the success/failure increment.
 	var echoRaw, echoFormatted string
@@ -499,6 +519,9 @@ func (st *Step) handleRepeatExecution(jCtx *JobContext, name string, hasError bo
 		counter.SuccessCount++
 	}
 	counter.LastResult = testResult
+	if counter.Failure == nil {
+		counter.Failure = failure
+	}
 
 	if st.Echo != "" {
 		counter.EchoOutputs = append(counter.EchoOutputs, echoFormatted)
@@ -891,6 +914,41 @@ func (st *Step) createFailedStepResult(name string, jCtx *JobContext) StepResult
 	}
 
 	return result
+}
+
+// errCredentialTemplate replaces why the template of a credential could not
+// be evaluated: the template, the excerpt of it in the error, and a value in
+// the error, such as the input of a failed conversion, may each hold the
+// credential.
+var errCredentialTemplate = errors.New("the template could not be evaluated; the details are not shown, as the value is a credential")
+
+// redactCredentialErrors replaces the error of each *expr.FieldError joined
+// into err whose path goes through a credential, such as
+// with.headers.authorization or with.password, keeping the path.
+func redactCredentialErrors(err error) error {
+	var errs []error
+	for _, e := range unwrapJoined(err) {
+		var fe *expr.FieldError
+		if errors.As(e, &fe) && pathHoldsCredential(fe.Path) {
+			e = &expr.FieldError{Path: fe.Path, Err: errCredentialTemplate}
+		}
+		errs = append(errs, e)
+	}
+	return errors.Join(errs...)
+}
+
+// pathHoldsCredential reports whether any key in path, such as
+// headers.cookie[0], names a credential.
+func pathHoldsCredential(path string) bool {
+	for _, key := range strings.Split(path, ".") {
+		if i := strings.IndexByte(key, '['); i >= 0 {
+			key = key[:i]
+		}
+		if mask.HoldsCredential(key) {
+			return true
+		}
+	}
+	return false
 }
 
 // failureKindOf tells a template that could not be evaluated from an error

@@ -88,7 +88,9 @@ func (w *Workflow) Start(c Config) error {
 
 	vars, err := w.evalVars()
 	if err != nil {
-		return err
+		// The caller prints this error itself, and a template's error can
+		// quote the value of a declared secret.
+		return &maskedError{err: err, masker: w.printer.Masker()}
 	}
 
 	ctx := w.newJobContext(c, vars, scheduler)
@@ -309,6 +311,21 @@ func (w *Workflow) evalVars() (map[string]any, error) {
 	}
 
 	return vars, nil
+}
+
+// maskedError shows err with the secrets masker knows hidden, and unwraps to
+// err, so that errors.As still finds what it holds.
+type maskedError struct {
+	err    error
+	masker *mask.Masker
+}
+
+func (e *maskedError) Error() string {
+	return e.masker.String(e.err.Error())
+}
+
+func (e *maskedError) Unwrap() error {
+	return e.err
 }
 
 // evalVar evaluates the templates in the var name, a workflow var or a step

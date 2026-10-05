@@ -25,6 +25,10 @@ type StepRepeatCounter struct {
 	LastResult   bool
 	RepeatTotal  int      // Total number of times the step should be repeated
 	EchoOutputs  []string // Formatted echo output captured per iteration
+	// Failure is why the first iteration that failed did, so that the step's
+	// result keeps the kind of failure, such as an action error, rather than
+	// only the count.
+	Failure *StepFailure
 }
 
 // StepResult represents the result of a step execution

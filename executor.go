@@ -1,6 +1,7 @@
 package probe
 
 import (
+	"fmt"
 	"sort"
 	"sync"
 	"sync/atomic"
@@ -255,6 +256,12 @@ func (e *Executor) appendRepeatStepResults(ctx *JobContext) {
 				HasTest:       hasTest,
 				RepeatCounter: &counter,
 				Test:          step.Test,
+			}
+			if counter.Failure != nil {
+				f := *counter.Failure
+				f.Message = fmt.Sprintf("%d of %d iterations failed; the first: %s",
+					counter.FailureCount, counter.SuccessCount+counter.FailureCount, f.Message)
+				stepResult.Failure = &f
 			}
 
 			// Add step result to workflow buffer

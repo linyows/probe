@@ -759,8 +759,9 @@ func TestErrorHandling(t *testing.T) {
 		if !errors.As(err, &fErr) || fErr.Path != "invalid" {
 			t.Fatalf("expected a FieldError for invalid, got %v", err)
 		}
-		if result != nil {
-			t.Errorf("expected no map, got %#v", result)
+		want := map[string]any{"valid": "simple string", "invalid": nil}
+		if !reflect.DeepEqual(result, want) {
+			t.Errorf("expected the values that could be evaluated, got %#v", result)
 		}
 	})
 

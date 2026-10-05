@@ -449,14 +449,13 @@ func (e *Expr) EvalTemplateWithTypePreservation(input string, env any) (any, err
 // EvalTemplateMap evaluates every template in the values of input, at any
 // depth, keeping the type of a value that is a single template. The errors of
 // all the values that could not be evaluated are joined, each as a
-// *FieldError naming its value, and the map is then nil.
+// *FieldError naming its value. The map is returned with them too, holding
+// nil where a value could not be evaluated, so that a caller can still see
+// the values that could, such as credentials to hide from the errors.
 func (e *Expr) EvalTemplateMap(input map[string]any, env any) (map[string]any, error) {
 	var errs []error
 	results := e.evalTemplateMap(input, env, "", &errs)
-	if len(errs) > 0 {
-		return nil, errors.Join(errs...)
-	}
-	return results, nil
+	return results, errors.Join(errs...)
 }
 
 func (e *Expr) evalTemplateMap(input map[string]any, env any, path string, errs *[]error) map[string]any {

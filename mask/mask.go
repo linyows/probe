@@ -34,6 +34,15 @@ var sensitiveKeys = map[string]bool{
 // visible.
 const dsnKey = "dsn"
 
+// HoldsCredential reports whether the parameter or header named key holds a
+// credential, whole or, as a database URL does, in part. A message about such
+// a value, such as why its template could not be evaluated, must not show
+// what was written there.
+func HoldsCredential(key string) bool {
+	k := strings.ToLower(key)
+	return sensitiveKeys[k] || k == dsnKey
+}
+
 // Masker hides secret values in everything Probe prints or writes. It starts
 // with the secrets the workflow declares and learns the values of credential
 // headers as actions are about to send them, so that a token obtained at run

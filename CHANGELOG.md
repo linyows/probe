@@ -39,7 +39,8 @@ evaluated. Both used to write the error into the value instead, as
 `[CompileError: ...]`, `[RuntimeError: ...]` or `[EvaluationError]`, and
 return no error. The error is a `*expr.TemplateError` naming the template;
 `EvalTemplateMap` joins one `*expr.FieldError` for each value that failed,
-naming its path, such as `headers.authorization`, and returns a nil map.
+naming its path, such as `headers.authorization`, and returns the map with
+nil in place of each such value.
 
 | Before | After |
 |---|---|
@@ -54,6 +55,11 @@ action does not run; in a workflow's `vars`, the run stops before the first
 job with exit status 2. A name that is not defined still reads as nil and is
 not an error. `echo` shows the error, indented as its other lines are,
 instead of the Go representation of the error value.
+
+The result of a step in a job with `repeat` now carries why its first
+failing iteration failed, so a JSON report keeps the kind, such as `action`
+or `template`, and JUnit reports an `<error>` for it instead of an assertion
+`<failure>`.
 
 `mapping.AssignStruct` now enforces `validate:"required"` on an `int` field:
 a missing key is reported as `params '<name>' is required`, as it already was
