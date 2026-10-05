@@ -532,46 +532,22 @@ func (r *Req) Select(mb string) (*SelectData, error) {
 }
 
 func (r *Req) Search(cr *Criteria) (*SearchData, error) {
-	if cr == nil {
-		return nil, fmt.Errorf("search criteria is nil")
-	}
-
-	criteria, err := r.buildSearchCriteria(*cr)
-	if err != nil {
-		return nil, fmt.Errorf("failed to build SearchCriteria: %s", err)
-	}
-
-	opts := &imap.SearchOptions{
-		ReturnMin:   true,
-		ReturnMax:   true,
-		ReturnAll:   true,
-		ReturnCount: true,
-		ReturnSave:  true,
-	}
-
-	data, err := r.cl.Search(criteria, opts).Wait()
-	if err != nil {
-		return nil, fmt.Errorf("failed to Search: %s", err)
-	}
-
-	// No match gives no set at all, which String would dereference.
-	all := ""
-	if data.All != nil {
-		all = data.All.String()
-	}
-	sd := SearchData{
-		All:   all,
-		Min:   int(data.Min),
-		Max:   int(data.Max),
-		Count: int(data.Count),
-	}
-
-	return &sd, nil
+	return r.search(cr, false)
 }
 
 func (r *Req) UIDSearch(cr *Criteria) (*SearchData, error) {
+	return r.search(cr, true)
+}
+
+// search implements SEARCH, or UID SEARCH when uid is true, which finds the
+// same messages but reports their UIDs.
+func (r *Req) search(cr *Criteria, uid bool) (*SearchData, error) {
+	name, command := "search", "Search"
+	if uid {
+		name, command = "uid_search", "UIDSearch"
+	}
 	if cr == nil {
-		return nil, fmt.Errorf("uid_search criteria is nil")
+		return nil, fmt.Errorf("%s criteria is nil", name)
 	}
 
 	criteria, err := r.buildSearchCriteria(*cr)
@@ -587,11 +563,16 @@ func (r *Req) UIDSearch(cr *Criteria) (*SearchData, error) {
 		ReturnSave:  true,
 	}
 
-	data, err := r.cl.UIDSearch(criteria, opts).Wait()
+	run := r.cl.Search
+	if uid {
+		run = r.cl.UIDSearch
+	}
+	data, err := run(criteria, opts).Wait()
 	if err != nil {
-		return nil, fmt.Errorf("failed to UIDSearch: %s", err)
+		return nil, fmt.Errorf("failed to %s: %s", command, err)
 	}
 
+	// No match gives no set at all, which String would dereference.
 	all := ""
 	if data.All != nil {
 		all = data.All.String()
@@ -997,28 +978,47 @@ func (r *Req) Noop() (*NoopData, error) {
 
 // Fetch implements FETCH command
 func (r *Req) Fetch(sequence, dataitem string) (*FetchData, error) {
+	return r.fetch(sequence, dataitem, false)
+}
+
+func (r *Req) UIDFetch(sequence, dataitem string) (*FetchData, error) {
+	return r.fetch(sequence, dataitem, true)
+}
+
+// fetch implements FETCH, or UID FETCH when uid is true, which takes UIDs in
+// sequence. FETCH needs dataitem; UID FETCH fetches ALL without it.
+func (r *Req) fetch(sequence, dataitem string, uid bool) (*FetchData, error) {
 	if sequence == "" {
-		return nil, fmt.Errorf("sequence is required for FETCH command: give one, or run a search of the same kind (search, or uid search for a uid command) just before it in this mailbox")
+		command := "FETCH command"
+		if uid {
+			command = "UID FETCH"
+		}
+		return nil, fmt.Errorf("sequence is required for %s: give one, or run a search of the same kind (search, or uid search for a uid command) just before it in this mailbox", command)
 	}
 	if dataitem == "" {
-		return nil, fmt.Errorf("dataitem is required for FETCH command")
+		if !uid {
+			return nil, fmt.Errorf("dataitem is required for FETCH command")
+		}
+		dataitem = "ALL"
 	}
 
-	// Parse sequence set
-	seqset, err := r.parseSequenceSet(sequence)
+	numSet, err := r.parseNumSet(sequence, uid)
 	if err != nil {
-		return nil, fmt.Errorf("invalid sequence set %s: %w", sequence, err)
+		return nil, err
 	}
 
-	// Parse fetch items
 	fetchItems, err := r.parseFetchItems(dataitem)
 	if err != nil {
 		return nil, fmt.Errorf("invalid dataitem %s: %w", dataitem, err)
 	}
 
-	messages, err := r.cl.Fetch(*seqset, fetchItems).Collect()
+	messages, err := r.cl.Fetch(numSet, fetchItems).Collect()
 	if err != nil {
-		return nil, fmt.Errorf("failed to Fetch: %s", err)
+		failed := "Fetch"
+		if uid {
+			failed = "UID Fetch"
+		}
+		return nil, fmt.Errorf("failed to %s: %s", failed, err)
 	}
 
 	fd := FetchData{
@@ -1049,119 +1049,6 @@ func (r *Req) Fetch(sequence, dataitem string) (*FetchData, error) {
 		}
 
 		message.Size = int(msg.RFC822Size)
-
-		// Handle body sections
-		if len(msg.BodySection) > 0 {
-			for _, bodySection := range msg.BodySection {
-				if len(bodySection.Bytes) > 0 {
-					content := string(bodySection.Bytes)
-
-					// Determine the type of body section based on the Section metadata
-					if bodySection.Section != nil {
-						// Check if this is a header section
-						if bodySection.Section.Specifier == imap.PartSpecifierHeader {
-							// Parse headers and add to message.Headers
-							headers := r.parseHeaderData(content)
-							maps.Copy(message.Headers, headers)
-						} else if len(bodySection.Section.HeaderFields) > 0 {
-							// Handle HEADER.FIELDS specifically
-							headers := r.parseHeaderData(content)
-							maps.Copy(message.Headers, headers)
-						} else if bodySection.Section.Specifier == imap.PartSpecifierText || bodySection.Section.Specifier == "" {
-							// This is text content or full message
-							if message.Body == "" {
-								message.Body = content
-							}
-							// If this looks like HTML content, also set HTMLBody
-							if strings.Contains(strings.ToLower(content), "<html") {
-								message.HTMLBody = content
-							}
-						}
-					} else {
-						// No specific section metadata, treat as body content
-						if message.Body == "" {
-							message.Body = content
-						}
-						// If this looks like HTML content, also set HTMLBody
-						if strings.Contains(strings.ToLower(content), "<html") {
-							message.HTMLBody = content
-						}
-					}
-				}
-			}
-		}
-
-		fd.Messages = append(fd.Messages, message)
-	}
-
-	return &fd, nil
-}
-
-func (r *Req) UIDFetch(sequence, dataitem string) (*FetchData, error) {
-	if sequence == "" {
-		return nil, fmt.Errorf("sequence is required for UID FETCH: give one, or run a search of the same kind (search, or uid search for a uid command) just before it in this mailbox")
-	}
-	if dataitem == "" {
-		dataitem = "ALL"
-	}
-
-	uidset, err := r.parseUIDSet(sequence)
-	if err != nil {
-		return nil, fmt.Errorf("invalid UID set %s: %w", sequence, err)
-	}
-
-	fetchItems, err := r.parseFetchItems(dataitem)
-	if err != nil {
-		return nil, fmt.Errorf("invalid dataitem %s: %w", dataitem, err)
-	}
-
-	messages, err := r.cl.Fetch(*uidset, fetchItems).Collect()
-	if err != nil {
-		return nil, fmt.Errorf("failed to UID Fetch: %s", err)
-	}
-
-	fd := FetchData{
-		Messages: make([]Message, 0, len(messages)),
-		Count:    len(messages),
-	}
-
-	for _, msg := range messages {
-		message := Message{
-			UID:     int(msg.UID),
-			Flags:   make([]string, 0, len(msg.Flags)),
-			Headers: make(map[string]string),
-		}
-
-		for _, flag := range msg.Flags {
-			message.Flags = append(message.Flags, string(flag))
-		}
-
-		if msg.Envelope != nil {
-			if !msg.Envelope.Date.IsZero() {
-				message.Date = formatDate(msg.Envelope.Date)
-			}
-			if len(msg.Envelope.From) > 0 {
-				message.From = fmt.Sprintf("%s@%s", msg.Envelope.From[0].Mailbox, msg.Envelope.From[0].Host)
-			}
-			if len(msg.Envelope.To) > 0 {
-				message.To = fmt.Sprintf("%s@%s", msg.Envelope.To[0].Mailbox, msg.Envelope.To[0].Host)
-			}
-			message.Subject = msg.Envelope.Subject
-		}
-
-		if msg.RFC822Size != 0 {
-			message.Size = int(msg.RFC822Size)
-		}
-
-		// NOTE:
-		// The IMAP protocol does not treat header field names as case-sensitive (per RFC 5322/3501),
-		// but FindBodySection is case-sensitive, so you should be careful
-		//for _, section := range fetchItems.BodySection {
-		//	if found := msg.FindBodySection(section); found != nil {
-		//	} else {
-		//		return nil, fmt.Errorf("failed to FindBodySection: %#v", section)
-		//	}
-		//}
 
 		// Handle body sections
 		if len(msg.BodySection) > 0 {

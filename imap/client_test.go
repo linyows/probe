@@ -1707,3 +1707,62 @@ func TestFetchUnknownItemFails(t *testing.T) {
 		t.Errorf("res = code %v, error %v; want the fetch to fail naming the item", res["code"], res["error"])
 	}
 }
+
+func fetchedSubjects(t *testing.T, ret map[string]any) []string {
+	t.Helper()
+	data := ret["res"].(map[string]any)["data"].(map[string]any)
+	var out []string
+	for _, m := range data["fetch"].(map[string]any)["messages"].([]any) {
+		out = append(out, m.(map[string]any)["subject"].(string))
+	}
+	return out
+}
+
+// UID FETCH takes UIDs and fetches ALL when no dataitem is given; FETCH
+// needs one.
+func TestUIDFetch(t *testing.T) {
+	host, port := plainIMAPServer(t, 3)
+
+	ret, err := runCommands(t, host, port,
+		map[string]any{"name": "select", "mailbox": "INBOX"},
+		map[string]any{"name": "uid fetch", "sequence": "2:3"},
+	)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"message 2", "message 3"}, fetchedSubjects(t, ret), "ALL includes the envelope")
+
+	ret, err = runCommands(t, host, port,
+		map[string]any{"name": "select", "mailbox": "INBOX"},
+		map[string]any{"name": "uid search", "criteria": map[string]any{"headers": map[string]any{"Subject": "message 3"}}},
+		map[string]any{"name": "uid fetch", "dataitem": "ENVELOPE"},
+	)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"message 3"}, fetchedSubjects(t, ret), "uid fetch without a sequence takes the uid search result")
+	search := ret["res"].(map[string]any)["data"].(map[string]any)["search"].(map[string]any)
+	assert.Equal(t, "3", search["all"], "uid search reports the UID")
+}
+
+func TestFetchErrors(t *testing.T) {
+	host, port := plainIMAPServer(t, 1)
+
+	tests := []struct {
+		name    string
+		cmd     map[string]any
+		wantErr string
+	}{
+		{name: "fetch without a dataitem", cmd: map[string]any{"name": "fetch", "sequence": "1"}, wantErr: "dataitem is required for FETCH command"},
+		{name: "fetch without a sequence", cmd: map[string]any{"name": "fetch", "dataitem": "FLAGS"}, wantErr: "sequence is required for FETCH command"},
+		{name: "uid fetch without a sequence", cmd: map[string]any{"name": "uid fetch"}, wantErr: "sequence is required for UID FETCH"},
+		{name: "fetch with a bad set", cmd: map[string]any{"name": "fetch", "sequence": "x", "dataitem": "FLAGS"}, wantErr: "invalid sequence set x"},
+		{name: "uid fetch with a bad set", cmd: map[string]any{"name": "uid fetch", "sequence": "x"}, wantErr: "invalid UID set x"},
+	}
+	// As for every command, a failure is the step's result, not an error.
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ret, err := runCommands(t, host, port, map[string]any{"name": "select", "mailbox": "INBOX"}, tt.cmd)
+			require.NoError(t, err)
+			res := ret["res"].(map[string]any)
+			assert.Equal(t, 1, res["code"])
+			assert.Contains(t, res["error"], tt.wantErr)
+		})
+	}
+}
