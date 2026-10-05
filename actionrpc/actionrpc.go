@@ -13,6 +13,7 @@ import (
 
 	"github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/go-plugin"
+	"github.com/linyows/probe/mask"
 	"github.com/linyows/probe/pb"
 	"github.com/linyows/probe/truncate"
 	"google.golang.org/grpc"
@@ -289,7 +290,7 @@ func convertFloatToInt(value any) any {
 // separate processes, so their log records reach the workflow runner as JSON
 // on stderr and are re-filtered there by the runner's own level.
 func LogParams(log hclog.Logger, msg string, with map[string]any) {
-	log.Debug(msg, "params", truncate.Map(with, truncate.MaxLogLength))
+	log.Debug(msg, "params", forLog(with))
 }
 
 // LogOutcome records how an action finished. subject names what was
@@ -299,5 +300,15 @@ func LogOutcome(log hclog.Logger, subject string, ret map[string]any, err error)
 		log.Error(subject+" failed", "error", err)
 		return
 	}
-	log.Debug(subject+" completed successfully", "result", truncate.Map(ret, truncate.MaxLogLength))
+	log.Debug(subject+" completed successfully", "result", forLog(ret))
+}
+
+// forLog returns a copy of data fit to log: credentials hidden, then long
+// values truncated. The runner hides credentials in the log as well, but
+// only where it finds them whole, and a truncated value is no longer whole,
+// so they are hidden here first.
+func forLog(data map[string]any) map[string]any {
+	m := mask.New(nil, nil)
+	m.Learn(data)
+	return truncate.Map(m.Map(data), truncate.MaxLogLength)
 }

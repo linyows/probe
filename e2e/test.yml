@@ -366,7 +366,9 @@ jobs:
       !(res.stdout contains "e2e-s3cr") && !(res.stderr contains "e2e-s3cr") &&
       !(res.stdout contains "e2e-runtime-credential") && !(res.stderr contains "e2e-runtime-credential") &&
       !(res.stdout contains "e2e-imap-password") && !(res.stderr contains "e2e-imap-password") &&
-      !(res.stdout contains "e2e-dsn-password") && !(res.stderr contains "e2e-dsn-password")
+      !(res.stdout contains "e2e-dsn-password") && !(res.stderr contains "e2e-dsn-password") &&
+      !(res.stdout contains "e2e-long-token") && !(res.stderr contains "e2e-long-token") &&
+      !(res.stdout contains "e2e-embedded-password") && !(res.stderr contains "e2e-embedded-password")
   - name: The report files hold none of them
     uses: shell
     with:
@@ -377,7 +379,9 @@ jobs:
       !(res.stdout contains "e2e-s3cr") &&
       !(res.stdout contains "e2e-runtime-credential") &&
       !(res.stdout contains "e2e-imap-password") &&
-      !(res.stdout contains "e2e-dsn-password")
+      !(res.stdout contains "e2e-dsn-password") &&
+      !(res.stdout contains "e2e-long-token") &&
+      !(res.stdout contains "e2e-embedded-password")
   - name: Remove the output directory
     uses: shell
     with:

@@ -3,6 +3,7 @@ package mask
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/url"
 	"sort"
@@ -191,8 +192,11 @@ func collectSensitive(v any, found *[]string) {
 		}
 	case map[string]string:
 		for k, s := range val {
-			if sensitiveKeys[strings.ToLower(k)] {
+			switch {
+			case sensitiveKeys[strings.ToLower(k)]:
 				*found = append(*found, s)
+			case strings.ToLower(k) == dsnKey:
+				*found = append(*found, dsnPassword(s)...)
 			}
 		}
 	case []any:
@@ -210,9 +214,13 @@ func dsnPassword(dsn string) []string {
 	if !ok {
 		return nil
 	}
-	// The user info ends at the last @ before the path, since an unescaped
-	// password may itself contain an @.
-	authority, _, _ := strings.Cut(rest, "/")
+	// The authority ends where the path, query or fragment begins, and the
+	// user info at the last @ before that, since an unescaped password may
+	// itself contain an @.
+	authority := rest
+	if i := strings.IndexAny(rest, "/?#"); i >= 0 {
+		authority = rest[:i]
+	}
 	at := strings.LastIndex(authority, "@")
 	if at < 0 {
 		return nil
@@ -228,12 +236,17 @@ func dsnPassword(dsn string) []string {
 	return found
 }
 
-// collectStrings gathers the strings a header value holds; Set-Cookie, for
-// one, can carry several.
+// collectStrings gathers the values a credential header or parameter holds;
+// Set-Cookie, for one, can carry several.
 func collectStrings(v any, found *[]string) {
 	switch val := v.(type) {
 	case string:
 		*found = append(*found, val)
+	// A password written without quotes, such as 123456, is a number in the
+	// workflow, and reaches the action as the same digits. A boolean is not
+	// learned: hiding every "true" in the output would hide nothing useful.
+	case int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64, float32, float64:
+		*found = append(*found, fmt.Sprint(val))
 	case []any:
 		for _, e := range val {
 			collectStrings(e, found)

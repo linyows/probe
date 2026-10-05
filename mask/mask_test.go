@@ -286,6 +286,18 @@ func TestMasker_LearnDSNPassword(t *testing.T) {
 			want: "raw <redacted> decoded <redacted>",
 		},
 		{
+			name: "no path, an @ in the query",
+			dsn:  "postgres://app:sample-pass@db?application_name=ops@example.com",
+			in:   "app:sample-pass@db?application_name=ops@example.com",
+			want: "app:<redacted>@db?application_name=ops@example.com",
+		},
+		{
+			name: "a fragment",
+			dsn:  "postgres://app:frag-pass@db#a@b",
+			in:   "frag-pass db#a@b",
+			want: "<redacted> db#a@b",
+		},
+		{
 			name: "no password",
 			dsn:  "postgres://app@db/main",
 			in:   "postgres://app@db/main",
@@ -306,5 +318,44 @@ func TestMasker_LearnDSNPassword(t *testing.T) {
 				t.Errorf("String(%q) = %q, want %q", tt.in, got, tt.want)
 			}
 		})
+	}
+}
+
+func TestMasker_LearnDSNInStringMap(t *testing.T) {
+	m := New(nil, nil)
+	m.Learn(map[string]any{
+		"conn": map[string]string{"dsn": "postgres://app:typed-pass@db/main"},
+	})
+	if got := m.String("typed-pass"); got != redactedValue {
+		t.Errorf("String() = %q, want the DSN password hidden", got)
+	}
+}
+
+// A password written without quotes is a number in the workflow, but the
+// action receives the same digits, so they are hidden too.
+func TestMasker_LearnNumericCredential(t *testing.T) {
+	tests := []struct {
+		name  string
+		value any
+		in    string
+	}{
+		{name: "int", value: 482915, in: "pass 482915"},
+		{name: "uint64", value: uint64(482915), in: "pass 482915"},
+		{name: "float64", value: float64(482915), in: "pass 482915"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			m := New(nil, nil)
+			m.Learn(map[string]any{"password": tt.value})
+			if got := m.String(tt.in); got != "pass "+redactedValue {
+				t.Errorf("String(%q) = %q, want the number hidden", tt.in, got)
+			}
+		})
+	}
+
+	m := New(nil, nil)
+	m.Learn(map[string]any{"password": true})
+	if got := m.String("enabled: true"); got != "enabled: true" {
+		t.Errorf("String() = %q, want a boolean password not to hide every true", got)
 	}
 }
