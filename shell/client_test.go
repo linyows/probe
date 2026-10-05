@@ -971,3 +971,24 @@ func TestReqDo_NotTimedOut(t *testing.T) {
 		t.Errorf("Res = %+v, want exit code 3, not timed out", res.Res)
 	}
 }
+
+// A command that exited before the deadline did not time out, even when the
+// deadline passes while the output a process it left running holds open is
+// still being read.
+func TestReqDo_DeadlinePassesWhileReadingOutput(t *testing.T) {
+	grace := outputGrace
+	outputGrace = time.Second
+	t.Cleanup(func() { outputGrace = grace })
+
+	for cmd, code := range map[string]int{"sleep 5 & echo done": 0, "sleep 5 & exit 4": 4} {
+		t.Run(cmd, func(t *testing.T) {
+			res, err := (&Req{Cmd: cmd, Shell: "/bin/sh", Timeout: "200ms"}).Do()
+			if err != nil {
+				t.Fatalf("Do() error = %v", err)
+			}
+			if res.Res.TimedOut || res.Res.Code != code {
+				t.Errorf("Res = %+v, want code %d, not timed out", res.Res, code)
+			}
+		})
+	}
+}

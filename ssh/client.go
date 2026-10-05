@@ -415,20 +415,26 @@ func (r *Req) Do() (re *Result, er error) {
 	case cmdErr = <-waitChan:
 		// Command completed normally
 	case <-ctx.Done():
-		// Timeout or context cancellation
-		timedOut = true
-		// Try to signal the session to stop
-		if signalErr := session.Signal(ssh.SIGTERM); signalErr != nil {
-			// If SIGTERM fails, try SIGKILL
-			_ = session.Signal(ssh.SIGKILL)
-		}
-		// Wait a bit for graceful termination, then proceed
+		// select picks at random when both are ready, so a command that
+		// finished as the deadline passed is taken as finished.
 		select {
 		case cmdErr = <-waitChan:
-			// Command terminated after signal
-		case <-time.After(stopGrace):
-			// The command did not stop: give up on it.
-			stopped = false
+			break
+		default:
+			timedOut = true
+			// Try to signal the session to stop
+			if signalErr := session.Signal(ssh.SIGTERM); signalErr != nil {
+				// If SIGTERM fails, try SIGKILL
+				_ = session.Signal(ssh.SIGKILL)
+			}
+			// Wait a bit for graceful termination, then proceed
+			select {
+			case cmdErr = <-waitChan:
+				// Command terminated after signal
+			case <-time.After(stopGrace):
+				// The command did not stop: give up on it.
+				stopped = false
+			}
 		}
 	}
 

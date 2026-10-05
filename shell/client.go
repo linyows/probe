@@ -12,6 +12,7 @@ import (
 	"runtime"
 	"slices"
 	"strconv"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -284,6 +285,17 @@ func (r *Req) Do() (*Result, error) {
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 	cmd.WaitDelay = outputGrace
+	// Whether the timeout stopped the command is recorded where it happens:
+	// when the deadline passes after the command exited, while its output is
+	// still being read, the kill finds nothing to stop.
+	var killed atomic.Bool
+	cmd.Cancel = func() error {
+		err := cmd.Process.Kill()
+		if err == nil {
+			killed.Store(true)
+		}
+		return err
+	}
 
 	if err := cmd.Start(); err != nil {
 		return result, fmt.Errorf("failed to start command: %w", err)
@@ -291,8 +303,7 @@ func (r *Req) Do() (*Result, error) {
 	cmdErr := cmd.Wait()
 	result.RT = time.Since(start)
 
-	// A command that finished just as the deadline passed did not time out.
-	timedOut := cmdErr != nil && errors.Is(ctx.Err(), context.DeadlineExceeded)
+	timedOut := killed.Load()
 	exitCode := 0
 	var exitError *exec.ExitError
 	switch {
@@ -300,9 +311,12 @@ func (r *Req) Do() (*Result, error) {
 		exitCode = exitError.ExitCode()
 	case timedOut:
 		exitCode = -1
-	case errors.Is(cmdErr, exec.ErrWaitDelay):
+	case cmd.ProcessState != nil:
 		// The command exited, but something it left running still held its
-		// output open, and was not waited for.
+		// output open, and was not waited for; or the deadline passed while
+		// that output was being read. Either way the command's own status
+		// stands.
+		exitCode = cmd.ProcessState.ExitCode()
 	case cmdErr != nil:
 		return result, fmt.Errorf("command execution failed: %w", cmdErr)
 	}
