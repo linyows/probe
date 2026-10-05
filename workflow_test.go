@@ -870,6 +870,45 @@ func Test_evalVarsReadsVarsAsAWhole(t *testing.T) {
 	}
 }
 
+// Test_evalVarsWithTemplatesFromFiles checks that a var that expands a
+// template comes after the vars that do not, since what the template reads
+// is known only once it runs, and that two such vars do not make a cycle.
+func Test_evalVarsWithTemplatesFromFiles(t *testing.T) {
+	dir := t.TempDir()
+	body := filepath.Join(dir, "body.tmpl")
+	if err := os.WriteFile(body, []byte("{{ vars.zone }}-{{ vars.yes }}"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	other := filepath.Join(dir, "other.tmpl")
+	if err := os.WriteFile(other, []byte("other {{ vars.zone }}"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	wf := &Workflow{
+		Name: "Test",
+		Vars: map[string]any{
+			"a":    "{{ template(file('" + body + "')) }}",
+			"b":    "{{ template(file('" + other + "')) }} and {{ vars.a }}",
+			"yes":  true,
+			"zone": "{{ ZONE }}",
+		},
+		env: map[string]string{"ZONE": "tokyo"},
+	}
+	actual, err := wf.evalVars()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	expected := map[string]any{
+		"a":    "tokyo-true",
+		"b":    "other tokyo and tokyo-true",
+		"yes":  true,
+		"zone": "tokyo",
+	}
+	if !reflect.DeepEqual(expected, actual) {
+		t.Errorf("expected %#v, got %#v", expected, actual)
+	}
+}
+
 func Test_evalVarsCycleIsReproducible(t *testing.T) {
 	// a reads b and c through the values of a map, and both read a back, so
 	// the cycle reported depends on which of them is visited first.

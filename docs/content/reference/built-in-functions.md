@@ -172,7 +172,7 @@ vars:
 
 ### `file`
 
-Returns the content of a file as a string, as it is: templates in it are not expanded. The path is relative to the working directory, as the paths of actions are. A file larger than 1000000 bytes, a directory and a missing file are errors.
+Returns the content of a file as a string, as it is: templates in it are not expanded. The path is relative to the working directory, as the paths of actions are. A file larger than 1000000 bytes, a missing file, a directory and anything else that is not a regular file, such as a device, are errors.
 
 **Syntax:** `file(path)`
 **Returns:** String

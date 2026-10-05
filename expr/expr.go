@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"io"
 	"math/rand/v2"
 	"os"
 	"slices"
@@ -288,22 +289,35 @@ func (e *Expr) Options(env any) []ex.Option {
 }
 
 // readFile returns the content of the file at path, relative to the working
-// directory, as the paths of actions are. A file larger than a string an
-// expression may hold is an error rather than cut short.
+// directory, as the paths of actions are. Only a regular file is read, and no
+// more of it than a string an expression may hold: a device such as
+// /dev/zero, or a file that grows while it is read, would otherwise be read
+// on after the evaluation has timed out. A larger file is an error rather
+// than cut short.
 func readFile(path string) (string, error) {
-	info, err := os.Stat(path)
+	f, err := os.Open(path)
+	if err != nil {
+		return "", fmt.Errorf("file: %w", err)
+	}
+	defer func() { _ = f.Close() }()
+
+	info, err := f.Stat()
 	if err != nil {
 		return "", fmt.Errorf("file: %w", err)
 	}
 	if info.IsDir() {
 		return "", fmt.Errorf("file: %s is a directory", path)
 	}
-	if info.Size() > int64(maxStringLength) {
-		return "", fmt.Errorf("file: %s exceeds maximum length (%d bytes)", path, maxStringLength)
+	if !info.Mode().IsRegular() {
+		return "", fmt.Errorf("file: %s is not a regular file", path)
 	}
-	data, err := os.ReadFile(path)
+
+	data, err := io.ReadAll(io.LimitReader(f, int64(maxStringLength)+1))
 	if err != nil {
 		return "", fmt.Errorf("file: %w", err)
+	}
+	if len(data) > maxStringLength {
+		return "", fmt.Errorf("file: %s exceeds maximum length (%d bytes)", path, maxStringLength)
 	}
 	return string(data), nil
 }

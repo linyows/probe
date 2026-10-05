@@ -288,7 +288,7 @@ func (w *Workflow) evalVars() (map[string]any, error) {
 		// A var that reads one that failed is not evaluated: its error
 		// would only repeat that one.
 		keys, dynamic := expr.Refs(v, "vars")
-		if len(failed) > 0 && (dynamic || slices.ContainsFunc(keys, func(d string) bool { return failed[d] })) {
+		if len(failed) > 0 && (dynamic || expr.CallsTemplate(v) || slices.ContainsFunc(keys, func(d string) bool { return failed[d] })) {
 			failed[k] = true
 			continue
 		}
@@ -375,15 +375,23 @@ func prefixFieldErrors(err error, prefix string) error {
 
 // varsOrder returns the names of vars in an order in which each comes after
 // the vars it reads. A var that reads vars by a key known only when it runs
-// comes after all the others. Names are otherwise sorted, and Refs returns
-// the keys of a map in the order of its sorted keys, so neither the order nor
-// a reported cycle depends on map iteration.
+// comes after all the others. A var that expands a template, such as one read
+// from a file, comes after all the vars that do not, since what the template
+// reads is known only when it runs; among themselves they are ordered by what
+// they read outside it. Names are otherwise sorted, and Refs returns the keys
+// of a map in the order of its sorted keys, so neither the order nor a
+// reported cycle depends on map iteration.
 func varsOrder(vars map[string]any) ([]string, error) {
 	names := make([]string, 0, len(vars))
 	for k := range vars {
 		names = append(names, k)
 	}
 	slices.Sort(names)
+
+	expands := make(map[string]bool, len(vars))
+	for _, k := range names {
+		expands[k] = expr.CallsTemplate(vars[k])
+	}
 
 	deps := make(map[string][]string, len(vars))
 	for _, k := range names {
@@ -399,6 +407,15 @@ func varsOrder(vars map[string]any) ([]string, error) {
 			// var, but not itself: only a key it names reads itself.
 			for _, d := range names {
 				if d != k && !slices.Contains(deps[k], d) {
+					deps[k] = append(deps[k], d)
+				}
+			}
+		}
+		if expands[k] {
+			// Two vars that expand templates are not taken to read each
+			// other, which would make every pair of them a cycle.
+			for _, d := range names {
+				if d != k && !expands[d] && !slices.Contains(deps[k], d) {
 					deps[k] = append(deps[k], d)
 				}
 			}

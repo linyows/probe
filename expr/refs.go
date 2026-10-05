@@ -93,3 +93,50 @@ func (c *refCollector) Visit(node *ast.Node) {
 		}
 	}
 }
+
+// CallsTemplate reports whether a template in v calls template, whose
+// argument is evaluated as templates once it runs, so that what it reads
+// cannot be known before then. v is as Refs takes it.
+func CallsTemplate(v any) bool {
+	switch v := v.(type) {
+	case string:
+		for _, span := range findTemplates(v) {
+			tree, err := parser.Parse(span.expr)
+			if err != nil {
+				continue
+			}
+			c := &callFinder{name: "template"}
+			ast.Walk(&tree.Node, c)
+			if c.found {
+				return true
+			}
+		}
+	case map[string]any:
+		for _, e := range v {
+			if CallsTemplate(e) {
+				return true
+			}
+		}
+	case []any:
+		for _, e := range v {
+			if CallsTemplate(e) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// callFinder finds a call to the function name.
+type callFinder struct {
+	name  string
+	found bool
+}
+
+func (c *callFinder) Visit(node *ast.Node) {
+	if n, ok := (*node).(*ast.CallNode); ok {
+		if id, ok := n.Callee.(*ast.IdentifierNode); ok && id.Value == c.name {
+			c.found = true
+		}
+	}
+}

@@ -1484,9 +1484,11 @@ func TestFileFunction(t *testing.T) {
 		{"file()", "file requires exactly 1 parameter"},
 		{"file(1)", "file parameter must be a path"},
 		{"file('')", "file parameter must be a path"},
-		{"file('" + missing + "')", "file: stat " + missing + ": no such file or directory"},
+		{"file('" + missing + "')", "file: open " + missing + ": no such file or directory"},
 		{"file('" + dir + "')", "file: " + dir + " is a directory"},
 		{"file('" + big + "')", "file: " + big + " exceeds maximum length (1000000 bytes)"},
+		// A device reports no size and would be read without end.
+		{"file('/dev/zero')", "file: /dev/zero is not a regular file"},
 	} {
 		if _, err := e.Eval(tt.input, env); err == nil || !strings.Contains(err.Error(), tt.wantErr) {
 			t.Errorf("Eval(%q) error = %v, want %q", tt.input, err, tt.wantErr)
