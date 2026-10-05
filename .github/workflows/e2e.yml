@@ -16,7 +16,7 @@ on:
       - 'go.sum'
       - 'e2e/**'
       - 'examples/**'
-      - '.github/workflows/e2e-test.yml'
+      - '.github/workflows/e2e.yml'
   # The tests use no secrets, so they run on pull requests from forks and
   # Dependabot as well, with a read-only token.
   pull_request:
@@ -26,7 +26,7 @@ on:
       - 'go.sum'
       - 'e2e/**'
       - 'examples/**'
-      - '.github/workflows/e2e-test.yml'
+      - '.github/workflows/e2e.yml'
 
 # A newer push to a pull request supersedes the run in progress. Every other
 # run gets a group of its own: a group holds one pending run at most, so a
@@ -39,8 +39,7 @@ permissions:
   contents: read
 
 jobs:
-  test:
-    name: Test to Workflow Examples
+  e2e:
     runs-on: ubuntu-latest
     steps:
     - name: Checkout

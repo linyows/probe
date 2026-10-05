@@ -13,8 +13,8 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/linyows/probe/actions/workflows/build.yml">
-    <img alt="GitHub Workflow Status" src="https://img.shields.io/github/actions/workflow/status/linyows/probe/build.yml?branch=main&style=for-the-badge&labelColor=666666">
+  <a href="https://github.com/linyows/probe/actions/workflows/test.yml">
+    <img alt="GitHub Workflow Status" src="https://img.shields.io/github/actions/workflow/status/linyows/probe/test.yml?branch=main&style=for-the-badge&labelColor=666666">
   </a>
   <a href="https://github.com/linyows/probe/releases">
     <img src="http://img.shields.io/github/release/linyows/probe.svg?style=for-the-badge&labelColor=666666&color=DDDDDD" alt="GitHub Release">
