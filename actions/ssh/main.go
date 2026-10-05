@@ -2,100 +2,39 @@ package ssh
 
 import (
 	"errors"
-	"fmt"
 
 	"github.com/hashicorp/go-hclog"
 	"github.com/linyows/probe/actionrpc"
 	"github.com/linyows/probe/ssh"
-	"github.com/linyows/probe/truncate"
 )
 
 type Action struct {
 	log hclog.Logger
 }
 
+// Run runs the command in with over SSH. The password and key passphrase in
+// with are hidden by the workflow runner, which learns them before the
+// action starts and masks the records this action logs.
 func (a *Action) Run(with map[string]any) (map[string]any, error) {
 	// Validate that required parameters are provided
 	if len(with) == 0 {
 		return map[string]any{}, errors.New("ssh action requires parameters in 'with' section. Please specify connection details like host, user, cmd")
 	}
 
-	// Use default truncate length, can be overridden by caller
-	truncateLength := truncate.MaxLogLength
-
-	// Truncate long parameters for logging to prevent log bloat
-	// Note: Sensitive data like passwords and keys are excluded from logs for security
-	truncatedParams := truncate.Map(with, truncateLength)
-
-	// Remove sensitive information from logs
-	logParams := make(map[string]string)
-	for k, v := range truncatedParams {
-		switch k {
-		case "password", "key_passphrase":
-			logParams[k] = "[REDACTED]"
-		case "key_file":
-			// Log only the filename, not the full path for security
-			if str, ok := v.(string); ok && str != "" {
-				logParams[k] = "[KEY_FILE_PROVIDED]"
-			}
-		default:
-			if str, ok := v.(string); ok {
-				logParams[k] = str
-			} else {
-				logParams[k] = fmt.Sprintf("%v", v)
-			}
-		}
-	}
-
-	a.log.Debug("received ssh request parameters", "params", logParams)
+	actionrpc.LogParams(a.log, "received ssh request parameters", with)
 
 	before := ssh.WithBefore(func(host string, port int, user string, cmd string) {
 		a.log.Debug("ssh connection prepared", "host", host, "port", port, "user", user, "cmd", cmd)
-	})
-	after := ssh.WithAfter(func(result *ssh.Result) {
-		// Truncate result for logging to prevent log bloat
-		logResult := map[string]any{
-			"code":   result.Res.Code,
-			"status": result.Status,
-			"rt":     result.RT,
-		}
-		// Truncate stdout/stderr for logging
-		if len(result.Res.Stdout) > truncateLength {
-			logResult["stdout"] = result.Res.Stdout[:truncateLength] + "...[TRUNCATED]"
-		} else {
-			logResult["stdout"] = result.Res.Stdout
-		}
-		if len(result.Res.Stderr) > truncateLength {
-			logResult["stderr"] = result.Res.Stderr[:truncateLength] + "...[TRUNCATED]"
-		} else {
-			logResult["stderr"] = result.Res.Stderr
-		}
-		a.log.Debug("ssh command completed", "result", logResult)
 	})
 	// Only the name is logged: the value may be a secret.
 	envRefused := ssh.WithEnvRefused(func(name string, err error) {
 		a.log.Warn("ssh server refused an environment variable; the command runs without it (allow it with AcceptEnv in sshd_config)", "name", name, "error", err)
 	})
-	ret, err := ssh.Execute(with, before, after, envRefused)
+	ret, err := ssh.Execute(with, before, envRefused)
 
-	if err != nil {
-		a.log.Error("ssh command failed", "error", err)
-	} else {
-		// Truncate result for logging to prevent log bloat
-		truncatedResult := truncate.Map(ret, truncateLength)
-		a.log.Debug("ssh command completed successfully", "result_keys", getMapKeys(truncatedResult))
-	}
+	actionrpc.LogOutcome(a.log, "ssh command", ret, err)
 
 	return ret, err
-}
-
-// getMapKeys returns the keys of a map for logging purposes
-func getMapKeys(m map[string]any) []string {
-	keys := make([]string, 0, len(m))
-	for k := range m {
-		keys = append(keys, k)
-	}
-	return keys
 }
 
 func Serve() {

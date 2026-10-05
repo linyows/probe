@@ -482,3 +482,26 @@ func TestJob_RunIndependently_Parameters(t *testing.T) {
 		})
 	}
 }
+
+// A job run outside a workflow, as an embedded one is, hides the credentials
+// its steps pass to actions, as a workflow does.
+func TestJob_RunIndependently_HidesCredentials(t *testing.T) {
+	step := &Step{
+		Name: "login",
+		Uses: "hello",
+		With: map[string]any{"password": "inner-only-pass"},
+		Test: "true",
+	}
+	step.actionRunner = NewMockActionRunner()
+	job := &Job{Name: "embedded", Steps: []*Step{step}}
+
+	printer := newBufferPrinter()
+	if printer.Masker() != nil {
+		t.Fatal("the printer already has a masker; the test needs one without")
+	}
+	job.RunIndependently(map[string]any{}, printer, "embedded")
+
+	if got := printer.Masker().String("sent inner-only-pass"); got != "sent <redacted>" {
+		t.Errorf("Masker().String() = %q, want the step's password hidden", got)
+	}
+}

@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/linyows/probe/expr"
+	"github.com/linyows/probe/mask"
 	"github.com/linyows/probe/procgroup"
 )
 
@@ -234,6 +235,12 @@ func (j *Job) handleSkip(ctx JobContext) {
 func (j *Job) RunIndependently(vars map[string]any, printer *Printer, jobID string) (bool, map[string]any, string, string, time.Duration) {
 	start := time.Now()
 	j.ID = jobID
+	// The job runs outside Workflow.Start, which is what installs a masker.
+	// One is installed here, so that credentials the job's own steps pass to
+	// actions are learned and hidden as they are in a workflow.
+	if printer.Masker() == nil {
+		printer.SetMasker(mask.New(nil, nil))
+	}
 	result := NewResult()
 	jr := &JobResult{
 		JobName:   j.Name,
