@@ -170,6 +170,43 @@ vars:
   email: "user-{{random_str(8)}}@example.com"
 ```
 
+### `file`
+
+Returns the content of a file as a string, as it is: templates in it are not expanded. The path is relative to the working directory, as the paths of actions are. A file larger than 1000000 bytes, a missing file, a directory and anything else that is not a regular file, such as a device, are errors.
+
+**Syntax:** `file(path)`
+**Returns:** String
+
+Combined with `parse_json`, a JSON file becomes an object, which is sent as JSON when `content-type` is a JSON type, or compared with a response:
+
+```yaml
+with:
+  post: /users
+  headers:
+    content-type: application/json
+  body: "{{parse_json(file('fixtures/user.json'))}}"
+test: match_json(res.body, parse_json(file('expected/user.json')))
+```
+
+### `template`
+
+Expands the `{{ }}` templates in a string, against the same fields as the expression that calls it, such as `vars` and `outputs`, and returns the string. It is what makes a file read by `file` a template:
+
+**Syntax:** `template(string)`
+**Returns:** String
+
+```yaml
+body: "{{parse_json(template(file('fixtures/user.json.tmpl')))}}"
+```
+
+With `fixtures/user.json.tmpl` holding:
+
+```json
+{"name": "{{ vars.name }}", "retries": {{ vars.retries + 1 }}}
+```
+
+A template is replaced by its value as text, so a string value that may hold a quote is better passed through `toJSON`, which writes it quoted: `{"name": {{ toJSON(vars.name) }}}`. A template in the expanded text that calls `template` again is expanded too, up to 10 levels deep.
+
 ## String Functions
 
 These operate on strings, which is what most response bodies and variables are.
@@ -335,7 +372,8 @@ Expression evaluation is bounded for safety:
 
 - An expression may be at most 1000000 characters long.
 - Evaluation times out after 5 seconds.
-- `parse_json`, `encode_base64` and `decode_base64` reject an argument longer than 1000000 characters.
+- `parse_json`, `encode_base64`, `decode_base64` and `template` reject an argument longer than 1000000 characters, and `file` a file larger than 1000000 bytes.
+- `template` calls nest at most 10 levels deep. Each returns at most 1000000 characters, and the calls nested in one expand at most 10000000 characters in all.
 
 ## See Also
 

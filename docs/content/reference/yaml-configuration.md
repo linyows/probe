@@ -111,7 +111,7 @@ vars:
   basic_auth: "Basic {{encode_base64('alice:' + vars.password)}}"
 ```
 
-A var that reads itself, directly or through other vars, stops the workflow before the first job starts with an error naming the chain, such as `vars: circular reference: a -> b -> a`. A name that is not a var reads as nil, so `vars.<name> ?? 'default'` gives the default. A var that reads `vars` by a key known only when it runs, as `vars[KEY]`, is evaluated after all the others.
+A var that reads itself, directly or through other vars, stops the workflow before the first job starts with an error naming the chain, such as `vars: circular reference: a -> b -> a`. A name that is not a var reads as nil, so `vars.<name> ?? 'default'` gives the default. A var that reads `vars` by a key known only when it runs, as `vars[KEY]`, is evaluated after all the others. A var that calls `template`, such as one built from a template file, is evaluated after all the vars that do not, since what the template reads is known only when it runs. When the template reads another var that calls `template` and has not been evaluated yet, that var is evaluated first, and a cycle between them stops the workflow as one between other vars does.
 
 The templates in a list are evaluated as those in a map are, at any depth, so `ports: ["{{vars.http_port}}"]` holds the port.
 

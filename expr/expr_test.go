@@ -2,6 +2,9 @@ package expr
 
 import (
 	"errors"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"reflect"
 	"regexp"
 	"strings"
@@ -1441,4 +1444,228 @@ func TestNewCustomFunctionsEdgeCases(t *testing.T) {
 			})
 		}
 	})
+}
+
+func TestFileFunction(t *testing.T) {
+	dir := t.TempDir()
+	body := filepath.Join(dir, "body.json")
+	if err := os.WriteFile(body, []byte(`{"name": "alice", "tags": ["a"]}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	e := &Expr{}
+	env := map[string]any{"path": body}
+
+	got, err := e.Eval("file(path)", env)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got != `{"name": "alice", "tags": ["a"]}` {
+		t.Errorf("file() = %#v", got)
+	}
+
+	// The content combines with parse_json, keeping its type in a template.
+	v, err := e.EvalTemplateWithTypePreservation("{{ parse_json(file(path)) }}", env)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := map[string]any{"name": "alice", "tags": []any{"a"}}
+	if !reflect.DeepEqual(v, want) {
+		t.Errorf("parse_json(file()) = %#v, want %#v", v, want)
+	}
+
+	big := filepath.Join(dir, "big.txt")
+	if err := os.WriteFile(big, make([]byte, maxStringLength+1), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	missing := filepath.Join(dir, "missing.json")
+	for _, tt := range []struct {
+		input   string
+		wantErr string
+	}{
+		{"file()", "file requires exactly 1 parameter"},
+		{"file(1)", "file parameter must be a path"},
+		{"file('')", "file parameter must be a path"},
+		{"file('" + missing + "')", "file: stat " + missing + ": no such file or directory"},
+		{"file('" + dir + "')", "file: " + dir + " is a directory"},
+		{"file('" + big + "')", "file: " + big + " exceeds maximum length (1000000 bytes)"},
+		// A device reports no size and would be read without end.
+		{"file('/dev/zero')", "file: /dev/zero is not a regular file"},
+	} {
+		if _, err := e.Eval(tt.input, env); err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+			t.Errorf("Eval(%q) error = %v, want %q", tt.input, err, tt.wantErr)
+		}
+	}
+}
+
+func TestTemplateFunction(t *testing.T) {
+	dir := t.TempDir()
+	tmpl := filepath.Join(dir, "user.json.tmpl")
+	if err := os.WriteFile(tmpl, []byte(`{"name": "{{ vars.name }}", "count": {{ vars.count + 1 }}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	e := &Expr{}
+	env := map[string]any{"vars": map[string]any{"name": "alice", "count": 2, "tmpl": tmpl}}
+
+	got, err := e.Eval("template(file(vars.tmpl))", env)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got != `{"name": "alice", "count": 3}` {
+		t.Errorf("template() = %#v", got)
+	}
+
+	// The file is read as it is when it is not given to template.
+	raw, err := e.Eval("file(vars.tmpl)", env)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(raw.(string), "{{ vars.name }}") {
+		t.Errorf("file() should not expand templates, got %q", raw)
+	}
+
+	// toJSON writes a string value quoted, so one holding a quote stays JSON.
+	quoted := map[string]any{"vars": map[string]any{"name": `a"b`}}
+	v, err := e.EvalTemplateWithTypePreservation(`{{ parse_json(template('{"name": {{ toJSON(vars.name) }}}')) }}`, quoted)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !reflect.DeepEqual(v, map[string]any{"name": `a"b`}) {
+		t.Errorf("template() with toJSON = %#v", v)
+	}
+
+	if got, err := e.Eval("template('no templates')", env); err != nil || got != "no templates" {
+		t.Errorf("template() of plain text = %#v, %v", got, err)
+	}
+
+	// A template that cannot be evaluated is an error naming it.
+	if _, err := e.Eval("template('{{ nosuch() }}')", env); err == nil || !strings.Contains(err.Error(), "{{ nosuch() }}") {
+		t.Errorf("error = %v, want one naming the template", err)
+	}
+	if _, err := e.Eval("template(1)", env); err == nil || !strings.Contains(err.Error(), "template parameter must be a string") {
+		t.Errorf("error = %v", err)
+	}
+}
+
+func TestTemplateFunctionNestsBoundedly(t *testing.T) {
+	dir := t.TempDir()
+	loop := filepath.Join(dir, "loop.tmpl")
+	if err := os.WriteFile(loop, []byte("{{ template(file(vars.loop)) }}"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	e := &Expr{}
+	env := map[string]any{"vars": map[string]any{"loop": loop}}
+
+	start := time.Now()
+	_, err := e.Eval("template(file(vars.loop))", env)
+	if err == nil || !strings.Contains(err.Error(), "template calls nest deeper than 10") {
+		t.Errorf("error = %v, want one about the nesting", err)
+	}
+	if time.Since(start) > time.Second {
+		t.Errorf("a template that reads itself should fail at once, took %v", time.Since(start))
+	}
+}
+
+func TestTemplateFunctionBoundsWhatItExpands(t *testing.T) {
+	dir := t.TempDir()
+	leaf := filepath.Join(dir, "leaf.txt")
+	if err := os.WriteFile(leaf, []byte(strings.Repeat("x", 300000)), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	e := &Expr{}
+	env := map[string]any{"vars": map[string]any{"leaf": leaf}}
+
+	// A result larger than a string may be is an error, not cut short.
+	big := strings.Repeat("{{ template(file(vars.leaf)) }}", 4)
+	if _, err := e.Eval("template('"+big+"')", env); err == nil || !strings.Contains(err.Error(), "template result exceeds maximum length (1000000 chars)") {
+		t.Errorf("error = %v, want one about the result", err)
+	}
+
+	// Results that are not kept still count against what may be expanded
+	// in all.
+	wide := strings.Repeat("{{ len(template(file(vars.leaf))) }} ", 40)
+	if _, err := e.Eval("template('"+wide+"')", env); err == nil || !strings.Contains(err.Error(), "template calls expand more than 10000000 chars in all") {
+		t.Errorf("error = %v, want one about the total", err)
+	}
+
+	// Each outermost call has a budget of its own.
+	few := strings.Repeat("{{ len(template(file(vars.leaf))) }} ", 3)
+	for i := 0; i < 20; i++ {
+		if _, err := e.Eval("template('"+few+"')", env); err != nil {
+			t.Fatalf("run %d: unexpected error: %v", i, err)
+		}
+	}
+}
+
+func TestBeforeTemplate(t *testing.T) {
+	var seen []string
+	stop := errors.New("stop")
+	e := &Expr{BeforeTemplate: func(text string) error {
+		seen = append(seen, text)
+		if strings.Contains(text, "deny") {
+			return stop
+		}
+		return nil
+	}}
+	env := map[string]any{"inner": "{{ 1 + 1 }}"}
+
+	got, err := e.EvalTemplate("{{ template('a {{ template(inner) }}') }}", env)
+	if err != nil || got != "a 2" {
+		t.Fatalf("EvalTemplate() = %q, %v", got, err)
+	}
+	if want := []string{"a {{ template(inner) }}", "{{ 1 + 1 }}"}; !reflect.DeepEqual(seen, want) {
+		t.Errorf("BeforeTemplate saw %q, want %q at every depth", seen, want)
+	}
+
+	if _, err := e.EvalTemplate("{{ template('deny') }}", env); !errors.Is(err, stop) {
+		t.Errorf("error = %v, want the error BeforeTemplate returned", err)
+	}
+}
+
+// TestTemplateFunctionStopsExpandingAtTheLimit checks that a template is
+// expanded no further than the limit of its result, rather than in full
+// before the limit is checked.
+func TestTemplateFunctionStopsExpandingAtTheLimit(t *testing.T) {
+	calls := 0
+	env := map[string]any{"chunk": func() string {
+		calls++
+		return strings.Repeat("x", 300000)
+	}}
+	e := &Expr{}
+	_, err := e.Eval("template('"+strings.Repeat("{{ chunk() }}", 40)+"')", env)
+	if err == nil || !strings.Contains(err.Error(), "template result exceeds maximum length (1000000 chars)") {
+		t.Errorf("error = %v, want one about the result", err)
+	}
+	if calls > 4 {
+		t.Errorf("chunk was called %d times, want the expansion stopped once it was over the limit", calls)
+	}
+}
+
+func TestFileFunctionDoesNotBlockOnAFIFO(t *testing.T) {
+	mkfifo, err := exec.LookPath("mkfifo")
+	if err != nil {
+		t.Skip("mkfifo is not available")
+	}
+	fifo := filepath.Join(t.TempDir(), "fifo")
+	if out, err := exec.Command(mkfifo, fifo).CombinedOutput(); err != nil {
+		t.Fatalf("mkfifo: %v: %s", err, out)
+	}
+
+	start := time.Now()
+	_, err = (&Expr{}).Eval("file(path)", map[string]any{"path": fifo})
+	if err == nil || !strings.Contains(err.Error(), "is not a regular file") {
+		t.Errorf("error = %v, want one about the file", err)
+	}
+	if time.Since(start) > time.Second {
+		t.Errorf("a FIFO should be refused at once, took %v", time.Since(start))
+	}
+}
+
+// TestNilExprEvaluates checks that a nil Expr evaluates as the zero one
+// does, as it did before Expr had fields.
+func TestNilExprEvaluates(t *testing.T) {
+	var e *Expr
+	got, err := e.EvalTemplate("{{ template('{{ 1 + 1 }}') }} {{ len('ab') }}", map[string]any{})
+	if err != nil || got != "2 2" {
+		t.Errorf("EvalTemplate() = %q, %v", got, err)
+	}
 }

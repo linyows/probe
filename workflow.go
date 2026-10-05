@@ -279,38 +279,106 @@ func (w *Workflow) evalVars() (map[string]any, error) {
 	vars := make(map[string]any)
 	env := strmapToAnymap(w.Env())
 
-	ev := &expr.Expr{}
 	var errs []error
 	failed := make(map[string]bool)
-	for _, k := range order {
+	done := make(map[string]bool)
+	var cycle error
+
+	// evaluate evaluates the var k, which path, the vars being evaluated,
+	// waits for. A template a var expands is read only when it runs, so a
+	// var it reads that has not been evaluated yet, which varsOrder could not
+	// see, is evaluated first and k evaluated again after it. k has kept no
+	// value then, so a value such as random_str(8) is still computed once.
+	var evaluate func(k string, path []string)
+	evaluate = func(k string, path []string) {
+		if done[k] || failed[k] || cycle != nil {
+			return
+		}
 		v := w.Vars[k]
 
 		// A var that reads one that failed is not evaluated: its error
 		// would only repeat that one.
 		keys, dynamic := expr.Refs(v, "vars")
-		if len(failed) > 0 && (dynamic || slices.ContainsFunc(keys, func(d string) bool { return failed[d] })) {
+		if len(failed) > 0 && (dynamic || expr.CallsTemplate(v) || slices.ContainsFunc(keys, func(d string) bool { return failed[d] })) {
 			failed[k] = true
-			continue
+			return
 		}
 
-		// Each var reads a copy of the vars evaluated so far. A template
-		// such as {{vars}} keeps the map it returns, and the map being
-		// filled in would then hold itself.
-		env["vars"] = maps.Clone(vars)
+		ev := &expr.Expr{BeforeTemplate: func(text string) error {
+			keys, dynamic := expr.Refs(text, "vars")
+			for _, d := range keys {
+				if _, ok := w.Vars[d]; ok && !done[d] {
+					return &pendingVarError{name: d}
+				}
+			}
+			// A template that reads vars by a key known only when it runs
+			// waits for every other var, as varsOrder orders such a var.
+			if dynamic {
+				for _, d := range order {
+					if d != k && !done[d] {
+						return &pendingVarError{name: d}
+					}
+				}
+			}
+			return nil
+		}}
+		for {
+			// Each var reads a copy of the vars evaluated so far. A
+			// template such as {{vars}} keeps the map it returns, and the
+			// map being filled in would then hold itself.
+			env["vars"] = maps.Clone(vars)
 
-		out, err := evalVar(ev, k, v, env)
-		if err != nil {
-			errs = append(errs, err)
-			failed[k] = true
-			continue
+			out, err := evalVar(ev, k, v, env)
+			var pending *pendingVarError
+			if errors.As(err, &pending) {
+				d := pending.name
+				waiting := append(slices.Clone(path), k)
+				if i := slices.Index(waiting, d); i >= 0 {
+					chain := append(waiting[i:], d)
+					cycle = fmt.Errorf("vars: circular reference: %s", strings.Join(chain, " -> "))
+					return
+				}
+				evaluate(d, waiting)
+				if cycle != nil {
+					return
+				}
+				if failed[d] {
+					failed[k] = true
+					return
+				}
+				continue
+			}
+			if err != nil {
+				errs = append(errs, err)
+				failed[k] = true
+				return
+			}
+			vars[k] = out
+			done[k] = true
+			return
 		}
-		vars[k] = out
+	}
+	for _, k := range order {
+		evaluate(k, nil)
+		if cycle != nil {
+			return nil, cycle
+		}
 	}
 	if len(errs) > 0 {
 		return nil, errors.Join(errs...)
 	}
 
 	return vars, nil
+}
+
+// pendingVarError stops the evaluation of a var whose template reads the var
+// name, which has not been evaluated yet.
+type pendingVarError struct {
+	name string
+}
+
+func (e *pendingVarError) Error() string {
+	return fmt.Sprintf("vars.%s has not been evaluated yet", e.name)
 }
 
 // maskedError shows err with the secrets masker knows hidden, and unwraps to
@@ -375,15 +443,23 @@ func prefixFieldErrors(err error, prefix string) error {
 
 // varsOrder returns the names of vars in an order in which each comes after
 // the vars it reads. A var that reads vars by a key known only when it runs
-// comes after all the others. Names are otherwise sorted, and Refs returns
-// the keys of a map in the order of its sorted keys, so neither the order nor
-// a reported cycle depends on map iteration.
+// comes after all the others. A var that expands a template, such as one read
+// from a file, comes after all the vars that do not, since what the template
+// reads is known only when it runs; among themselves they are ordered by what
+// they read outside it. Names are otherwise sorted, and Refs returns the keys
+// of a map in the order of its sorted keys, so neither the order nor a
+// reported cycle depends on map iteration.
 func varsOrder(vars map[string]any) ([]string, error) {
 	names := make([]string, 0, len(vars))
 	for k := range vars {
 		names = append(names, k)
 	}
 	slices.Sort(names)
+
+	expands := make(map[string]bool, len(vars))
+	for _, k := range names {
+		expands[k] = expr.CallsTemplate(vars[k])
+	}
 
 	deps := make(map[string][]string, len(vars))
 	for _, k := range names {
@@ -399,6 +475,15 @@ func varsOrder(vars map[string]any) ([]string, error) {
 			// var, but not itself: only a key it names reads itself.
 			for _, d := range names {
 				if d != k && !slices.Contains(deps[k], d) {
+					deps[k] = append(deps[k], d)
+				}
+			}
+		}
+		if expands[k] {
+			// Two vars that expand templates are not taken to read each
+			// other, which would make every pair of them a cycle.
+			for _, d := range names {
+				if d != k && !expands[d] && !slices.Contains(deps[k], d) {
 					deps[k] = append(deps[k], d)
 				}
 			}

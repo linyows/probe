@@ -45,3 +45,23 @@ func TestRefs(t *testing.T) {
 		})
 	}
 }
+
+func TestCallsTemplate(t *testing.T) {
+	for _, tt := range []struct {
+		v    any
+		want bool
+	}{
+		{"{{ template(file('a.tmpl')) }}", true},
+		{"x {{ vars.a }} {{ parse_json(template(vars.t)).k }}", true},
+		{map[string]any{"a": []any{"plain", "{{ template('{{ vars.b }}') }}"}}, true},
+		{"{{ file('a.json') }}", false},
+		{"{{ vars.template }}", false},
+		{"template(x) outside braces", false},
+		{"{{ template( }}", false},
+		{42, false},
+	} {
+		if got := CallsTemplate(tt.v); got != tt.want {
+			t.Errorf("CallsTemplate(%#v) = %v, want %v", tt.v, got, tt.want)
+		}
+	}
+}

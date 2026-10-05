@@ -1,0 +1,37 @@
+name: File and Template Example
+vars:
+  url: "{{URL ?? 'http://localhost:8080'}}"
+  name: alice
+  retries: 2
+
+jobs:
+- name: "Send bodies kept in files to {{vars.url}}"
+  defaults:
+    http:
+      url: "{{vars.url}}"
+      headers:
+        content-type: application/json
+        accept: application/json
+  steps:
+  # file() reads a file as it is, relative to the working directory, and
+  # parse_json turns it into an object, which is sent as JSON
+  - name: Post a body read from a file
+    uses: http
+    with:
+      post: /post
+      body: "{{ parse_json(file('examples/fixtures/user.json')) }}"
+    test: |
+      res.code == 200 &&
+      res.body.json.name == "alice"
+
+  # template() expands the {{ }} templates in what file() read, against the
+  # step's own vars, outputs and the rest
+  - name: Post a body built from a template
+    uses: http
+    with:
+      post: /post
+      body: "{{ parse_json(template(file('examples/fixtures/user.json.tmpl'))) }}"
+    # the response is compared with an expected body kept in a file
+    test: |
+      res.code == 200 &&
+      match_json(res.body.json, parse_json(file('examples/fixtures/user.json')))
