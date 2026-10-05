@@ -2,6 +2,9 @@ package probe
 
 import (
 	"errors"
+	"fmt"
+	"slices"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -258,13 +261,23 @@ func (w *Workflow) Env() map[string]string {
 	return w.env
 }
 
-// evalVars evaluates template variables in workflow vars using environment variables
+// evalVars evaluates template variables in workflow vars using environment
+// variables. A var can read another as vars.<name>; each one is evaluated
+// after the vars it reads, so a value such as random_str(8) is computed once
+// and every var that reads it sees the same value.
 func (w *Workflow) evalVars() (map[string]any, error) {
-	env := strmapToAnymap(w.Env())
+	order, err := varsOrder(w.Vars)
+	if err != nil {
+		return nil, err
+	}
+
 	vars := make(map[string]any)
+	env := strmapToAnymap(w.Env())
+	env["vars"] = vars
 
 	ev := &expr.Expr{}
-	for k, v := range w.Vars {
+	for _, k := range order {
+		v := w.Vars[k]
 		if mapV, ok := v.(map[string]any); ok {
 			vars[k] = ev.EvalTemplateMap(mapV, env)
 		} else if strV, ok2 := v.(string); ok2 {
@@ -280,6 +293,71 @@ func (w *Workflow) evalVars() (map[string]any, error) {
 	}
 
 	return vars, nil
+}
+
+// varsOrder returns the names of vars in an order in which each comes after
+// the vars it reads. A var that reads vars by a key known only when it runs
+// comes after all the others. Names are otherwise sorted, so the order does
+// not depend on map iteration.
+func varsOrder(vars map[string]any) ([]string, error) {
+	names := make([]string, 0, len(vars))
+	for k := range vars {
+		names = append(names, k)
+	}
+	slices.Sort(names)
+
+	deps := make(map[string][]string, len(vars))
+	for _, k := range names {
+		keys, dynamic := expr.Refs(vars[k], "vars")
+		if dynamic {
+			keys = names
+		}
+		for _, d := range keys {
+			// A name that is not a var reads as nil, as it always has, and
+			// a var that reads vars as a whole does not read itself.
+			if _, ok := vars[d]; !ok || (dynamic && d == k) {
+				continue
+			}
+			deps[k] = append(deps[k], d)
+		}
+	}
+
+	const (
+		visiting = 1
+		done     = 2
+	)
+	state := make(map[string]int, len(vars))
+	order := make([]string, 0, len(vars))
+	var path []string
+	var visit func(k string) error
+	visit = func(k string) error {
+		switch state[k] {
+		case done:
+			return nil
+		case visiting:
+			i := slices.Index(path, k)
+			cycle := append(slices.Clone(path[i:]), k)
+			return fmt.Errorf("vars: circular reference: %s", strings.Join(cycle, " -> "))
+		}
+		state[k] = visiting
+		path = append(path, k)
+		for _, d := range deps[k] {
+			if err := visit(d); err != nil {
+				return err
+			}
+		}
+		path = path[:len(path)-1]
+		state[k] = done
+		order = append(order, k)
+		return nil
+	}
+	for _, k := range names {
+		if err := visit(k); err != nil {
+			return nil, err
+		}
+	}
+
+	return order, nil
 }
 
 func (w *Workflow) newJobContext(c Config, vars map[string]any, scheduler *JobScheduler) JobContext {

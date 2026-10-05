@@ -101,6 +101,18 @@ vars:
 
 Expressions inside a step cannot read environment variables directly - there is no `env` in the expression context. Put the variable in `vars` and read `vars.<name>`.
 
+A var can read another var as `vars.<name>`, wherever the other one is written in the block. Each var is evaluated after the vars it reads, so a value computed once, such as a random password, is the same in every var built from it:
+
+```yaml
+vars:
+  http_port: "{{HTTP_PORT ?? '18080'}}"
+  base: "http://localhost:{{vars.http_port}}"
+  password: "{{PASSWORD ?? random_str(24)}}"
+  basic_auth: "Basic {{encode_base64('alice:' + vars.password)}}"
+```
+
+A var that reads itself, directly or through other vars, stops the workflow before the first job starts with an error naming the chain, such as `vars: circular reference: a -> b -> a`. A name that is not a var reads as nil, so `vars.<name> ?? 'default'` gives the default. A var that reads `vars` by a key known only when it runs, as `vars[KEY]`, is evaluated after all the others.
+
 ### `secrets`
 
 **Type:** Array of strings (optional)  
