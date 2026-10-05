@@ -2,11 +2,12 @@ package embedded
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
+	"io/fs"
 	"maps"
 	"os"
 	"path/filepath"
-	"strings"
 	"time"
 
 	"github.com/goccy/go-yaml"
@@ -63,54 +64,38 @@ func (r *Req) Do() (*Result, error) {
 
 	start := time.Now()
 
-	// Resolve absolute path
 	absPath, err := filepath.Abs(r.Path)
 	if err != nil {
 		return result, fmt.Errorf("failed to resolve path: %w", err)
 	}
-
-	// Check if file exists
-	if _, err := os.Stat(absPath); os.IsNotExist(err) {
-		return result, fmt.Errorf("embedded steps file does not exist: %s", absPath)
-	}
-
-	// Read embedded steps file
-	data, err := os.ReadFile(absPath)
+	job, err := loadJob(absPath)
 	if err != nil {
-		return result, fmt.Errorf("failed to read embedded steps file: %w", err)
+		return result, err
 	}
 
-	// Parse YAML job
-	job := &probe.Job{}
-	v := validator.New()
-	dec := yaml.NewDecoder(bytes.NewReader(data), yaml.Validator(v), yaml.AllowDuplicateMapKey())
-	if err = dec.Decode(job); err != nil {
-		return result, fmt.Errorf("failed to decode YAML job: %w", err)
-	}
-
-	if len(job.Steps) == 0 {
-		return result, fmt.Errorf("no steps found in embedded file: %s", absPath)
-	}
-
-	// Apply defaults to steps if they exist
-	applyDefaultsToSteps(job)
-
-	// Execute job independently
+	// A local action in the job is found next to the job file, as one in a
+	// workflow is found next to the workflow file.
 	jobID := "embedded"
 	printer := probe.NewPrinter(true, []string{jobID})
-	success, outputs, report, errorMsg, _ := job.RunIndependently(r.Vars, printer, jobID)
+	run := job.RunStandalone(r.Vars, printer, jobID, filepath.Dir(absPath))
 
 	result.RT = time.Since(start)
 
 	code := 0
-	if !success {
+	errorMsg := ""
+	if !run.Success {
 		code = 1
+		// The message res.error has always carried for a failed step.
+		errorMsg = "execution error in job_start: job execution failed"
+	}
+	if run.Err != nil {
+		errorMsg = run.Err.Error()
 	}
 
 	result.Res = Res{
 		Code:    code,
-		Outputs: outputs,
-		Report:  report,
+		Outputs: run.Outputs,
+		Report:  run.Report,
 		Error:   errorMsg,
 		Dump:    false, // Don't dump request/response for embedded jobs
 	}
@@ -121,69 +106,42 @@ func (r *Req) Do() (*Result, error) {
 		r.cb.after(result)
 	}
 
-	// Only return error for system-level failures (file not found, parsing errors, etc.)
-	// Test failures should not be treated as plugin errors
-	if !success && errorMsg != "" &&
-		errorMsg != "job execution failed" &&
-		!strings.Contains(errorMsg, "execution error in job_start: job execution failed") {
-		detailedError := fmt.Sprintf("embedded job execution failed: %s", errorMsg)
-		if report != "" {
-			detailedError += "\nEmbedded job details:\n" + report
+	// A step that fails is the embedded job's result, for the embedding step
+	// to test. Only a job that could not run, such as one with an invalid
+	// step, is an error.
+	if run.Err != nil {
+		detailedError := fmt.Sprintf("embedded job execution failed: %s", run.Err)
+		if run.Report != "" {
+			detailedError += "\nEmbedded job details:\n" + run.Report
 		}
-		return result, fmt.Errorf("%s", detailedError)
+		return result, errors.New(detailedError)
 	}
 
 	return result, nil
 }
 
-// applyDefaultsToSteps applies defaults from job to steps
-func applyDefaultsToSteps(job *probe.Job) {
-	if job.Defaults == nil {
-		return
+// loadJob reads the job file at path and applies the job's defaults to its
+// steps.
+func loadJob(path string) (*probe.Job, error) {
+	data, err := os.ReadFile(path)
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil, fmt.Errorf("embedded steps file does not exist: %s", path)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to read embedded steps file: %w", err)
 	}
 
-	dataMap, ok := job.Defaults.(map[string]any)
-	if !ok {
-		return
+	job := &probe.Job{}
+	dec := yaml.NewDecoder(bytes.NewReader(data), yaml.Validator(validator.New()), yaml.AllowDuplicateMapKey())
+	if err := dec.Decode(job); err != nil {
+		return nil, fmt.Errorf("failed to decode YAML job: %w", err)
+	}
+	if len(job.Steps) == 0 {
+		return nil, fmt.Errorf("no steps found in embedded file: %s", path)
 	}
 
-	for key, values := range dataMap {
-		defaults, defok := values.(map[string]any)
-		if !defok {
-			continue
-		}
-
-		for _, s := range job.Steps {
-			if s.Uses != key {
-				continue
-			}
-
-			if s.With == nil {
-				s.With = make(map[string]any)
-			}
-
-			applyDefaults(s.With, defaults)
-		}
-	}
-}
-
-// applyDefaults recursively applies default values
-func applyDefaults(data, defaults map[string]any) {
-	for key, defaultValue := range defaults {
-		// If key does not exist in data
-		if _, exists := data[key]; !exists {
-			data[key] = defaultValue
-			continue
-		}
-
-		// If you have a nested map with a key of data
-		if nestedDefault, ok := defaultValue.(map[string]any); ok {
-			if nestedData, ok := data[key].(map[string]any); ok {
-				// Recursively set default values
-				applyDefaults(nestedData, nestedDefault)
-			}
-		}
-	}
+	job.ApplyDefaults()
+	return job, nil
 }
 
 func Execute(data map[string]any, opts ...Option) (map[string]any, error) {

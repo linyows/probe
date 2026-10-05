@@ -3,6 +3,7 @@ package probe
 import (
 	"bytes"
 	"fmt"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -503,5 +504,149 @@ func TestJob_RunIndependently_HidesCredentials(t *testing.T) {
 
 	if got := printer.Masker().String("sent inner-only-pass"); got != "sent <redacted>" {
 		t.Errorf("Masker().String() = %q, want the step's password hidden", got)
+	}
+}
+
+func TestJob_ApplyDefaults(t *testing.T) {
+	withHeaders := &Step{Uses: "http", With: map[string]any{
+		"url":     "http://step",
+		"headers": map[string]any{"accept": "text/plain"},
+	}}
+	// A step that sets no with of its own still gets the defaults.
+	bare := &Step{Uses: "http"}
+	other := &Step{Uses: "shell", With: map[string]any{"cmd": "true"}}
+
+	job := &Job{
+		Steps: []*Step{withHeaders, bare, other},
+		Defaults: map[string]any{
+			"http": map[string]any{
+				"url":     "http://default",
+				"timeout": "5s",
+				"headers": map[string]any{"accept": "application/json", "user-agent": "probe"},
+			},
+		},
+	}
+	job.ApplyDefaults()
+
+	want := map[string]any{
+		"url":     "http://step",
+		"timeout": "5s",
+		"headers": map[string]any{"accept": "text/plain", "user-agent": "probe"},
+	}
+	if !reflect.DeepEqual(withHeaders.With, want) {
+		t.Errorf("step with its own values: With = %v, want %v", withHeaders.With, want)
+	}
+	if bare.With["url"] != "http://default" || bare.With["timeout"] != "5s" {
+		t.Errorf("step without with: With = %v, want the defaults", bare.With)
+	}
+	if !reflect.DeepEqual(other.With, map[string]any{"cmd": "true"}) {
+		t.Errorf("step of another action: With = %v, want it untouched", other.With)
+	}
+
+	// Defaults that are not a map of objects are ignored.
+	(&Job{Steps: []*Step{{Uses: "http"}}, Defaults: "nope"}).ApplyDefaults()
+}
+
+func TestJob_RunStandalone(t *testing.T) {
+	passing := func() *Step {
+		st := &Step{Name: "ok", Uses: "hello", Test: "true"}
+		st.actionRunner = NewMockActionRunner()
+		return st
+	}
+	failing := func() *Step {
+		st := &Step{Name: "ng", Uses: "hello", Test: "false"}
+		st.actionRunner = NewMockActionRunner()
+		return st
+	}
+
+	tests := []struct {
+		name        string
+		steps       []*Step
+		wantSuccess bool
+		wantErr     string
+	}{
+		{name: "steps pass", steps: []*Step{passing()}, wantSuccess: true},
+		{name: "a step fails", steps: []*Step{passing(), failing()}, wantSuccess: false},
+		{name: "an invalid step", steps: []*Step{{ID: "Bad ID", Uses: "hello"}}, wantErr: "step validation failed"},
+		{name: "an action that cannot be resolved", steps: []*Step{{Uses: "./no-such-action"}}, wantErr: "failed to resolve an external action"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			job := &Job{Name: "standalone", Steps: tt.steps}
+			run := job.RunStandalone(map[string]any{}, newBufferPrinter(), "standalone", t.TempDir())
+
+			if tt.wantErr != "" {
+				if run.Err == nil || !strings.Contains(run.Err.Error(), tt.wantErr) {
+					t.Fatalf("Err = %v, want one containing %q", run.Err, tt.wantErr)
+				}
+				if run.Success {
+					t.Error("Success = true for a job that could not run")
+				}
+				return
+			}
+			if run.Err != nil {
+				t.Fatalf("Err = %v, want none: a failing step is not an error", run.Err)
+			}
+			if run.Success != tt.wantSuccess {
+				t.Errorf("Success = %v, want %v", run.Success, tt.wantSuccess)
+			}
+		})
+	}
+}
+
+// RunIndependently keeps the messages it returned before RunStandalone
+// existed, since code outside probe may compare them.
+func TestJob_RunIndependently_ErrorMessages(t *testing.T) {
+	st := &Step{Name: "ng", Uses: "hello", Test: "false"}
+	st.actionRunner = NewMockActionRunner()
+	_, _, _, msg, _ := (&Job{Name: "j", Steps: []*Step{st}}).RunIndependently(map[string]any{}, newBufferPrinter(), "j")
+	if msg != "execution error in job_start: job execution failed" {
+		t.Errorf("failed step: errorMsg = %q", msg)
+	}
+
+	_, _, _, msg, _ = (&Job{Name: "j", Steps: []*Step{{ID: "Bad ID", Uses: "hello"}}}).RunIndependently(map[string]any{}, newBufferPrinter(), "j")
+	if !strings.HasPrefix(msg, "execution error in job_start: step validation failed") {
+		t.Errorf("invalid step: errorMsg = %q", msg)
+	}
+}
+
+// RunIndependently resolves an external action only when a step runs it, as
+// it did before RunStandalone resolved them up front.
+func TestJob_RunIndependently_ResolvesActionsWhenRun(t *testing.T) {
+	missing := func() *Step { return &Step{Name: "missing", Uses: "./no-such-action", Test: "true"} }
+
+	tests := []struct {
+		name        string
+		job         *Job
+		wantSuccess bool
+		wantMsg     string
+	}{
+		{
+			name:        "a skipped job",
+			job:         &Job{Name: "j", SkipIf: "true", Steps: []*Step{missing()}},
+			wantSuccess: true,
+		},
+		{
+			name: "a skipped step",
+			job: &Job{Name: "j", Steps: []*Step{func() *Step {
+				st := missing()
+				st.SkipIf = "true"
+				return st
+			}()}},
+			wantSuccess: true,
+		},
+		{
+			name:    "a step that runs the action",
+			job:     &Job{Name: "j", Steps: []*Step{missing()}},
+			wantMsg: "execution error in job_start: job execution failed",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			success, _, _, msg, _ := tt.job.RunIndependently(map[string]any{}, newBufferPrinter(), "j")
+			if success != tt.wantSuccess || msg != tt.wantMsg {
+				t.Errorf("RunIndependently() = %v, %q; want %v, %q", success, msg, tt.wantSuccess, tt.wantMsg)
+			}
+		})
 	}
 }

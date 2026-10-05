@@ -55,6 +55,8 @@ An embedded step names the job file to run and the variables to hand it.
 | `path` | String | Yes | - | Path to the job file. Resolved against the current working directory, not the workflow file |
 | `vars` | Object | No | `{}` | Variables passed to the embedded job, read there as `vars.<name>` |
 
+Inside the job file, a local [external action](/guide/concepts/actions#external-actions) such as `uses: ./greet` is found relative to the job file itself, the way one in a workflow is found relative to the workflow file.
+
 ## Response Object
 
 After the embedded job finishes, `res` carries its result and its outputs.

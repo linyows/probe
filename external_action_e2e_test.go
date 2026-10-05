@@ -102,6 +102,53 @@ jobs:
 	}
 }
 
+// A local action in an embedded job is found next to the job file, as one in
+// a workflow is found next to the workflow file.
+func TestEndToEndLocalExternalActionInEmbeddedJob(t *testing.T) {
+	dir := t.TempDir()
+	probeBin := filepath.Join(dir, "probe")
+	jobsDir := filepath.Join(dir, "jobs")
+	bin := filepath.Join(jobsDir, "greet", "greet")
+	for _, b := range [][]string{{probeBin, "./cmd/probe"}, {bin, "./testdata/external-action"}} {
+		if out, err := exec.Command("go", "build", "-o", b[0], b[1]).CombinedOutput(); err != nil {
+			t.Fatalf("go build %s: %v\n%s", b[1], err, out)
+		}
+	}
+	files := map[string]string{
+		filepath.Join(jobsDir, "greet", "action.yml"): "runs:\n  using: binary\n  path: greet\n",
+		filepath.Join(jobsDir, "greet.yml"): `name: greet
+steps:
+- name: greet probe
+  id: greet
+  uses: ./greet
+  with:
+    name: probe
+  test: res.greeting == "hello probe"
+  outputs:
+    greeting: res.greeting
+`,
+		filepath.Join(dir, "workflow.yml"): fmt.Sprintf(`name: embedded external
+jobs:
+- name: embed
+  steps:
+  - uses: embedded
+    with:
+      path: %s
+    test: res.code == 0 && res.outputs.greeting == "hello probe"
+`, filepath.Join(jobsDir, "greet.yml")),
+	}
+	for name, content := range files {
+		if err := os.WriteFile(name, []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	out, err := exec.Command(probeBin, filepath.Join(dir, "workflow.yml")).CombinedOutput()
+	if err != nil {
+		t.Fatalf("probe: %v\n%s", err, out)
+	}
+}
+
 // The digest an executable was resolved with is checked again when it is
 // started, so one replaced in between is not run.
 func TestEndToEndExternalActionChecksumAtStart(t *testing.T) {

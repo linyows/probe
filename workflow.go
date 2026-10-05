@@ -301,12 +301,22 @@ func (w *Workflow) newJobContext(c Config, vars map[string]any, scheduler *JobSc
 
 // resolveExternalActions resolves every action the steps name outside Probe.
 func (w *Workflow) resolveExternalActions() error {
-	for _, job := range w.Jobs {
+	jobs := make([]*Job, len(w.Jobs))
+	for i := range w.Jobs {
+		jobs[i] = &w.Jobs[i]
+	}
+	return resolveExternalActions(jobs, w.basePath)
+}
+
+// resolveExternalActions resolves every action the steps of jobs name
+// outside Probe, with local ones relative to baseDir.
+func resolveExternalActions(jobs []*Job, baseDir string) error {
+	for _, job := range jobs {
 		for _, st := range job.Steps {
 			if !actionref.IsExternal(st.Uses) {
 				continue
 			}
-			if _, err := actionref.Resolve(st.Uses, w.basePath); err != nil {
+			if _, err := actionref.Resolve(st.Uses, baseDir); err != nil {
 				return NewConfigurationError("resolve_action", "failed to resolve an external action", err).
 					WithContext("uses", st.Uses)
 			}
