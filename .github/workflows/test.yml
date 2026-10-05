@@ -41,8 +41,17 @@ jobs:
 
   # Builds probe for every platform .goreleaser.yaml releases, the way it does,
   # so that a release does not fail on a platform the tests do not run on.
+  # Each platform is a job of its own: a build takes over a minute, since the
+  # cached build is the tests' and none of it is reused without cgo, and run
+  # one after another they took longer than the tests.
   build:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        goos: [linux, darwin]
+        goarch: [amd64, arm64]
+    name: build (${{ matrix.goos }}/${{ matrix.goarch }})
     steps:
     - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
     - uses: actions/setup-go@4dc6199c7b1a012772edbd06daecab0f50c9053c # v6.1.0
@@ -51,9 +60,6 @@ jobs:
     - name: Go build
       env:
         CGO_ENABLED: "0"
-      run: |
-        for platform in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64; do
-          echo "::group::$platform"
-          GOOS=${platform%/*} GOARCH=${platform#*/} go build -o /dev/null ./cmd/probe
-          echo "::endgroup::"
-        done
+        GOOS: ${{ matrix.goos }}
+        GOARCH: ${{ matrix.goarch }}
+      run: go build -o /dev/null ./cmd/probe
