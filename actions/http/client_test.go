@@ -750,3 +750,133 @@ func TestRequestAcceptsNumericTimeout(t *testing.T) {
 		t.Fatalf("unexpected error: %s", err)
 	}
 }
+
+func TestRequestBasicAuth(t *testing.T) {
+	type seen struct {
+		user, pass string
+		ok         bool
+	}
+	tests := []struct {
+		name string
+		auth any
+		want seen
+	}{
+		{
+			name: "username and password",
+			auth: map[string]any{"username": "alice@example.test", "password": "s3cr:et"},
+			want: seen{"alice@example.test", "s3cr:et", true},
+		},
+		{
+			name: "a password written as a number",
+			auth: map[string]any{"username": "bob", "password": uint64(123456)},
+			want: seen{"bob", "123456", true},
+		},
+		{
+			name: "a password decoded as a float",
+			auth: map[string]any{"username": "bob", "password": float64(1000000)},
+			want: seen{"bob", "1000000", true},
+		},
+		{
+			name: "no password",
+			auth: map[string]any{"username": "carol"},
+			want: seen{"carol", "", true},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var got seen
+			srv := httptest.NewServer(hp.HandlerFunc(func(w hp.ResponseWriter, r *hp.Request) {
+				got.user, got.pass, got.ok = r.BasicAuth()
+				_, _ = w.Write([]byte("ok"))
+			}))
+			defer srv.Close()
+
+			ret, err := Request(map[string]any{
+				"url":        srv.URL,
+				"get":        "/",
+				"basic_auth": tt.auth,
+				"headers":    map[string]any{"accept": "text/plain"},
+			})
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if got != tt.want {
+				t.Errorf("server saw %+v, want %+v", got, tt.want)
+			}
+
+			req := ret["req"].(map[string]any)
+			if _, ok := req["basic_auth"]; ok {
+				t.Error("basic_auth should not be carried into req")
+			}
+			headers := req["headers"].(map[string]string)
+			if !strings.HasPrefix(headers["authorization"], "Basic ") {
+				t.Errorf("req should show the header it sent, got %#v", headers)
+			}
+			if headers["accept"] != "text/plain" {
+				t.Errorf("other headers should be kept, got %#v", headers)
+			}
+		})
+	}
+}
+
+func TestRequestBasicAuthRejected(t *testing.T) {
+	tests := []struct {
+		name    string
+		data    map[string]any
+		wantErr string
+	}{
+		{
+			name:    "with an authorization header",
+			data:    map[string]any{"basic_auth": map[string]any{"username": "a"}, "headers": map[string]any{"Authorization": "Bearer x"}},
+			wantErr: "basic_auth and an authorization header cannot be given together",
+		},
+		{
+			name:    "not a map",
+			data:    map[string]any{"basic_auth": "alice:pw"},
+			wantErr: "basic_auth must be a map of username and password",
+		},
+		{
+			name:    "no username",
+			data:    map[string]any{"basic_auth": map[string]any{"password": "pw"}},
+			wantErr: "basic_auth.username is required",
+		},
+		{
+			name:    "a colon in the username",
+			data:    map[string]any{"basic_auth": map[string]any{"username": "a:b", "password": "pw"}},
+			wantErr: "basic_auth.username must not contain a colon",
+		},
+		{
+			name:    "an unknown key",
+			data:    map[string]any{"basic_auth": map[string]any{"user": "a", "password": "pw"}},
+			wantErr: "basic_auth takes username and password, not user",
+		},
+		{
+			name:    "a password that is a map",
+			data:    map[string]any{"basic_auth": map[string]any{"username": "a", "password": map[string]any{}}},
+			wantErr: "basic_auth.password must be a string",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			called := false
+			srv := httptest.NewServer(hp.HandlerFunc(func(w hp.ResponseWriter, r *hp.Request) {
+				called = true
+			}))
+			defer srv.Close()
+
+			data := map[string]any{"url": srv.URL, "method": "GET"}
+			for k, v := range tt.data {
+				data[k] = v
+			}
+			_, err := Request(data)
+			if err == nil || err.Error() != tt.wantErr {
+				t.Errorf("error = %v, want %q", err, tt.wantErr)
+			}
+			if called {
+				t.Error("the request should not be sent")
+			}
+		})
+	}
+}

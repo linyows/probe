@@ -2,9 +2,11 @@
 package mask
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
+	"math"
 	"net/url"
 	"sort"
 	"strconv"
@@ -42,6 +44,12 @@ func HoldsCredential(key string) bool {
 	k := strings.ToLower(key)
 	return sensitiveKeys[k] || k == dsnKey
 }
+
+// basicAuthKey names the parameter of the http action that holds the username
+// and password of HTTP Basic authentication. The action sends them in an
+// Authorization header it builds itself, so the value of that header is never
+// in the parameters the masker learns from, and is worked out here.
+const basicAuthKey = "basic_auth"
 
 // Masker hides secret values in everything Probe prints or writes. It starts
 // with the secrets the workflow declares and learns the values of credential
@@ -189,6 +197,18 @@ func collectSensitive(v any, found *[]string) {
 	switch val := v.(type) {
 	case map[string]any:
 		for k, e := range val {
+			if auth, ok := e.(map[string]any); ok && strings.ToLower(k) == basicAuthKey {
+				*found = append(*found, basicAuthValues(auth)...)
+				// Everything in it but the username is a credential, also
+				// under a key the action refuses, such as a mistyped pass:
+				// the action logs its parameters before it checks them.
+				for ak, av := range auth {
+					if strings.ToLower(ak) != "username" {
+						collectStrings(av, found)
+					}
+				}
+				continue
+			}
 			if sensitiveKeys[strings.ToLower(k)] {
 				collectStrings(e, found)
 				continue
@@ -213,6 +233,87 @@ func collectSensitive(v any, found *[]string) {
 			collectSensitive(e, found)
 		}
 	}
+}
+
+// basicAuthValues returns the Authorization header the http action builds from
+// auth, and the encoded credentials alone, as they are shown when the header
+// is split. A username or password that is a number may reach the action as
+// another number, so the header is worked out for each form it may take;
+// without a username the action sends nothing.
+func basicAuthValues(auth map[string]any) []string {
+	usernames, passwords := scalarForms(auth["username"]), scalarForms(auth["password"])
+	if len(usernames) == 0 || usernames[0] == "" {
+		return nil
+	}
+	var found []string
+	for _, u := range usernames {
+		for _, p := range passwords {
+			token := base64.StdEncoding.EncodeToString([]byte(u + ":" + p))
+			found = append(found, "Basic "+token, token)
+		}
+	}
+	return found
+}
+
+// scalarForms returns how a value of a parameter is written, by the workflow
+// and by the action that receives it, which differ only for a number: an
+// action receives every number as a float64 and gets back an integer when it
+// holds one, so 9007199254740993 arrives as 9007199254740992. A missing
+// value is written as empty.
+func scalarForms(v any) []string {
+	if v == nil {
+		return []string{""}
+	}
+	if forms, ok := numberForms(v); ok {
+		return forms
+	}
+	return []string{fmt.Sprint(v)}
+}
+
+// numberForms returns a number as written and as an action receives it,
+// once when the two are the same, or false when v is not a number.
+func numberForms(v any) ([]string, bool) {
+	var f float64
+	switch n := v.(type) {
+	case int:
+		f = float64(n)
+	case int8:
+		f = float64(n)
+	case int16:
+		f = float64(n)
+	case int32:
+		f = float64(n)
+	case int64:
+		f = float64(n)
+	case uint:
+		f = float64(n)
+	case uint8:
+		f = float64(n)
+	case uint16:
+		f = float64(n)
+	case uint32:
+		f = float64(n)
+	case uint64:
+		f = float64(n)
+	case float32:
+		f = float64(n)
+	case float64:
+		f = n
+	default:
+		return nil, false
+	}
+	written := fmt.Sprint(v)
+	if n, ok := v.(float64); ok {
+		written = strconv.FormatFloat(n, 'f', -1, 64)
+	}
+	received := strconv.FormatFloat(f, 'f', -1, 64)
+	if f == math.Trunc(f) && f >= math.MinInt64 && f <= math.MaxInt64 {
+		received = strconv.FormatInt(int64(f), 10)
+	}
+	if received == written {
+		return []string{written}, true
+	}
+	return []string{written, received}, true
 }
 
 // dsnPassword returns the password in a URL-style DSN, both as written and
@@ -256,6 +357,8 @@ func collectStrings(v any, found *[]string) {
 	// learned: hiding every "true" in the output would hide nothing useful.
 	case int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64, float32, float64:
 		*found = append(*found, fmt.Sprint(val))
+		forms, _ := numberForms(val)
+		*found = append(*found, forms...)
 	case []any:
 		for _, e := range val {
 			collectStrings(e, found)

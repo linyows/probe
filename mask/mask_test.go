@@ -376,3 +376,72 @@ func TestHoldsCredential(t *testing.T) {
 		}
 	}
 }
+
+func TestLearn_BasicAuth(t *testing.T) {
+	// "Basic " + base64("alice@example.test:pa55-word")
+	const header = "Basic YWxpY2VAZXhhbXBsZS50ZXN0OnBhNTUtd29yZA=="
+	const token = "YWxpY2VAZXhhbXBsZS50ZXN0OnBhNTUtd29yZA=="
+
+	m := New(nil, nil)
+	m.Learn(map[string]any{
+		"url": "http://localhost",
+		"basic_auth": map[string]any{
+			"username": "alice@example.test",
+			"password": "pa55-word",
+		},
+	})
+
+	for _, in := range []string{
+		"authorization: " + header,
+		"map[authorization:" + header + "]",
+		"credentials " + token,
+		"password pa55-word",
+	} {
+		got := m.String(in)
+		if strings.Contains(got, token) || strings.Contains(got, "pa55-word") {
+			t.Errorf("String(%q) = %q, the credentials are not hidden", in, got)
+		}
+	}
+	if got := m.String("user alice@example.test"); got != "user alice@example.test" {
+		t.Errorf("the username alone should stay visible, got %q", got)
+	}
+}
+
+func TestLearn_BasicAuthNumericPassword(t *testing.T) {
+	// "Basic " + base64("bob:1000000"), as the http action sends a password
+	// decoded as a float.
+	const token = "Ym9iOjEwMDAwMDA="
+
+	m := New(nil, nil)
+	m.Learn(map[string]any{"basic_auth": map[string]any{"username": "bob", "password": float64(1000000)}})
+	if got := m.String("Basic " + token); strings.Contains(got, token) {
+		t.Errorf("the header of a numeric password is not hidden: %q", got)
+	}
+}
+
+func TestLearn_BasicAuthMistypedKey(t *testing.T) {
+	// The http action refuses pass, but logs its parameters before that.
+	m := New(nil, nil)
+	m.Learn(map[string]any{"basic_auth": map[string]any{"username": "alice", "pass": "mistyped-secret"}})
+	if got := m.String("pass:mistyped-secret"); strings.Contains(got, "mistyped-secret") {
+		t.Errorf("a credential under a mistyped key is not hidden: %q", got)
+	}
+	if got := m.String("username:alice"); got != "username:alice" {
+		t.Errorf("the username should stay visible, got %q", got)
+	}
+}
+
+func TestLearn_BasicAuthLargeNumber(t *testing.T) {
+	// 9007199254740993 cannot be a float64, and reaches the action as
+	// 9007199254740992, from which it builds the header:
+	// "Basic " + base64("bob:9007199254740992").
+	const token = "Ym9iOjkwMDcxOTkyNTQ3NDA5OTI="
+
+	m := New(nil, nil)
+	m.Learn(map[string]any{"basic_auth": map[string]any{"username": "bob", "password": uint64(9007199254740993)}})
+	for _, in := range []string{"Basic " + token, "password:9007199254740992", "password:9007199254740993"} {
+		if got := m.String(in); strings.Contains(got, "9007199254740") || strings.Contains(got, token) {
+			t.Errorf("String(%q) = %q, the credential is not hidden", in, got)
+		}
+	}
+}
