@@ -3,6 +3,7 @@ package http
 import (
 	"io"
 	"mime"
+	"mime/multipart"
 	hp "net/http"
 	"net/http/httptest"
 	"os"
@@ -280,6 +281,11 @@ func TestRequestFormRejected(t *testing.T) {
 			wantErr: "multipart.a.filename must be a string",
 		},
 		{
+			name:    "a content_type with a line break",
+			data:    map[string]any{"multipart": map[string]any{"a": map[string]any{"content": "x", "content_type": "text/plain\r\nX-Injected: 1"}}},
+			wantErr: "multipart.a.content_type must not contain a line break",
+		},
+		{
 			name:    "an empty content_type",
 			data:    map[string]any{"multipart": map[string]any{"a": map[string]any{"content": "x", "content_type": ""}}},
 			wantErr: "multipart.a.content_type must be a string",
@@ -311,15 +317,86 @@ func TestRequestFormRejected(t *testing.T) {
 
 func TestEncodeMultipartEscapesNames(t *testing.T) {
 	body, contentType, err := encodeMultipart(map[string]any{
-		`a"b`: map[string]any{"content": "x", "filename": `c"d\e.txt`},
+		`a"b`:       map[string]any{"content": "x", "filename": `c"d\e.txt`},
+		"t\r\nX: 1": "v",
+		"f\r\nX: 2": map[string]any{"content": "x", "filename": "n\r\nX: 3"},
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if !strings.Contains(string(body), `name="a\"b"; filename="c\"d\\e.txt"`) {
-		t.Errorf("names should be escaped in Content-Disposition, got %q", body)
+	for _, want := range []string{
+		`name="a\"b"; filename="c\"d\\e.txt"`,
+		`name="t%0D%0AX: 1"`,
+		`name="f%0D%0AX: 2"; filename="n%0D%0AX: 3"`,
+	} {
+		if !strings.Contains(string(body), want) {
+			t.Errorf("names should be escaped in Content-Disposition as %s, got %q", want, body)
+		}
+	}
+	if strings.Contains(string(body), "\r\nX: ") {
+		t.Errorf("a line break in a name should not begin a header, got %q", body)
 	}
 	if !strings.HasPrefix(contentType, "multipart/form-data; boundary=") {
 		t.Errorf("contentType = %q", contentType)
+	}
+}
+
+// TestEncodeMultipartMixedList checks that a list holding both text values
+// and files sends its text values first, each keeping their order.
+func TestEncodeMultipartMixedList(t *testing.T) {
+	body, contentType, err := encodeMultipart(map[string]any{
+		"a": []any{
+			map[string]any{"content": "file1"},
+			"text1",
+			map[string]any{"content": "file2"},
+			"text2",
+		},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	_, params, _ := mime.ParseMediaType(contentType)
+	mr := multipart.NewReader(strings.NewReader(string(body)), params["boundary"])
+	var got []string
+	for {
+		p, err := mr.NextPart()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		data, _ := io.ReadAll(p)
+		got = append(got, string(data))
+	}
+	want := []string{"text1", "text2", "file1", "file2"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("parts = %q, want %q", got, want)
+	}
+}
+
+// TestRequestKeepsCallerHeaders checks that the headers a caller passes are
+// not changed by the headers basic_auth, form and multipart add or replace.
+func TestRequestKeepsCallerHeaders(t *testing.T) {
+	srv := httptest.NewServer(hp.HandlerFunc(func(w hp.ResponseWriter, r *hp.Request) {}))
+	defer srv.Close()
+
+	for _, extra := range []map[string]any{
+		{"basic_auth": map[string]any{"username": "a", "password": "b"}},
+		{"form": map[string]any{"a": "b"}},
+		{"multipart": map[string]any{"a": "b"}},
+	} {
+		headers := map[string]string{"Content-Type": "application/json"}
+		data := map[string]any{"url": srv.URL, "post": "/", "headers": headers}
+		for k, v := range extra {
+			data[k] = v
+		}
+		if _, err := Request(data); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		want := map[string]string{"Content-Type": "application/json"}
+		if !reflect.DeepEqual(headers, want) {
+			t.Errorf("with %v, the caller's headers became %v", extra, headers)
+		}
 	}
 }

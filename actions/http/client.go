@@ -367,7 +367,8 @@ func Request(data map[string]any, opts ...Option) (map[string]any, error) {
 	var customHeaders map[string]string
 	if headersInterface, exists := m["headers"]; exists {
 		if headers, ok := headersInterface.(map[string]string); ok {
-			customHeaders = headers
+			// A copy, since basic_auth, form and multipart change it.
+			customHeaders = maps.Clone(headers)
 		} else if headersInterfaceMap, ok := headersInterface.(map[string]any); ok {
 			// Convert map[string]interface{} to map[string]string
 			customHeaders = make(map[string]string)

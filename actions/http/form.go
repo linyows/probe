@@ -97,7 +97,9 @@ type multipartPart struct {
 // given as content; any other is a text field, and a list sends the field
 // once for each of its values. Text fields come first and files after them,
 // each sorted by name, since some servers, such as S3 for a POST upload, take
-// only the fields that come before the file.
+// only the fields that come before the file. The values of a list keep their
+// order among the text fields or among the files, so a list that holds both
+// sends its text values first.
 func encodeMultipart(spec any) ([]byte, string, error) {
 	fields, ok := spec.(map[string]any)
 	if !ok {
@@ -193,23 +195,25 @@ func filePart(name string, f map[string]any) (multipartPart, error) {
 		if !ok || s == "" {
 			return multipartPart{}, fmt.Errorf("multipart.%s.content_type must be a string", name)
 		}
+		// A line break would end the header and begin another.
+		if strings.ContainsAny(s, "\r\n") {
+			return multipartPart{}, fmt.Errorf("multipart.%s.content_type must not contain a line break", name)
+		}
 		p.contentType = s
 	}
 
 	return p, nil
 }
 
-var quoteEscaper = strings.NewReplacer("\\", "\\\\", `"`, "\\\"")
-
 // writePart writes p to w. A file part carries its filename and media type,
 // which multipart.Writer.CreateFormFile would fix to application/octet-stream.
+// The names are escaped as WriteField escapes them, line breaks included.
 func writePart(w *multipart.Writer, p multipartPart) error {
 	if !p.file {
 		return w.WriteField(p.name, string(p.data))
 	}
 	h := make(textproto.MIMEHeader)
-	h.Set("Content-Disposition", fmt.Sprintf(`form-data; name="%s"; filename="%s"`,
-		quoteEscaper.Replace(p.name), quoteEscaper.Replace(p.filename)))
+	h.Set("Content-Disposition", multipart.FileContentDisposition(p.name, p.filename))
 	h.Set("Content-Type", p.contentType)
 	pw, err := w.CreatePart(h)
 	if err != nil {

@@ -147,7 +147,7 @@ A file takes these keys:
 | `filename` | Filename sent with the file. Defaults to the base name of `file`, or the field name for `content` |
 | `content_type` | Media type of the file. Defaults to the one the extension of `filename` names, or `application/octet-stream` |
 
-Text fields are sent first and files after them, each sorted by name, since some servers, such as S3 for a POST upload, read only the fields that come before the file. The values of a list keep their order. A file is read each time the step runs, so a retried step sends the file as it is then.
+Text fields are sent first and files after them, each sorted by name, since some servers, such as S3 for a POST upload, read only the fields that come before the file. The values of a list keep their order among the text fields or among the files, so a list that holds both sends its text values first. A file is read each time the step runs, so a retried step sends the file as it is then.
 
 The body is sent with its length, and is not shown: `req.body` is empty and `req.multipart` shows what was written instead.
 
