@@ -14,13 +14,15 @@ type Action struct {
 }
 
 func (a *Action) Run(with map[string]any) (map[string]any, error) {
-	ret, _, err := a.RunWithState(with, nil)
+	ret, _, err := a.RunStep(actionrpc.Call{With: with})
 	return ret, err
 }
 
-// RunWithState runs the request with the cookies the job keeps, when the
-// step asks for keep_cookies, and returns the cookies to keep.
-func (a *Action) RunWithState(with, state map[string]any) (map[string]any, map[string]any, error) {
+// RunStep runs the request for a step: with the cookies the job keeps, when
+// the step asks for keep_cookies, returning the cookies to keep, and with a
+// header that names the step, when it asks for trace_header.
+func (a *Action) RunStep(call actionrpc.Call) (map[string]any, map[string]any, error) {
+	with := call.With
 	// Validate that required parameters are provided
 	if len(with) == 0 {
 		return map[string]any{}, nil, errors.New("http action requires parameters in 'with' section. Please specify request details like url, method, or use method fields (get, post, etc.)")
@@ -44,7 +46,7 @@ func (a *Action) RunWithState(with, state map[string]any) (map[string]any, map[s
 			"headers": joinHeader(res.Header),
 		})
 	})
-	ret, newState, err := RequestWithState(with, state, before, after)
+	ret, newState, err := RequestStep(call, before, after)
 
 	actionrpc.LogOutcome(a.log, "http request", ret, err)
 

@@ -717,18 +717,37 @@ type Action interface {
 
 `with` holds the step's `with` parameters. The returned map becomes the step's `req`, `res`, `rt` and `status`, as with the built-in actions. A map in the result may be keyed by strings, numbers or booleans; the keys are sent as text, so `map[int]string{404: "not found"}` arrives as `{"404": "not found"}`. A map with any other kind of key, or two keys that read the same, such as `1` and `"1"`, fails the step with an action error rather than losing entries.
 
-#### Keeping State Between Steps
+#### Knowing the Step and Keeping State
 
-An action that keeps something from one step to the next, as the http action keeps cookies, also implements `actionrpc.StatefulAction`:
+An action that needs to know the step it runs for, or to keep something from one step to the next, as the http action does for its trace header and its cookies, also implements `actionrpc.StepAction`:
 
 ```go
-type StatefulAction interface {
+type StepAction interface {
     Action
-    RunWithState(with, state map[string]any) (result, newState map[string]any, err error)
+    RunStep(call Call) (result, newState map[string]any, err error)
+}
+
+type Call struct {
+    With  map[string]any // the step's with parameters
+    State map[string]any // the state the action left in the job
+    Step  Step           // the step it runs for
+}
+
+type Step struct {
+    RunID   string // the run of probe, the same for every step
+    JobID   string
+    JobName string
+    Index   int    // the position of the step in the job, from 0
+    ID      string
+    Name    string
+    Repeat  int    // which run of a repeated job, from 0
+    Attempt int    // which attempt of a retried step, from 1
 }
 ```
 
-`state` is the state the action left in the job, or nil when it left none. Probe keeps `newState` without reading it, and passes it to the action in the next step of the same job that uses it. The state takes the form a result takes, maps keyed by strings, lists and plain values, and one that cannot take it fails the step with an action error. A nil `newState` keeps the state as it was, and so does a step that fails with an action error or times out. Each job keeps the state of each action apart, and each run of a repeated job, and a job run by the embedded action, starts with none. The state is not shown in the output, so it may hold credentials.
+Probe tells every such action about the step it runs for; what the action does with it is up to the action. `RunID` is the same for every step of a run, and for a job run by the embedded action.
+
+`State` is the state the action left in the job, or nil when it left none. Probe keeps `newState` without reading it, and passes it to the action in the next step of the same job that uses it. The state takes the form a result takes, maps keyed by strings, lists and plain values, and one that cannot take it fails the step with an action error. A nil `newState` keeps the state as it was, and so does a step that fails with an action error or times out. Each job keeps the state of each action apart, and each run of a repeated job, and a job run by the embedded action, starts with none. The state is not shown in the output, so it may hold credentials.
 
 ### External Actions
 

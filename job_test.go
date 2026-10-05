@@ -650,3 +650,35 @@ func TestJob_RunIndependently_ResolvesActionsWhenRun(t *testing.T) {
 		})
 	}
 }
+
+// TestRunStandaloneTellsTheRun checks that a job run on its own is told the
+// run WithRunID names, such as the run of the step that embeds it, or else a
+// run of its own.
+func TestRunStandaloneTellsTheRun(t *testing.T) {
+	for _, tt := range []struct {
+		name string
+		opts []StandaloneOption
+	}{
+		{name: "the run given", opts: []StandaloneOption{WithRunID("parent-run")}},
+		{name: "a run of its own"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			runner := NewMockActionRunner()
+			runner.SetResult("hello", map[string]any{"status": 0})
+			job := &Job{Name: "embedded", Steps: []*Step{{Name: "s", Uses: "hello", actionRunner: runner}}}
+			job.RunStandalone(map[string]any{}, newBufferPrinter(), "embedded", "", tt.opts...)
+
+			calls := runner.Calls["hello"]
+			if len(calls) != 1 {
+				t.Fatalf("calls = %v", calls)
+			}
+			got := calls[0].Step.RunID
+			if len(tt.opts) > 0 && got != "parent-run" {
+				t.Errorf("RunID = %q, want the run given", got)
+			}
+			if len(tt.opts) == 0 && len(got) != 16 {
+				t.Errorf("RunID = %q, want a run of its own", got)
+			}
+		})
+	}
+}

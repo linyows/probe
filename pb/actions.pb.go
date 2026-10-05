@@ -26,7 +26,9 @@ type RunRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	With  *structpb.Struct       `protobuf:"bytes,2,opt,name=with,proto3" json:"with,omitempty"`
 	// The state the action left in the job before, for a stateful action.
-	State         *structpb.Struct `protobuf:"bytes,3,opt,name=state,proto3" json:"state,omitempty"`
+	State *structpb.Struct `protobuf:"bytes,3,opt,name=state,proto3" json:"state,omitempty"`
+	// The step the action runs for.
+	Step          *Step `protobuf:"bytes,4,opt,name=step,proto3" json:"step,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -75,6 +77,120 @@ func (x *RunRequest) GetState() *structpb.Struct {
 	return nil
 }
 
+func (x *RunRequest) GetStep() *Step {
+	if x != nil {
+		return x.Step
+	}
+	return nil
+}
+
+// Step tells an action about the step it runs for, for it to use as it sees
+// fit, such as to say where a request comes from.
+type Step struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// The run of probe, the same for every step of every job in it.
+	RunId   string `protobuf:"bytes,1,opt,name=run_id,json=runId,proto3" json:"run_id,omitempty"`
+	JobId   string `protobuf:"bytes,2,opt,name=job_id,json=jobId,proto3" json:"job_id,omitempty"`
+	JobName string `protobuf:"bytes,3,opt,name=job_name,json=jobName,proto3" json:"job_name,omitempty"`
+	// The position of the step in the job, from 0.
+	Index int64 `protobuf:"varint,4,opt,name=index,proto3" json:"index,omitempty"`
+	// The id the step is given, or empty.
+	Id   string `protobuf:"bytes,5,opt,name=id,proto3" json:"id,omitempty"`
+	Name string `protobuf:"bytes,6,opt,name=name,proto3" json:"name,omitempty"`
+	// Which run of a repeated job, from 0.
+	Repeat int64 `protobuf:"varint,7,opt,name=repeat,proto3" json:"repeat,omitempty"`
+	// Which attempt of a retried step, from 1.
+	Attempt       int64 `protobuf:"varint,8,opt,name=attempt,proto3" json:"attempt,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *Step) Reset() {
+	*x = Step{}
+	mi := &file_pb_actions_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Step) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Step) ProtoMessage() {}
+
+func (x *Step) ProtoReflect() protoreflect.Message {
+	mi := &file_pb_actions_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Step.ProtoReflect.Descriptor instead.
+func (*Step) Descriptor() ([]byte, []int) {
+	return file_pb_actions_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *Step) GetRunId() string {
+	if x != nil {
+		return x.RunId
+	}
+	return ""
+}
+
+func (x *Step) GetJobId() string {
+	if x != nil {
+		return x.JobId
+	}
+	return ""
+}
+
+func (x *Step) GetJobName() string {
+	if x != nil {
+		return x.JobName
+	}
+	return ""
+}
+
+func (x *Step) GetIndex() int64 {
+	if x != nil {
+		return x.Index
+	}
+	return 0
+}
+
+func (x *Step) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *Step) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *Step) GetRepeat() int64 {
+	if x != nil {
+		return x.Repeat
+	}
+	return 0
+}
+
+func (x *Step) GetAttempt() int64 {
+	if x != nil {
+		return x.Attempt
+	}
+	return 0
+}
+
 type RunResponse struct {
 	state  protoimpl.MessageState `protogen:"open.v1"`
 	Result *structpb.Struct       `protobuf:"bytes,1,opt,name=result,proto3" json:"result,omitempty"`
@@ -86,7 +202,7 @@ type RunResponse struct {
 
 func (x *RunResponse) Reset() {
 	*x = RunResponse{}
-	mi := &file_pb_actions_proto_msgTypes[1]
+	mi := &file_pb_actions_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -98,7 +214,7 @@ func (x *RunResponse) String() string {
 func (*RunResponse) ProtoMessage() {}
 
 func (x *RunResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pb_actions_proto_msgTypes[1]
+	mi := &file_pb_actions_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -111,7 +227,7 @@ func (x *RunResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RunResponse.ProtoReflect.Descriptor instead.
 func (*RunResponse) Descriptor() ([]byte, []int) {
-	return file_pb_actions_proto_rawDescGZIP(), []int{1}
+	return file_pb_actions_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *RunResponse) GetResult() *structpb.Struct {
@@ -132,11 +248,21 @@ var File_pb_actions_proto protoreflect.FileDescriptor
 
 const file_pb_actions_proto_rawDesc = "" +
 	"\n" +
-	"\x10pb/actions.proto\x12\x02pb\x1a\x1cgoogle/protobuf/struct.proto\"t\n" +
+	"\x10pb/actions.proto\x12\x02pb\x1a\x1cgoogle/protobuf/struct.proto\"\x92\x01\n" +
 	"\n" +
 	"RunRequest\x12+\n" +
 	"\x04with\x18\x02 \x01(\v2\x17.google.protobuf.StructR\x04with\x12-\n" +
-	"\x05state\x18\x03 \x01(\v2\x17.google.protobuf.StructR\x05stateJ\x04\b\x01\x10\x02R\x04args\"z\n" +
+	"\x05state\x18\x03 \x01(\v2\x17.google.protobuf.StructR\x05state\x12\x1c\n" +
+	"\x04step\x18\x04 \x01(\v2\b.pb.StepR\x04stepJ\x04\b\x01\x10\x02R\x04args\"\xbb\x01\n" +
+	"\x04Step\x12\x15\n" +
+	"\x06run_id\x18\x01 \x01(\tR\x05runId\x12\x15\n" +
+	"\x06job_id\x18\x02 \x01(\tR\x05jobId\x12\x19\n" +
+	"\bjob_name\x18\x03 \x01(\tR\ajobName\x12\x14\n" +
+	"\x05index\x18\x04 \x01(\x03R\x05index\x12\x0e\n" +
+	"\x02id\x18\x05 \x01(\tR\x02id\x12\x12\n" +
+	"\x04name\x18\x06 \x01(\tR\x04name\x12\x16\n" +
+	"\x06repeat\x18\a \x01(\x03R\x06repeat\x12\x18\n" +
+	"\aattempt\x18\b \x01(\x03R\aattempt\"z\n" +
 	"\vRunResponse\x12/\n" +
 	"\x06result\x18\x01 \x01(\v2\x17.google.protobuf.StructR\x06result\x12-\n" +
 	"\x05state\x18\x03 \x01(\v2\x17.google.protobuf.StructR\x05stateJ\x04\b\x02\x10\x03R\x05error21\n" +
@@ -155,24 +281,26 @@ func file_pb_actions_proto_rawDescGZIP() []byte {
 	return file_pb_actions_proto_rawDescData
 }
 
-var file_pb_actions_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
+var file_pb_actions_proto_msgTypes = make([]protoimpl.MessageInfo, 3)
 var file_pb_actions_proto_goTypes = []any{
 	(*RunRequest)(nil),      // 0: pb.RunRequest
-	(*RunResponse)(nil),     // 1: pb.RunResponse
-	(*structpb.Struct)(nil), // 2: google.protobuf.Struct
+	(*Step)(nil),            // 1: pb.Step
+	(*RunResponse)(nil),     // 2: pb.RunResponse
+	(*structpb.Struct)(nil), // 3: google.protobuf.Struct
 }
 var file_pb_actions_proto_depIdxs = []int32{
-	2, // 0: pb.RunRequest.with:type_name -> google.protobuf.Struct
-	2, // 1: pb.RunRequest.state:type_name -> google.protobuf.Struct
-	2, // 2: pb.RunResponse.result:type_name -> google.protobuf.Struct
-	2, // 3: pb.RunResponse.state:type_name -> google.protobuf.Struct
-	0, // 4: pb.Actions.Run:input_type -> pb.RunRequest
-	1, // 5: pb.Actions.Run:output_type -> pb.RunResponse
-	5, // [5:6] is the sub-list for method output_type
-	4, // [4:5] is the sub-list for method input_type
-	4, // [4:4] is the sub-list for extension type_name
-	4, // [4:4] is the sub-list for extension extendee
-	0, // [0:4] is the sub-list for field type_name
+	3, // 0: pb.RunRequest.with:type_name -> google.protobuf.Struct
+	3, // 1: pb.RunRequest.state:type_name -> google.protobuf.Struct
+	1, // 2: pb.RunRequest.step:type_name -> pb.Step
+	3, // 3: pb.RunResponse.result:type_name -> google.protobuf.Struct
+	3, // 4: pb.RunResponse.state:type_name -> google.protobuf.Struct
+	0, // 5: pb.Actions.Run:input_type -> pb.RunRequest
+	2, // 6: pb.Actions.Run:output_type -> pb.RunResponse
+	6, // [6:7] is the sub-list for method output_type
+	5, // [5:6] is the sub-list for method input_type
+	5, // [5:5] is the sub-list for extension type_name
+	5, // [5:5] is the sub-list for extension extendee
+	0, // [0:5] is the sub-list for field type_name
 }
 
 func init() { file_pb_actions_proto_init() }
@@ -186,7 +314,7 @@ func file_pb_actions_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_pb_actions_proto_rawDesc), len(file_pb_actions_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   2,
+			NumMessages:   3,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

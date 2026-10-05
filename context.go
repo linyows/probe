@@ -77,6 +77,10 @@ type JobContext struct {
 	baseDir string
 	// The state each action keeps in this run of the job
 	states *actionStates
+	// The run of probe, which actions are told about
+	runID string
+	// The name of the job, with its templates evaluated
+	jobName string
 }
 
 // SetFailed marks the job context as failed

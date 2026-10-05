@@ -45,12 +45,13 @@ type ActionRunner interface {
 	RunActions(name string, with map[string]any, opts RunOptions) (map[string]any, error)
 }
 
-// StatefulActionRunner is an ActionRunner that also carries the state an
-// action keeps in a job, as actionrpc.StatefulAction describes. A runner
-// that is not one runs every action without state.
-type StatefulActionRunner interface {
+// StepActionRunner is an ActionRunner that also tells an action about the
+// step it runs for and carries the state it keeps in a job, as
+// actionrpc.StepAction describes. A runner that is not one runs every action
+// with its parameters alone.
+type StepActionRunner interface {
 	ActionRunner
-	RunActionsWithState(name string, with, state map[string]any, opts RunOptions) (result, newState map[string]any, err error)
+	RunStep(name string, call actionrpc.Call, opts RunOptions) (result, newState map[string]any, err error)
 }
 
 // PluginActionRunner implements ActionRunner using the plugin system
@@ -58,13 +59,14 @@ type PluginActionRunner struct{}
 
 // RunActions executes an action using the plugin system
 func (p *PluginActionRunner) RunActions(name string, with map[string]any, opts RunOptions) (map[string]any, error) {
-	result, _, err := p.RunActionsWithState(name, with, nil, opts)
+	result, _, err := p.RunStep(name, actionrpc.Call{With: with}, opts)
 	return result, err
 }
 
-// RunActionsWithState executes an action using the plugin system, giving it
-// the state it left in the job and returning the state it leaves.
-func (p *PluginActionRunner) RunActionsWithState(name string, with, state map[string]any, opts RunOptions) (map[string]any, map[string]any, error) {
+// RunStep executes an action for a step using the plugin system, telling it
+// about the step, giving it the state it left in the job and returning the
+// state it leaves.
+func (p *PluginActionRunner) RunStep(name string, call actionrpc.Call, opts RunOptions) (map[string]any, map[string]any, error) {
 	// Actions are separate processes: they log to stderr as JSON and the
 	// records are re-filtered here, so this level decides what the user sees.
 	log := hclog.New(&hclog.LoggerOptions{
@@ -73,22 +75,22 @@ func (p *PluginActionRunner) RunActionsWithState(name string, with, state map[st
 		Level:  opts.logLevel(),
 	})
 	if !actionref.IsExternal(name) {
-		return actionrpc.RunWithState(name, with, state, log)
+		return actionrpc.RunStep(name, call, log)
 	}
 	exe, err := actionref.Resolve(name, opts.BaseDir)
 	if err != nil {
 		return nil, nil, err
 	}
-	return actionrpc.RunExecutableWithState(exe.Path, exe.SHA256, with, state, log)
+	return actionrpc.RunExecutableStep(exe.Path, exe.SHA256, call, log)
 }
 
-// runAction runs the action named name with the state it left in the job,
-// when runner carries state, and returns the state it leaves.
-func runAction(runner ActionRunner, name string, with, state map[string]any, opts RunOptions) (map[string]any, map[string]any, error) {
-	if sr, ok := runner.(StatefulActionRunner); ok {
-		return sr.RunActionsWithState(name, with, state, opts)
+// runAction runs the action named name for a step, when runner can tell it
+// about one, and returns the state it leaves.
+func runAction(runner ActionRunner, name string, call actionrpc.Call, opts RunOptions) (map[string]any, map[string]any, error) {
+	if sr, ok := runner.(StepActionRunner); ok {
+		return sr.RunStep(name, call, opts)
 	}
-	result, err := runner.RunActions(name, with, opts)
+	result, err := runner.RunActions(name, call.With, opts)
 	return result, nil, err
 }
 
@@ -141,8 +143,8 @@ type MockActionRunner struct {
 	Errors  map[string]error
 	// States is the state each action leaves in the job, keyed by its name.
 	States map[string]map[string]any
-	// Received records the state each call to an action was given, in order.
-	Received map[string][]map[string]any
+	// Calls records each call of an action for a step, in order.
+	Calls map[string][]actionrpc.Call
 
 	mu sync.Mutex
 }
@@ -150,24 +152,24 @@ type MockActionRunner struct {
 // NewMockActionRunner creates a new mock action runner
 func NewMockActionRunner() *MockActionRunner {
 	return &MockActionRunner{
-		Results:  make(map[string]map[string]any),
-		Errors:   make(map[string]error),
-		States:   make(map[string]map[string]any),
-		Received: make(map[string][]map[string]any),
+		Results: make(map[string]map[string]any),
+		Errors:  make(map[string]error),
+		States:  make(map[string]map[string]any),
+		Calls:   make(map[string][]actionrpc.Call),
 	}
 }
 
-// RunActionsWithState records the state the action is given and returns the
-// result and the state set for it.
-func (m *MockActionRunner) RunActionsWithState(name string, with, state map[string]any, opts RunOptions) (map[string]any, map[string]any, error) {
+// RunStep records the call and returns the result and the state set for the
+// action.
+func (m *MockActionRunner) RunStep(name string, call actionrpc.Call, opts RunOptions) (map[string]any, map[string]any, error) {
 	m.mu.Lock()
-	if m.Received == nil {
-		m.Received = make(map[string][]map[string]any)
+	if m.Calls == nil {
+		m.Calls = make(map[string][]actionrpc.Call)
 	}
-	m.Received[name] = append(m.Received[name], state)
+	m.Calls[name] = append(m.Calls[name], call)
 	newState := m.States[name]
 	m.mu.Unlock()
-	result, err := m.RunActions(name, with, opts)
+	result, err := m.RunActions(name, call.With, opts)
 	if err != nil {
 		return nil, nil, err
 	}

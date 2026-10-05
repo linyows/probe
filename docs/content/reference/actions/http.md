@@ -31,6 +31,7 @@ The fields below describe the request. All of them accept template expressions.
 | `form` | Object | No | - | Form fields, sent as an `application/x-www-form-urlencoded` body. See [Sending a Form](#sending-a-form) |
 | `multipart` | Object | No | - | Form fields and files, sent as a `multipart/form-data` body. See [Uploading Files](#uploading-files) |
 | `cookies` | Object | No | - | Cookies to send, by name. See [Cookies](#cookies) |
+| `trace_header` | Boolean or String | No | `false` | Send a header that names the run, job and step of the request: `X-Probe-Trace` for `true`, or the header named. See [Tracing Requests](#tracing-requests) |
 | `keep_cookies` | Boolean | No | `false` | Keep the cookies the server sets in the job, and send them in the following steps that keep cookies. See [Cookies](#cookies) |
 
 There are no parameters for redirects or TLS verification. Redirects are followed by default.
@@ -294,6 +295,41 @@ Each job keeps its own cookies, so jobs that run at the same time do not see eac
 ```
 
 The values of `cookies` and `res.cookies` are hidden in the output as other credentials are, with their names shown.
+
+### Tracing Requests
+
+With `trace_header: true`, each request carries an `X-Probe-Trace` header that says where it comes from, so that it can be told apart in the server's access log:
+
+```
+X-Probe-Trace: run=7f3a9c21e4b05d68; job=login; step=auth; repeat=0; attempt=1
+```
+
+| Field | Value |
+|-------|-------|
+| `run` | The ID of the run of probe, the same for every request of the run. It is the `run_id` of the JSON report, and a job run by the embedded action shares it |
+| `job` | The ID of the job |
+| `step` | The ID of the step, which a step without one is given as `step_<index>` |
+| `repeat` | Which run of a repeated job, from 0 |
+| `attempt` | Which attempt of a retried step, from 1 |
+
+A value that holds a space, a semicolon or a letter outside ASCII is escaped as in a URL query. Set in a job's `defaults`, it applies to every request of the job. A header name in place of `true` sends the same value in that header, such as one the server already logs:
+
+```yaml
+- name: Traced checks
+  defaults:
+    http:
+      url: "{{vars.api_url}}"
+      trace_header: X-Correlation-Id
+  steps:
+    - name: List users
+      id: users
+      uses: http
+      with:
+        get: /users
+      test: res.code == 200
+```
+
+The header is sent as written in `headers` is, and shows in `req.headers`. It cannot be given together with a header of the same name in `headers`. The option is not named `trace`, which is the shorthand of the TRACE method.
 
 ### Checking an Error Response
 

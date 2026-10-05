@@ -269,6 +269,9 @@ func TestWorkflow_StartWritesReports(t *testing.T) {
 	if r.Name != "Report Run" || r.Status != report.Failed {
 		t.Errorf("report = %q/%q, want Report Run/failed", r.Name, r.Status)
 	}
+	if r.RunID == "" || r.RunID != workflow.RunID() {
+		t.Errorf("run_id = %q, want the run, %q", r.RunID, workflow.RunID())
+	}
 	if len(r.Jobs) != 2 || r.Jobs[0].ID != "checks" || r.Jobs[1].Status != report.Skipped {
 		t.Fatalf("jobs = %+v, want checks then a skipped later", r.Jobs)
 	}

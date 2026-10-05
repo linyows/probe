@@ -12,9 +12,17 @@ type Action struct {
 }
 
 func (a *Action) Run(with map[string]any) (map[string]any, error) {
+	ret, _, err := a.RunStep(actionrpc.Call{With: with})
+	return ret, err
+}
+
+// RunStep runs the job as part of the run of the step that embeds it. It
+// keeps no state of its own: the job keeps its own state, in its own run.
+func (a *Action) RunStep(call actionrpc.Call) (map[string]any, map[string]any, error) {
+	with := call.With
 	// Validate that required parameters are provided
 	if len(with) == 0 {
-		return map[string]any{}, errors.New("embedded action requires parameters in 'with' section. Please specify embedded job details like path")
+		return map[string]any{}, nil, errors.New("embedded action requires parameters in 'with' section. Please specify embedded job details like path")
 	}
 
 	actionrpc.LogParams(a.log, "received embedded request parameters", with)
@@ -25,11 +33,11 @@ func (a *Action) Run(with map[string]any) (map[string]any, error) {
 	after := WithAfter(func(result *Result) {
 		a.log.Debug("embedded job completed", "result", result)
 	})
-	ret, err := Execute(with, before, after)
+	ret, err := Execute(with, before, after, WithRunID(call.Step.RunID))
 
 	actionrpc.LogOutcome(a.log, "embedded job", ret, err)
 
-	return ret, err
+	return ret, nil, err
 }
 
 func Serve() {

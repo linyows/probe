@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/linyows/probe/actionrpc"
 	"github.com/linyows/probe/expr"
 	"github.com/linyows/probe/jsonutil"
 	"github.com/linyows/probe/mask"
@@ -40,6 +41,11 @@ type Step struct {
 	err          error
 	ctx          StepContext
 	retryAttempt int
+	// attempt is the attempt of the action running now, from 1, which the
+	// action is told about.
+	attempt int
+	// expandedName is the name with its templates evaluated.
+	expandedName string
 	startedAt    time.Time
 	failure      *StepFailure
 	// templateErr holds the templates of the step's name and vars that
@@ -101,6 +107,7 @@ func (st *Step) prepare(jCtx *JobContext) (string, bool) {
 		st.templateErr = errors.Join(&expr.FieldError{Path: "name", Err: err}, st.templateErr)
 	}
 
+	st.expandedName = name
 	jCtx.Printer.StepStart(jCtx.CurrentJobID, name)
 
 	// Check if step should be skipped BEFORE waiting
@@ -131,6 +138,7 @@ func (st *Step) executeAction(name string, jCtx *JobContext) (map[string]any, er
 	if runner == nil {
 		runner = &PluginActionRunner{} // Default to plugin execution
 	}
+	st.attempt = 1
 
 	// If no retry configuration, execute once
 	if st.Retry == nil {
@@ -172,10 +180,13 @@ func (st *Step) executeSingleAction(runner ActionRunner, expW map[string]any, jC
 	// than after the select, so that one started after the step timed out is
 	// still stopped with the others.
 	done := beginBackground(jCtx.background, st.Uses)
+	// The call is made up here: an attempt that timed out goes on in the
+	// background while the next one changes the step.
+	opts := RunOptions{Verbose: jCtx.Verbose, Quiet: quiet, Masker: masker, BaseDir: jCtx.baseDir}
+	call := actionrpc.Call{With: expW, State: jCtx.states.get(st.Uses), Step: st.stepInfo(jCtx)}
 	go func() {
 		defer done()
-		opts := RunOptions{Verbose: jCtx.Verbose, Quiet: quiet, Masker: masker, BaseDir: jCtx.baseDir}
-		ret, state, err := runAction(runner, st.Uses, expW, jCtx.states.get(st.Uses), opts)
+		ret, state, err := runAction(runner, st.Uses, call, opts)
 		if err == nil {
 			trackBackground(jCtx.background, st.Uses, ret)
 		}
@@ -194,6 +205,24 @@ func (st *Step) executeSingleAction(runner ActionRunner, expW map[string]any, jC
 		return res.ret, res.err
 	case <-ctx.Done():
 		return nil, errors.New("action execution timed out after " + timeout.String())
+	}
+}
+
+// stepInfo tells an action about the step it runs for.
+func (st *Step) stepInfo(jCtx *JobContext) actionrpc.Step {
+	attempt := st.attempt
+	if attempt < 1 {
+		attempt = 1
+	}
+	return actionrpc.Step{
+		RunID:   jCtx.runID,
+		JobID:   jCtx.CurrentJobID,
+		JobName: jCtx.jobName,
+		Index:   st.Idx,
+		ID:      st.ID,
+		Name:    st.expandedName,
+		Repeat:  jCtx.RepeatCurrent,
+		Attempt: attempt,
 	}
 }
 
@@ -276,6 +305,7 @@ func (st *Step) executeActionWithRetry(runner ActionRunner, expW map[string]any,
 
 		// Only the final attempt reports a failure as such; before that the
 		// step still has a chance to succeed.
+		st.attempt = attempt
 		result, err := st.executeSingleAction(runner, expW, jCtx, attempt < retry.MaxAttempts)
 		lastResult = result
 		lastErr = err

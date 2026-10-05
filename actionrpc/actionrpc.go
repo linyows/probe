@@ -35,14 +35,70 @@ type Action interface {
 	Run(with map[string]any) (map[string]any, error)
 }
 
-// StatefulAction is an Action that keeps state in a job from one step that
-// uses it to the next, such as the cookies a server set. The runner keeps the
-// state the action returns without reading it, and passes it to the action
-// again in the next step of the job that uses it. The state starts empty in
-// each run of a job. A nil state keeps the state as it was.
-type StatefulAction interface {
+// StepAction is an Action that is told about the step it runs for, and may
+// keep state in a job from one step that uses it to the next, such as the
+// cookies a server set. What it does with either is up to the action.
+type StepAction interface {
 	Action
-	RunWithState(with, state map[string]any) (result, newState map[string]any, err error)
+	RunStep(call Call) (result, newState map[string]any, err error)
+}
+
+// Call is what a StepAction is given to run once for a step.
+type Call struct {
+	// With holds the step's with parameters, as Action.Run is given them.
+	With map[string]any
+	// State is the state the action left in the job, or nil when it left
+	// none. The runner keeps the state the action returns without reading
+	// it, and gives it to the action again in the next step of the job that
+	// uses it. The state starts empty in each run of a job, and a nil state
+	// returned keeps it as it was.
+	State map[string]any
+	// Step is the step the action runs for.
+	Step Step
+}
+
+// Step tells an action about the step it runs for.
+type Step struct {
+	// RunID names the run of probe, the same for every step of every job in
+	// it, and for a job run by the embedded action.
+	RunID   string
+	JobID   string
+	JobName string
+	// Index is the position of the step in the job, from 0.
+	Index int
+	// ID is the id the step is given, or empty.
+	ID   string
+	Name string
+	// Repeat is which run of a repeated job this is, from 0.
+	Repeat int
+	// Attempt is which attempt of a retried step this is, from 1.
+	Attempt int
+}
+
+func stepToPB(s Step) *pb.Step {
+	return &pb.Step{
+		RunId:   s.RunID,
+		JobId:   s.JobID,
+		JobName: s.JobName,
+		Index:   int64(s.Index),
+		Id:      s.ID,
+		Name:    s.Name,
+		Repeat:  int64(s.Repeat),
+		Attempt: int64(s.Attempt),
+	}
+}
+
+func stepFromPB(s *pb.Step) Step {
+	return Step{
+		RunID:   s.GetRunId(),
+		JobID:   s.GetJobId(),
+		JobName: s.GetJobName(),
+		Index:   int(s.GetIndex()),
+		ID:      s.GetId(),
+		Name:    s.GetName(),
+		Repeat:  int(s.GetRepeat()),
+		Attempt: int(s.GetAttempt()),
+	}
 }
 
 // Plugin serves an Action over gRPC, and is what the runner dispenses to call
@@ -73,22 +129,22 @@ type Client struct {
 
 // Run calls the action with the given parameters.
 func (m *Client) Run(with map[string]any) (map[string]any, error) {
-	result, _, err := m.RunWithState(with, nil)
+	result, _, err := m.RunStep(Call{With: with})
 	return result, err
 }
 
-// RunWithState calls the action with the given parameters and the state it
-// left in the job, and returns the state it leaves, which is nil when the
-// action keeps none.
-func (m *Client) RunWithState(with, state map[string]any) (map[string]any, map[string]any, error) {
+// RunStep calls the action for a step, and returns the state it leaves,
+// which is nil when the action keeps none. An action that is not a
+// StepAction is run with the parameters alone.
+func (m *Client) RunStep(call Call) (map[string]any, map[string]any, error) {
 	// Convert map[string]any directly to protobuf.Struct
-	withStruct, err := structpb.NewStruct(with)
+	withStruct, err := structpb.NewStruct(call.With)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to convert parameters to protobuf struct: %v", err)
 	}
-	req := &pb.RunRequest{With: withStruct}
-	if state != nil {
-		req.State, err = structpb.NewStruct(state)
+	req := &pb.RunRequest{With: withStruct, Step: stepToPB(call.Step)}
+	if call.State != nil {
+		req.State, err = structpb.NewStruct(call.State)
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to convert state to protobuf struct: %v", err)
 		}
@@ -145,12 +201,12 @@ func (m *Server) Run(ctx context.Context, req *pb.RunRequest) (*pb.RunResponse, 
 
 	var v, newState map[string]any
 	var err error
-	if sa, ok := m.Impl.(StatefulAction); ok {
-		var state map[string]any
+	if sa, ok := m.Impl.(StepAction); ok {
+		call := Call{With: withMap, Step: stepFromPB(req.GetStep())}
 		if req.State != nil {
-			state = structToMap(req.State)
+			call.State = structToMap(req.State)
 		}
-		v, newState, err = sa.RunWithState(withMap, state)
+		v, newState, err = sa.RunStep(call)
 	} else {
 		v, err = m.Impl.Run(withMap)
 	}

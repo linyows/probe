@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/linyows/probe/actionrpc"
 )
 
 // newLoginServer serves /login, which sets a session cookie and redirects to
@@ -73,7 +75,7 @@ func TestRequestSendsCookiesSetOnARedirect(t *testing.T) {
 func TestRequestWithStateKeepsCookies(t *testing.T) {
 	srv := newLoginServer(t)
 
-	_, state, err := RequestWithState(map[string]any{"url": srv.URL, "post": "/login", "keep_cookies": true}, nil)
+	_, state, err := requestWithState(map[string]any{"url": srv.URL, "post": "/login", "keep_cookies": true}, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -81,7 +83,7 @@ func TestRequestWithStateKeepsCookies(t *testing.T) {
 		t.Fatal("keep_cookies should leave the cookies in the state")
 	}
 
-	ret, state2, err := RequestWithState(map[string]any{"url": srv.URL, "get": "/home", "keep_cookies": true}, state)
+	ret, state2, err := requestWithState(map[string]any{"url": srv.URL, "get": "/home", "keep_cookies": true}, state)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -93,7 +95,7 @@ func TestRequestWithStateKeepsCookies(t *testing.T) {
 	}
 
 	// Without keep_cookies the step neither sends nor changes them.
-	ret, state3, err := RequestWithState(map[string]any{"url": srv.URL, "get": "/home"}, state)
+	ret, state3, err := requestWithState(map[string]any{"url": srv.URL, "get": "/home"}, state)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -105,7 +107,7 @@ func TestRequestWithStateKeepsCookies(t *testing.T) {
 	}
 
 	// A removed cookie leaves the state.
-	_, state4, err := RequestWithState(map[string]any{"url": srv.URL, "get": "/logout", "keep_cookies": true}, state)
+	_, state4, err := requestWithState(map[string]any{"url": srv.URL, "get": "/logout", "keep_cookies": true}, state)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -128,11 +130,11 @@ func TestRequestKeepsOnlyCookiesTheJarTakes(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	_, state, err := RequestWithState(map[string]any{"url": srv.URL, "get": "/set", "keep_cookies": true}, nil)
+	_, state, err := requestWithState(map[string]any{"url": srv.URL, "get": "/set", "keep_cookies": true}, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	ret, _, err := RequestWithState(map[string]any{"url": srv.URL, "get": "/echo", "keep_cookies": true}, state)
+	ret, _, err := requestWithState(map[string]any{"url": srv.URL, "get": "/echo", "keep_cookies": true}, state)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -143,12 +145,12 @@ func TestRequestKeepsOnlyCookiesTheJarTakes(t *testing.T) {
 
 func TestRequestSendsGivenCookies(t *testing.T) {
 	srv := newLoginServer(t)
-	_, state, err := RequestWithState(map[string]any{"url": srv.URL, "post": "/login", "keep_cookies": true}, nil)
+	_, state, err := requestWithState(map[string]any{"url": srv.URL, "post": "/login", "keep_cookies": true}, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	ret, _, err := RequestWithState(map[string]any{
+	ret, _, err := requestWithState(map[string]any{
 		"url":          srv.URL,
 		"get":          "/echo",
 		"keep_cookies": true,
@@ -343,7 +345,7 @@ func TestRequestCookiesRejected(t *testing.T) {
 			for k, v := range tt.data {
 				data[k] = v
 			}
-			_, _, err := RequestWithState(data, nil)
+			_, _, err := requestWithState(data, nil)
 			if err == nil || err.Error() != tt.wantErr {
 				t.Errorf("error = %v, want %q", err, tt.wantErr)
 			}
@@ -361,4 +363,9 @@ func mustParseURL(t *testing.T, s string) *url.URL {
 		t.Fatal(err)
 	}
 	return u
+}
+
+// requestWithState makes the request of a step with the state kept in the job.
+func requestWithState(data, state map[string]any) (map[string]any, map[string]any, error) {
+	return RequestStep(actionrpc.Call{With: data, State: state})
 }

@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/hashicorp/go-hclog"
+	"github.com/linyows/probe/actionrpc"
 	"github.com/linyows/probe/expr"
 )
 
@@ -142,7 +143,7 @@ func TestRunOptions_logLevel(t *testing.T) {
 	}
 }
 
-// countingRunner is a StatefulActionRunner whose actions count their calls
+// countingRunner is a StepActionRunner whose actions count their calls
 // in the state they keep. It records the count each call was given, or "-"
 // for no state. A call with fail fails, and one with keep leaves no state.
 type countingRunner struct {
@@ -151,11 +152,12 @@ type countingRunner struct {
 }
 
 func (r *countingRunner) RunActions(name string, with map[string]any, opts RunOptions) (map[string]any, error) {
-	ret, _, err := r.RunActionsWithState(name, with, nil, opts)
+	ret, _, err := r.RunStep(name, actionrpc.Call{With: with}, opts)
 	return ret, err
 }
 
-func (r *countingRunner) RunActionsWithState(name string, with, state map[string]any, opts RunOptions) (map[string]any, map[string]any, error) {
+func (r *countingRunner) RunStep(name string, call actionrpc.Call, opts RunOptions) (map[string]any, map[string]any, error) {
+	with, state := call.With, call.State
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	n, _ := state["n"].(int64)
@@ -239,19 +241,19 @@ func TestMockActionRunnerCarriesState(t *testing.T) {
 	m.States["counter"] = map[string]any{"n": 1}
 
 	var r ActionRunner = m
-	sr, ok := r.(StatefulActionRunner)
+	sr, ok := r.(StepActionRunner)
 	if !ok {
 		t.Fatal("MockActionRunner should carry state")
 	}
-	_, state, err := sr.RunActionsWithState("counter", nil, map[string]any{"n": 0}, RunOptions{})
+	_, state, err := sr.RunStep("counter", actionrpc.Call{State: map[string]any{"n": 0}}, RunOptions{})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if !reflect.DeepEqual(state, map[string]any{"n": 1}) {
 		t.Errorf("state = %v", state)
 	}
-	if !reflect.DeepEqual(m.Received["counter"], []map[string]any{{"n": 0}}) {
-		t.Errorf("received = %v", m.Received["counter"])
+	if calls := m.Calls["counter"]; len(calls) != 1 || !reflect.DeepEqual(calls[0].State, map[string]any{"n": 0}) {
+		t.Errorf("calls = %v", calls)
 	}
 }
 
@@ -262,11 +264,12 @@ type mutatingRunner struct {
 }
 
 func (r *mutatingRunner) RunActions(name string, with map[string]any, opts RunOptions) (map[string]any, error) {
-	ret, _, err := r.RunActionsWithState(name, with, nil, opts)
+	ret, _, err := r.RunStep(name, actionrpc.Call{With: with}, opts)
 	return ret, err
 }
 
-func (r *mutatingRunner) RunActionsWithState(name string, with, state map[string]any, opts RunOptions) (map[string]any, map[string]any, error) {
+func (r *mutatingRunner) RunStep(name string, call actionrpc.Call, opts RunOptions) (map[string]any, map[string]any, error) {
+	with, state := call.With, call.State
 	list, _ := state["list"].([]any)
 	r.got = append(r.got, fmt.Sprint(list))
 	if state != nil {
@@ -313,12 +316,12 @@ type typedStateRunner struct {
 }
 
 func (r *typedStateRunner) RunActions(name string, with map[string]any, opts RunOptions) (map[string]any, error) {
-	ret, _, err := r.RunActionsWithState(name, with, nil, opts)
+	ret, _, err := r.RunStep(name, actionrpc.Call{With: with}, opts)
 	return ret, err
 }
 
-func (r *typedStateRunner) RunActionsWithState(name string, with, state map[string]any, opts RunOptions) (map[string]any, map[string]any, error) {
-	r.got = append(r.got, fmt.Sprint(state))
+func (r *typedStateRunner) RunStep(name string, call actionrpc.Call, opts RunOptions) (map[string]any, map[string]any, error) {
+	r.got = append(r.got, fmt.Sprint(call.State))
 	if r.kept != nil {
 		r.kept["tags"].([]string)[0] = "changed"
 		r.kept["labels"].(map[string]string)["a"] = "changed"
@@ -357,7 +360,7 @@ func (unsendableStateRunner) RunActions(name string, with map[string]any, opts R
 	return map[string]any{"status": 0}, nil
 }
 
-func (unsendableStateRunner) RunActionsWithState(name string, with, state map[string]any, opts RunOptions) (map[string]any, map[string]any, error) {
+func (unsendableStateRunner) RunStep(name string, call actionrpc.Call, opts RunOptions) (map[string]any, map[string]any, error) {
 	return map[string]any{"status": 0}, map[string]any{"bad": map[struct{}]int{{}: 1}}, nil
 }
 

@@ -1,6 +1,8 @@
 package probe
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"maps"
@@ -37,6 +39,21 @@ type Workflow struct {
 	// Shared outputs across all jobs
 	outputs *Outputs
 	printer *Printer
+	// runID names this run, for actions to tell where a request comes from
+	runID string
+}
+
+// RunID returns the ID of the run Start began, which every action of the run
+// is told about, or an empty string before Start.
+func (w *Workflow) RunID() string {
+	return w.runID
+}
+
+// newRunID returns a random ID for a run.
+func newRunID() string {
+	b := make([]byte, 8)
+	_, _ = rand.Read(b)
+	return hex.EncodeToString(b)
 }
 
 // Start executes the workflow with the given configuration
@@ -48,6 +65,7 @@ func (w *Workflow) Start(c Config) error {
 	if err != nil {
 		return err
 	}
+	w.runID = newRunID()
 
 	// Fetch external actions before any job starts, so that a bad reference
 	// fails the run up front and a download does not count against a step's
@@ -120,6 +138,7 @@ func (w *Workflow) writeReports(targets []report.Target, rs *Result, order []str
 	}
 
 	r := BuildReport(w.Name, w.Description, rs, order, startedAt, finishedAt)
+	r.RunID = w.runID
 	r.Mask(w.printer.Masker())
 
 	var errs []error
@@ -542,6 +561,7 @@ func (w *Workflow) newJobContext(c Config, vars map[string]any, scheduler *JobSc
 		countersMu:   &sync.Mutex{},
 		background:   procgroup.NewTracker(),
 		baseDir:      w.basePath,
+		runID:        w.runID,
 	}
 }
 
