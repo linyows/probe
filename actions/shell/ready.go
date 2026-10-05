@@ -24,9 +24,10 @@ const (
 // is pid has exited with nothing left of its process group, or timeout has
 // passed. exited is closed once the shell has exited.
 //
-// A shell that exits 0 while its process group lives on, as `server &` and
-// a command that daemonizes do, is waited for still: what it started may
-// write the text later.
+// A shell that exits while its process group lives on, as `server &` does,
+// is waited for still: what it started may write the text later. A process
+// that leaves the group, as one that calls setsid to daemonize does, is not
+// followed.
 func waitReady(path, text string, pid int, exited <-chan struct{}, timeout time.Duration) readyState {
 	m := &logMatcher{path: path, text: []byte(text)}
 	deadline := time.NewTimer(timeout)
@@ -56,6 +57,18 @@ func waitReady(path, text string, pid int, exited <-chan struct{}, timeout time.
 		case <-deadline.C:
 			if m.found() {
 				return ready
+			}
+			// The shell may have exited before the deadline although this
+			// case was chosen: select picks at random among the ready ones.
+			if !shellExited {
+				select {
+				case <-exited:
+					shellExited = true
+				default:
+				}
+			}
+			if shellExited && !groupAlive(pid) {
+				return readyExited
 			}
 			return readyTimedOut
 		}

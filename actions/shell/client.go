@@ -393,6 +393,15 @@ func Execute(data map[string]any, opts ...Option) (map[string]any, error) {
 	// into a string here is what used to drop it before it reached the command.
 	m := mapping.EnvToStringValue(data)
 
+	// ready is checked as it was given: the mapping leaves an empty map for
+	// one that is missing and drops a value that is not a string, so
+	// ready: {} or ready: {log: 123} would run the command without waiting.
+	if v, ok := data["ready"]; ok {
+		if err := checkReady(v); err != nil {
+			return map[string]any{}, err
+		}
+	}
+
 	r := NewReq()
 
 	cb := &Callback{}
@@ -426,6 +435,32 @@ func Execute(data map[string]any, opts ...Option) (map[string]any, error) {
 
 	// Return the result directly without flattening
 	return mapResult, nil
+}
+
+// checkReady checks the ready parameter as a step gave it: a map whose only
+// key is log, holding the text to wait for.
+func checkReady(v any) error {
+	ready, ok := v.(map[string]any)
+	if !ok {
+		return fmt.Errorf("ready must be a map with log, the text the command writes once it is ready, not %T", v)
+	}
+	for k := range ready {
+		if k != "log" {
+			return fmt.Errorf("ready takes log, not %s", k)
+		}
+	}
+	log, ok := ready["log"]
+	if !ok {
+		return fmt.Errorf("ready.log is required: the text the command writes once it is ready")
+	}
+	s, ok := log.(string)
+	if !ok {
+		return fmt.Errorf("ready.log must be a string, not %T: quote it, as log: \"8080\"", log)
+	}
+	if s == "" {
+		return fmt.Errorf("ready.log is required: the text the command writes once it is ready")
+	}
+	return nil
 }
 
 func WithBefore(f func(cmd string, shell string, workdir string)) Option {

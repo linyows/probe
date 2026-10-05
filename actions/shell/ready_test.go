@@ -2,8 +2,10 @@ package shell
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 )
@@ -164,6 +166,71 @@ func TestLogMatcher(t *testing.T) {
 		got := m.found()
 		if want := chunk == " on :80\n"; got != want {
 			t.Fatalf("after %q: found = %v, want %v", chunk, got, want)
+		}
+	}
+}
+
+func TestExecuteReadyRejected(t *testing.T) {
+	tests := []struct {
+		name  string
+		ready any
+		want  string
+	}{
+		{"an empty map", map[string]any{}, "ready.log is required"},
+		{"null", nil, "ready must be a map"},
+		{"a string", "listening on", "ready must be a map"},
+		{"a number for log", map[string]any{"log": int64(8080)}, "ready.log must be a string"},
+		{"an empty log", map[string]any{"log": ""}, "ready.log is required"},
+		{"an unknown key", map[string]any{"file": "x"}, "ready takes log, not file"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			marker := filepath.Join(t.TempDir(), "ran")
+			ret, err := Execute(map[string]any{
+				"cmd":        "touch " + marker,
+				"background": true,
+				"ready":      tt.ready,
+			})
+			if res, ok := ret["res"].(map[string]any); ok {
+				pid, _ := res["pid"].(int)
+				log, _ := res["log"].(string)
+				cleanupBackground(t, pid, log)
+			}
+			if err == nil || !strings.Contains(err.Error(), tt.want) {
+				t.Errorf("error = %v, want one containing %q", err, tt.want)
+			}
+			time.Sleep(100 * time.Millisecond)
+			if _, err := os.Stat(marker); err == nil {
+				t.Error("the command should not run")
+			}
+		})
+	}
+}
+
+func TestWaitReadyExitAndDeadlineTogether(t *testing.T) {
+	// A shell that has exited, with nothing left of its group, and a timeout
+	// that has passed as well: select may pick either, and the exit came
+	// first, so it is the exit that is reported, every time.
+	cmd := exec.Command("/bin/sh", "-c", "exit 3")
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
+	if err := cmd.Run(); err == nil {
+		t.Fatal("expected the command to exit 3")
+	}
+	pid := cmd.Process.Pid
+	if !waitGone(pid) {
+		t.Fatal("the group should be gone")
+	}
+	exited := make(chan struct{})
+	close(exited)
+	log := filepath.Join(t.TempDir(), "log")
+	if err := os.WriteFile(log, []byte("starting\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	for i := 0; i < 200; i++ {
+		if got := waitReady(log, "listening on", pid, exited, 0); got != readyExited {
+			t.Fatalf("run %d: waitReady = %v, want readyExited", i, got)
 		}
 	}
 }

@@ -148,10 +148,10 @@ Without `ready`, a step after a background command has to find out on its own wh
 | `timeout` passes | `1` | `-1` | `true` | What it wrote |
 
 - **Waiting:** the text is looked for in the log as the command writes it, as plain text and not a pattern. `timeout`, `30s` unless it is given, bounds the wait. A command that is not ready by then is stopped as the workflow would stop it, so a retry of the step does not find the last one still holding its port.
-- **A shell that exits early:** a command such as `server &`, or one that detaches, ends its shell while what it started goes on running. The wait goes on while anything it started is left, since that may still write the text.
+- **A shell that exits early:** a command such as `server &` ends its shell while what it started goes on running. The wait goes on while anything it started is left in the shell's process group, since that may still write the text. A process that leaves the group, as a daemon that starts a session of its own does, is not followed: once the rest is gone the command counts as exited, and the process is not stopped with the others. Run such a program in the foreground, as with a `--foreground` or `-f` option, if it has one.
 - **Buffered output:** a program that buffers what it writes when it is not writing to a terminal, as Python does, may hold the text back; make it write at once, as with `python3 -u`.
 
-`ready` is refused for a command that is not in the background, and when `log` is missing or empty.
+`ready` is refused before the command runs when the command is not in the background, when it is not a map, when it has a key other than `log`, and when `log` is missing, empty or not a string; quote a number, as `log: "8080"`.
 
 ## Response Format
 
