@@ -8,7 +8,6 @@ import (
 
 	"github.com/hashicorp/go-hclog"
 	"github.com/linyows/probe/actionrpc"
-	"github.com/linyows/probe/shell"
 )
 
 type Action struct {
@@ -23,13 +22,13 @@ func (a *Action) Run(with map[string]any) (map[string]any, error) {
 
 	actionrpc.LogParams(a.log, "received shell request parameters", with)
 
-	before := shell.WithBefore(func(cmd string, shell string, workdir string) {
+	before := WithBefore(func(cmd string, shell string, workdir string) {
 		a.log.Debug("shell command prepared", "cmd", cmd, "shell", shell, "workdir", workdir)
 	})
-	after := shell.WithAfter(func(result *shell.Result) {
+	after := WithAfter(func(result *Result) {
 		a.log.Debug("shell command completed", "result", result)
 	})
-	ret, err := shell.Execute(with, before, after)
+	ret, err := Execute(with, before, after)
 
 	actionrpc.LogOutcome(a.log, "shell command", ret, err)
 
@@ -56,7 +55,7 @@ func stopStartedOnSignal() {
 	go func() {
 		sig := <-ch
 		signal.Stop(ch)
-		shell.StopStarted()
+		StopStarted()
 		if s, ok := sig.(syscall.Signal); ok {
 			_ = syscall.Kill(os.Getpid(), s)
 		}

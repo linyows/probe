@@ -5,7 +5,6 @@ import (
 
 	"github.com/hashicorp/go-hclog"
 	"github.com/linyows/probe/actionrpc"
-	"github.com/linyows/probe/ssh"
 )
 
 type Action struct {
@@ -23,14 +22,14 @@ func (a *Action) Run(with map[string]any) (map[string]any, error) {
 
 	actionrpc.LogParams(a.log, "received ssh request parameters", with)
 
-	before := ssh.WithBefore(func(host string, port int, user string, cmd string) {
+	before := WithBefore(func(host string, port int, user string, cmd string) {
 		a.log.Debug("ssh connection prepared", "host", host, "port", port, "user", user, "cmd", cmd)
 	})
 	// Only the name is logged: the value may be a secret.
-	envRefused := ssh.WithEnvRefused(func(name string, err error) {
+	envRefused := WithEnvRefused(func(name string, err error) {
 		a.log.Warn("ssh server refused an environment variable; the command runs without it (allow it with AcceptEnv in sshd_config)", "name", name, "error", err)
 	})
-	ret, err := ssh.Execute(with, before, envRefused)
+	ret, err := Execute(with, before, envRefused)
 
 	actionrpc.LogOutcome(a.log, "ssh command", ret, err)
 

@@ -450,14 +450,14 @@ jobs:
         ./e2e/gen.sh
         go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
         go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
-        cd grpc/testserver && \
+        cd actions/grpc/testserver && \
           protoc --go_out=. --go-grpc_out=. ./pb/user_service.proto
     test: res.code == 0
   - name: Start GRPC server in background
     uses: shell
     with:
       background: true
-      cmd: go run grpc/testserver/*.go
+      cmd: go run actions/grpc/testserver/*.go
     test: status == -1
     outputs:
       grpc_pid: res.pid
@@ -470,7 +470,7 @@ jobs:
     with:
       background: true
       cmd: |
-        go run grpc/testserver/*.go -tls -port=50052 \
+        go run actions/grpc/testserver/*.go -tls -port=50052 \
           -cert="./e2e/certs/server.crt" \
           -key="./e2e/certs/server.key"
     test: status == -1

@@ -1,4 +1,4 @@
-package mail
+package maillatency
 
 import (
 	"bytes"
