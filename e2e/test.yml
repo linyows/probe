@@ -433,6 +433,20 @@ jobs:
       cmd: ./probe examples/http.yml
     test: res.code == 0
     echo: "{{res.stdout}}"
+  - name: http-upload.yml
+    uses: shell
+    with:
+      cmd: ./probe examples/http-upload.yml
+    test: res.code == 0
+    echo: "{{res.stdout}}"
+  - name: secrets-form.yml hides a password sent in a form, percent-encoded too
+    uses: shell
+    with:
+      cmd: ./probe e2e/secrets-form.yml --verbose
+    test: |
+      res.code == 0 &&
+      res.stderr contains "password=<redacted>" &&
+      !(res.stdout contains "e2e-form") && !(res.stderr contains "e2e-form")
   - name: Stop HTTP server
     uses: shell
     with:
