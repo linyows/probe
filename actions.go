@@ -102,25 +102,55 @@ func newActionStates() *actionStates {
 	return &actionStates{states: make(map[string]map[string]any)}
 }
 
-// get returns the state the action left, or nil when it left none.
+// get returns a copy of the state the action left, or nil when it left none.
+// A runner in this process may change what it is given, and the state kept
+// must not change with it, should the step then fail or time out.
 func (s *actionStates) get(name string) map[string]any {
 	if s == nil {
 		return nil
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.states[name]
+	state, _ := cloneState(s.states[name]).(map[string]any)
+	return state
 }
 
-// set records the state the action leaves. A nil state keeps the one there
-// was.
+// set records a copy of the state the action leaves, which the runner may
+// still hold. A nil state keeps the one there was.
 func (s *actionStates) set(name string, state map[string]any) {
 	if s == nil || state == nil {
 		return
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.states[name] = state
+	s.states[name], _ = cloneState(state).(map[string]any)
+}
+
+// cloneState copies the maps and lists in v, which hold the state. Any other
+// value is shared, as the state an action sends holds no other mutable one.
+func cloneState(v any) any {
+	switch val := v.(type) {
+	case map[string]any:
+		if val == nil {
+			return val
+		}
+		out := make(map[string]any, len(val))
+		for k, e := range val {
+			out[k] = cloneState(e)
+		}
+		return out
+	case []any:
+		if val == nil {
+			return val
+		}
+		out := make([]any, len(val))
+		for i, e := range val {
+			out[i] = cloneState(e)
+		}
+		return out
+	default:
+		return v
+	}
 }
 
 // MockActionRunner implements ActionRunner for testing

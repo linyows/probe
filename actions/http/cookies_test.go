@@ -193,6 +193,25 @@ func TestCompactCookies(t *testing.T) {
 	}
 }
 
+// TestCompactCookiesDomainCookie checks that a domain cookie is told apart
+// by its domain alone, so that one host removes what another set.
+func TestCompactCookiesDomainCookie(t *testing.T) {
+	now := time.Date(2026, 10, 5, 12, 0, 0, 0, time.UTC)
+	all := []storedCookie{
+		{URL: "http://a.example.com/", SetCookie: "session=1; Domain=example.com; Path=/"},
+		{URL: "http://a.example.com/", SetCookie: "host=1; Path=/"},
+		{URL: "http://b.example.com/", SetCookie: "session=; Domain=.EXAMPLE.com; Path=/; Max-Age=0"},
+		{URL: "http://b.example.com/", SetCookie: "host=2; Path=/"},
+	}
+	want := []storedCookie{
+		{URL: "http://a.example.com/", SetCookie: "host=1; Path=/"},
+		{URL: "http://b.example.com/", SetCookie: "host=2; Path=/"},
+	}
+	if got := compactCookies(all, now); !reflect.DeepEqual(got, want) {
+		t.Errorf("compactCookies() =\n%v\nwant\n%v", got, want)
+	}
+}
+
 func TestCookieJarTurnsMaxAgeIntoExpires(t *testing.T) {
 	now := time.Date(2026, 10, 5, 12, 0, 0, 0, time.UTC)
 	j, err := newCookieJar("http://a.test/", nil, nil)

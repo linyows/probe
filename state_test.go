@@ -120,3 +120,52 @@ func TestMockActionRunnerCarriesState(t *testing.T) {
 		t.Errorf("received = %v", m.Received["counter"])
 	}
 }
+
+// mutatingRunner changes the state it is given before it answers, failing
+// when with.fail is set, and records the list it was given.
+type mutatingRunner struct {
+	got []any
+}
+
+func (r *mutatingRunner) RunActions(name string, with map[string]any, opts RunOptions) (map[string]any, error) {
+	ret, _, err := r.RunActionsWithState(name, with, nil, opts)
+	return ret, err
+}
+
+func (r *mutatingRunner) RunActionsWithState(name string, with, state map[string]any, opts RunOptions) (map[string]any, map[string]any, error) {
+	list, _ := state["list"].([]any)
+	r.got = append(r.got, fmt.Sprint(list))
+	if state != nil {
+		list[0] = "changed"
+		state["extra"] = true
+	}
+	if with["fail"] == true {
+		return nil, nil, errors.New("failed")
+	}
+	newState := map[string]any{"list": []any{"kept"}}
+	return map[string]any{"status": 0}, newState, nil
+}
+
+func TestActionStateIsNotChangedByTheRunner(t *testing.T) {
+	runner := &mutatingRunner{}
+	step := func(with map[string]any) *Step {
+		return &Step{Name: "s", Uses: "mutating", With: with, actionRunner: runner}
+	}
+	workflow := &Workflow{
+		Name: "state",
+		Jobs: []Job{{
+			Name:  "mutates",
+			ID:    "mutates",
+			Steps: []*Step{step(nil), step(map[string]any{"fail": true}), step(nil)},
+		}},
+		printer: newBufferPrinter(),
+	}
+	_ = workflow.Start(Config{})
+
+	// The failed step changed what it was given, which is not what the job
+	// keeps, and the state kept is not what the first step went on to hold.
+	want := []any{"[]", "[kept]", "[kept]"}
+	if !reflect.DeepEqual(runner.got, want) {
+		t.Errorf("states given = %v, want %v", runner.got, want)
+	}
+}

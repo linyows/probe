@@ -122,8 +122,8 @@ func (j *cookieJar) Stored(before []storedCookie) []storedCookie {
 }
 
 // compactCookies keeps the last of each cookie in all, a cookie being told
-// apart by its name, domain, path and host as a jar tells it apart, and drops
-// those that are removed or expired by then.
+// apart by its name, domain and path as a jar tells it apart, and drops those
+// that are removed or expired by then.
 func compactCookies(all []storedCookie, now time.Time) []storedCookie {
 	type entry struct {
 		cookie storedCookie
@@ -144,7 +144,13 @@ func compactCookies(all []storedCookie, now time.Time) []storedCookie {
 		if p == "" || !strings.HasPrefix(p, "/") {
 			p = defaultCookiePath(u.Path)
 		}
-		key := strings.Join([]string{c.Name, strings.ToLower(strings.TrimPrefix(c.Domain, ".")), p, u.Hostname()}, "\x00")
+		// A domain cookie is the same cookie whichever host set it; a
+		// host-only one belongs to the host that set it.
+		domain := strings.ToLower(strings.TrimPrefix(c.Domain, "."))
+		if domain == "" {
+			domain = strings.ToLower(u.Hostname())
+		}
+		key := strings.Join([]string{c.Name, domain, p}, "\x00")
 		if _, seen := last[key]; !seen {
 			keys = append(keys, key)
 		}
