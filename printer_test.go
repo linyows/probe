@@ -1035,12 +1035,12 @@ func TestPrinter_generateTestError(t *testing.T) {
 		{
 			name:     "simple error",
 			err:      fmt.Errorf("compilation error"),
-			expected: "Test\nerror: &errors.errorString{s:\"compilation error\"}\n",
+			expected: "       test error: compilation error\n",
 		},
 		{
 			name:     "complex error message",
 			err:      fmt.Errorf("invalid expression: res.status == \"200\""),
-			expected: "Test\nerror: &errors.errorString{s:\"invalid expression: res.status == \\\"200\\\"\"}\n",
+			expected: "       test error: invalid expression: res.status == \"200\"\n",
 		},
 	}
 
@@ -1067,19 +1067,19 @@ func TestPrinter_generateTestTypeMismatch(t *testing.T) {
 			name:     "string result instead of bool",
 			testExpr: "res.status",
 			result:   "200",
-			expected: "Test: `res.status` = 200\n",
+			expected: "       Test: `res.status` = 200\n",
 		},
 		{
 			name:     "number result instead of bool",
 			testExpr: "res.code",
 			result:   404,
-			expected: "Test: `res.code` = 404\n",
+			expected: "       Test: `res.code` = 404\n",
 		},
 		{
 			name:     "map result instead of bool",
 			testExpr: "res.body",
 			result:   map[string]any{"error": "not found"},
-			expected: "Test: `res.body` = map[error:not found]\n",
+			expected: "       Test: `res.body` = map[error:not found]\n",
 		},
 	}
 
@@ -1424,5 +1424,24 @@ func TestPrinter_MasksOutput(t *testing.T) {
 	}
 	if !strings.Contains(out, "<secret:S>") || !strings.Contains(out, "<redacted>") {
 		t.Errorf("expected masked markers in:\n%s", out)
+	}
+}
+
+func TestIndentDetail(t *testing.T) {
+	tests := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{"one line", "connection refused", "       connection refused\n"},
+		{"several lines", "with.cmd: {{x.y}}: cannot fetch y\n | x.y\n | ..^", "       with.cmd: {{x.y}}: cannot fetch y\n        | x.y\n        | ..^\n"},
+		{"surrounding newlines", "\nmessage\n", "       message\n"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := indentDetail(tt.in); got != tt.want {
+				t.Errorf("indentDetail() = %q, want %q", got, tt.want)
+			}
+		})
 	}
 }

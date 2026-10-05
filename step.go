@@ -886,7 +886,7 @@ func (st *Step) createFailedStepResult(name string, jCtx *JobContext) StepResult
 
 	// Include error information if available
 	if st.err != nil {
-		result.TestOutput = st.err.Error()
+		result.TestOutput = indentDetail(st.err.Error())
 		result.Failure = st.newFailure(failureKindOf(st.err), st.err.Error())
 	}
 
