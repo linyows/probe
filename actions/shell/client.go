@@ -26,7 +26,10 @@ type Req struct {
 	Timeout    string            `map:"timeout"`
 	Env        map[string]string `map:"env"`
 	Background bool              `map:"background"`
-	cb         *Callback
+	// Ready says when a background command is ready for the steps after
+	// it: its key log names text the command writes once it is.
+	Ready map[string]string `map:"ready"`
+	cb    *Callback
 }
 
 type Res struct {
@@ -58,6 +61,9 @@ type shellParams struct {
 	shell   string
 	timeout time.Duration
 	env     map[string]string
+	// readyLog is the text a background command writes once it is ready,
+	// or empty when the step does not wait for it.
+	readyLog string
 }
 
 type Option func(*Callback)
@@ -114,6 +120,22 @@ func parseParams(req *Req) (*shellParams, error) {
 		if err := validateWorkdir(params.workdir); err != nil {
 			return nil, err
 		}
+	}
+
+	// The mapping leaves an empty map where ready is not given.
+	if len(req.Ready) > 0 {
+		if !req.Background {
+			return nil, fmt.Errorf("ready is for a background command, and background is not true")
+		}
+		for k := range req.Ready {
+			if k != "log" {
+				return nil, fmt.Errorf("ready takes log, not %s", k)
+			}
+		}
+		if req.Ready["log"] == "" {
+			return nil, fmt.Errorf("ready.log is required: the text the command writes once it is ready")
+		}
+		params.readyLog = req.Ready["log"]
 	}
 
 	return params, nil
@@ -250,16 +272,22 @@ func (r *Req) Do() (*Result, error) {
 		started.procs = append(started.procs, proc)
 		started.Unlock()
 
-		// Start a goroutine to close the log file when process exits
+		// Close the log file when the process exits, and tell a wait for
+		// readiness that it did.
+		exited := make(chan struct{})
+		exitCode := 0
 		go func() {
 			_ = cmd.Wait()
+			if cmd.ProcessState != nil {
+				exitCode = cmd.ProcessState.ExitCode()
+			}
 			_ = logFile.Close()
 			started.Lock()
 			proc.exited = true
 			started.Unlock()
+			close(exited)
 		}()
 
-		result.RT = time.Since(start)
 		result.Res = Res{
 			Code:   -1, // Indicate background process (not finished)
 			Stdout: "",
@@ -268,6 +296,22 @@ func (r *Req) Do() (*Result, error) {
 			Log:    logPath,
 		}
 		result.Status = -1 // Indicate background execution
+
+		if params.readyLog != "" {
+			switch waitReady(logPath, params.readyLog, cmd.Process.Pid, exited, params.timeout) {
+			case readyExited:
+				// exitCode is written before exited is closed.
+				result.Res.Code = exitCode
+				result.Res.Stdout = readLog(logPath)
+				result.Status = 1
+			case readyTimedOut:
+				stopGroups([]int{cmd.Process.Pid})
+				result.Res.TimedOut = true
+				result.Res.Stdout = readLog(logPath)
+				result.Status = 1
+			}
+		}
+		result.RT = time.Since(start)
 
 		// callback after
 		if r.cb != nil && r.cb.after != nil {
@@ -349,6 +393,15 @@ func Execute(data map[string]any, opts ...Option) (map[string]any, error) {
 	// into a string here is what used to drop it before it reached the command.
 	m := mapping.EnvToStringValue(data)
 
+	// ready is checked as it was given: the mapping leaves an empty map for
+	// one that is missing and drops a value that is not a string, so
+	// ready: {} or ready: {log: 123} would run the command without waiting.
+	if v, ok := data["ready"]; ok {
+		if err := checkReady(v); err != nil {
+			return map[string]any{}, err
+		}
+	}
+
 	r := NewReq()
 
 	cb := &Callback{}
@@ -382,6 +435,32 @@ func Execute(data map[string]any, opts ...Option) (map[string]any, error) {
 
 	// Return the result directly without flattening
 	return mapResult, nil
+}
+
+// checkReady checks the ready parameter as a step gave it: a map whose only
+// key is log, holding the text to wait for.
+func checkReady(v any) error {
+	ready, ok := v.(map[string]any)
+	if !ok {
+		return fmt.Errorf("ready must be a map with log, the text the command writes once it is ready, not %T", v)
+	}
+	for k := range ready {
+		if k != "log" {
+			return fmt.Errorf("ready takes log, not %s", k)
+		}
+	}
+	log, ok := ready["log"]
+	if !ok {
+		return fmt.Errorf("ready.log is required: the text the command writes once it is ready")
+	}
+	s, ok := log.(string)
+	if !ok {
+		return fmt.Errorf("ready.log must be a string, not %T: quote it, as log: \"8080\"", log)
+	}
+	if s == "" {
+		return fmt.Errorf("ready.log is required: the text the command writes once it is ready")
+	}
+	return nil
 }
 
 func WithBefore(f func(cmd string, shell string, workdir string)) Option {

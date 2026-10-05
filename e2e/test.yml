@@ -821,27 +821,21 @@ jobs:
   steps:
   # The examples drive a page served here rather than a public site, whose
   # content can change under the test.
+  # -u makes Python write the line at once rather than when its buffer fills.
   - name: Start fixture page server in background
     uses: shell
     with:
       background: true
-      cmd: python3 -m http.server 8090 --bind 127.0.0.1 --directory e2e/browser
+      cmd: python3 -u -m http.server 8090 --bind 127.0.0.1 --directory e2e/browser
+      ready:
+        log: Serving HTTP
+      timeout: 10s
     test: status == -1
     outputs:
       page_pid: res.pid
     echo: |
       PID: {{ res.pid }}
       Log: {{ res.log }}
-  - name: Wait for fixture page server to be ready
-    uses: http
-    with:
-      url: http://localhost:8090
-      get: /
-    retry:
-      max_attempts: 10
-      interval: "0.5s"
-      initial_delay: "0.5s"
-    test: res.code == 200
   - name: Start Xvfb in background
     uses: shell
     skipif: vars.ci == ""
@@ -914,28 +908,21 @@ jobs:
   steps:
   # The action is downloaded from GitHub, but the endpoint it queries is an
   # echo server here, so a public API being down does not fail the tests.
+  # go run builds the server first, which the timeout allows for.
   - name: Start echo server in background
     uses: shell
     with:
       background: true
       cmd: go run ./e2e/echo-server -addr 127.0.0.1:8091
+      ready:
+        log: listening on
+      timeout: 2m
     test: status == -1
     outputs:
       echo_pid: res.pid
     echo: |
       PID: {{ res.pid }}
       Log: {{ res.log }}
-  - name: Wait for echo server to be ready
-    uses: http
-    with:
-      url: http://127.0.0.1:8091
-      get: /
-    # go run builds the server first
-    retry:
-      max_attempts: 60
-      interval: "1s"
-      initial_delay: "1s"
-    test: res.code == 200
   - name: external-action.yml downloads the action into an empty cache
     uses: shell
     with:

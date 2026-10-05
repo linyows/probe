@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"flag"
 	"log"
+	"net"
 	"net/http"
 )
 
@@ -18,7 +19,6 @@ func main() {
 
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
-			// Readiness check
 			reply(w, map[string]any{"ok": true})
 			return
 		}
@@ -34,7 +34,13 @@ func main() {
 		reply(w, map[string]any{"data": map[string]any{"request": body, "headers": headers}})
 	})
 
-	log.Fatal(http.ListenAndServe(*addr, nil))
+	// Listen first and say so, so that a step can wait for the line.
+	ln, err := net.Listen("tcp", *addr)
+	if err != nil {
+		log.Fatal(err)
+	}
+	log.Printf("listening on %s", ln.Addr())
+	log.Fatal(http.Serve(ln, nil))
 }
 
 func reply(w http.ResponseWriter, body any) {

@@ -109,13 +109,49 @@ with:
   background: true
 ```
 
-A background command is for something the following steps need running, such as a server under test. The step returns as soon as the command has started, so `res.code` is `-1` and `res.stdout` and `res.stderr` are empty. `timeout` does not apply.
+A background command is for something the following steps need running, such as a server under test. The step returns as soon as the command has started, so `res.code` is `-1` and `res.stdout` and `res.stderr` are empty. `timeout` does not apply, unless `ready` is given.
 
 - **Output:** stdout and stderr both go to a log file of its own, whose path is in `res.log`. Starting the same command twice gives two files.
 - **Lifetime:** the command keeps running after its step and after its job, so steps in later jobs can use it too. When the workflow is over, Probe sends `SIGTERM` to the command and everything it started, sends `SIGKILL` to whatever is left after 3 seconds, and removes the log file. Read the log in a step if it is needed afterwards.
 - **Interruption:** when Probe is interrupted with Ctrl+C, or receives `SIGTERM` or `SIGHUP`, it stops the command the same way before it exits, and a second Ctrl+C ends Probe at once. Only a Probe killed outright, such as with `SIGKILL`, leaves the command and its log file behind.
 
 A command started inside an [embedded](/reference/actions/embedded) job is stopped when that job is over.
+
+### `ready` (optional)
+
+**Type:** Object  
+**Description:** For a background command, wait until it writes `log`, the text it writes once it is ready, before the step returns
+
+```yaml
+- name: Start the server
+  uses: shell
+  with:
+    cmd: python3 -u -m http.server 8080 --bind 127.0.0.1
+    background: true
+    ready:
+      log: Serving HTTP
+  test: status == -1
+
+- name: Use it at once
+  uses: http
+  with:
+    get: http://127.0.0.1:8080/
+  test: res.code == 200
+```
+
+Without `ready`, a step after a background command has to find out on its own when the command is ready, usually by retrying a request; and when the command fails to start, the retries run out with nothing saying why. With `ready`, the step itself waits, and fails at once with what the command wrote:
+
+| What happens first | `status` | `res.code` | `res.timed_out` | `res.stdout` |
+|---|---|---|---|---|
+| The command writes the text, to stdout or stderr | `-1` | `-1` | `false` | Empty, as for any background command |
+| The command exits, and nothing it started is left running | `1` | Its exit code | `false` | What it wrote |
+| `timeout` passes | `1` | `-1` | `true` | What it wrote |
+
+- **Waiting:** the text is looked for in the log as the command writes it, as plain text and not a pattern. `timeout`, `30s` unless it is given, bounds the wait. A command that is not ready by then is stopped as the workflow would stop it, so a retry of the step does not find the last one still holding its port.
+- **A shell that exits early:** a command such as `server &` ends its shell while what it started goes on running. The wait goes on while anything it started is left in the shell's process group, since that may still write the text. A process that leaves the group, as a daemon that starts a session of its own does, is not followed: once the rest is gone the command counts as exited, and the process is not stopped with the others. Run such a program in the foreground, as with a `--foreground` or `-f` option, if it has one.
+- **Buffered output:** a program that buffers what it writes when it is not writing to a terminal, as Python does, may hold the text back; make it write at once, as with `python3 -u`.
+
+`ready` is refused before the command runs when the command is not in the background, when it is not a map, when it has a key other than `log`, and when `log` is missing, empty or not a string; quote a number, as `log: "8080"`.
 
 ## Response Format
 
