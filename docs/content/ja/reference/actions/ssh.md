@@ -48,10 +48,12 @@ SSHのステップには、接続先のホスト、ユーザー、認証方法�
 | パラメータ | 型 | デフォルト | 説明 |
 |-----------|---|-----------|------|
 | `port` | int | 22 | SSHポート番号 |
-| `timeout` | string | "30s" | 接続とコマンド実行の制限時間。`"30s"`や`"5m"`のようなGoのduration形式で指定し、数値だけの指定は受け付けない |
+| `timeout` | string | "30s" | 接続とコマンド実行の制限時間。`"30s"`や`"5m"`のようなGoのduration形式で指定し、数値だけの指定は受け付けない。超えた場合の扱いは後述 |
 | `workdir` | string | - | リモートでの作業ディレクトリ |
 | `strict_host_check` | bool | true | Host Keyの厳密検証 |
 | `known_hosts` | string | `~/.ssh/known_hosts`と`/etc/ssh/ssh_known_hosts` | Known Hostsファイルのパス。既定では2つのうち存在するファイルを読み、どちらもなければホストの検証に失敗する |
+
+`timeout`を過ぎても終わらないコマンドには`SIGTERM`を送り、ステップはテストできる結果を受け取ります。`res.timed_out`が`true`になり、`res.stdout`と`res.stderr`にはそれまでに書いた内容が、`res.code`にはシグナルを受けて終了したときの終了コード（多くは`143`）が入ります。その後5秒経っても終わらないコマンドは待つのをやめ、`res.code`は`-1`になります。
 
 ### 環境変数
 
@@ -79,6 +81,7 @@ SSH Actionは以下の値を返します：
 | `res.code` | int | 終了コード（0 = 成功） |
 | `res.stdout` | string | 標準出力 |
 | `res.stderr` | string | 標準エラー出力 |
+| `res.timed_out` | bool | コマンドが`timeout`で停止されたときに`true` |
 | `status` | int | 実行ステータス（0 = 成功、1 = 失敗） |
 | `rt.duration` | string | ステップにかかった時間。`"1.2s"`など |
 | `rt.sec` | float | 同じ時間を秒で表した値 |

@@ -1,9 +1,10 @@
 package shell
 
 import (
+	"bytes"
 	"context"
+	"errors"
 	"fmt"
-	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -11,6 +12,7 @@ import (
 	"runtime"
 	"slices"
 	"strconv"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -33,7 +35,15 @@ type Res struct {
 	Stderr string `map:"stderr"`
 	PID    int    `map:"pid"`
 	Log    string `map:"log"`
+	// TimedOut is true when the command was stopped at the timeout. Code
+	// is then -1, and Stdout and Stderr hold what it wrote until then.
+	TimedOut bool `map:"timed_out"`
 }
+
+// outputGrace is how long a command's output is still read once the command
+// has exited or been stopped at its timeout. A process the command left
+// running can hold the output open long after that; it is not waited for.
+var outputGrace = time.Second
 
 type Result struct {
 	Req    Req           `map:"req"`
@@ -180,16 +190,14 @@ func (r *Req) Do() (*Result, error) {
 	}
 
 	// Create command with appropriate context
-	var cmd *exec.Cmd
-	if r.Background {
-		// For background execution, use context.Background() without timeout
-		cmd = exec.CommandContext(context.Background(), params.shell, "-c", params.cmd)
-	} else {
+	ctx := context.Background()
+	if !r.Background {
 		// For synchronous execution, use timeout context
-		ctx, cancel := context.WithTimeout(context.Background(), params.timeout)
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, params.timeout)
 		defer cancel()
-		cmd = exec.CommandContext(ctx, params.shell, "-c", params.cmd)
 	}
+	cmd := exec.CommandContext(ctx, params.shell, "-c", params.cmd)
 
 	// Set working directory
 	if params.workdir != "" {
@@ -269,54 +277,48 @@ func (r *Req) Do() (*Result, error) {
 		return result, nil
 	}
 
-	// Capture stdout and stderr for synchronous execution
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		return result, fmt.Errorf("failed to create stdout pipe: %w", err)
+	// Capture stdout and stderr for synchronous execution. Buffers rather
+	// than pipes let Wait stop reading after outputGrace: a process the
+	// command started can keep the output open, and reading it to the end
+	// would outlast the timeout.
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	cmd.WaitDelay = outputGrace
+	// Whether the timeout stopped the command is recorded where it happens:
+	// when the deadline passes after the command exited, while its output is
+	// still being read, the kill finds nothing to stop.
+	var killed atomic.Bool
+	cmd.Cancel = func() error {
+		err := cmd.Process.Kill()
+		if err == nil {
+			killed.Store(true)
+		}
+		return err
 	}
 
-	stderr, err := cmd.StderrPipe()
-	if err != nil {
-		return result, fmt.Errorf("failed to create stderr pipe: %w", err)
-	}
-
-	// Start command
 	if err := cmd.Start(); err != nil {
 		return result, fmt.Errorf("failed to start command: %w", err)
 	}
-
-	// Read stdout and stderr concurrently.
-	// All reads from pipes must complete before calling cmd.Wait(),
-	// because Wait() closes the pipe read ends which can cause data loss.
-	stdoutChan := make(chan []byte, 1)
-	go func() {
-		data, _ := io.ReadAll(stdout)
-		stdoutChan <- data
-	}()
-
-	stderrChan := make(chan []byte, 1)
-	go func() {
-		data, _ := io.ReadAll(stderr)
-		stderrChan <- data
-	}()
-
-	// Collect output before calling Wait()
-	stdoutBytes := <-stdoutChan
-	stderrBytes := <-stderrChan
-
-	// Wait for command completion (synchronous execution)
 	cmdErr := cmd.Wait()
 	result.RT = time.Since(start)
 
-	// Get exit code
+	timedOut := killed.Load()
 	exitCode := 0
-	if cmdErr != nil {
-		if exitError, ok := cmdErr.(*exec.ExitError); ok {
-			exitCode = exitError.ExitCode()
-		} else {
-			// Non-exit error (e.g., timeout, process killed)
-			return result, fmt.Errorf("command execution failed: %w", cmdErr)
-		}
+	var exitError *exec.ExitError
+	switch {
+	case errors.As(cmdErr, &exitError):
+		exitCode = exitError.ExitCode()
+	case timedOut:
+		exitCode = -1
+	case cmd.ProcessState != nil:
+		// The command exited, but something it left running still held its
+		// output open, and was not waited for; or the deadline passed while
+		// that output was being read. Either way the command's own status
+		// stands.
+		exitCode = cmd.ProcessState.ExitCode()
+	case cmdErr != nil:
+		return result, fmt.Errorf("command execution failed: %w", cmdErr)
 	}
 
 	// Determine status based on exit code (0 = success, 1 = failure)
@@ -326,10 +328,11 @@ func (r *Req) Do() (*Result, error) {
 	}
 
 	result.Res = Res{
-		Code:   exitCode,
-		Stdout: string(stdoutBytes),
-		Stderr: string(stderrBytes),
-		PID:    cmd.Process.Pid,
+		Code:     exitCode,
+		Stdout:   stdout.String(),
+		Stderr:   stderr.String(),
+		PID:      cmd.Process.Pid,
+		TimedOut: timedOut,
 	}
 	result.Status = status
 

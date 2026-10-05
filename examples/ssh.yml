@@ -45,3 +45,11 @@ jobs:
         date
     test: res.code == 0
     echo: "{{res.stdout}}"
+
+  - name: A command that outlives its timeout
+    uses: ssh
+    with:
+      cmd: echo started; sleep 30
+      timeout: 2s
+    test: res.timed_out && res.stdout contains "started"
+    echo: "code={{res.code}} timed_out={{res.timed_out}}"

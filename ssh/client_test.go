@@ -505,9 +505,53 @@ func TestReqDoTimeout(t *testing.T) {
 	if res.Res.Stdout != "started" {
 		t.Errorf("Stdout = %q, want the output from before the timeout", res.Res.Stdout)
 	}
+	if !res.Res.TimedOut {
+		t.Error("TimedOut = false, want the timeout marked")
+	}
 	_, signals, _ := srv.received()
 	if len(signals) == 0 || signals[0] != string(ssh.SIGTERM) {
 		t.Errorf("server got signals %v, want TERM first", signals)
+	}
+}
+
+// A command that does not stop when signalled is given up on, and is still a
+// result: what it wrote until then, marked as timed out, with no exit status.
+func TestReqDoTimeoutCommandDoesNotStop(t *testing.T) {
+	grace := stopGrace
+	stopGrace = 100 * time.Millisecond
+	t.Cleanup(func() { stopGrace = grace })
+
+	release := make(chan struct{})
+	t.Cleanup(func() { close(release) })
+	srv := newTestServer(t, func(s session) (uint32, bool) {
+		_, _ = fmt.Fprint(s.stdout, "started")
+		<-release
+		return 0, true
+	})
+
+	r := srv.req("trap '' TERM; sleep 60")
+	r.Timeout = "200ms"
+	res, err := r.Do()
+	if err != nil {
+		t.Fatalf("Do() error = %v", err)
+	}
+	if !res.Res.TimedOut || res.Res.Code != -1 || res.Status != 1 {
+		t.Errorf("Res = %+v, Status = %d; want timed out with code -1 and status 1", res.Res, res.Status)
+	}
+	if res.Res.Stdout != "started" {
+		t.Errorf("Stdout = %q, want the output from before the timeout", res.Res.Stdout)
+	}
+}
+
+// A command that finishes in time is not marked.
+func TestReqDoNotTimedOut(t *testing.T) {
+	srv := newTestServer(t, echo)
+	res, err := srv.req("true").Do()
+	if err != nil {
+		t.Fatalf("Do() error = %v", err)
+	}
+	if res.Res.TimedOut {
+		t.Error("TimedOut = true for a command that finished in time")
 	}
 }
 
