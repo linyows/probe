@@ -126,3 +126,49 @@ with:
 vars:
   email: "user-{{random_str(8)}}@example.com"
 ```
+
+## `file`
+
+ファイルの中身を文字列として、そのまま返します。
+中のテンプレートは展開しません。
+パスは、アクションのパスと同じくカレントディレクトリからの相対パスです。
+1000000バイトを超えるファイル、ディレクトリ、存在しないファイルはエラーになります。
+
+**構文:** `file(path)`
+**戻り値:** String
+
+`parse_json`と組み合わせると、JSONファイルがオブジェクトになります。
+`content-type`がJSONの型ならJSONとして送られ、レスポンスとの比較にも使えます。
+
+```yaml
+with:
+  post: /users
+  headers:
+    content-type: application/json
+  body: "{{parse_json(file('fixtures/user.json'))}}"
+test: match_json(res.body, parse_json(file('expected/user.json')))
+```
+
+## `template`
+
+文字列の中の`{{ }}`テンプレートを展開して、その文字列を返します。
+展開には、呼び出した式と同じフィールド（`vars`や`outputs`など）を使います。
+`file`で読んだファイルをテンプレートとして使うための関数です。
+
+**構文:** `template(string)`
+**戻り値:** String
+
+```yaml
+body: "{{parse_json(template(file('fixtures/user.json.tmpl')))}}"
+```
+
+`fixtures/user.json.tmpl`の中身は次のとおりです。
+
+```json
+{"name": "{{ vars.name }}", "retries": {{ vars.retries + 1 }}}
+```
+
+テンプレートはその値の文字列で置き換わります。
+引用符を含みうる文字列の値は、引用符付きで書き出す`toJSON`を通すと安全です（`{"name": {{ toJSON(vars.name) }}}`）。
+展開した文字列の中で`template`をさらに呼ぶと、それも展開します。
+入れ子は10段までです。

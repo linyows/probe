@@ -2,6 +2,8 @@ package expr
 
 import (
 	"errors"
+	"os"
+	"path/filepath"
 	"reflect"
 	"regexp"
 	"strings"
@@ -1441,4 +1443,121 @@ func TestNewCustomFunctionsEdgeCases(t *testing.T) {
 			})
 		}
 	})
+}
+
+func TestFileFunction(t *testing.T) {
+	dir := t.TempDir()
+	body := filepath.Join(dir, "body.json")
+	if err := os.WriteFile(body, []byte(`{"name": "alice", "tags": ["a"]}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	e := &Expr{}
+	env := map[string]any{"path": body}
+
+	got, err := e.Eval("file(path)", env)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got != `{"name": "alice", "tags": ["a"]}` {
+		t.Errorf("file() = %#v", got)
+	}
+
+	// The content combines with parse_json, keeping its type in a template.
+	v, err := e.EvalTemplateWithTypePreservation("{{ parse_json(file(path)) }}", env)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := map[string]any{"name": "alice", "tags": []any{"a"}}
+	if !reflect.DeepEqual(v, want) {
+		t.Errorf("parse_json(file()) = %#v, want %#v", v, want)
+	}
+
+	big := filepath.Join(dir, "big.txt")
+	if err := os.WriteFile(big, make([]byte, maxStringLength+1), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	missing := filepath.Join(dir, "missing.json")
+	for _, tt := range []struct {
+		input   string
+		wantErr string
+	}{
+		{"file()", "file requires exactly 1 parameter"},
+		{"file(1)", "file parameter must be a path"},
+		{"file('')", "file parameter must be a path"},
+		{"file('" + missing + "')", "file: stat " + missing + ": no such file or directory"},
+		{"file('" + dir + "')", "file: " + dir + " is a directory"},
+		{"file('" + big + "')", "file: " + big + " exceeds maximum length (1000000 bytes)"},
+	} {
+		if _, err := e.Eval(tt.input, env); err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+			t.Errorf("Eval(%q) error = %v, want %q", tt.input, err, tt.wantErr)
+		}
+	}
+}
+
+func TestTemplateFunction(t *testing.T) {
+	dir := t.TempDir()
+	tmpl := filepath.Join(dir, "user.json.tmpl")
+	if err := os.WriteFile(tmpl, []byte(`{"name": "{{ vars.name }}", "count": {{ vars.count + 1 }}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	e := &Expr{}
+	env := map[string]any{"vars": map[string]any{"name": "alice", "count": 2, "tmpl": tmpl}}
+
+	got, err := e.Eval("template(file(vars.tmpl))", env)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got != `{"name": "alice", "count": 3}` {
+		t.Errorf("template() = %#v", got)
+	}
+
+	// The file is read as it is when it is not given to template.
+	raw, err := e.Eval("file(vars.tmpl)", env)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(raw.(string), "{{ vars.name }}") {
+		t.Errorf("file() should not expand templates, got %q", raw)
+	}
+
+	// toJSON writes a string value quoted, so one holding a quote stays JSON.
+	quoted := map[string]any{"vars": map[string]any{"name": `a"b`}}
+	v, err := e.EvalTemplateWithTypePreservation(`{{ parse_json(template('{"name": {{ toJSON(vars.name) }}}')) }}`, quoted)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !reflect.DeepEqual(v, map[string]any{"name": `a"b`}) {
+		t.Errorf("template() with toJSON = %#v", v)
+	}
+
+	if got, err := e.Eval("template('no templates')", env); err != nil || got != "no templates" {
+		t.Errorf("template() of plain text = %#v, %v", got, err)
+	}
+
+	// A template that cannot be evaluated is an error naming it.
+	if _, err := e.Eval("template('{{ nosuch() }}')", env); err == nil || !strings.Contains(err.Error(), "{{ nosuch() }}") {
+		t.Errorf("error = %v, want one naming the template", err)
+	}
+	if _, err := e.Eval("template(1)", env); err == nil || !strings.Contains(err.Error(), "template parameter must be a string") {
+		t.Errorf("error = %v", err)
+	}
+}
+
+func TestTemplateFunctionNestsBoundedly(t *testing.T) {
+	dir := t.TempDir()
+	loop := filepath.Join(dir, "loop.tmpl")
+	if err := os.WriteFile(loop, []byte("{{ template(file(vars.loop)) }}"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	e := &Expr{}
+	env := map[string]any{"vars": map[string]any{"loop": loop}}
+
+	start := time.Now()
+	_, err := e.Eval("template(file(vars.loop))", env)
+	if err == nil || !strings.Contains(err.Error(), "template calls nest deeper than 10") {
+		t.Errorf("error = %v, want one about the nesting", err)
+	}
+	if time.Since(start) > time.Second {
+		t.Errorf("a template that reads itself should fail at once, took %v", time.Since(start))
+	}
 }

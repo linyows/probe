@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"math/rand/v2"
+	"os"
 	"slices"
 	"strconv"
 	"strings"
@@ -27,11 +28,18 @@ var (
 
 	// Security: Maximum string length to prevent memory exhaustion
 	maxStringLength = 1000000
+
+	// maxTemplateDepth bounds how deep template() calls may nest, as they do
+	// when a file expands a template that reads another file.
+	maxTemplateDepth = 10
 )
 
 // Expr evaluates expressions and templates against an environment such as
 // a step's context.
-type Expr struct{}
+type Expr struct {
+	// depth is how many template() calls this evaluation is inside.
+	depth int
+}
 
 // Options builds the expr options used to compile every workflow expression.
 //
@@ -241,7 +249,63 @@ func (e *Expr) Options(env any) []ex.Option {
 				return string(decoded), nil
 			},
 		),
+		ex.Function(
+			"file",
+			func(params ...any) (any, error) {
+				if len(params) != 1 {
+					return nil, fmt.Errorf("file requires exactly 1 parameter")
+				}
+				path, ok := params[0].(string)
+				if !ok || path == "" {
+					return nil, fmt.Errorf("file parameter must be a path")
+				}
+				return readFile(path)
+			},
+		),
+		ex.Function(
+			"template",
+			func(params ...any) (any, error) {
+				if len(params) != 1 {
+					return nil, fmt.Errorf("template requires exactly 1 parameter")
+				}
+				s, ok := params[0].(string)
+				if !ok {
+					return nil, fmt.Errorf("template parameter must be a string")
+				}
+				if len(s) > maxStringLength {
+					return nil, fmt.Errorf("template parameter exceeds maximum length (%d chars)", maxStringLength)
+				}
+				if e.depth >= maxTemplateDepth {
+					return nil, fmt.Errorf("template calls nest deeper than %d", maxTemplateDepth)
+				}
+				// The templates in s are evaluated against the same
+				// environment as the expression that calls template.
+				nested := &Expr{depth: e.depth + 1}
+				return nested.EvalTemplate(s, env)
+			},
+		),
 	}
+}
+
+// readFile returns the content of the file at path, relative to the working
+// directory, as the paths of actions are. A file larger than a string an
+// expression may hold is an error rather than cut short.
+func readFile(path string) (string, error) {
+	info, err := os.Stat(path)
+	if err != nil {
+		return "", fmt.Errorf("file: %w", err)
+	}
+	if info.IsDir() {
+		return "", fmt.Errorf("file: %s is a directory", path)
+	}
+	if info.Size() > int64(maxStringLength) {
+		return "", fmt.Errorf("file: %s exceeds maximum length (%d bytes)", path, maxStringLength)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return "", fmt.Errorf("file: %w", err)
+	}
+	return string(data), nil
 }
 
 // validateExpression bounds an expression before it is compiled.

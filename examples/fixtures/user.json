@@ -1,0 +1,5 @@
+{
+  "name": "alice",
+  "roles": ["reader", "writer"],
+  "retries": 3
+}
