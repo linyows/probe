@@ -184,3 +184,39 @@ func TestMaxLength(t *testing.T) {
 		t.Errorf("MaxLength = %d, expected %d", MaxLength, expectedValue)
 	}
 }
+
+func TestMap(t *testing.T) {
+	// Disable color output for consistent testing
+	color.NoColor = true
+	defer func() { color.NoColor = false }()
+
+	input := map[string]any{
+		"short":  "abc",
+		"long":   "abcdefghij",
+		"number": 1234567,
+		"nested": map[string]any{"k": "vvvvvvvv"},
+		"none":   nil,
+	}
+	got := Map(input, 5)
+
+	want := map[string]any{
+		"short":  "abc",
+		"long":   "abcde" + Message(),
+		"number": "12345" + Message(),
+		// A value that is not a string is printed first, so a nested map is
+		// cut as one string rather than value by value.
+		"nested": "map[k" + Message(),
+		"none":   "<nil>",
+	}
+	for k, w := range want {
+		if got[k] != w {
+			t.Errorf("Map()[%q] = %#v, want %#v", k, got[k], w)
+		}
+	}
+	if len(got) != len(want) {
+		t.Errorf("Map() has %d keys, want %d", len(got), len(want))
+	}
+	if input["long"] != "abcdefghij" {
+		t.Error("Map() changed its input")
+	}
+}
