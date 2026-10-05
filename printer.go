@@ -601,7 +601,7 @@ func (p *Printer) LogWarn(format string, args ...any) {
 // generateEchoOutput formats echo output with proper indentation
 func (p *Printer) generateEchoOutput(content string, err error) string {
 	if err != nil {
-		return fmt.Sprintf("Echo\nerror: %#v\n", err)
+		content = fmt.Sprintf("error: %v", err)
 	}
 
 	// Add indent to all lines, including after user-specified newlines

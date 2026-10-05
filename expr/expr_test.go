@@ -1,6 +1,7 @@
 package expr
 
 import (
+	"errors"
 	"reflect"
 	"regexp"
 	"strings"
@@ -24,7 +25,10 @@ func TestEvalTemplateMap(t *testing.T) {
 		"authorization": "Bearer secrets",
 	}
 	expr := &Expr{}
-	actual := expr.EvalTemplateMap(exprs, env)
+	actual, err := expr.EvalTemplateMap(exprs, env)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	if !reflect.DeepEqual(expected, actual) {
 		t.Errorf("map are not equal: expected %+v, got %+v", expected, actual)
 	}
@@ -548,7 +552,10 @@ func TestEvalTemplateMapTypePreservation(t *testing.T) {
 		},
 	}
 
-	result := expr.EvalTemplateMap(input, env)
+	result, err := expr.EvalTemplateMap(input, env)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	// Check type preservation
 	if result["number"] != 123 {
@@ -700,10 +707,42 @@ func TestErrorHandling(t *testing.T) {
 
 	t.Run("handles template evaluation errors", func(t *testing.T) {
 		expr := &Expr{}
-		result, err := expr.EvalTemplate("{{invalid syntax $$}}", map[string]any{})
+		result, err := expr.EvalTemplate("a {{invalid syntax $$}} b", map[string]any{})
 
-		if err == nil && !strings.Contains(result, "CompileError") {
-			t.Errorf("expected compilation error in template")
+		var tErr *TemplateError
+		if !errors.As(err, &tErr) || tErr.Template != "{{invalid syntax $$}}" {
+			t.Fatalf("expected a TemplateError naming the template, got %v", err)
+		}
+		if result != "" {
+			t.Errorf("expected no string with the error, got %q", result)
+		}
+	})
+
+	t.Run("handles template runtime errors", func(t *testing.T) {
+		expr := &Expr{}
+		env := map[string]any{"outputs": map[string]any{}}
+		result, err := expr.EvalTemplate("Bearer {{outputs.login.token}}", env)
+
+		var tErr *TemplateError
+		if !errors.As(err, &tErr) || tErr.Template != "{{outputs.login.token}}" {
+			t.Fatalf("expected a TemplateError naming the template, got %v", err)
+		}
+		if !strings.Contains(err.Error(), "{{outputs.login.token}}: ") {
+			t.Errorf("expected the error to start with the template, got %q", err.Error())
+		}
+		if result != "" {
+			t.Errorf("expected no string with the error, got %q", result)
+		}
+	})
+
+	t.Run("an undefined name is not an error", func(t *testing.T) {
+		expr := &Expr{}
+		result, err := expr.EvalTemplate("{{MISSING ?? 'x'}}-{{vars.none ?? 'y'}}", map[string]any{"vars": map[string]any{}})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if result != "x-y" {
+			t.Errorf("expected %q, got %q", "x-y", result)
 		}
 	})
 
@@ -714,14 +753,43 @@ func TestErrorHandling(t *testing.T) {
 			"invalid": "{{invalid syntax $$}}",
 		}
 
-		result := expr.EvalTemplateMap(inputMap, map[string]any{})
+		result, err := expr.EvalTemplateMap(inputMap, map[string]any{})
 
-		if result["valid"] != "simple string" {
-			t.Errorf("valid expression should work")
+		var fErr *FieldError
+		if !errors.As(err, &fErr) || fErr.Path != "invalid" {
+			t.Fatalf("expected a FieldError for invalid, got %v", err)
 		}
-		// The actual error message may vary, just check it's not the original invalid template
-		if result["invalid"] == "{{invalid syntax $$}}" {
-			t.Errorf("invalid expression should be processed and not return original template")
+		if result != nil {
+			t.Errorf("expected no map, got %#v", result)
+		}
+	})
+
+	t.Run("names every value that fails, nested", func(t *testing.T) {
+		expr := &Expr{}
+		inputMap := map[string]any{
+			"url": "{{base.host}}/x",
+			"headers": map[string]any{
+				"authorization": "Bearer {{login.token}}",
+				"accept":        "application/json",
+			},
+			"items": []any{"ok", map[string]any{"name": "{{1 +}}"}},
+		}
+
+		_, err := expr.EvalTemplateMap(inputMap, map[string]any{"base": nil, "login": nil})
+		if err == nil {
+			t.Fatal("expected an error")
+		}
+		var paths []string
+		for _, e := range err.(interface{ Unwrap() []error }).Unwrap() {
+			var fErr *FieldError
+			if !errors.As(e, &fErr) {
+				t.Fatalf("expected a FieldError, got %T: %v", e, e)
+			}
+			paths = append(paths, fErr.Path)
+		}
+		want := []string{"headers.authorization", "items[1].name", "url"}
+		if !reflect.DeepEqual(paths, want) {
+			t.Errorf("paths = %v, want %v", paths, want)
 		}
 	})
 }

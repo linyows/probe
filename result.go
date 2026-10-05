@@ -57,6 +57,7 @@ const (
 	FailureTestError = report.FailureTestError
 	FailureTestType  = report.FailureTestType
 	FailureAction    = report.FailureAction
+	FailureTemplate  = report.FailureTemplate
 )
 
 // StepFailure describes a failed step without terminal formatting, so that

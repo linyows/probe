@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -38,6 +40,10 @@ type Step struct {
 	retryAttempt int
 	startedAt    time.Time
 	failure      *StepFailure
+	// templateErr holds the templates of the step's name and vars that
+	// could not be evaluated, so that the step fails rather than run with
+	// them.
+	templateErr  error
 	Idx          int          `yaml:"-"`
 	Expr         *expr.Expr   `yaml:"-"`
 	actionRunner ActionRunner `yaml:"-"`
@@ -47,6 +53,11 @@ func (st *Step) Do(jCtx *JobContext) {
 	// 1. Preparation phase: validation, wait, skip check
 	name, shouldContinue := st.prepare(jCtx)
 	if !shouldContinue {
+		return
+	}
+
+	if st.templateErr != nil {
+		st.handleActionError(st.templateErr, name, jCtx)
 		return
 	}
 
@@ -73,11 +84,12 @@ func (st *Step) prepare(jCtx *JobContext) (string, bool) {
 		st.Name = "Unknown Step"
 	}
 
-	// Evaluate step name
+	// Evaluate step name. A name that cannot be evaluated is shown as
+	// written, and fails the step unless it is skipped.
 	name, err := st.Expr.EvalTemplate(st.Name, st.ctx)
 	if err != nil {
-		jCtx.Printer.PrintError("step name evaluation error: %v", err)
-		return "", false
+		name = st.Name
+		st.templateErr = errors.Join(&expr.FieldError{Path: "name", Err: err}, st.templateErr)
 	}
 
 	jCtx.Printer.StepStart(jCtx.CurrentJobID, name)
@@ -97,7 +109,10 @@ func (st *Step) prepare(jCtx *JobContext) (string, bool) {
 // executeAction executes the step action and returns the result
 // If retry is configured, it will retry until status == 0 or max attempts reached
 func (st *Step) executeAction(name string, jCtx *JobContext) (map[string]any, error) {
-	expW := st.Expr.EvalTemplateMap(st.With, st.ctx)
+	expW, err := st.Expr.EvalTemplateMap(st.With, st.ctx)
+	if err != nil {
+		return nil, prefixFieldErrors(err, "with.")
+	}
 
 	runner := st.actionRunner
 	if runner == nil {
@@ -287,15 +302,23 @@ func (st *Step) executeActionWithRetry(runner ActionRunner, expW map[string]any,
 	return lastResult, lastErr
 }
 
-// handleActionError handles action execution errors
+// handleActionError handles a step that failed before its test could run:
+// the action returned an error, or a template the action needed could not be
+// evaluated, in which case the action did not run.
 func (st *Step) handleActionError(err error, name string, jCtx *JobContext) {
-	actionErr := NewActionError("step_execute", "action execution failed", err).
-		WithContext("step_name", name).
-		WithContext("action_type", st.Uses)
-	st.err = actionErr
-	jCtx.Printer.PrintError("Action execution failed: %v", actionErr)
+	kind := failureKindOf(err)
+	if kind == FailureTemplate {
+		st.err = err
+		jCtx.Printer.PrintError("Template evaluation failed: %v", err)
+	} else {
+		actionErr := NewActionError("step_execute", "action execution failed", err).
+			WithContext("step_name", name).
+			WithContext("action_type", st.Uses)
+		st.err = actionErr
+		jCtx.Printer.PrintError("Action execution failed: %v", actionErr)
+	}
 	jCtx.SetFailed()
-	jCtx.Result.recordFailure(FailureAction)
+	jCtx.Result.recordFailure(kind)
 
 	// Create and add step result for failed action execution
 	if jCtx.Verbose {
@@ -565,25 +588,23 @@ func (st *Step) SetCtx(j JobContext, override map[string]any) {
 		RepeatIndex: j.RepeatCurrent,
 	}
 
-	// Evaluate step-level vars with access to outputs
+	// Evaluate step-level vars with access to outputs. A var that cannot be
+	// evaluated is left out, and fails the step when it runs.
+	st.templateErr = nil
 	evaluatedStepVars := make(map[string]any)
 	if len(st.Vars) > 0 {
 		ev := &expr.Expr{}
-		for k, v := range st.Vars {
-			if mapV, ok := v.(map[string]any); ok {
-				evaluatedStepVars[k] = ev.EvalTemplateMap(mapV, evalCtx)
-			} else if strV, ok2 := v.(string); ok2 {
-				output, err := ev.EvalTemplate(strV, evalCtx)
-				if err != nil {
-					// If evaluation fails, keep original value
-					evaluatedStepVars[k] = v
-				} else {
-					evaluatedStepVars[k] = output
-				}
-			} else {
-				evaluatedStepVars[k] = v
+		var errs []error
+		// Sorted so that the errors come in the same order on every run.
+		for _, k := range slices.Sorted(maps.Keys(st.Vars)) {
+			out, err := evalVar(ev, k, st.Vars[k], evalCtx)
+			if err != nil {
+				errs = append(errs, err)
+				continue
 			}
+			evaluatedStepVars[k] = out
 		}
+		st.templateErr = errors.Join(errs...)
 	}
 
 	// Merge workflow vars with evaluated step vars
@@ -866,10 +887,21 @@ func (st *Step) createFailedStepResult(name string, jCtx *JobContext) StepResult
 	// Include error information if available
 	if st.err != nil {
 		result.TestOutput = st.err.Error()
-		result.Failure = st.newFailure(FailureAction, st.err.Error())
+		result.Failure = st.newFailure(failureKindOf(st.err), st.err.Error())
 	}
 
 	return result
+}
+
+// failureKindOf tells a template that could not be evaluated from an error
+// of the action itself.
+func failureKindOf(err error) string {
+	var tErr *expr.TemplateError
+	var fErr *expr.FieldError
+	if errors.As(err, &tErr) || errors.As(err, &fErr) {
+		return FailureTemplate
+	}
+	return FailureAction
 }
 
 // unwrapJoined returns the errors joined into err, or err alone.

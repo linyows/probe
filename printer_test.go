@@ -953,7 +953,7 @@ func TestPrinter_generateEchoOutput(t *testing.T) {
 			name:     "error case",
 			content:  "",
 			err:      fmt.Errorf("template error"),
-			expected: "Echo\nerror: &errors.errorString{s:\"template error\"}\n",
+			expected: "       error: template error\n",
 		},
 		{
 			name:     "empty content",

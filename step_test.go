@@ -1136,7 +1136,7 @@ func TestStep_getEchoOutput_Error(t *testing.T) {
 	result := step.getEchoOutput(printer)
 
 	// Should contain error indication when template evaluation fails
-	if !strings.Contains(result, "CompileError") && !strings.Contains(result, "RuntimeError") && !strings.Contains(result, "Echo\nerror:") {
+	if !strings.Contains(result, "error: {{invalid_expression + }}: ") {
 		t.Errorf("getEchoOutput() with invalid expression should return error message, got %q", result)
 	}
 
