@@ -1,6 +1,7 @@
 package probe
 
 import (
+	"fmt"
 	"os"
 	"sync"
 
@@ -111,46 +112,27 @@ func (s *actionStates) get(name string) map[string]any {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	state, _ := cloneState(s.states[name]).(map[string]any)
+	// What is kept was made sendable when it was set, so this cannot fail.
+	state, _ := actionrpc.Sendable(s.states[name])
 	return state
 }
 
-// set records a copy of the state the action leaves, which the runner may
-// still hold. A nil state keeps the one there was.
-func (s *actionStates) set(name string, state map[string]any) {
+// set records the state the action leaves, in the form it takes when it is
+// sent, which is a copy of it: a runner in this process may still hold the
+// state it returned. A nil state keeps the one there was. A state that cannot
+// be sent is an error, as it is for an action in a process of its own.
+func (s *actionStates) set(name string, state map[string]any) error {
 	if s == nil || state == nil {
-		return
+		return nil
+	}
+	sendable, err := actionrpc.Sendable(state)
+	if err != nil {
+		return fmt.Errorf("cannot keep the action's state: %w", err)
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.states[name], _ = cloneState(state).(map[string]any)
-}
-
-// cloneState copies the maps and lists in v, which hold the state. Any other
-// value is shared, as the state an action sends holds no other mutable one.
-func cloneState(v any) any {
-	switch val := v.(type) {
-	case map[string]any:
-		if val == nil {
-			return val
-		}
-		out := make(map[string]any, len(val))
-		for k, e := range val {
-			out[k] = cloneState(e)
-		}
-		return out
-	case []any:
-		if val == nil {
-			return val
-		}
-		out := make([]any, len(val))
-		for i, e := range val {
-			out[i] = cloneState(e)
-		}
-		return out
-	default:
-		return v
-	}
+	s.states[name] = sendable
+	return nil
 }
 
 // MockActionRunner implements ActionRunner for testing

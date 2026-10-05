@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"strings"
 	"sync"
 	"testing"
 
@@ -300,5 +301,71 @@ func TestActionStateIsNotChangedByTheRunner(t *testing.T) {
 	want := []any{"[]", "[kept]", "[kept]"}
 	if !reflect.DeepEqual(runner.got, want) {
 		t.Errorf("states given = %v, want %v", runner.got, want)
+	}
+}
+
+// typedStateRunner keeps state in containers of other types than the ones
+// the protocol carries, holds on to the state it returned, and changes it in
+// the next call, which fails.
+type typedStateRunner struct {
+	kept map[string]any
+	got  []string
+}
+
+func (r *typedStateRunner) RunActions(name string, with map[string]any, opts RunOptions) (map[string]any, error) {
+	ret, _, err := r.RunActionsWithState(name, with, nil, opts)
+	return ret, err
+}
+
+func (r *typedStateRunner) RunActionsWithState(name string, with, state map[string]any, opts RunOptions) (map[string]any, map[string]any, error) {
+	r.got = append(r.got, fmt.Sprint(state))
+	if r.kept != nil {
+		r.kept["tags"].([]string)[0] = "changed"
+		r.kept["labels"].(map[string]string)["a"] = "changed"
+		return nil, nil, errors.New("failed")
+	}
+	r.kept = map[string]any{"tags": []string{"kept"}, "labels": map[string]string{"a": "kept"}}
+	return map[string]any{"status": 0}, r.kept, nil
+}
+
+func TestActionStateOfOtherTypesIsNotChangedByTheRunner(t *testing.T) {
+	runner := &typedStateRunner{}
+	step := &Step{Name: "s", Uses: "typed", actionRunner: runner}
+	workflow := &Workflow{
+		Name: "state",
+		Jobs: []Job{{
+			Name:  "typed",
+			ID:    "typed",
+			Steps: []*Step{step, {Name: "s", Uses: "typed", actionRunner: runner}, {Name: "s", Uses: "typed", actionRunner: runner}},
+		}},
+		printer: newBufferPrinter(),
+	}
+	_ = workflow.Start(Config{})
+
+	// The state is given in the form the protocol carries, and keeps what
+	// was returned, not what the runner changed it to afterwards.
+	want := []string{"map[]", "map[labels:map[a:kept] tags:[kept]]", "map[labels:map[a:kept] tags:[kept]]"}
+	if !reflect.DeepEqual(runner.got, want) {
+		t.Errorf("states given = %q, want %q", runner.got, want)
+	}
+}
+
+// unsendableStateRunner leaves a state that cannot be sent.
+type unsendableStateRunner struct{}
+
+func (unsendableStateRunner) RunActions(name string, with map[string]any, opts RunOptions) (map[string]any, error) {
+	return map[string]any{"status": 0}, nil
+}
+
+func (unsendableStateRunner) RunActionsWithState(name string, with, state map[string]any, opts RunOptions) (map[string]any, map[string]any, error) {
+	return map[string]any{"status": 0}, map[string]any{"bad": map[struct{}]int{{}: 1}}, nil
+}
+
+func TestActionStateThatCannotBeSentFailsTheStep(t *testing.T) {
+	jCtx := &JobContext{Printer: newBufferPrinter(), states: newActionStates()}
+	st := &Step{Name: "s", Uses: "unsendable"}
+	_, err := st.executeSingleAction(unsendableStateRunner{}, map[string]any{}, jCtx, false)
+	if err == nil || !strings.Contains(err.Error(), "cannot keep the action's state") {
+		t.Errorf("error = %v, want one about the state", err)
 	}
 }

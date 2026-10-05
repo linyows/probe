@@ -539,3 +539,30 @@ func TestServerLogsResultWithCredentialsHidden(t *testing.T) {
 		}
 	}
 }
+
+func TestSendable(t *testing.T) {
+	tags := []string{"a"}
+	labels := map[string]string{"k": "v"}
+	in := map[string]any{"tags": tags, "labels": labels, "n": 1}
+
+	got, err := Sendable(in)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := map[string]any{"tags": []any{"a"}, "labels": map[string]any{"k": "v"}, "n": 1}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("Sendable() = %#v, want %#v", got, want)
+	}
+	tags[0] = "changed"
+	labels["k"] = "changed"
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("the copy should share nothing with the original, got %#v", got)
+	}
+
+	if got, err := Sendable(nil); got != nil || err != nil {
+		t.Errorf("Sendable(nil) = %v, %v", got, err)
+	}
+	if _, err := Sendable(map[string]any{"bad": map[struct{}]int{{}: 1}}); err == nil {
+		t.Error("a map keyed by structs cannot be sent")
+	}
+}

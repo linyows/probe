@@ -210,6 +210,22 @@ func (m *Server) Run(ctx context.Context, req *pb.RunRequest) (*pb.RunResponse, 
 	return res, nil
 }
 
+// Sendable returns a copy of v in the form an action's result and state take
+// when they are sent: maps keyed by strings, lists and plain values. The
+// maps and lists are new, so the copy shares none of them with v. It fails
+// for a value that cannot be sent, as sending it would.
+func Sendable(v map[string]any) (map[string]any, error) {
+	if v == nil {
+		return nil, nil
+	}
+	c, err := convertForProtobuf(v)
+	if err != nil {
+		return nil, err
+	}
+	m, _ := c.(map[string]any)
+	return m, nil
+}
+
 // convertForProtobuf converts unsupported types to protobuf-compatible types.
 // A map whose keys are not strings is keyed by their printed form instead;
 // keys that cannot be printed faithfully are an error, so that no entry of a

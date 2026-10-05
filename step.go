@@ -187,7 +187,9 @@ func (st *Step) executeSingleAction(runner ActionRunner, expW map[string]any, jC
 	select {
 	case res := <-resultCh:
 		if res.err == nil {
-			jCtx.states.set(st.Uses, res.state)
+			if err := jCtx.states.set(st.Uses, res.state); err != nil {
+				return nil, err
+			}
 		}
 		return res.ret, res.err
 	case <-ctx.Done():
