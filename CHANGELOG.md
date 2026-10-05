@@ -4,9 +4,15 @@ Release notes for each version are generated from the commits by GoReleaser.
 This file records what those notes cannot carry well: changes that break code
 importing probe as a library.
 
-## Unreleased
+## v1.18.0 (2026-10-05)
 
 ### Breaking Changes
+
+This release breaks the Go API in a minor version, as v1.16.0 did: code
+that imports probe as a library has to be updated. Workflow files are
+affected too, by the first behaviour change below: a template that cannot
+be evaluated now fails its step, where its value used to be sent on with
+the error written into it.
 
 The packages that implement the built-in actions moved under `actions/`,
 each into the package of the action it serves, so that the repository root
