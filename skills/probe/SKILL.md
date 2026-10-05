@@ -92,7 +92,7 @@ The exit code says what to look at:
 | Code | Meaning | Where to look |
 |---|---|---|
 | `0` | Every job succeeded | |
-| `1` | A `test` was false, could not be evaluated, or was not a boolean | The response, or the test expression |
+| `1` | A `test` was false, could not be evaluated, or was not a boolean, or a step's template could not be evaluated | The response, or the test expression or template |
 | `2` | The workflow or the command line is wrong | The `[ERROR]` line on stderr: YAML, an unknown `needs`, a step id, a flag |
 | `3` | An action returned an error, such as a refused connection or a timeout | Whether the target is reachable, and the action's parameters |
 
@@ -102,6 +102,7 @@ The exit code says what to look at:
 2. Act on the kind:
    - `assertion`: the test was false. Compare the response with what the test expects; fix whichever is wrong.
    - `test_error` or `test_type`: the expression itself is wrong. Check field names against `probe guide <action>` and the syntax against `probe guide concepts/expressions`.
+   - `template`: a template in the step's `with`, `vars` or `name` could not be evaluated, so the action did not run. The message names the value, as `with.headers.authorization`. Usually an earlier step did not publish the output it reads; check that step, or fall back with `?.` and `??`.
    - `action`: the action could not run. Check the URL or host, credentials, and `timeout`.
 3. For more detail, run with `-v`, which prints every request and response. Declared secrets and credential headers are masked there too.
 4. After a fix, run the workflow again and confirm the exit code is `0` before calling it done.

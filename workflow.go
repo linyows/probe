@@ -88,7 +88,9 @@ func (w *Workflow) Start(c Config) error {
 
 	vars, err := w.evalVars()
 	if err != nil {
-		return err
+		// The caller prints this error itself, and a template's error can
+		// quote the value of a declared secret.
+		return &maskedError{err: err, masker: w.printer.Masker()}
 	}
 
 	ctx := w.newJobContext(c, vars, scheduler)
@@ -265,7 +267,9 @@ func (w *Workflow) Env() map[string]string {
 // evalVars evaluates template variables in workflow vars using environment
 // variables. A var can read another as vars.<name>; each one is evaluated
 // after the vars it reads, so a value such as random_str(8) is computed once
-// and every var that reads it sees the same value.
+// and every var that reads it sees the same value. A var whose template
+// cannot be evaluated is an error, which stops the workflow before any job
+// starts.
 func (w *Workflow) evalVars() (map[string]any, error) {
 	order, err := varsOrder(w.Vars)
 	if err != nil {
@@ -276,32 +280,97 @@ func (w *Workflow) evalVars() (map[string]any, error) {
 	env := strmapToAnymap(w.Env())
 
 	ev := &expr.Expr{}
+	var errs []error
+	failed := make(map[string]bool)
 	for _, k := range order {
+		v := w.Vars[k]
+
+		// A var that reads one that failed is not evaluated: its error
+		// would only repeat that one.
+		keys, dynamic := expr.Refs(v, "vars")
+		if len(failed) > 0 && (dynamic || slices.ContainsFunc(keys, func(d string) bool { return failed[d] })) {
+			failed[k] = true
+			continue
+		}
+
 		// Each var reads a copy of the vars evaluated so far. A template
 		// such as {{vars}} keeps the map it returns, and the map being
 		// filled in would then hold itself.
 		env["vars"] = maps.Clone(vars)
 
-		v := w.Vars[k]
-		if mapV, ok := v.(map[string]any); ok {
-			vars[k] = ev.EvalTemplateMap(mapV, env)
-		} else if arrV, ok := v.([]any); ok {
-			// Evaluated as a map's value is, so that an array at the top
-			// level renders the templates in it as one nested in a map does.
-			vars[k] = ev.EvalTemplateMap(map[string]any{k: arrV}, env)[k]
-		} else if strV, ok2 := v.(string); ok2 {
-			output, err := ev.EvalTemplate(strV, env)
-			if err != nil {
-				return vars, err
-			}
-			vars[k] = output
-		} else {
-			// Handle other types directly (bool, int, float, etc.)
-			vars[k] = v
+		out, err := evalVar(ev, k, v, env)
+		if err != nil {
+			errs = append(errs, err)
+			failed[k] = true
+			continue
 		}
+		vars[k] = out
+	}
+	if len(errs) > 0 {
+		return nil, errors.Join(errs...)
 	}
 
 	return vars, nil
+}
+
+// maskedError shows err with the secrets masker knows hidden, and unwraps to
+// err, so that errors.As still finds what it holds.
+type maskedError struct {
+	err    error
+	masker *mask.Masker
+}
+
+func (e *maskedError) Error() string {
+	return e.masker.String(e.err.Error())
+}
+
+func (e *maskedError) Unwrap() error {
+	return e.err
+}
+
+// evalVar evaluates the templates in the var name, a workflow var or a step
+// var: a string becomes a string, and a map or a list keeps the type of each
+// value that is a single template. Other values are kept as they are. An
+// error names the value that could not be evaluated, as vars.auth.user.
+func evalVar(ev *expr.Expr, name string, v any, env any) (any, error) {
+	switch v := v.(type) {
+	case string:
+		out, err := ev.EvalTemplate(v, env)
+		if err != nil {
+			return nil, &expr.FieldError{Path: "vars." + name, Err: err}
+		}
+		return out, nil
+	case map[string]any:
+		out, err := ev.EvalTemplateMap(v, env)
+		if err != nil {
+			return nil, prefixFieldErrors(err, "vars."+name+".")
+		}
+		return out, nil
+	case []any:
+		// Evaluated as a map's value is, so that a list renders the
+		// templates in it as one nested in a map does.
+		out, err := ev.EvalTemplateMap(map[string]any{name: v}, env)
+		if err != nil {
+			return nil, prefixFieldErrors(err, "vars.")
+		}
+		return out[name], nil
+	default:
+		return v, nil
+	}
+}
+
+// prefixFieldErrors puts prefix before the path of each *expr.FieldError
+// joined into err, so that the path names the value from further up.
+func prefixFieldErrors(err error, prefix string) error {
+	var errs []error
+	for _, e := range unwrapJoined(err) {
+		var fe *expr.FieldError
+		if errors.As(e, &fe) {
+			e = &expr.FieldError{Path: prefix + fe.Path, Err: fe.Err}
+		}
+		errs = append(errs, e)
+	}
+	return errors.Join(errs...)
 }
 
 // varsOrder returns the names of vars in an order in which each comes after

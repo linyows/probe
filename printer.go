@@ -601,19 +601,21 @@ func (p *Printer) LogWarn(format string, args ...any) {
 // generateEchoOutput formats echo output with proper indentation
 func (p *Printer) generateEchoOutput(content string, err error) string {
 	if err != nil {
-		return fmt.Sprintf("Echo\nerror: %#v\n", err)
+		content = fmt.Sprintf("error: %v", err)
 	}
+	return indentDetail(content)
+}
 
-	// Add indent to all lines, including after user-specified newlines
+// indentDetail indents every line of s, including those after a newline in
+// it, to the column of a step's name, where the details printed under a step
+// start. The result ends with a newline.
+func indentDetail(s string) string {
 	indent := "       "
-	lines := strings.Split(strings.TrimSpace(content), "\n")
-	indentedLines := make([]string, len(lines))
-
+	lines := strings.Split(strings.TrimSpace(s), "\n")
 	for i, line := range lines {
-		indentedLines[i] = indent + line
+		lines[i] = indent + line
 	}
-
-	return strings.Join(indentedLines, "\n") + "\n"
+	return strings.Join(lines, "\n") + "\n"
 }
 
 // generateTestFailure formats test failure output with request/response info
@@ -640,7 +642,7 @@ func (p *Printer) generateTestError(testExpr string, err error) string {
 		p.LogError("Test Error: %s", err)
 		p.LogError("Input: %s", testExpr)
 	}
-	return fmt.Sprintf("Test\nerror: %#v\n", err)
+	return indentDetail(fmt.Sprintf("test error: %v", err))
 }
 
 // generateTestTypeMismatch formats test type mismatch error output
@@ -649,7 +651,7 @@ func (p *Printer) generateTestTypeMismatch(testExpr string, result any) string {
 	if p.verbose {
 		p.LogDebug("%s", txt)
 	}
-	return txt
+	return indentDetail(txt)
 }
 
 // PrintTestResult prints test result in verbose mode

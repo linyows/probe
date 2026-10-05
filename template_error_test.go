@@ -1,0 +1,406 @@
+package probe
+
+import (
+	"bytes"
+	"encoding/json"
+	"errors"
+	"os"
+	"path/filepath"
+	"strings"
+	"sync"
+	"testing"
+	"time"
+
+	"github.com/linyows/probe/expr"
+	"github.com/linyows/probe/report"
+)
+
+// runStepForTemplateError runs st in a job context of its own and returns
+// how many times the action ran, the step's result and whether the job failed.
+func runStepForTemplateError(t *testing.T, st *Step, vars map[string]any) (int, StepResult, bool) {
+	t.Helper()
+
+	calls := 0
+	st.actionRunner = &CountingMockActionRunner{
+		result:    map[string]any{"req": map[string]any{}, "res": map[string]any{"code": 200}},
+		callCount: &calls,
+	}
+	st.Expr = &expr.Expr{}
+
+	rs := NewResult()
+	rs.Jobs["j"] = &JobResult{JobName: "j", JobID: "j"}
+	jCtx := &JobContext{
+		Vars:         vars,
+		CurrentJobID: "j",
+		Printer:      newBufferPrinter(),
+		Result:       rs,
+		Outputs:      NewOutputs(),
+		countersMu:   &sync.Mutex{},
+	}
+
+	st.SetCtx(*jCtx, nil)
+	st.Do(jCtx)
+
+	results := rs.Jobs["j"].StepResults
+	if len(results) != 1 {
+		t.Fatalf("expected 1 step result, got %d", len(results))
+	}
+	return calls, results[0], jCtx.Failed
+}
+
+func TestStep_TemplateErrorFailsStep(t *testing.T) {
+	tests := []struct {
+		name    string
+		step    *Step
+		vars    map[string]any
+		message []string
+	}{
+		{
+			name: "a value in with",
+			step: &Step{
+				Name: "login",
+				Uses: "http",
+				With: map[string]any{
+					"url": "http://localhost",
+					"headers": map[string]any{
+						"x-request-id": "req-{{outputs.login.id}}",
+					},
+				},
+			},
+			message: []string{"with.headers.x-request-id: {{outputs.login.id}}: "},
+		},
+		{
+			name: "a value in with that is a single template",
+			step: &Step{
+				Name: "port",
+				Uses: "http",
+				With: map[string]any{"items": []any{"{{vars.base.port}}"}},
+			},
+			vars:    map[string]any{"base": nil},
+			message: []string{"with.items[0]: {{vars.base.port}}: "},
+		},
+		{
+			name: "a step var",
+			step: &Step{
+				Name: "var",
+				Uses: "http",
+				Vars: map[string]any{"token": "{{outputs.login.token}}"},
+			},
+			message: []string{"vars.token: {{outputs.login.token}}: "},
+		},
+		{
+			name: "a step var that is a map",
+			step: &Step{
+				Name: "map var",
+				Uses: "http",
+				Vars: map[string]any{"auth": map[string]any{"user": "{{1 +}}"}},
+			},
+			message: []string{"vars.auth.user: {{1 +}}: "},
+		},
+		{
+			name: "the step name",
+			step: &Step{
+				Name: "check {{outputs.login.token}}",
+				Uses: "http",
+			},
+			message: []string{"name: {{outputs.login.token}}: "},
+		},
+		{
+			name: "the name and a var together",
+			step: &Step{
+				Name: "check {{outputs.a.b}}",
+				Uses: "http",
+				Vars: map[string]any{"x": "{{outputs.c.d}}"},
+			},
+			message: []string{"name: {{outputs.a.b}}: ", "vars.x: {{outputs.c.d}}: "},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			calls, result, failed := runStepForTemplateError(t, tt.step, tt.vars)
+			if calls != 0 {
+				t.Errorf("the action ran %d times, want 0", calls)
+			}
+			if !failed {
+				t.Error("the job is not marked failed")
+			}
+			if result.Status != StatusError {
+				t.Errorf("status = %v, want %v", result.Status, StatusError)
+			}
+			if result.Failure == nil || result.Failure.Kind != FailureTemplate {
+				t.Fatalf("failure = %+v, want kind %q", result.Failure, FailureTemplate)
+			}
+			for _, m := range tt.message {
+				if !strings.Contains(result.Failure.Message, m) {
+					t.Errorf("failure message %q does not contain %q", result.Failure.Message, m)
+				}
+			}
+		})
+	}
+}
+
+func TestStep_TemplateErrorInSkippedStep(t *testing.T) {
+	st := &Step{
+		Name:   "skipped",
+		Uses:   "http",
+		SkipIf: "true",
+		Vars:   map[string]any{"token": "{{outputs.login.token}}"},
+	}
+	calls, result, failed := runStepForTemplateError(t, st, nil)
+	if calls != 0 || failed {
+		t.Errorf("calls = %d, failed = %v, want a skipped step", calls, failed)
+	}
+	if result.Status != StatusSkipped {
+		t.Errorf("status = %v, want %v", result.Status, StatusSkipped)
+	}
+}
+
+func TestStep_TemplateWithUndefinedNameRuns(t *testing.T) {
+	st := &Step{
+		Name: "fallback {{vars.missing ?? 'x'}}",
+		Uses: "http",
+		With: map[string]any{"url": "{{vars.base ?? 'http://localhost'}}"},
+		Test: "res.code == 200",
+	}
+	calls, result, failed := runStepForTemplateError(t, st, map[string]any{})
+	if calls != 1 || failed {
+		t.Errorf("calls = %d, failed = %v, want one successful run", calls, failed)
+	}
+	if result.Name != "fallback x" {
+		t.Errorf("name = %q, want %q", result.Name, "fallback x")
+	}
+}
+
+func TestWorkflow_evalVarsTemplateError(t *testing.T) {
+	wf := &Workflow{
+		Name: "Test",
+		Vars: map[string]any{
+			"ok":   "fine",
+			"bad":  "{{1 +}}",
+			"auth": map[string]any{"user": "{{nothing.here}}"},
+		},
+		env: map[string]string{"UNUSED": ""},
+	}
+	vars, err := wf.evalVars()
+	if err == nil {
+		t.Fatal("expected an error")
+	}
+	if vars != nil {
+		t.Errorf("expected no vars, got %#v", vars)
+	}
+	for _, m := range []string{"vars.auth.user: {{nothing.here}}: ", "vars.bad: {{1 +}}: "} {
+		if !strings.Contains(err.Error(), m) {
+			t.Errorf("error %q does not contain %q", err.Error(), m)
+		}
+	}
+	if strings.Index(err.Error(), "vars.auth") > strings.Index(err.Error(), "vars.bad") {
+		t.Errorf("errors are not in name order: %q", err.Error())
+	}
+}
+
+func TestWorkflow_TemplateErrorExitCode(t *testing.T) {
+	runner := NewMockActionRunner()
+	runner.SetResult("ok", map[string]any{
+		"req": map[string]any{},
+		"res": map[string]any{"code": 200},
+	})
+	w := &Workflow{
+		Name: "exit",
+		Jobs: []Job{{Name: "a", Steps: []*Step{{
+			Name:         "s",
+			Uses:         "ok",
+			With:         map[string]any{"url": "{{outputs.missing.url}}"},
+			actionRunner: runner,
+		}}}},
+		printer: newBufferPrinter(),
+	}
+	if err := w.Start(Config{}); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	if w.exitStatus != ExitTestFailed {
+		t.Errorf("exit status = %d, want %d", w.exitStatus, ExitTestFailed)
+	}
+}
+
+func TestWorkflow_evalVarsSkipsVarsReadingAFailedOne(t *testing.T) {
+	wf := &Workflow{
+		Name: "Test",
+		Vars: map[string]any{
+			"base":  "{{1 +}}",
+			"url":   "{{vars.base}}/x",
+			"all":   "{{toJSON(vars)}}",
+			"list":  []any{"ok", "{{nothing.here}}"},
+			"other": "fine",
+		},
+		env: map[string]string{"UNUSED": ""},
+	}
+	_, err := wf.evalVars()
+	if err == nil {
+		t.Fatal("expected an error")
+	}
+	errs := unwrapJoined(err)
+	if len(errs) != 2 {
+		t.Fatalf("expected the errors of base and list alone, got %d: %v", len(errs), err)
+	}
+	for _, m := range []string{"vars.base: {{1 +}}: ", "vars.list[1]: {{nothing.here}}: "} {
+		if !strings.Contains(err.Error(), m) {
+			t.Errorf("error %q does not contain %q", err.Error(), m)
+		}
+	}
+}
+
+// templateErrorOutput runs w with a JSON report and returns everything it
+// printed and wrote, and the report.
+func templateErrorOutput(t *testing.T, w *Workflow) (string, report.Report) {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "report.json")
+	if err := w.Start(Config{Reports: []report.Target{{Format: report.JSON, Path: path}}}); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var r report.Report
+	if err := json.Unmarshal(data, &r); err != nil {
+		t.Fatal(err)
+	}
+	out := w.printer.outWriter.(*bytes.Buffer).String() +
+		w.printer.errWriter.(*bytes.Buffer).String() +
+		string(data)
+	return out, r
+}
+
+func TestWorkflow_TemplateErrorHidesCredentials(t *testing.T) {
+	runner := NewMockActionRunner()
+	runner.SetResult("ok", map[string]any{"req": map[string]any{}, "res": map[string]any{"code": 200}})
+	w := &Workflow{
+		Name: "credentials",
+		Vars: map[string]any{"pw": "learned-pw"},
+		Jobs: []Job{{
+			Name: "job",
+			Steps: []*Step{
+				{
+					Name: "a literal in a credential's template",
+					Uses: "ok",
+					With: map[string]any{
+						"password": "{{ 'literal-pw' + outputs.login.token }}",
+						"headers":  map[string]any{"cookie": []any{"{{ 'cookie-pw' + outputs.login.token }}"}},
+					},
+					actionRunner: runner,
+				},
+				{
+					Name: "a credential quoted by the error of another value",
+					Uses: "ok",
+					With: map[string]any{
+						"password": "{{vars.pw}}",
+						"port":     "{{parse_int(vars.pw)}}",
+					},
+					actionRunner: runner,
+				},
+			},
+		}},
+		printer: newBufferPrinter(),
+	}
+
+	out, r := templateErrorOutput(t, w)
+	for _, leak := range []string{"literal-pw", "cookie-pw", "learned-pw"} {
+		if strings.Contains(out, leak) {
+			t.Errorf("%q leaked into the output:\n%s", leak, out)
+		}
+	}
+
+	steps := r.Jobs[0].Steps
+	for _, want := range []string{"with.password: the template could not be evaluated", "with.headers.cookie[0]: the template could not be evaluated"} {
+		if !strings.Contains(steps[0].Failure.Message, want) {
+			t.Errorf("failure message %q does not contain %q", steps[0].Failure.Message, want)
+		}
+	}
+	if steps[1].Failure == nil || !strings.Contains(steps[1].Failure.Message, "with.port: {{parse_int(vars.pw)}}: ") {
+		t.Errorf("the error of a value that is not a credential should be kept, got %+v", steps[1].Failure)
+	}
+}
+
+func TestWorkflow_VarsTemplateErrorHidesSecrets(t *testing.T) {
+	w := &Workflow{
+		Name:    "secrets",
+		Secrets: []string{"TEST_PASSWORD"},
+		env:     map[string]string{"TEST_PASSWORD": "hunter2xyz"},
+		Vars:    map[string]any{"n": "{{parse_int(TEST_PASSWORD)}}"},
+		Jobs:    []Job{{Name: "job", Steps: []*Step{{Name: "s", Uses: "ok"}}}},
+		printer: newBufferPrinter(),
+	}
+	err := w.Start(Config{})
+	if err == nil {
+		t.Fatal("expected an error")
+	}
+	if strings.Contains(err.Error(), "hunter2xyz") {
+		t.Errorf("the secret leaked into the error: %v", err)
+	}
+	if !strings.Contains(err.Error(), "<secret:TEST_PASSWORD>") {
+		t.Errorf("expected the secret to be masked, got %v", err)
+	}
+	var fErr *expr.FieldError
+	if !errors.As(err, &fErr) || fErr.Path != "vars.n" {
+		t.Errorf("expected the FieldError to be found through the masking, got %v", err)
+	}
+}
+
+func TestStep_TemplateErrorDoesNotReportTheLastRun(t *testing.T) {
+	st := &Step{
+		Name:  "again",
+		Uses:  "http",
+		Vars:  map[string]any{"x": "{{outputs.a.b}}"},
+		Retry: &StepRetry{MaxAttempts: 3},
+	}
+	// What a run that retried and took an hour leaves behind.
+	st.startedAt = time.Now().Add(-time.Hour)
+	st.retryAttempt = 3
+
+	_, result, _ := runStepForTemplateError(t, st, nil)
+	if result.Elapsed != 0 {
+		t.Errorf("elapsed = %v, want 0 for a step whose action did not run", result.Elapsed)
+	}
+	if result.RetryAttempt != 0 {
+		t.Errorf("retry attempt = %d, want 0", result.RetryAttempt)
+	}
+}
+
+func TestWorkflow_RepeatKeepsFailureKind(t *testing.T) {
+	for _, async := range []bool{false, true} {
+		t.Run(map[bool]string{false: "sync", true: "async"}[async], func(t *testing.T) {
+			runner := NewMockActionRunner()
+			runner.SetResult("ok", map[string]any{"req": map[string]any{}, "res": map[string]any{"code": 200}})
+			runner.SetError("down", errors.New("connection refused"))
+			w := &Workflow{
+				Name: "repeat",
+				Jobs: []Job{{
+					Name:   "job",
+					Repeat: &Repeat{Count: 2, Interval: Interval{Duration: time.Millisecond}, Async: async},
+					Steps: []*Step{
+						{Name: "template", Uses: "ok", With: map[string]any{"url": "{{outputs.a.b}}"}, actionRunner: runner},
+						{Name: "action", Uses: "down", Test: "res.code == 200", actionRunner: runner},
+						{Name: "assertion", Uses: "ok", Test: "res.code == 500", actionRunner: runner},
+					},
+				}},
+				printer: newBufferPrinter(),
+			}
+			_, r := templateErrorOutput(t, w)
+
+			want := []string{FailureTemplate, FailureAction, FailureAssertion}
+			for i, st := range r.Jobs[0].Steps {
+				if st.Failure == nil {
+					t.Errorf("step %d: no failure recorded", i)
+					continue
+				}
+				if st.Failure.Kind != want[i] {
+					t.Errorf("step %d: kind = %q, want %q", i, st.Failure.Kind, want[i])
+				}
+				if !strings.HasPrefix(st.Failure.Message, "2 of 2 iterations failed; the first: ") {
+					t.Errorf("step %d: message = %q", i, st.Failure.Message)
+				}
+			}
+		})
+	}
+}

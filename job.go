@@ -47,14 +47,17 @@ func (j *Job) run(ctx JobContext) (failed bool, err error) {
 	ctxPtr := &ctx
 	ev := &expr.Expr{}
 
-	// Validate steps before execution
+	// Validate steps before execution. The job shows only as failed in the
+	// report, so the reason is printed here.
 	if err := j.validateSteps(); err != nil {
 		ctx.Result.recordFailure(failureConfig)
+		ctx.Printer.PrintError("job %q: %v", j.Name, err)
 		return false, NewExecutionError("job_start", "step validation failed", err)
 	}
 
 	if err := j.expandJobName(ev, ctxPtr); err != nil {
 		ctx.Result.recordFailure(failureConfig)
+		ctx.Printer.PrintError("job %q: name: %v", j.Name, err)
 		return false, NewExecutionError("job_start", "failed to expand job name", err)
 	}
 

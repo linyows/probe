@@ -33,7 +33,33 @@ The `mail` package served two actions, so it was split between them:
 | `mail.Send`, `mail.Req`, `mail.Res`, `mail.Result`, `mail.NewReq`, `mail.Option`, `mail.Callback`, `mail.WithBefore`, `mail.WithAfter`, `mail.Mail`, `mail.Bulk`, `mail.NewBulk`, `mail.DeliveryResult`, `mail.Client`, `mail.Dial`, `mail.NewClient`, `mail.StartTLSOff`, `mail.StartTLSAuto`, `mail.StartTLSRequired`, `mail.TLS`, `mail.OptimisticUID`, `mail.MockServer`, `mail.MockServerSession` | the same names in `github.com/linyows/probe/actions/smtp` |
 | `mail.GetLatencies`, `mail.Latency`, `mail.Latencies`, `mail.ReadFirstBytes`, `mail.IsMailText`, `mail.HasFlexedPrefix`, `mail.CreateHistogramByBucket`, `mail.CreateHistogramByDuration` | the same names in `github.com/linyows/probe/actions/mail-latency` (package `maillatency`) |
 
+`expr.EvalTemplateMap` now returns an error as well as the map, and
+`expr.EvalTemplate` returns an error for a template that cannot be
+evaluated. Both used to write the error into the value instead, as
+`[CompileError: ...]`, `[RuntimeError: ...]` or `[EvaluationError]`, and
+return no error. The error is a `*expr.TemplateError` naming the template;
+`EvalTemplateMap` joins one `*expr.FieldError` for each value that failed,
+naming its path, such as `headers.authorization`, and returns the map with
+nil in place of each such value.
+
+| Before | After |
+|---|---|
+| `m := ev.EvalTemplateMap(in, env)` | `m, err := ev.EvalTemplateMap(in, env)` |
+
 ### Behaviour Changes
+
+A template that cannot be evaluated now fails what needs it instead of
+being sent on with the error written into it. In a step's `with`, `vars`
+or `name`, the step fails with the new failure kind `template` and the
+action does not run; in a workflow's `vars`, the run stops before the first
+job with exit status 2. A name that is not defined still reads as nil and is
+not an error. `echo` shows the error, indented as its other lines are,
+instead of the Go representation of the error value.
+
+The result of a step in a job with `repeat` now carries why its first
+failing iteration failed, so a JSON report keeps the kind, such as `action`
+or `template`, and JUnit reports an `<error>` for it instead of an assertion
+`<failure>`.
 
 `mapping.AssignStruct` now enforces `validate:"required"` on an `int` field:
 a missing key is reported as `params '<name>' is required`, as it already was

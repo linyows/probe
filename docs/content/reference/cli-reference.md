@@ -159,8 +159,9 @@ A step's status is `passed`, `failed`, `skipped`, or `untested` when it ran with
 | `test_error` | The `test` expression could not be evaluated | `<error>` |
 | `test_type` | The `test` expression did not evaluate to a boolean | `<error>` |
 | `action` | The action returned an error, such as a refused connection | `<error>` |
+| `template` | A template in the step's `with`, `vars` or `name` could not be evaluated, so the action did not run | `<error>` |
 
-A step in a job with `repeat` fails when any iteration fails, and reports how many iterations passed. When an action sets `dump: false` on its response, the request and response are left out of the report as they are left out of the terminal.
+A step in a job with `repeat` fails when any iteration fails, and reports how many iterations passed and why the first failing one failed. When an action sets `dump: false` on its response, the request and response are left out of the report as they are left out of the terminal.
 
 The value can also come from the `PROBE_REPORT` environment variable, and the flag wins over it. If a report file cannot be written, the others are still written and Probe exits with status 2.
 
@@ -455,7 +456,7 @@ The exit code says not only whether a run failed but what has to be looked at, s
 | Exit Code | Meaning | Description |
 |-----------|---------|-------------|
 | `0` | Success | Every job completed and every test passed |
-| `1` | Test failed | A `test` evaluated to false, could not be evaluated, or did not evaluate to a boolean |
+| `1` | Test failed | A `test` evaluated to false, could not be evaluated, or did not evaluate to a boolean, or a template a step needed could not be evaluated |
 | `2` | Configuration error | The workflow or the command line is wrong: a missing file, invalid YAML, an unknown `needs`, an invalid step ID, an unknown flag or report format. A report file that cannot be written also exits `2` |
 | `3` | Action error | An action returned an error, such as a refused connection or a timeout, so its test could not be checked |
 

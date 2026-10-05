@@ -359,3 +359,20 @@ func TestMasker_LearnNumericCredential(t *testing.T) {
 		t.Errorf("String() = %q, want a boolean password not to hide every true", got)
 	}
 }
+
+func TestHoldsCredential(t *testing.T) {
+	for key, want := range map[string]bool{
+		"password":       true,
+		"Password":       true,
+		"key_passphrase": true,
+		"authorization":  true,
+		"Cookie":         true,
+		"dsn":            true,
+		"url":            false,
+		"headers":        false,
+	} {
+		if got := HoldsCredential(key); got != want {
+			t.Errorf("HoldsCredential(%q) = %v, want %v", key, got, want)
+		}
+	}
+}

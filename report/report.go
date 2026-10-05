@@ -118,6 +118,7 @@ const (
 	FailureTestError = "test_error" // The test expression could not be evaluated
 	FailureTestType  = "test_type"  // The test expression did not evaluate to a boolean
 	FailureAction    = "action"     // The action itself returned an error
+	FailureTemplate  = "template"   // A template in the step's with, vars or name could not be evaluated
 )
 
 // Report is the result of a workflow run in a form meant for machines: the

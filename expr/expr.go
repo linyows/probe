@@ -3,8 +3,10 @@ package expr
 
 import (
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"math/rand/v2"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -341,6 +343,11 @@ func extractTemplateExpression(input string) string {
 	return strings.TrimSpace(findTemplates(strings.TrimSpace(input))[0].expr)
 }
 
+// EvalTemplate replaces each {{ }} template in input with the value of its
+// expression. A template that does not compile or fails to run is an error
+// naming the template, and no string is returned: a value with the error
+// written into it would otherwise be sent on, as a URL or a header, as if it
+// were right.
 func (e *Expr) EvalTemplate(input string, env any) (string, error) {
 	// Security: Validate template input
 	if err := e.validateExpression(input); err != nil {
@@ -363,15 +370,13 @@ func (e *Expr) EvalTemplate(input string, env any) (string, error) {
 		// Evaluate the expression using expr
 		program, err := ex.Compile(expression, e.Options(env)...)
 		if err != nil {
-			fmt.Fprintf(&b, "[CompileError: %s]", err.Error())
-			continue
+			return "", &TemplateError{Template: input[span.start:span.end], Err: err}
 		}
 
 		// Security: Execute with timeout protection
 		output, err := e.executeWithTimeout(program, env)
 		if err != nil {
-			fmt.Fprintf(&b, "[RuntimeError: %s]", err.Error())
-			continue
+			return "", &TemplateError{Template: input[span.start:span.end], Err: err}
 		}
 
 		// Convert the output to string with size limit
@@ -384,6 +389,36 @@ func (e *Expr) EvalTemplate(input string, env any) (string, error) {
 	b.WriteString(input[last:])
 
 	return b.String(), nil
+}
+
+// TemplateError is a {{ }} template that could not be evaluated.
+type TemplateError struct {
+	Template string // The template as written, braces included
+	Err      error  // Why it could not be evaluated
+}
+
+func (e *TemplateError) Error() string {
+	return fmt.Sprintf("%s: %v", e.Template, e.Err)
+}
+
+func (e *TemplateError) Unwrap() error {
+	return e.Err
+}
+
+// FieldError is an error in the value under a key of a map evaluated by
+// EvalTemplateMap. Path names the value from the top of that map, as in
+// headers.authorization or items[0].name.
+type FieldError struct {
+	Path string
+	Err  error
+}
+
+func (e *FieldError) Error() string {
+	return fmt.Sprintf("%s: %v", e.Path, e.Err)
+}
+
+func (e *FieldError) Unwrap() error {
+	return e.Err
 }
 
 func (e *Expr) EvalTemplateWithTypePreservation(input string, env any) (any, error) {
@@ -400,49 +435,58 @@ func (e *Expr) EvalTemplateWithTypePreservation(input string, env any) (any, err
 		}
 
 		// Use Eval directly to preserve type
-		return e.Eval(expression, env)
+		output, err := e.Eval(expression, env)
+		if err != nil {
+			return nil, &TemplateError{Template: strings.TrimSpace(input), Err: err}
+		}
+		return output, nil
 	}
 
 	// For partial templates, fall back to string processing
 	return e.EvalTemplate(input, env)
 }
 
-func (e *Expr) EvalTemplateMap(input map[string]any, env any) map[string]any {
+// EvalTemplateMap evaluates every template in the values of input, at any
+// depth, keeping the type of a value that is a single template. The errors of
+// all the values that could not be evaluated are joined, each as a
+// *FieldError naming its value. The map is returned with them too, holding
+// nil where a value could not be evaluated, so that a caller can still see
+// the values that could, such as credentials to hide from the errors.
+func (e *Expr) EvalTemplateMap(input map[string]any, env any) (map[string]any, error) {
+	var errs []error
+	results := e.evalTemplateMap(input, env, "", &errs)
+	return results, errors.Join(errs...)
+}
+
+func (e *Expr) evalTemplateMap(input map[string]any, env any, path string, errs *[]error) map[string]any {
 	results := make(map[string]any)
 
-	for key, val := range input {
+	keys := make([]string, 0, len(input))
+	for key := range input {
+		keys = append(keys, key)
+	}
+	// Sorted so that the errors come in the same order on every run.
+	slices.Sort(keys)
+
+	for _, key := range keys {
 		// Security: Limit the number of processed keys to prevent DoS
 		if len(results) > 1000 {
 			results["_truncated"] = "Map processing truncated due to size limits"
 			break
 		}
 
-		switch v := val.(type) {
-		case string:
-			output, err := e.EvalTemplateWithTypePreservation(v, env)
-			if err != nil {
-				// Security: Don't expose internal errors, use sanitized error
-				results[key] = "[EvaluationError]"
-				continue
-			}
-			results[key] = output
-
-		case map[string]any:
-			results[key] = e.EvalTemplateMap(v, env)
-
-		case []any:
-			results[key] = e.evalTemplateArray(v, env)
-
-		default:
-			results[key] = v
+		keyPath := key
+		if path != "" {
+			keyPath = path + "." + key
 		}
+		results[key] = e.evalTemplateValue(input[key], env, keyPath, errs)
 	}
 
 	return results
 }
 
 // evalTemplateArray evaluates templates in array elements
-func (e *Expr) evalTemplateArray(input []any, env any) []any {
+func (e *Expr) evalTemplateArray(input []any, env any, path string, errs *[]error) []any {
 	results := make([]any, len(input))
 
 	for i, val := range input {
@@ -452,26 +496,26 @@ func (e *Expr) evalTemplateArray(input []any, env any) []any {
 			break
 		}
 
-		switch v := val.(type) {
-		case string:
-			output, err := e.EvalTemplateWithTypePreservation(v, env)
-			if err != nil {
-				// Security: Don't expose internal errors, use sanitized error
-				results[i] = "[EvaluationError]"
-				continue
-			}
-			results[i] = output
-
-		case map[string]any:
-			results[i] = e.EvalTemplateMap(v, env)
-
-		case []any:
-			results[i] = e.evalTemplateArray(v, env)
-
-		default:
-			results[i] = v
-		}
+		results[i] = e.evalTemplateValue(val, env, fmt.Sprintf("%s[%d]", path, i), errs)
 	}
 
 	return results
+}
+
+func (e *Expr) evalTemplateValue(val any, env any, path string, errs *[]error) any {
+	switch v := val.(type) {
+	case string:
+		output, err := e.EvalTemplateWithTypePreservation(v, env)
+		if err != nil {
+			*errs = append(*errs, &FieldError{Path: path, Err: err})
+			return nil
+		}
+		return output
+	case map[string]any:
+		return e.evalTemplateMap(v, env, path, errs)
+	case []any:
+		return e.evalTemplateArray(v, env, path, errs)
+	default:
+		return v
+	}
 }

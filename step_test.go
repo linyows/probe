@@ -487,8 +487,8 @@ func TestStep_createFailedStepResult(t *testing.T) {
 	if result.Report != "HTTP error occurred" {
 		t.Errorf("Report = %v, want %v", result.Report, "HTTP error occurred")
 	}
-	if result.TestOutput != "test error message" {
-		t.Errorf("TestOutput = %v, want %v", result.TestOutput, "test error message")
+	if result.TestOutput != "       test error message\n" {
+		t.Errorf("TestOutput = %q, want %q", result.TestOutput, "       test error message\n")
 	}
 	if result.RepeatCounter != nil {
 		t.Errorf("RepeatCounter should be nil for non-repeat step, got %v", result.RepeatCounter)
@@ -1136,7 +1136,7 @@ func TestStep_getEchoOutput_Error(t *testing.T) {
 	result := step.getEchoOutput(printer)
 
 	// Should contain error indication when template evaluation fails
-	if !strings.Contains(result, "CompileError") && !strings.Contains(result, "RuntimeError") && !strings.Contains(result, "Echo\nerror:") {
+	if !strings.Contains(result, "error: {{invalid_expression + }}: ") {
 		t.Errorf("getEchoOutput() with invalid expression should return error message, got %q", result)
 	}
 
