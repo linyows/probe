@@ -915,3 +915,59 @@ func TestExecuteStopsOnUnreadableParameter(t *testing.T) {
 		t.Errorf("the command ran although background could not be read: %v", statErr)
 	}
 }
+
+// A command stopped at its timeout is a result marked as timed out, with what
+// it wrote until then, and it is not waited on past the timeout even when a
+// process it started still holds its output open.
+func TestReqDo_Timeout(t *testing.T) {
+	grace := outputGrace
+	outputGrace = 100 * time.Millisecond
+	t.Cleanup(func() { outputGrace = grace })
+
+	r := &Req{Cmd: "echo started; sleep 30", Shell: "/bin/sh", Timeout: "300ms"}
+	start := time.Now()
+	res, err := r.Do()
+	if err != nil {
+		t.Fatalf("Do() error = %v", err)
+	}
+	if elapsed := time.Since(start); elapsed > 5*time.Second {
+		t.Errorf("Do() took %v, want it to stop at the timeout", elapsed)
+	}
+	if !res.Res.TimedOut || res.Res.Code != -1 || res.Status != 1 {
+		t.Errorf("Res = %+v, Status = %d; want timed out with code -1 and status 1", res.Res, res.Status)
+	}
+	if res.Res.Stdout != "started\n" {
+		t.Errorf("Stdout = %q, want the output from before the timeout", res.Res.Stdout)
+	}
+}
+
+// A command that exits while something it started still holds its output
+// open finishes when it exits, not when that process does.
+func TestReqDo_ExitsWhileChildHoldsOutput(t *testing.T) {
+	grace := outputGrace
+	outputGrace = 100 * time.Millisecond
+	t.Cleanup(func() { outputGrace = grace })
+
+	r := &Req{Cmd: "sleep 30 & echo done", Shell: "/bin/sh", Timeout: "20s"}
+	start := time.Now()
+	res, err := r.Do()
+	if err != nil {
+		t.Fatalf("Do() error = %v", err)
+	}
+	if elapsed := time.Since(start); elapsed > 5*time.Second {
+		t.Errorf("Do() took %v, want it to return once the command exited", elapsed)
+	}
+	if res.Res.TimedOut || res.Res.Code != 0 || res.Res.Stdout != "done\n" {
+		t.Errorf("Res = %+v, want a finished command", res.Res)
+	}
+}
+
+func TestReqDo_NotTimedOut(t *testing.T) {
+	res, err := (&Req{Cmd: "exit 3", Shell: "/bin/sh", Timeout: "5s"}).Do()
+	if err != nil {
+		t.Fatalf("Do() error = %v", err)
+	}
+	if res.Res.TimedOut || res.Res.Code != 3 {
+		t.Errorf("Res = %+v, want exit code 3, not timed out", res.Res)
+	}
+}

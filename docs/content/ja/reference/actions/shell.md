@@ -75,6 +75,8 @@ with:
   timeout: "300"  # 300秒
 ```
 
+`timeout`を過ぎても終わらないコマンドは停止しますが、ステップはテストできる結果を受け取ります。`res.timed_out`が`true`、`res.code`が`-1`になり、`res.stdout`と`res.stderr`にはそれまでに書いた内容が入ります。コマンドがバックグラウンドで起動したプロセスは待ちません。コマンドが終了するか停止された後、出力を読むのは最大1秒です。
+
 ### `env` (オプション)
 
 **型:** Object  
@@ -143,6 +145,7 @@ res:
   stdout: "Build successful" # 標準出力
   stderr: ""                 # 標準エラー出力
   pid: 12345                 # シェルのプロセスID
+  timed_out: false           # timeoutで停止したときにtrue
 
 req:
   cmd: "npm run build"       # 元のコマンド

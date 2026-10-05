@@ -48,10 +48,12 @@ The rest tune the connection and fall back to the defaults below when omitted.
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `port` | int | 22 | SSH port number |
-| `timeout` | string | "30s" | Limit for connecting and for running the command, as a Go duration such as `"30s"` or `"5m"` (a plain number is rejected) |
+| `timeout` | string | "30s" | Limit for connecting and for running the command, as a Go duration such as `"30s"` or `"5m"` (a plain number is rejected). See below for a command that runs past it |
 | `workdir` | string | - | Working directory on remote server |
 | `strict_host_check` | bool | true | Strict host key verification |
 | `known_hosts` | string | `~/.ssh/known_hosts` and `/etc/ssh/ssh_known_hosts` | Known hosts file path. By default both files are read, as many of them as exist; with neither, a strict host check fails |
+
+A command that runs past `timeout` is sent `SIGTERM`, and the step still gets a result to test: `res.timed_out` is `true`, `res.stdout` and `res.stderr` hold what the command wrote until then, and `res.code` is the status it exits with once signalled, often `143`. A command that has not stopped 5 seconds later is given up on, with `res.code` `-1`.
 
 ### Environment Variables
 
@@ -79,6 +81,7 @@ The SSH Action returns the following values:
 | `res.code` | int | Exit code (0 = success) |
 | `res.stdout` | string | Standard output |
 | `res.stderr` | string | Standard error output |
+| `res.timed_out` | bool | `true` when the command was stopped at `timeout` |
 | `status` | int | Execution status (0 = success, 1 = failure) |
 | `rt.duration` | string | How long the step took, such as `"1.2s"` |
 | `rt.sec` | float | The same in seconds |

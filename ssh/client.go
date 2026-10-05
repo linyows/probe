@@ -45,7 +45,15 @@ type Res struct {
 	Code   int    `map:"code"`
 	Stdout string `map:"stdout"`
 	Stderr string `map:"stderr"`
+	// TimedOut is true when the command was stopped at the timeout. Code is
+	// then the status it exited with once signalled, or -1 when it did not
+	// stop, and Stdout and Stderr hold what it wrote until then.
+	TimedOut bool `map:"timed_out"`
 }
+
+// stopGrace is how long a command signalled at its timeout has to stop
+// before it is given up on.
+var stopGrace = 5 * time.Second
 
 type Result struct {
 	Req    Req           `map:"req"`
@@ -402,11 +410,13 @@ func (r *Req) Do() (re *Result, er error) {
 
 	// Wait for either command completion or timeout
 	var cmdErr error
+	timedOut, stopped := false, true
 	select {
 	case cmdErr = <-waitChan:
 		// Command completed normally
 	case <-ctx.Done():
 		// Timeout or context cancellation
+		timedOut = true
 		// Try to signal the session to stop
 		if signalErr := session.Signal(ssh.SIGTERM); signalErr != nil {
 			// If SIGTERM fails, try SIGKILL
@@ -416,13 +426,19 @@ func (r *Req) Do() (re *Result, er error) {
 		select {
 		case cmdErr = <-waitChan:
 			// Command terminated after signal
-		case <-time.After(5 * time.Second):
-			// Force termination
-			cmdErr = fmt.Errorf("command execution timed out after %v", params.timeout)
+		case <-time.After(stopGrace):
+			// The command did not stop: give up on it.
+			stopped = false
 		}
 	}
 
 	result.RT = time.Since(start)
+
+	// A command that did not stop still holds its output open; closing the
+	// session ends the reads with what it wrote so far.
+	if !stopped {
+		_ = session.Close()
+	}
 
 	// Collect output (may still be available even if command failed/timed out)
 	var stdoutBytes, stderrBytes []byte
@@ -443,13 +459,15 @@ func (r *Req) Do() (re *Result, er error) {
 
 	// Get exit code
 	exitCode := 0
-	if cmdErr != nil {
-		if exitError, ok := cmdErr.(*ssh.ExitError); ok {
-			exitCode = exitError.ExitStatus()
-		} else {
-			// Connection or other error
-			return result, fmt.Errorf("SSH command execution failed: %w", cmdErr)
-		}
+	var exitError *ssh.ExitError
+	switch {
+	case !stopped:
+		exitCode = -1
+	case errors.As(cmdErr, &exitError):
+		exitCode = exitError.ExitStatus()
+	case cmdErr != nil:
+		// Connection or other error
+		return result, fmt.Errorf("SSH command execution failed: %w", cmdErr)
 	}
 
 	// Determine status based on exit code (0 = success, 1 = failure)
@@ -459,9 +477,10 @@ func (r *Req) Do() (re *Result, er error) {
 	}
 
 	result.Res = Res{
-		Code:   exitCode,
-		Stdout: stdout,
-		Stderr: stderr,
+		Code:     exitCode,
+		Stdout:   stdout,
+		Stderr:   stderr,
+		TimedOut: timedOut,
 	}
 	result.Status = status
 

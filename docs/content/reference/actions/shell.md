@@ -75,6 +75,8 @@ with:
   timeout: "300"  # 300 seconds
 ```
 
+A command that runs past `timeout` is stopped, and the step still gets a result to test: `res.timed_out` is `true`, `res.code` is `-1`, and `res.stdout` and `res.stderr` hold what the command wrote until then. A process the command started in the background is not waited for: once the command has exited or been stopped, its output is read for at most one more second.
+
 ### `env` (optional)
 
 **Type:** Object  
@@ -125,6 +127,7 @@ res:
   stdout: "Build successful" # Standard output
   stderr: ""                 # Standard error output
   pid: 12345                 # Process ID of the shell
+  timed_out: false           # true when the command was stopped at timeout
 
 req:
   cmd: "npm run build"       # Original command
