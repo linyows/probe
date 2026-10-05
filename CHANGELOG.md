@@ -24,12 +24,13 @@ and external actions, which only use `actionrpc`, are unaffected.
 | `github.com/linyows/probe/ssh` | `github.com/linyows/probe/actions/ssh` |
 | `github.com/linyows/probe/imap` | `github.com/linyows/probe/actions/imap` |
 | `github.com/linyows/probe/embedded` | `github.com/linyows/probe/actions/embedded` |
+| `github.com/linyows/probe/grpc/testserver/pb` | `github.com/linyows/probe/actions/grpc/testserver/pb` |
 
 The `mail` package served two actions, so it was split between them:
 
 | Before | After |
 |---|---|
-| `mail.Send`, `mail.Req`, `mail.Res`, `mail.Result`, `mail.NewReq`, `mail.Option`, `mail.Callback`, `mail.WithBefore`, `mail.WithAfter`, `mail.Mail`, `mail.Bulk`, `mail.NewBulk`, `mail.DeliveryResult`, `mail.Client`, `mail.Dial`, `mail.NewClient`, `mail.TLS`, `mail.OptimisticUID`, `mail.MockServer`, `mail.MockServerSession` | the same names in `github.com/linyows/probe/actions/smtp` |
+| `mail.Send`, `mail.Req`, `mail.Res`, `mail.Result`, `mail.NewReq`, `mail.Option`, `mail.Callback`, `mail.WithBefore`, `mail.WithAfter`, `mail.Mail`, `mail.Bulk`, `mail.NewBulk`, `mail.DeliveryResult`, `mail.Client`, `mail.Dial`, `mail.NewClient`, `mail.StartTLSOff`, `mail.StartTLSAuto`, `mail.StartTLSRequired`, `mail.TLS`, `mail.OptimisticUID`, `mail.MockServer`, `mail.MockServerSession` | the same names in `github.com/linyows/probe/actions/smtp` |
 | `mail.GetLatencies`, `mail.Latency`, `mail.Latencies`, `mail.ReadFirstBytes`, `mail.IsMailText`, `mail.HasFlexedPrefix`, `mail.CreateHistogramByBucket`, `mail.CreateHistogramByDuration` | the same names in `github.com/linyows/probe/actions/mail-latency` (package `maillatency`) |
 
 ### Behaviour Changes
