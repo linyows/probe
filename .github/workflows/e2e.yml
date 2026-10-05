@@ -39,8 +39,7 @@ permissions:
   contents: read
 
 jobs:
-  test:
-    name: Test to Workflow Examples
+  e2e:
     runs-on: ubuntu-latest
     steps:
     - name: Checkout

@@ -19,7 +19,6 @@ permissions:
 
 jobs:
   build:
-    name: Build static website
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -49,7 +48,6 @@ jobs:
           path: docs/out
 
   deploy:
-    name: Deploy to Pages
     if: github.event_name != 'pull_request'
     needs: build
     runs-on: ubuntu-latest

@@ -14,7 +14,6 @@ concurrency:
 
 jobs:
   test:
-    name: Unit test
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -31,7 +30,6 @@ jobs:
       uses: k1LoW/octocov-action@73d561f65d59e66899ed5c87e4621a913b5d5c20 # v1.5.0
 
   lint:
-    name: GolangCI Lint
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -44,7 +42,6 @@ jobs:
   # Builds probe for every platform .goreleaser.yaml releases, the way it does,
   # so that a release does not fail on a platform the tests do not run on.
   build:
-    name: Build for release platforms
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
