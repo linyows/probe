@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math"
 	"net/url"
 	"sort"
 	"strconv"
@@ -198,6 +199,15 @@ func collectSensitive(v any, found *[]string) {
 		for k, e := range val {
 			if auth, ok := e.(map[string]any); ok && strings.ToLower(k) == basicAuthKey {
 				*found = append(*found, basicAuthValues(auth)...)
+				// Everything in it but the username is a credential, also
+				// under a key the action refuses, such as a mistyped pass:
+				// the action logs its parameters before it checks them.
+				for ak, av := range auth {
+					if strings.ToLower(ak) != "username" {
+						collectStrings(av, found)
+					}
+				}
+				continue
 			}
 			if sensitiveKeys[strings.ToLower(k)] {
 				collectStrings(e, found)
@@ -227,26 +237,83 @@ func collectSensitive(v any, found *[]string) {
 
 // basicAuthValues returns the Authorization header the http action builds from
 // auth, and the encoded credentials alone, as they are shown when the header
-// is split. The username and password are formatted as the action formats
-// them; without a username the action sends nothing.
+// is split. A username or password that is a number may reach the action as
+// another number, so the header is worked out for each form it may take;
+// without a username the action sends nothing.
 func basicAuthValues(auth map[string]any) []string {
-	username, password := basicAuthField(auth["username"]), basicAuthField(auth["password"])
-	if username == "" {
+	usernames, passwords := scalarForms(auth["username"]), scalarForms(auth["password"])
+	if len(usernames) == 0 || usernames[0] == "" {
 		return nil
 	}
-	token := base64.StdEncoding.EncodeToString([]byte(username + ":" + password))
-	return []string{"Basic " + token, token}
+	var found []string
+	for _, u := range usernames {
+		for _, p := range passwords {
+			token := base64.StdEncoding.EncodeToString([]byte(u + ":" + p))
+			found = append(found, "Basic "+token, token)
+		}
+	}
+	return found
 }
 
-func basicAuthField(v any) string {
-	switch v := v.(type) {
-	case nil:
-		return ""
-	case float64:
-		return strconv.FormatFloat(v, 'f', -1, 64)
-	default:
-		return fmt.Sprint(v)
+// scalarForms returns how a value of a parameter is written, by the workflow
+// and by the action that receives it, which differ only for a number: an
+// action receives every number as a float64 and gets back an integer when it
+// holds one, so 9007199254740993 arrives as 9007199254740992. A missing
+// value is written as empty.
+func scalarForms(v any) []string {
+	if v == nil {
+		return []string{""}
 	}
+	if forms, ok := numberForms(v); ok {
+		return forms
+	}
+	return []string{fmt.Sprint(v)}
+}
+
+// numberForms returns a number as written and as an action receives it,
+// once when the two are the same, or false when v is not a number.
+func numberForms(v any) ([]string, bool) {
+	var f float64
+	switch n := v.(type) {
+	case int:
+		f = float64(n)
+	case int8:
+		f = float64(n)
+	case int16:
+		f = float64(n)
+	case int32:
+		f = float64(n)
+	case int64:
+		f = float64(n)
+	case uint:
+		f = float64(n)
+	case uint8:
+		f = float64(n)
+	case uint16:
+		f = float64(n)
+	case uint32:
+		f = float64(n)
+	case uint64:
+		f = float64(n)
+	case float32:
+		f = float64(n)
+	case float64:
+		f = n
+	default:
+		return nil, false
+	}
+	written := fmt.Sprint(v)
+	if n, ok := v.(float64); ok {
+		written = strconv.FormatFloat(n, 'f', -1, 64)
+	}
+	received := strconv.FormatFloat(f, 'f', -1, 64)
+	if f == math.Trunc(f) && f >= math.MinInt64 && f <= math.MaxInt64 {
+		received = strconv.FormatInt(int64(f), 10)
+	}
+	if received == written {
+		return []string{written}, true
+	}
+	return []string{written, received}, true
 }
 
 // dsnPassword returns the password in a URL-style DSN, both as written and
@@ -290,6 +357,8 @@ func collectStrings(v any, found *[]string) {
 	// learned: hiding every "true" in the output would hide nothing useful.
 	case int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64, float32, float64:
 		*found = append(*found, fmt.Sprint(val))
+		forms, _ := numberForms(val)
+		*found = append(*found, forms...)
 	case []any:
 		for _, e := range val {
 			collectStrings(e, found)

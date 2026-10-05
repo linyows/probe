@@ -171,13 +171,6 @@ JSONレスポンスの値は`res.body`から直接読みます。
     test: res.code == 200
 ```
 
-Basic認証は`encode_base64`で組み立てます。
-
-```yaml
-      headers:
-        authorization: "Basic {{encode_base64(vars.user + ':' + vars.password)}}"
-```
-
 HTTP Basic認証を受け付けるサーバーには、`basic_auth`でユーザー名とパスワードを渡します。`basic_auth`はそこから`Authorization`ヘッダーを組み立てます。ジョブの`defaults`に書けば、ジョブのすべてのリクエストに適用されます。
 
 ```yaml
