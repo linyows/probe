@@ -150,6 +150,21 @@ res:
   log: "/tmp/probe-shell-action.1234567890.log" # Log file for stdout and stderr
 ```
 
+When the whole of `stdout` is one JSON object or array, surrounding whitespace aside, it is also decoded into `res.json`, so a command that prints JSON is read as a response body is, without `parse_json(res.stdout)` in each expression. `res.stdout` keeps the text.
+
+```yaml
+- name: Find the email
+  id: found
+  uses: shell
+  with:
+    cmd: ./driver find-emails -subject 'inbound'   # prints {"count":1,"emails":[{"id":"M1"}]}
+  test: res.code == 0 && res.json.count == 1
+  outputs:
+    id: res.json.emails[0].id
+```
+
+Anything else leaves `res.json` unset, which reads as nil: plain text, a scalar such as `42`, JSON Lines, and output that is not valid JSON. A background command has no `stdout`, so it has no `res.json` either; read its log file with `parse_json` instead.
+
 Besides `res` and `req`, the step can test these:
 
 | Field | Type | Description |

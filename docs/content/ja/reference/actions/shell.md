@@ -168,6 +168,21 @@ res:
   log: "/tmp/probe-shell-action.1234567890.log" # 標準出力と標準エラー出力のログファイル
 ```
 
+`stdout`全体が前後の空白を除いて1つのJSONオブジェクトまたは配列の場合は、`res.json`にもデコードした値が入ります。JSONを出力するコマンドの結果を、式ごとに`parse_json(res.stdout)`と書かずにレスポンスボディと同じように読めます。`res.stdout`にはテキストがそのまま残ります。
+
+```yaml
+- name: Find the email
+  id: found
+  uses: shell
+  with:
+    cmd: ./driver find-emails -subject 'inbound'   # {"count":1,"emails":[{"id":"M1"}]} を出力する
+  test: res.code == 0 && res.json.count == 1
+  outputs:
+    id: res.json.emails[0].id
+```
+
+それ以外の場合、つまりプレーンテキスト、`42`のようなスカラー値、JSON Lines、正しくないJSONでは`res.json`は設定されず、nilとして読まれます。backgroundのコマンドには`stdout`がないため`res.json`もありません。ログファイルを`parse_json`で読んでください。
+
 `res`と`req`のほかに、テストでは次の値も使えます。
 
 | フィールド | 型 | 説明 |
