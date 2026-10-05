@@ -3,7 +3,10 @@ package actionrpc
 import (
 	"context"
 	"errors"
+	"reflect"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/linyows/probe/pb"
 	"google.golang.org/grpc"
@@ -322,5 +325,116 @@ func TestConvertFloatToInt_Array(t *testing.T) {
 	}
 	if m["value"] != float64(0.091026392) {
 		t.Errorf("value = %v (%T), want float64(0.091026392)", m["value"], m["value"])
+	}
+}
+
+func TestConvertForProtobuf(t *testing.T) {
+	type inner struct {
+		Code   int    `map:"code"`
+		Name   string // no tag: the field name is the key
+		hidden string
+	}
+	at := time.Date(2026, 10, 5, 9, 30, 0, 0, time.UTC)
+	n := 7
+
+	tests := []struct {
+		name string
+		in   any
+		want any
+	}{
+		{name: "nil", in: nil, want: nil},
+		{name: "a supported scalar", in: "s", want: "s"},
+		{name: "a duration", in: 1500 * time.Millisecond, want: "1.5s"},
+		{name: "a time", in: at, want: "2026-10-05T09:30:00Z"},
+		{name: "a string map", in: map[string]string{"a": "b"}, want: map[string]any{"a": "b"}},
+		{name: "a nested map", in: map[string]any{"rt": time.Second, "deep": map[string]any{"at": at}}, want: map[string]any{"rt": "1s", "deep": map[string]any{"at": "2026-10-05T09:30:00Z"}}},
+		{name: "a list", in: []any{time.Second, "x"}, want: []any{"1s", "x"}},
+		{name: "a string list", in: []string{"a", "b"}, want: []any{"a", "b"}},
+		{name: "another slice", in: []int{1, 2}, want: []any{1, 2}},
+		{name: "a nil pointer", in: (*int)(nil), want: nil},
+		{name: "a pointer", in: &n, want: 7},
+		{name: "a struct", in: inner{Code: 1, Name: "x", hidden: "h"}, want: map[string]any{"code": 1, "Name": "x"}},
+		{name: "a pointer to a struct", in: &inner{Code: 2}, want: map[string]any{"code": 2, "Name": ""}},
+		{name: "another string-keyed map", in: map[string]int{"a": 1}, want: map[string]any{"a": 1}},
+		{name: "a map keyed by numbers", in: map[int]string{1: "a", 20: "b"}, want: map[string]any{"1": "a", "20": "b"}},
+		{name: "a map keyed by bools", in: map[bool]int{true: 1}, want: map[string]any{"true": 1}},
+		{name: "a map keyed by floats", in: map[float64]string{0.5: "half"}, want: map[string]any{"0.5": "half"}},
+		{name: "an any map with distinct keys", in: map[any]any{1: "a", "b": time.Second}, want: map[string]any{"1": "a", "b": "1s"}},
+		{name: "a nested map keyed by numbers", in: map[string]any{"codes": map[uint32]string{404: "not found"}}, want: map[string]any{"codes": map[string]any{"404": "not found"}}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := convertForProtobuf(tt.in)
+			if err != nil {
+				t.Fatalf("convertForProtobuf(%#v) error = %v", tt.in, err)
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("convertForProtobuf(%#v) = %#v, want %#v", tt.in, got, tt.want)
+			}
+		})
+	}
+}
+
+// A map whose entries cannot all be keyed by a string is an error, so that
+// no entry of an action's result is dropped without a word.
+func TestConvertForProtobufRejectsUnsendableKeys(t *testing.T) {
+	type point struct{ X, Y int }
+	tests := []struct {
+		name    string
+		in      any
+		wantErr string
+	}{
+		{name: "struct keys", in: map[point]string{{1, 2}: "a"}, wantErr: "map key of type actionrpc.point"},
+		{name: "keys that print alike", in: map[any]any{1: "number", "1": "string"}, wantErr: `map keys collide as "1"`},
+		{name: "deep inside a result", in: map[string]any{"res": []any{map[point]int{{0, 0}: 1}}}, wantErr: "res: [0]: map key"},
+		{name: "in a struct field", in: struct {
+			Data map[point]int `map:"data"`
+		}{map[point]int{{0, 0}: 1}}, wantErr: "data: map key"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := convertForProtobuf(tt.in)
+			if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+				t.Fatalf("convertForProtobuf() error = %v, want one containing %q", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+// What convertForProtobuf returns for an action's result has to be
+// something a protobuf Struct accepts, which the result is sent as.
+func TestConvertForProtobufIsAcceptedByStruct(t *testing.T) {
+	result := map[string]any{
+		"req":    map[string]string{"url": "http://x"},
+		"res":    struct{ Code int }{200},
+		"rt":     250 * time.Millisecond,
+		"at":     time.Now(),
+		"lines":  []string{"a"},
+		"status": 0,
+	}
+	c, err := convertForProtobuf(result)
+	if err != nil {
+		t.Fatalf("convertForProtobuf() error = %v", err)
+	}
+	converted, ok := c.(map[string]any)
+	if !ok {
+		t.Fatalf("convertForProtobuf() returned %T, want a map", c)
+	}
+	if _, err := structpb.NewStruct(converted); err != nil {
+		t.Errorf("structpb.NewStruct() error = %v", err)
+	}
+}
+
+// A result the runner could not receive whole is an error of the action, not
+// a result with entries missing.
+func TestServer_RunUnsendableResult(t *testing.T) {
+	type point struct{ X, Y int }
+	server := &Server{Impl: &MockActions{RunFunc: func(map[string]any) (map[string]any, error) {
+		return map[string]any{"res": map[point]int{{1, 2}: 3}}, nil
+	}}}
+
+	_, err := server.Run(context.Background(), &pb.RunRequest{})
+	if err == nil || !strings.Contains(err.Error(), "cannot send the action's result: res: map key") {
+		t.Fatalf("Run() error = %v, want the result refused", err)
 	}
 }

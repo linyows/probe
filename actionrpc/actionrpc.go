@@ -129,7 +129,13 @@ func (m *Server) Run(ctx context.Context, req *pb.RunRequest) (*pb.RunResponse, 
 	}
 
 	// Convert map[string]any to protobuf.Struct
-	convertedResult := convertForProtobuf(v)
+	convertedResult, err := convertForProtobuf(v)
+	if err != nil {
+		if m.log != nil {
+			m.log.Error("ActionsServer cannot send the action's result", "error", err)
+		}
+		return &pb.RunResponse{}, fmt.Errorf("cannot send the action's result: %w", err)
+	}
 	resultMap, ok := convertedResult.(map[string]any)
 	if !ok {
 		if m.log != nil {
@@ -152,105 +158,134 @@ func (m *Server) Run(ctx context.Context, req *pb.RunRequest) (*pb.RunResponse, 
 	return &pb.RunResponse{Result: resultStruct}, nil
 }
 
-// convertForProtobuf converts unsupported types to protobuf-compatible types
-func convertForProtobuf(value any) any {
+// convertForProtobuf converts unsupported types to protobuf-compatible types.
+// A map whose keys are not strings is keyed by their printed form instead;
+// keys that cannot be printed faithfully are an error, so that no entry of a
+// result is dropped without a word.
+func convertForProtobuf(value any) (any, error) {
 	if value == nil {
-		return nil
+		return nil, nil
 	}
 
 	switch v := value.(type) {
 	case time.Duration:
 		// Convert Duration to string
-		return v.String()
+		return v.String(), nil
 	case time.Time:
 		// Convert Time to RFC3339 string format
-		return v.Format(time.RFC3339)
+		return v.Format(time.RFC3339), nil
 	case map[string]string:
 		// Convert map[string]string to map[string]any
-		result := make(map[string]any)
+		result := make(map[string]any, len(v))
 		for k, val := range v {
 			result[k] = val
 		}
-		return result
+		return result, nil
 	case map[string]any:
 		// Recursively convert nested maps
-		result := make(map[string]any)
+		result := make(map[string]any, len(v))
 		for k, val := range v {
-			result[k] = convertForProtobuf(val)
+			c, err := convertForProtobuf(val)
+			if err != nil {
+				return nil, fmt.Errorf("%s: %w", k, err)
+			}
+			result[k] = c
 		}
-		return result
+		return result, nil
 	case []any:
 		// Recursively convert arrays
-		result := make([]any, len(v))
-		for i, val := range v {
-			result[i] = convertForProtobuf(val)
-		}
-		return result
+		return convertSlice(reflect.ValueOf(v))
 	case []string:
 		// Convert []string to []any
 		result := make([]any, len(v))
 		for i, str := range v {
 			result[i] = str
 		}
-		return result
-	default:
-		// Check if it's a slice using reflection
-		rv := reflect.ValueOf(value)
-		if rv.Kind() == reflect.Slice {
-			// Handle other slice types
-			result := make([]any, rv.Len())
-			for i := 0; i < rv.Len(); i++ {
-				result[i] = convertForProtobuf(rv.Index(i).Interface())
-			}
-			return result
-		}
-		// Check if it's a pointer using reflection
-		if rv.Kind() == reflect.Pointer {
-			if rv.IsNil() {
-				return nil
-			}
-			// Dereference pointer and recurse
-			return convertForProtobuf(rv.Elem().Interface())
-		}
-		// Check if it's a struct using reflection
-		if rv.Kind() == reflect.Struct {
-			// Convert struct to map[string]any
-			result := make(map[string]any)
-			rt := rv.Type()
-			for i := 0; i < rv.NumField(); i++ {
-				field := rt.Field(i)
-				fieldValue := rv.Field(i)
-
-				// Skip unexported fields
-				if !field.IsExported() {
-					continue
-				}
-
-				// Use struct tag if available, otherwise use field name
-				fieldName := field.Name
-				if mapTag := field.Tag.Get("map"); mapTag != "" {
-					fieldName = mapTag
-				}
-
-				result[fieldName] = convertForProtobuf(fieldValue.Interface())
-			}
-			return result
-		}
-		// Check if it's a map with string keys using reflection
-		if rv.Kind() == reflect.Map {
-			// Handle map[string]interface{} and similar types
-			result := make(map[string]any)
-			for _, key := range rv.MapKeys() {
-				if keyStr, ok := key.Interface().(string); ok {
-					mapValue := rv.MapIndex(key).Interface()
-					result[keyStr] = convertForProtobuf(mapValue)
-				}
-			}
-			return result
-		}
-		// Return as-is for supported types (string, int, float64, bool, etc.)
-		return value
+		return result, nil
 	}
+
+	rv := reflect.ValueOf(value)
+	switch rv.Kind() {
+	case reflect.Slice:
+		return convertSlice(rv)
+	case reflect.Pointer:
+		if rv.IsNil() {
+			return nil, nil
+		}
+		// Dereference pointer and recurse
+		return convertForProtobuf(rv.Elem().Interface())
+	case reflect.Struct:
+		// Convert struct to map[string]any
+		result := make(map[string]any)
+		rt := rv.Type()
+		for i := 0; i < rv.NumField(); i++ {
+			field := rt.Field(i)
+			// Skip unexported fields
+			if !field.IsExported() {
+				continue
+			}
+			// Use struct tag if available, otherwise use field name
+			fieldName := field.Name
+			if mapTag := field.Tag.Get("map"); mapTag != "" {
+				fieldName = mapTag
+			}
+			c, err := convertForProtobuf(rv.Field(i).Interface())
+			if err != nil {
+				return nil, fmt.Errorf("%s: %w", fieldName, err)
+			}
+			result[fieldName] = c
+		}
+		return result, nil
+	case reflect.Map:
+		return convertMap(rv)
+	}
+	// Return as-is for supported types (string, int, float64, bool, etc.)
+	return value, nil
+}
+
+func convertSlice(rv reflect.Value) (any, error) {
+	result := make([]any, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		c, err := convertForProtobuf(rv.Index(i).Interface())
+		if err != nil {
+			return nil, fmt.Errorf("[%d]: %w", i, err)
+		}
+		result[i] = c
+	}
+	return result, nil
+}
+
+// convertMap converts a map of any key type to one keyed by strings. A key
+// that is a string, a number or a bool is printed as fmt.Sprint does, which
+// tells apart any two keys of one type. Any other key, or two keys that print
+// alike, such as 1 and "1" in a map[any]any, is an error.
+func convertMap(rv reflect.Value) (any, error) {
+	result := make(map[string]any, rv.Len())
+	iter := rv.MapRange()
+	for iter.Next() {
+		key := iter.Key()
+		if key.Kind() == reflect.Interface {
+			key = key.Elem()
+		}
+		switch key.Kind() {
+		case reflect.String, reflect.Bool,
+			reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
+			reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64,
+			reflect.Float32, reflect.Float64:
+		default:
+			return nil, fmt.Errorf("map key of type %s cannot be sent: use string keys", iter.Key().Type())
+		}
+		name := fmt.Sprint(key.Interface())
+		if _, exists := result[name]; exists {
+			return nil, fmt.Errorf("map keys collide as %q: use string keys", name)
+		}
+		c, err := convertForProtobuf(iter.Value().Interface())
+		if err != nil {
+			return nil, fmt.Errorf("%s: %w", name, err)
+		}
+		result[name] = c
+	}
+	return result, nil
 }
 
 // convertFloatToInt converts float64 values that represent integers back to int64.

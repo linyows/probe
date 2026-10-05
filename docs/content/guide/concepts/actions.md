@@ -715,7 +715,7 @@ type Action interface {
 }
 ```
 
-`with` holds the step's `with` parameters. The returned map becomes the step's `req`, `res`, `rt` and `status`, as with the built-in actions.
+`with` holds the step's `with` parameters. The returned map becomes the step's `req`, `res`, `rt` and `status`, as with the built-in actions. A map in the result may be keyed by strings, numbers or booleans; the keys are sent as text, so `map[int]string{404: "not found"}` arrives as `{"404": "not found"}`. A map with any other kind of key, or two keys that read the same, such as `1` and `"1"`, fails the step with an action error rather than losing entries.
 
 ### External Actions
 

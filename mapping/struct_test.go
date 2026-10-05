@@ -1,7 +1,9 @@
 package mapping
 
 import (
+	"errors"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -220,5 +222,67 @@ func TestStructToMapByTags(t *testing.T) {
 
 	if !reflect.DeepEqual(result, expected) {
 		t.Errorf("StructToMapByTags() = %v, want %v", result, expected)
+	}
+}
+
+type assignTarget struct {
+	Name    string `map:"name" validate:"required"`
+	Label   string `map:"label"`
+	Timeout int    `map:"timeout"`
+	Enabled bool   `map:"enabled"`
+	Skipped string
+}
+
+func TestAssignStruct(t *testing.T) {
+	var got assignTarget
+	err := AssignStruct(map[string]any{
+		"name":    "bulk",
+		"label":   42,
+		"timeout": "30",
+		"Skipped": "ignored",
+	}, &got)
+	if err != nil {
+		t.Fatalf("AssignStruct() error = %v", err)
+	}
+	want := assignTarget{Name: "bulk", Label: "42", Timeout: 30}
+	if got != want {
+		t.Errorf("AssignStruct() = %+v, want %+v", got, want)
+	}
+
+	// An int that arrives as a number, as one written without quotes does.
+	var n assignTarget
+	if err := AssignStruct(map[string]any{"name": "n", "timeout": 5}, &n); err != nil || n.Timeout != 5 {
+		t.Errorf("AssignStruct() with a numeric int = %+v, %v", n, err)
+	}
+}
+
+func TestAssignStructErrors(t *testing.T) {
+	tests := []struct {
+		name   string
+		params map[string]any
+		want   []string
+	}{
+		{name: "a required field missing", params: map[string]any{"label": "x"}, want: []string{"params 'name' is required"}},
+		{name: "an int that is not a number", params: map[string]any{"name": "n", "timeout": "soon"}, want: []string{"params 'timeout' can't convert to int"}},
+		{name: "a field of a type it does not assign", params: map[string]any{"name": "n", "enabled": true}, want: []string{"params 'enabled'"}},
+		{
+			name:   "every problem at once",
+			params: map[string]any{"timeout": "soon"},
+			want:   []string{"params 'name' is required", "params 'timeout' can't convert to int"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := AssignStruct(tt.params, &assignTarget{})
+			var ve *ValidationError
+			if !errors.As(err, &ve) {
+				t.Fatalf("AssignStruct() error = %v, want a *ValidationError", err)
+			}
+			for _, w := range tt.want {
+				if !strings.Contains(err.Error(), w) {
+					t.Errorf("error %q does not contain %q", err, w)
+				}
+			}
+		})
 	}
 }
