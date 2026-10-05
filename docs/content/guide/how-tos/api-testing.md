@@ -1158,7 +1158,9 @@ body: |
     "email": "test{{random_str(8)}}@example.com",
     "username": "user_{{unixtime()}}_{{random_str(4)}}"
   }
+```
 
+```yaml
 # Good: Clean up test data
 - name: Cleanup Test User
   uses: http
@@ -1193,7 +1195,9 @@ Sending input the API should reject is how its validation gets tested at all.
   with:
     body: '{"invalid": "data"}'
   test: res.code == 400
+```
 
+```yaml
 # Good: Validate error responses
 test: |
   res.code == 400 &&

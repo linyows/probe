@@ -883,7 +883,7 @@ jobs:
 
 環境ごとにファイルを分ければ値が混ざらず、差分として違いを確認できます。
 
-```yaml
+```text
 # 良い例: 明確な環境分離
 environments/
 ├── development.yml
@@ -918,7 +918,9 @@ vars:
   environment: "{{ENVIRONMENT}}"
   api_base_url: "{{API_BASE_URL}}"
   api_token: "{{API_TOKEN}}"
+```
 
+```yaml
 - name: Pre-Test Validation
   echo: |
     Environment: {{vars.environment ? "✅" : "❌"}}

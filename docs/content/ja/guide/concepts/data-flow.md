@@ -641,7 +641,7 @@ outputs:
 ```yaml
 # 良い例: 安全なデータアクセス
 outputs:
-  user_id: res.body.user && res.body.user.id ? res.body.user.id : null
+  user_id: 'res.body.user && res.body.user.id ? res.body.user.id : null'
   email_verified: res.body.user && res.body.user.email_verified == true
   profile_complete: res.body.user && res.body.user.profile && res.body.user.profile.complete == true
 

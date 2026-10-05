@@ -11,7 +11,7 @@ Probeがexprに追加している関数です。
 **戻り値:** Boolean
 
 ```yaml
-test: match_json(res.body, {"status": "ok", "count": 3})
+test: 'match_json(res.body, {"status": "ok", "count": 3})'
 ```
 
 ## `diff_json`

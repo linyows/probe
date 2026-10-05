@@ -1142,7 +1142,9 @@ body: |
     "email": "test{{random_str(8)}}@example.com",
     "username": "user_{{unixtime()}}_{{random_str(4)}}"
   }
+```
 
+```yaml
 # 良い例: テストデータのクリーンアップ
 - name: Cleanup Test User
   uses: http
@@ -1177,7 +1179,9 @@ APIが拒否すべき入力を送って初めて、その検証処理自体を�
   with:
     body: '{"invalid": "data"}'
   test: res.code == 400
+```
 
+```yaml
 # 良い例: エラーレスポンスを検証
 test: |
   res.code == 400 &&

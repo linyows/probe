@@ -269,7 +269,7 @@ test: all(res.body.permissions, #.active == true)
 test: any(res.body.items, #.price > 100)
 
 # Object property testing
-test: "id" in res.body.user && "email" in res.body.user
+test: '"id" in res.body.user && "email" in res.body.user'
 test: res.body.config.database.host != null
 ```
 
@@ -711,10 +711,12 @@ body: |
 
 When a test fails for no obvious reason, print the values it reads before comparing them.
 
-```yaml
+```bash
 # Debug with verbose mode
 probe -v workflow.yml
+```
 
+```yaml
 # Add debug outputs
 - name: Debug Values
   echo: |
@@ -737,7 +739,7 @@ test: res.body.user != null && res.body.user.active == true
 echo: "User count: {{outputs.api.user_count || 0}}"
 
 # Good: Check existence before access
-test: "data" in res.body && "users" in res.body.data
+test: '"data" in res.body && "users" in res.body.data'
 ```
 
 ## Best Practices

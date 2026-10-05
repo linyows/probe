@@ -240,7 +240,7 @@ jobs:
         res.code == 200 &&
         (rt.sec * 1000) < vars.RESPONSE_TIME_THRESHOLD
       outputs:
-        web_status: res.code == 200 ? "healthy" : "unhealthy"
+        web_status: 'res.code == 200 ? "healthy" : "unhealthy"'
         web_response_time: (rt.sec * 1000)
 
     - name: "Database Connectivity"
@@ -254,7 +254,7 @@ jobs:
         res.body.database.connected == true &&
         res.body.database.responseTime < 1000
       outputs:
-        db_status: res.body.database.connected ? "connected" : "disconnected"
+        db_status: 'res.body.database.connected ? "connected" : "disconnected"'
         db_response_time: res.body.database.responseTime
         db_pool_size: res.body.database.poolSize
 
@@ -268,7 +268,7 @@ jobs:
         res.code == 200 &&
         res.body.cache.connected == true
       outputs:
-        cache_status: res.body.cache.connected ? "connected" : "disconnected"
+        cache_status: 'res.body.cache.connected ? "connected" : "disconnected"'
         cache_hit_rate: res.body.cache.hitRate
 
 - id: service-dependencies
@@ -285,7 +285,7 @@ jobs:
         res.code == 200 &&
         res.body.paymentService.available == true
       outputs:
-        payment_status: res.body.paymentService.available ? "available" : "unavailable"
+        payment_status: 'res.body.paymentService.available ? "available" : "unavailable"'
 
     - name: "Email Service Health"
       id: email-health
@@ -297,7 +297,7 @@ jobs:
         res.code == 200 &&
         res.body.emailService.available == true
       outputs:
-        email_status: res.body.emailService.available ? "available" : "unavailable"
+        email_status: 'res.body.emailService.available ? "available" : "unavailable"'
 
     - name: "Search Service Health"
       id: search-health
@@ -309,7 +309,7 @@ jobs:
         res.code == 200 &&
         res.body.searchService.available == true
       outputs:
-        search_status: res.body.searchService.available ? "available" : "unavailable"
+        search_status: 'res.body.searchService.available ? "available" : "unavailable"'
 
 - id: environment-report
   name: "Environment Health Report"

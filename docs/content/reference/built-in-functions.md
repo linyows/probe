@@ -58,7 +58,7 @@ Compares two objects strictly. Every key and value must match on both sides - ex
 **Returns:** Boolean
 
 ```yaml
-test: match_json(res.body, {"status": "ok", "count": 3})
+test: 'match_json(res.body, {"status": "ok", "count": 3})'
 ```
 
 ### `diff_json`

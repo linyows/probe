@@ -1023,7 +1023,9 @@ jobs:
 # 良い例: テスト前にベースラインを確立
 vars:
   api_url: "{{API_URL}}"
+```
 
+```yaml
 - name: Establish Baseline
   uses: http
   with:

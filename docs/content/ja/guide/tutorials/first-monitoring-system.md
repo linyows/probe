@@ -270,7 +270,7 @@ probe monitoring.yml
         res.body.products != null &&
         len(res.body.products) > 0
       outputs:
-        product_count: res.body.products ? len(res.body.products) : 0
+        product_count: 'res.body.products ? len(res.body.products) : 0'
         response_time: (rt.sec * 1000)
         available: res.code == 200
         status_code: res.code
@@ -302,7 +302,7 @@ probe monitoring.yml
         res.body.user.id != null
       outputs:
         authenticated: res.code == 200
-        user_id: res.body.user ? res.body.user.id : "unknown"
+        user_id: 'res.body.user ? res.body.user.id : "unknown"'
         response_time: (rt.sec * 1000)
         status_code: res.code
 
