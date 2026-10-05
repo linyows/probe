@@ -180,8 +180,7 @@ func TestReadYamlFiles(t *testing.T) {
 	}
 }
 
-func TestSetDefaults(t *testing.T) {
-	p := &Probe{}
+func TestMergeDefaults(t *testing.T) {
 
 	tests := []struct {
 		name     string
@@ -237,9 +236,9 @@ func TestSetDefaults(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			p.setDefaults(tt.data, tt.defaults)
+			mergeDefaults(tt.data, tt.defaults)
 			if !reflect.DeepEqual(tt.data, tt.expected) {
-				t.Errorf("setDefaults() = %v, want %v", tt.data, tt.expected)
+				t.Errorf("mergeDefaults() = %v, want %v", tt.data, tt.expected)
 			}
 		})
 	}

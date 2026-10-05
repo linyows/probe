@@ -1,7 +1,10 @@
 package embedded
 
 import (
+	"os"
+	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 )
@@ -61,22 +64,135 @@ func TestReqDo_ValidationErrors(t *testing.T) {
 	}
 }
 
-func TestReqDo_WithCallbacks(t *testing.T) {
-	// Test callback functionality without actually executing embedded jobs
-	// to avoid complex plugin system interactions in unit tests
-	t.Skip("Skipping embedded job execution test to avoid plugin system complexity")
+// writeJob writes a job file into a directory of its own and returns its path.
+func writeJob(t *testing.T, content string) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "job.yml")
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return path
 }
 
-func TestReqDo_WithInvalidYAML(t *testing.T) {
-	t.Skip("Skipping YAML parsing test to avoid plugin system complexity")
+func TestLoadJob(t *testing.T) {
+	t.Run("applies defaults", func(t *testing.T) {
+		job, err := loadJob(writeJob(t, `name: j
+defaults:
+  http:
+    timeout: 5s
+steps:
+- uses: http
+  with:
+    url: http://example.com
+- uses: http
+`))
+		if err != nil {
+			t.Fatalf("loadJob() error = %v", err)
+		}
+		for i, st := range job.Steps {
+			if st.With["timeout"] != "5s" {
+				t.Errorf("step %d: With = %v, want the default timeout", i, st.With)
+			}
+		}
+	})
+
+	tests := []struct {
+		name    string
+		path    func(t *testing.T) string
+		wantErr string
+	}{
+		{name: "missing file", path: func(t *testing.T) string { return filepath.Join(t.TempDir(), "none.yml") }, wantErr: "does not exist"},
+		{name: "invalid YAML", path: func(t *testing.T) string { return writeJob(t, "steps: [") }, wantErr: "failed to decode YAML job"},
+		{name: "no steps", path: func(t *testing.T) string { return writeJob(t, "name: j\nsteps: []\n") }, wantErr: "no steps found"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := loadJob(tt.path(t))
+			if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+				t.Fatalf("loadJob() error = %v, want one containing %q", err, tt.wantErr)
+			}
+		})
+	}
 }
 
-func TestReqDo_WithEmptySteps(t *testing.T) {
-	t.Skip("Skipping empty steps test to avoid plugin system complexity")
+// A skipped step runs no action, so these jobs run without starting the
+// plugin processes that real actions need.
+func TestReqDo(t *testing.T) {
+	t.Run("a job that runs", func(t *testing.T) {
+		var before, after bool
+		r := NewReq()
+		r.Path = writeJob(t, `name: j
+steps:
+- name: skipped
+  uses: hello
+  skipif: "true"
+`)
+		r.cb = &Callback{
+			before: func(string, map[string]any) { before = true },
+			after:  func(*Result) { after = true },
+		}
+		res, err := r.Do()
+		if err != nil {
+			t.Fatalf("Do() error = %v", err)
+		}
+		if res.Res.Code != 0 || res.Status != 0 || res.Res.Error != "" {
+			t.Errorf("Res = %+v, want a passing job", res.Res)
+		}
+		if !before || !after {
+			t.Errorf("callbacks called: before %v, after %v", before, after)
+		}
+	})
+
+	t.Run("a job that cannot run", func(t *testing.T) {
+		r := NewReq()
+		r.Path = writeJob(t, `name: j
+steps:
+- id: Not Valid
+  uses: hello
+`)
+		res, err := r.Do()
+		if err == nil || !strings.Contains(err.Error(), "step validation failed") {
+			t.Fatalf("Do() error = %v, want a step validation error", err)
+		}
+		if res.Res.Code != 1 {
+			t.Errorf("Res.Code = %d, want 1", res.Res.Code)
+		}
+	})
+
+	// A local action is looked up next to the job file, not in the working
+	// directory, so this one is reported missing from the job's directory.
+	t.Run("a local action is relative to the job file", func(t *testing.T) {
+		r := NewReq()
+		r.Path = writeJob(t, `name: j
+steps:
+- uses: ./greet
+`)
+		_, err := r.Do()
+		want := filepath.Join(filepath.Dir(r.Path), "greet")
+		if err == nil || !strings.Contains(err.Error(), want) {
+			t.Fatalf("Do() error = %v, want one naming %s", err, want)
+		}
+	})
 }
 
 func TestExecute(t *testing.T) {
-	t.Skip("Skipping Execute test to avoid plugin system complexity")
+	path := writeJob(t, `name: j
+steps:
+- uses: hello
+  skipif: "true"
+`)
+	data := map[string]any{"path": path, "vars": map[string]any{"k": "v"}}
+	got, err := Execute(data)
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	res, _ := got["res"].(map[string]any)
+	if res == nil || res["code"] != 0 {
+		t.Errorf("Execute() res = %v, want code 0", got["res"])
+	}
+	if _, ok := data["path"]; !ok {
+		t.Error("Execute() changed the caller's data")
+	}
 }
 
 func TestWithBefore(t *testing.T) {
@@ -148,59 +264,5 @@ func TestWithAfter(t *testing.T) {
 	}
 	if capturedResult != testResult {
 		t.Error("after callback did not receive correct result")
-	}
-}
-
-func TestApplyDefaults(t *testing.T) {
-	tests := []struct {
-		name     string
-		data     map[string]any
-		defaults map[string]any
-		expected map[string]any
-	}{
-		{
-			name: "simple defaults",
-			data: map[string]any{
-				"existing": "value",
-			},
-			defaults: map[string]any{
-				"new_key":  "default_value",
-				"existing": "should_not_override",
-			},
-			expected: map[string]any{
-				"existing": "value",
-				"new_key":  "default_value",
-			},
-		},
-		{
-			name: "nested defaults",
-			data: map[string]any{
-				"config": map[string]any{
-					"timeout": 30,
-				},
-			},
-			defaults: map[string]any{
-				"config": map[string]any{
-					"retries": 3,
-					"timeout": 60, // should not override
-				},
-			},
-			expected: map[string]any{
-				"config": map[string]any{
-					"timeout": 30,
-					"retries": 3,
-				},
-			},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			applyDefaults(tt.data, tt.defaults)
-
-			if !reflect.DeepEqual(tt.data, tt.expected) {
-				t.Errorf("Expected %v, got %v", tt.expected, tt.data)
-			}
-		})
 	}
 }

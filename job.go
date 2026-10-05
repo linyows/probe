@@ -21,6 +21,25 @@ type Job struct {
 }
 
 func (j *Job) Start(ctx JobContext) error {
+	failed, err := j.run(ctx)
+	if err != nil {
+		return err
+	}
+	if failed {
+		return errStepsFailed(j.Name)
+	}
+	return nil
+}
+
+// errStepsFailed is the error Start returns when a step of the job failed.
+func errStepsFailed(jobName string) error {
+	return NewExecutionError("job_start", "job execution failed", nil).
+		WithContext("job_name", jobName)
+}
+
+// run runs the job. It reports whether a step failed separately from the
+// error that kept the job from running at all, such as an invalid step.
+func (j *Job) run(ctx JobContext) (failed bool, err error) {
 	// Set current job ID in context (already set by Executor.setJobID())
 	ctx.CurrentJobID = j.ID
 
@@ -31,26 +50,63 @@ func (j *Job) Start(ctx JobContext) error {
 	// Validate steps before execution
 	if err := j.validateSteps(); err != nil {
 		ctx.Result.recordFailure(failureConfig)
-		return NewExecutionError("job_start", "step validation failed", err)
+		return false, NewExecutionError("job_start", "step validation failed", err)
 	}
 
 	if err := j.expandJobName(ev, ctxPtr); err != nil {
 		ctx.Result.recordFailure(failureConfig)
-		return NewExecutionError("job_start", "failed to expand job name", err)
+		return false, NewExecutionError("job_start", "failed to expand job name", err)
 	}
 
 	// Check if job should be skipped
 	if j.shouldSkip(ev, *ctxPtr) {
 		j.handleSkip(*ctxPtr)
-		return nil
+		return false, nil
 	}
 
 	j.executeSteps(ev, ctxPtr)
-	if ctxPtr.Failed {
-		return NewExecutionError("job_start", "job execution failed", nil).
-			WithContext("job_name", j.Name)
+	return ctxPtr.Failed, nil
+}
+
+// ApplyDefaults merges the job's defaults into the with of every step that
+// uses the action they are keyed by. A value the step sets itself wins, and
+// nested objects are merged key by key.
+func (j *Job) ApplyDefaults() {
+	byAction, ok := j.Defaults.(map[string]any)
+	if !ok {
+		return
 	}
-	return nil
+	for uses, values := range byAction {
+		defaults, ok := values.(map[string]any)
+		if !ok {
+			continue
+		}
+		for _, s := range j.Steps {
+			if s.Uses != uses {
+				continue
+			}
+			if s.With == nil {
+				s.With = make(map[string]any)
+			}
+			mergeDefaults(s.With, defaults)
+		}
+	}
+}
+
+// mergeDefaults sets each key of defaults that data lacks, recursing into
+// objects that both have.
+func mergeDefaults(data, defaults map[string]any) {
+	for key, defaultValue := range defaults {
+		if _, exists := data[key]; !exists {
+			data[key] = defaultValue
+			continue
+		}
+		if nestedDefault, ok := defaultValue.(map[string]any); ok {
+			if nestedData, ok := data[key].(map[string]any); ok {
+				mergeDefaults(nestedData, nestedDefault)
+			}
+		}
+	}
 }
 
 // expandJobName evaluates and sets the job name, printing it if appropriate
@@ -230,9 +286,46 @@ func (j *Job) handleSkip(ctx JobContext) {
 	}
 }
 
+// JobRun is the outcome of a job run on its own with RunStandalone.
+type JobRun struct {
+	// Success is true when every step passed or the job was skipped.
+	Success bool
+	// Outputs are the outputs the job's steps published.
+	Outputs map[string]any
+	// Report is the report of the job's steps.
+	Report string
+	// Err is set when the job could not run as it was written, such as when
+	// a step is invalid or an action cannot be resolved. A step that fails
+	// leaves it nil and Success false.
+	Err error
+	// Duration is how long the job took.
+	Duration time.Duration
+}
+
+// RunStandalone runs the job outside a workflow, as an embedded job is run.
+// A local action is resolved relative to baseDir, the directory of the file
+// the job comes from, or to the working directory when baseDir is empty.
+func (j *Job) RunStandalone(vars map[string]any, printer *Printer, jobID, baseDir string) JobRun {
+	run, _ := j.runStandalone(vars, printer, jobID, baseDir)
+	return run
+}
+
 // RunIndependently executes a job independently with its own context and result tracking
 // Returns success/failure status, outputs, report, error message, and duration
 func (j *Job) RunIndependently(vars map[string]any, printer *Printer, jobID string) (bool, map[string]any, string, string, time.Duration) {
+	run, failed := j.runStandalone(vars, printer, jobID, "")
+	errorMsg := ""
+	switch {
+	case run.Err != nil:
+		errorMsg = run.Err.Error()
+	case failed:
+		errorMsg = errStepsFailed(j.Name).Error()
+	}
+	return run.Success, run.Outputs, run.Report, errorMsg, run.Duration
+}
+
+// runStandalone is RunStandalone, also reporting whether a step failed.
+func (j *Job) runStandalone(vars map[string]any, printer *Printer, jobID, baseDir string) (JobRun, bool) {
 	start := time.Now()
 	j.ID = jobID
 	// The job runs outside Workflow.Start, which is what installs a masker.
@@ -259,6 +352,7 @@ func (j *Job) RunIndependently(vars map[string]any, printer *Printer, jobID stri
 		Printer:    printer,
 		countersMu: &sync.Mutex{},
 		background: procgroup.NewTracker(),
+		baseDir:    baseDir,
 	}
 	// This job runs inside the plugin process of the step that embeds it,
 	// which exits once the job is done, so its background processes go then.
@@ -267,29 +361,25 @@ func (j *Job) RunIndependently(vars map[string]any, printer *Printer, jobID stri
 	defer endWatch()
 	defer ctx.background.Stop()
 
-	success := true
-	errorMsg := ""
-
-	if err := j.Start(ctx); err != nil {
-		success = false
-		errorMsg = err.Error()
-		jr.Status = "Failed"
-		jr.Success = false
-	} else if ctx.Failed {
-		success = false
-		errorMsg = "job execution failed"
-		jr.Status = "Failed"
-		jr.Success = false
-	} else {
-		jr.Status = "Completed"
-		jr.Success = true
+	// External actions are resolved before any step runs, as a workflow
+	// does, so that a bad reference stops the job before it changes anything.
+	failed, err := false, resolveExternalActions([]*Job{j}, baseDir)
+	if err == nil {
+		failed, err = j.run(ctx)
 	}
 
-	duration := time.Since(start)
-	jr.EndTime = jr.StartTime.Add(duration)
+	run := JobRun{Err: err, Success: err == nil && !failed}
+	if run.Success {
+		jr.Status = "Completed"
+	} else {
+		jr.Status = "Failed"
+	}
+	jr.Success = run.Success
 
-	outputs := ctx.Outputs.GetAll()
-	report := ctx.Printer.GenerateReportOnlySteps(result)
+	run.Duration = time.Since(start)
+	jr.EndTime = jr.StartTime.Add(run.Duration)
+	run.Outputs = ctx.Outputs.GetAll()
+	run.Report = ctx.Printer.GenerateReportOnlySteps(result)
 
-	return success, outputs, report, errorMsg, duration
+	return run, failed
 }
