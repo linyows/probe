@@ -4,6 +4,16 @@ Release notes for each version are generated from the commits by GoReleaser.
 This file records what those notes cannot carry well: changes that break code
 importing probe as a library.
 
+## Unreleased
+
+### Behaviour Changes
+
+`mapping.AssignStruct` now enforces `validate:"required"` on an `int` field:
+a missing key is reported as `params '<name>' is required`, as it already was
+for a string, and as `mapping.MapToStructByTags` does. It used to accept a
+missing required int and leave the field at zero. A value of `0` that is
+given still passes. Code that relied on omitting such a field has to give it.
+
 ## v1.16.0 (2026-10-04)
 
 ### Breaking Changes

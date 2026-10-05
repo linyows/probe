@@ -227,6 +227,7 @@ func TestStructToMapByTags(t *testing.T) {
 
 type assignTarget struct {
 	Name    string `map:"name" validate:"required"`
+	Port    int    `map:"port" validate:"required"`
 	Label   string `map:"label"`
 	Timeout int    `map:"timeout"`
 	Enabled bool   `map:"enabled"`
@@ -237,6 +238,7 @@ func TestAssignStruct(t *testing.T) {
 	var got assignTarget
 	err := AssignStruct(map[string]any{
 		"name":    "bulk",
+		"port":    "25",
 		"label":   42,
 		"timeout": "30",
 		"Skipped": "ignored",
@@ -244,14 +246,14 @@ func TestAssignStruct(t *testing.T) {
 	if err != nil {
 		t.Fatalf("AssignStruct() error = %v", err)
 	}
-	want := assignTarget{Name: "bulk", Label: "42", Timeout: 30}
+	want := assignTarget{Name: "bulk", Port: 25, Label: "42", Timeout: 30}
 	if got != want {
 		t.Errorf("AssignStruct() = %+v, want %+v", got, want)
 	}
 
 	// An int that arrives as a number, as one written without quotes does.
 	var n assignTarget
-	if err := AssignStruct(map[string]any{"name": "n", "timeout": 5}, &n); err != nil || n.Timeout != 5 {
+	if err := AssignStruct(map[string]any{"name": "n", "port": 0, "timeout": 5}, &n); err != nil || n.Timeout != 5 {
 		t.Errorf("AssignStruct() with a numeric int = %+v, %v", n, err)
 	}
 }
@@ -262,13 +264,15 @@ func TestAssignStructErrors(t *testing.T) {
 		params map[string]any
 		want   []string
 	}{
-		{name: "a required field missing", params: map[string]any{"label": "x"}, want: []string{"params 'name' is required"}},
-		{name: "an int that is not a number", params: map[string]any{"name": "n", "timeout": "soon"}, want: []string{"params 'timeout' can't convert to int"}},
-		{name: "a field of a type it does not assign", params: map[string]any{"name": "n", "enabled": true}, want: []string{"params 'enabled'"}},
+		{name: "a required field missing", params: map[string]any{"port": 25, "label": "x"}, want: []string{"params 'name' is required"}},
+		{name: "a required string empty", params: map[string]any{"name": "", "port": 25}, want: []string{"params 'name' is required"}},
+		{name: "a required int missing", params: map[string]any{"name": "n"}, want: []string{"params 'port' is required"}},
+		{name: "an int that is not a number", params: map[string]any{"name": "n", "port": 25, "timeout": "soon"}, want: []string{"params 'timeout' can't convert to int"}},
+		{name: "a field of a type it does not assign", params: map[string]any{"name": "n", "port": 25, "enabled": true}, want: []string{"params 'enabled'"}},
 		{
 			name:   "every problem at once",
 			params: map[string]any{"timeout": "soon"},
-			want:   []string{"params 'name' is required", "params 'timeout' can't convert to int"},
+			want:   []string{"params 'name' is required", "params 'port' is required", "params 'timeout' can't convert to int"},
 		},
 	}
 	for _, tt := range tests {
