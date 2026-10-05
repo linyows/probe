@@ -2,6 +2,8 @@ package probe
 
 import (
 	"bytes"
+	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -681,6 +683,261 @@ func Test_evalVars(t *testing.T) {
 			}
 			if !reflect.DeepEqual(tt.expected, actual) {
 				t.Errorf("expected %#v, got %#v", tt.expected, actual)
+			}
+		})
+	}
+}
+
+func Test_evalVarsReadsOtherVars(t *testing.T) {
+	tests := []struct {
+		name     string
+		vars     map[string]any
+		env      map[string]string
+		expected map[string]any
+	}{
+		{
+			name: "a var defined after the one that reads it",
+			vars: map[string]any{
+				"base": "http://localhost:{{vars.port}}",
+				"port": "{{PORT ?? '18080'}}",
+			},
+			env: map[string]string{"PORT": "9000"},
+			expected: map[string]any{
+				"base": "http://localhost:9000",
+				"port": "9000",
+			},
+		},
+		{
+			name: "a chain of vars",
+			vars: map[string]any{
+				"a": "{{vars.b}}-a",
+				"b": "{{vars.c}}-b",
+				"c": "c",
+			},
+			expected: map[string]any{
+				"a": "c-b-a",
+				"b": "c-b",
+				"c": "c",
+			},
+		},
+		{
+			name: "a map var reading a string var",
+			vars: map[string]any{
+				"domain": "example.test",
+				"alice": map[string]any{
+					"user": "alice@{{vars.domain}}",
+					"tags": []any{"{{vars.domain}}"},
+				},
+			},
+			expected: map[string]any{
+				"domain": "example.test",
+				"alice": map[string]any{
+					"user": "alice@example.test",
+					"tags": []any{"example.test"},
+				},
+			},
+		},
+		{
+			name: "a string var reading a field of a map var",
+			vars: map[string]any{
+				"auth": map[string]any{"user": "admin", "password": "{{PASSWORD}}"},
+				"pair": "{{vars.auth.user + ':' + vars.auth.password}}",
+			},
+			env: map[string]string{"PASSWORD": "secret"},
+			expected: map[string]any{
+				"auth": map[string]any{"user": "admin", "password": "secret"},
+				"pair": "admin:secret",
+			},
+		},
+		{
+			name: "a var that is not defined falls back",
+			vars: map[string]any{
+				"port": "{{vars.missing ?? '8080'}}",
+			},
+			expected: map[string]any{
+				"port": "8080",
+			},
+		},
+		{
+			name: "a var read by a key known only at run time",
+			vars: map[string]any{
+				"picked": "{{vars[WHICH]}}",
+				"x":      "{{vars.y}}!",
+				"y":      "why",
+			},
+			env: map[string]string{"WHICH": "x"},
+			expected: map[string]any{
+				"picked": "why!",
+				"x":      "why!",
+				"y":      "why",
+			},
+		},
+		{
+			name: "an array at the top level",
+			vars: map[string]any{
+				"port":  "8080",
+				"list":  []any{"{{vars.port}}", map[string]any{"p": "{{vars.port}}"}},
+				"label": "{{vars.list[0]}}",
+			},
+			expected: map[string]any{
+				"port":  "8080",
+				"list":  []any{"8080", map[string]any{"p": "8080"}},
+				"label": "8080",
+			},
+		},
+		{
+			name: "a value that is not a string",
+			vars: map[string]any{
+				"retries": 3,
+				"label":   "{{vars.retries * 2}}",
+			},
+			expected: map[string]any{
+				"retries": 3,
+				"label":   "6",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			env := tt.env
+			if env == nil {
+				// A non-empty env keeps Env from reading the process's own.
+				env = map[string]string{"UNUSED": ""}
+			}
+			wf := &Workflow{Name: "Test", Vars: tt.vars, env: env}
+			actual, err := wf.evalVars()
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if !reflect.DeepEqual(tt.expected, actual) {
+				t.Errorf("expected %#v, got %#v", tt.expected, actual)
+			}
+		})
+	}
+}
+
+func Test_evalVarsReadsOneRandomValue(t *testing.T) {
+	wf := &Workflow{
+		Name: "Test",
+		Vars: map[string]any{
+			"password": "{{random_str(24)}}",
+			"auth":     "alice:{{vars.password}}",
+			"header":   "Basic {{encode_base64(vars.auth)}}",
+		},
+		env: map[string]string{"UNUSED": ""},
+	}
+	for i := 0; i < 20; i++ {
+		actual, err := wf.evalVars()
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		password := actual["password"].(string)
+		if actual["auth"] != "alice:"+password {
+			t.Fatalf("auth = %q, want it built from password %q", actual["auth"], password)
+		}
+		want := "Basic " + base64.StdEncoding.EncodeToString([]byte("alice:"+password))
+		if actual["header"] != want {
+			t.Fatalf("header = %q, want %q", actual["header"], want)
+		}
+	}
+}
+
+func Test_evalVarsReadsVarsAsAWhole(t *testing.T) {
+	wf := &Workflow{
+		Name: "Test",
+		Vars: map[string]any{
+			"name":     "probe",
+			"snapshot": map[string]any{"all": "{{vars}}"},
+		},
+		env: map[string]string{"UNUSED": ""},
+	}
+	actual, err := wf.evalVars()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	expected := map[string]any{
+		"name":     "probe",
+		"snapshot": map[string]any{"all": map[string]any{"name": "probe"}},
+	}
+	if !reflect.DeepEqual(expected, actual) {
+		t.Errorf("expected %#v, got %#v", expected, actual)
+	}
+	// A var holding the map being filled in would make it cyclic, which JSON
+	// cannot encode.
+	if _, err := json.Marshal(actual); err != nil {
+		t.Errorf("vars cannot be encoded as JSON: %v", err)
+	}
+}
+
+func Test_evalVarsCycleIsReproducible(t *testing.T) {
+	// a reads b and c through the values of a map, and both read a back, so
+	// the cycle reported depends on which of them is visited first.
+	vars := map[string]any{
+		"a": map[string]any{"x": "{{vars.c}}", "y": "{{vars.b}}", "z": "{{vars.c}}"},
+		"b": "{{vars.a.y}}",
+		"c": "{{vars.a.x}}",
+	}
+	for i := 0; i < 50; i++ {
+		wf := &Workflow{Name: "Test", Vars: vars, env: map[string]string{"UNUSED": ""}}
+		_, err := wf.evalVars()
+		if err == nil || err.Error() != "vars: circular reference: a -> c -> a" {
+			t.Fatalf("run %d: error = %v, want the cycle through c", i, err)
+		}
+	}
+}
+
+func Test_evalVarsCircularReference(t *testing.T) {
+	tests := []struct {
+		name string
+		vars map[string]any
+		want string
+	}{
+		{
+			name: "itself",
+			vars: map[string]any{"a": "{{vars.a}}"},
+			want: "vars: circular reference: a -> a",
+		},
+		{
+			name: "two vars",
+			vars: map[string]any{"a": "{{vars.b}}", "b": "{{vars.a}}"},
+			want: "vars: circular reference: a -> b -> a",
+		},
+		{
+			name: "through a map var",
+			vars: map[string]any{
+				"a": map[string]any{"x": "{{vars.c}}"},
+				"b": "{{vars.a.x}}",
+				"c": "{{vars.b}}",
+			},
+			want: "vars: circular reference: a -> c -> b -> a",
+		},
+		{
+			name: "itself by name, along with a read of vars as a whole",
+			vars: map[string]any{
+				"a": "{{vars.a ?? 'fallback'}} {{toJSON(vars)}}",
+				"b": "b",
+			},
+			want: "vars: circular reference: a -> a",
+		},
+		{
+			name: "through an array var",
+			vars: map[string]any{"a": []any{"{{vars.b}}"}, "b": "{{vars.a[0]}}"},
+			want: "vars: circular reference: a -> b -> a",
+		},
+		{
+			name: "two vars read by keys known only at run time",
+			vars: map[string]any{"a": "{{vars[K]}}", "b": "{{toJSON(vars)}}"},
+			want: "vars: circular reference: a -> b -> a",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			wf := &Workflow{Name: "Test", Vars: tt.vars, env: map[string]string{"UNUSED": ""}}
+			_, err := wf.evalVars()
+			if err == nil || err.Error() != tt.want {
+				t.Errorf("error = %v, want %q", err, tt.want)
 			}
 		})
 	}
