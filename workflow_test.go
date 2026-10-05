@@ -955,6 +955,34 @@ func Test_evalVarsTemplateReadsALaterTemplateVar(t *testing.T) {
 	}
 }
 
+// Test_evalVarsTemplateReadsVarsByAKeyKnownWhenItRuns checks that a template
+// reading vars by a key known only when it runs waits for every other var.
+func Test_evalVarsTemplateReadsVarsByAKeyKnownWhenItRuns(t *testing.T) {
+	dir := t.TempDir()
+	write := func(name, content string) string {
+		path := filepath.Join(dir, name)
+		if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		return path
+	}
+	wf := &Workflow{
+		Name: "Test",
+		Vars: map[string]any{
+			"a": "{{ template(file('" + write("a.tmpl", "a sees {{ vars[WHICH] }}") + "')) }}",
+			"z": "{{ template(file('" + write("z.tmpl", "z") + "')) }}",
+		},
+		env: map[string]string{"WHICH": "z"},
+	}
+	actual, err := wf.evalVars()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if actual["a"] != "a sees z" {
+		t.Errorf("a = %q, want it to see z", actual["a"])
+	}
+}
+
 func Test_evalVarsCycleIsReproducible(t *testing.T) {
 	// a reads b and c through the values of a map, and both read a back, so
 	// the cycle reported depends on which of them is visited first.

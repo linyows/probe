@@ -52,6 +52,9 @@ type Expr struct {
 
 	// depth is how many template() calls this evaluation is inside.
 	depth int
+	// maxOutput, when it is not zero, is the length EvalTemplate stops at,
+	// as soon as the text it builds would pass it.
+	maxOutput int
 	// expanded counts the text the template() calls nested in the outermost
 	// one have expanded, which they share.
 	expanded *atomic.Int64
@@ -73,6 +76,10 @@ type Expr struct {
 // the evaluation timeout in executeWithTimeout, and the argument limits on the
 // functions registered below.
 func (e *Expr) Options(env any) []ex.Option {
+	// A nil Expr evaluates as the zero one does.
+	if e == nil {
+		e = &Expr{}
+	}
 	return []ex.Option{
 		ex.Env(env),
 		// Workflow expressions routinely reference names that only exist at
@@ -305,13 +312,10 @@ func (e *Expr) Options(env any) []ex.Option {
 				}
 				// The templates in s are evaluated against the same
 				// environment as the expression that calls template.
-				nested := &Expr{BeforeTemplate: e.BeforeTemplate, depth: e.depth + 1, expanded: expanded}
+				nested := &Expr{BeforeTemplate: e.BeforeTemplate, depth: e.depth + 1, expanded: expanded, maxOutput: maxStringLength}
 				out, err := nested.EvalTemplate(s, env)
 				if err != nil {
 					return nil, err
-				}
-				if len(out) > maxStringLength {
-					return nil, fmt.Errorf("template result exceeds maximum length (%d chars)", maxStringLength)
 				}
 				if expanded.Add(int64(len(out))) > maxTemplateOutput {
 					return nil, fmt.Errorf("template calls expand more than %d chars in all", maxTemplateOutput)
@@ -329,21 +333,32 @@ func (e *Expr) Options(env any) []ex.Option {
 // on after the evaluation has timed out. A larger file is an error rather
 // than cut short.
 func readFile(path string) (string, error) {
+	// The path is looked at before it is opened: opening a FIFO to read
+	// waits for a writer.
+	info, err := os.Stat(path)
+	if err != nil {
+		return "", fmt.Errorf("file: %w", err)
+	}
+	if err := checkRegular(path, info); err != nil {
+		return "", err
+	}
+
 	f, err := os.Open(path)
 	if err != nil {
 		return "", fmt.Errorf("file: %w", err)
 	}
 	defer func() { _ = f.Close() }()
 
-	info, err := f.Stat()
+	// It is looked at again once it is open, in case it was replaced.
+	opened, err := f.Stat()
 	if err != nil {
 		return "", fmt.Errorf("file: %w", err)
 	}
-	if info.IsDir() {
-		return "", fmt.Errorf("file: %s is a directory", path)
+	if err := checkRegular(path, opened); err != nil {
+		return "", err
 	}
-	if !info.Mode().IsRegular() {
-		return "", fmt.Errorf("file: %s is not a regular file", path)
+	if !os.SameFile(info, opened) {
+		return "", fmt.Errorf("file: %s changed while it was opened", path)
 	}
 
 	data, err := io.ReadAll(io.LimitReader(f, int64(maxStringLength)+1))
@@ -354,6 +369,17 @@ func readFile(path string) (string, error) {
 		return "", fmt.Errorf("file: %s exceeds maximum length (%d bytes)", path, maxStringLength)
 	}
 	return string(data), nil
+}
+
+// checkRegular returns an error unless info is of a regular file.
+func checkRegular(path string, info os.FileInfo) error {
+	if info.IsDir() {
+		return fmt.Errorf("file: %s is a directory", path)
+	}
+	if !info.Mode().IsRegular() {
+		return fmt.Errorf("file: %s is not a regular file", path)
+	}
+	return nil
 }
 
 // validateExpression bounds an expression before it is compiled.
@@ -467,9 +493,24 @@ func (e *Expr) EvalTemplate(input string, env any) (string, error) {
 	}
 
 	var b strings.Builder
+	// A nil Expr evaluates as the zero one does, with no limit.
+	limit := 0
+	if e != nil {
+		limit = e.maxOutput
+	}
+	// write adds s to the text, unless it would pass the limit there is.
+	write := func(s string) error {
+		if limit > 0 && b.Len()+len(s) > limit {
+			return fmt.Errorf("template result exceeds maximum length (%d chars)", limit)
+		}
+		b.WriteString(s)
+		return nil
+	}
 	last := 0
 	for _, span := range findTemplates(input) {
-		b.WriteString(input[last:span.start])
+		if err := write(input[last:span.start]); err != nil {
+			return "", err
+		}
 		last = span.end
 
 		expression := strings.TrimSpace(span.expr)
@@ -496,9 +537,13 @@ func (e *Expr) EvalTemplate(input string, env any) (string, error) {
 		if len(outputStr) > maxStringLength {
 			outputStr = outputStr[:maxStringLength] + truncate.Message()
 		}
-		b.WriteString(outputStr)
+		if err := write(outputStr); err != nil {
+			return "", err
+		}
 	}
-	b.WriteString(input[last:])
+	if err := write(input[last:]); err != nil {
+		return "", err
+	}
 
 	return b.String(), nil
 }

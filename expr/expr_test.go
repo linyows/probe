@@ -3,6 +3,7 @@ package expr
 import (
 	"errors"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"reflect"
 	"regexp"
@@ -1484,7 +1485,7 @@ func TestFileFunction(t *testing.T) {
 		{"file()", "file requires exactly 1 parameter"},
 		{"file(1)", "file parameter must be a path"},
 		{"file('')", "file parameter must be a path"},
-		{"file('" + missing + "')", "file: open " + missing + ": no such file or directory"},
+		{"file('" + missing + "')", "file: stat " + missing + ": no such file or directory"},
 		{"file('" + dir + "')", "file: " + dir + " is a directory"},
 		{"file('" + big + "')", "file: " + big + " exceeds maximum length (1000000 bytes)"},
 		// A device reports no size and would be read without end.
@@ -1617,5 +1618,54 @@ func TestBeforeTemplate(t *testing.T) {
 
 	if _, err := e.EvalTemplate("{{ template('deny') }}", env); !errors.Is(err, stop) {
 		t.Errorf("error = %v, want the error BeforeTemplate returned", err)
+	}
+}
+
+// TestTemplateFunctionStopsExpandingAtTheLimit checks that a template is
+// expanded no further than the limit of its result, rather than in full
+// before the limit is checked.
+func TestTemplateFunctionStopsExpandingAtTheLimit(t *testing.T) {
+	calls := 0
+	env := map[string]any{"chunk": func() string {
+		calls++
+		return strings.Repeat("x", 300000)
+	}}
+	e := &Expr{}
+	_, err := e.Eval("template('"+strings.Repeat("{{ chunk() }}", 40)+"')", env)
+	if err == nil || !strings.Contains(err.Error(), "template result exceeds maximum length (1000000 chars)") {
+		t.Errorf("error = %v, want one about the result", err)
+	}
+	if calls > 4 {
+		t.Errorf("chunk was called %d times, want the expansion stopped once it was over the limit", calls)
+	}
+}
+
+func TestFileFunctionDoesNotBlockOnAFIFO(t *testing.T) {
+	mkfifo, err := exec.LookPath("mkfifo")
+	if err != nil {
+		t.Skip("mkfifo is not available")
+	}
+	fifo := filepath.Join(t.TempDir(), "fifo")
+	if out, err := exec.Command(mkfifo, fifo).CombinedOutput(); err != nil {
+		t.Fatalf("mkfifo: %v: %s", err, out)
+	}
+
+	start := time.Now()
+	_, err = (&Expr{}).Eval("file(path)", map[string]any{"path": fifo})
+	if err == nil || !strings.Contains(err.Error(), "is not a regular file") {
+		t.Errorf("error = %v, want one about the file", err)
+	}
+	if time.Since(start) > time.Second {
+		t.Errorf("a FIFO should be refused at once, took %v", time.Since(start))
+	}
+}
+
+// TestNilExprEvaluates checks that a nil Expr evaluates as the zero one
+// does, as it did before Expr had fields.
+func TestNilExprEvaluates(t *testing.T) {
+	var e *Expr
+	got, err := e.EvalTemplate("{{ template('{{ 1 + 1 }}') }} {{ len('ab') }}", map[string]any{})
+	if err != nil || got != "2 2" {
+		t.Errorf("EvalTemplate() = %q, %v", got, err)
 	}
 }

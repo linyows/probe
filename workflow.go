@@ -305,10 +305,19 @@ func (w *Workflow) evalVars() (map[string]any, error) {
 		}
 
 		ev := &expr.Expr{BeforeTemplate: func(text string) error {
-			keys, _ := expr.Refs(text, "vars")
+			keys, dynamic := expr.Refs(text, "vars")
 			for _, d := range keys {
 				if _, ok := w.Vars[d]; ok && !done[d] {
 					return &pendingVarError{name: d}
+				}
+			}
+			// A template that reads vars by a key known only when it runs
+			// waits for every other var, as varsOrder orders such a var.
+			if dynamic {
+				for _, d := range order {
+					if d != k && !done[d] {
+						return &pendingVarError{name: d}
+					}
 				}
 			}
 			return nil
