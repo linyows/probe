@@ -47,44 +47,6 @@ func (b *graphBuilder) expandPath(path string) string {
 	return expanded
 }
 
-// resolvePath resolves a (potentially relative) path using a fixed priority order:
-//  1. If the path is absolute, it is returned as-is.
-//  2. If workflow.basePath is set, first try the path relative to the workflow
-//     directory (workflow.basePath/path).
-//  3. If not found, try the path relative to the parent of the workflow directory
-//     (for project-root relative paths; parentDir/path).
-//  4. If still not found, fall back to resolving the path from the current working
-//     directory using filepath.Abs, which matches the runtime's default behavior.
-func (b *graphBuilder) resolvePath(path string) string {
-	if filepath.IsAbs(path) {
-		return path
-	}
-
-	// Try workflow directory first
-	if b.workflow.basePath != "" {
-		workflowRelPath := filepath.Join(b.workflow.basePath, path)
-		if _, err := os.Stat(workflowRelPath); err == nil {
-			return workflowRelPath
-		}
-
-		// Try parent of workflow directory (for project-root relative paths)
-		parentDir := filepath.Dir(b.workflow.basePath)
-		if parentDir != b.workflow.basePath {
-			parentRelPath := filepath.Join(parentDir, path)
-			if _, err := os.Stat(parentRelPath); err == nil {
-				return parentRelPath
-			}
-		}
-	}
-
-	// Fall back to current directory (matches runtime behavior)
-	absPath, err := filepath.Abs(path)
-	if err != nil {
-		return path
-	}
-	return absPath
-}
-
 // LoadEmbeddedJob loads a job definition from an embedded YAML file
 func LoadEmbeddedJob(path string) (*Job, error) {
 	absPath, err := filepath.Abs(path)
@@ -108,7 +70,8 @@ func LoadEmbeddedJob(path string) (*Job, error) {
 
 // Graph returns the jobs and steps of the workflow in the form the DAG
 // renderers draw. The steps of an embedded job are read from its file, at the
-// path its `with.path` names after the workflow's vars are expanded.
+// path its `with.path` names after the workflow's vars are expanded, relative
+// to the working directory.
 func (w *Workflow) Graph() dag.Graph {
 	b := &graphBuilder{workflow: w}
 	g := dag.Graph{Jobs: make([]dag.Job, 0, len(w.Jobs))}
@@ -139,8 +102,10 @@ func (b *graphBuilder) step(st *Step) dag.Step {
 	if !ok {
 		return s
 	}
+	// The path is taken from the working directory, as the embedded action
+	// takes it when the workflow runs, so the graph shows the file that runs.
 	expanded := b.expandPath(path)
-	job, err := LoadEmbeddedJob(b.resolvePath(expanded))
+	job, err := LoadEmbeddedJob(expanded)
 	if err != nil || len(job.Steps) == 0 {
 		return s
 	}

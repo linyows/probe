@@ -42,8 +42,8 @@ func TestWorkflow_Graph_Embedded(t *testing.T) {
 		want dag.Step
 	}{
 		{
-			name: "path relative to the workflow",
-			path: "./embedded-success-job.yml",
+			name: "path relative to the working directory",
+			path: "./testdata/embedded-success-job.yml",
 			want: dag.Step{
 				Name:          "Run job",
 				Embedded:      true,
@@ -54,7 +54,7 @@ func TestWorkflow_Graph_Embedded(t *testing.T) {
 		{
 			name: "path from the workflow's vars",
 			vars: map[string]any{"job": "embedded-success-job.yml"},
-			path: "./{{vars.job}}",
+			path: "./testdata/{{vars.job}}",
 			want: dag.Step{
 				Name:          "Run job",
 				Embedded:      true,
@@ -65,6 +65,13 @@ func TestWorkflow_Graph_Embedded(t *testing.T) {
 		{
 			name: "file that does not exist",
 			path: "./missing.yml",
+			want: dag.Step{Name: "Run job", Embedded: true},
+		},
+		// The embedded action does not look next to the workflow file, so the
+		// graph does not either: it would show steps that never run.
+		{
+			name: "file next to the workflow only",
+			path: "./embedded-success-job.yml",
 			want: dag.Step{Name: "Run job", Embedded: true},
 		},
 	}
