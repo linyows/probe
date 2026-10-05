@@ -121,6 +121,8 @@ A name that is not set, or set to an empty string, has nothing to hide and is sk
 
 Independently of `secrets`, the values of the `Authorization`, `Proxy-Authorization`, `Cookie` and `Set-Cookie` headers are always shown as `<redacted>`. A token obtained while the workflow runs, such as one returned by a login step and sent in a later request, is never listed in `secrets`, but it travels in one of these headers. Probe learns these values as an action is about to send or has received them, and hides them from then on, including in the action's own log records.
 
+The same goes for credentials passed to an action: the value of any `password` or `key_passphrase` field, at any depth of `with`, is shown as `<redacted>`, and so is the password in a database URL such as the `dsn` of the `db` action, while the rest of the URL stays visible. A password written straight into a step therefore does not appear in `--verbose` output or an action's log records, even though it is not listed in `secrets`.
+
 ## Jobs
 
 `jobs` is a map from job name to job definition. A job groups the steps that run in sequence, and declares what it depends on.

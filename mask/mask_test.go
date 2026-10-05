@@ -230,3 +230,81 @@ func TestMasker_Writer(t *testing.T) {
 		t.Errorf("learned value not hidden: %q", buf.String())
 	}
 }
+
+// A password passed to an action is hidden even when the workflow does not
+// declare it as a secret, wherever the action or Probe shows it.
+func TestMasker_LearnCredentialParams(t *testing.T) {
+	m := New(nil, nil)
+	m.Learn(map[string]any{
+		"host":           "imap.example.com",
+		"Password":       "imap-pass",
+		"key_passphrase": "key-pass",
+		"user":           "alice",
+	})
+
+	got := m.String(`dial alice:imap-pass with "key-pass" at imap.example.com`)
+	want := `dial alice:<redacted> with "<redacted>" at imap.example.com`
+	if got != want {
+		t.Errorf("String() = %q, want %q", got, want)
+	}
+
+	r := New(nil, nil).Map(map[string]any{"password": "p", "user": "alice"})
+	if r["password"] != redactedValue || r["user"] != "alice" {
+		t.Errorf("Map() = %v, want the password redacted and the user kept", r)
+	}
+}
+
+func TestMasker_LearnDSNPassword(t *testing.T) {
+	tests := []struct {
+		name string
+		dsn  string
+		in   string
+		want string
+	}{
+		{
+			name: "postgres",
+			dsn:  "postgres://app:pg-secret@db:5432/main?sslmode=disable",
+			in:   "connect postgres://app:pg-secret@db:5432/main?sslmode=disable",
+			want: "connect postgres://app:<redacted>@db:5432/main?sslmode=disable",
+		},
+		{
+			name: "mysql with a tcp address",
+			dsn:  "mysql://app:my-secret@tcp(db:3306)/main",
+			in:   "app:my-secret@tcp(db:3306)/main",
+			want: "app:<redacted>@tcp(db:3306)/main",
+		},
+		{
+			name: "an @ in the password",
+			dsn:  "mysql://app:p@ss@db/main",
+			in:   "app:p@ss@db",
+			want: "app:<redacted>@db",
+		},
+		{
+			name: "percent-encoded",
+			dsn:  "postgres://app:a%2Fb%40c@db/main",
+			in:   "raw a%2Fb%40c decoded a/b@c",
+			want: "raw <redacted> decoded <redacted>",
+		},
+		{
+			name: "no password",
+			dsn:  "postgres://app@db/main",
+			in:   "postgres://app@db/main",
+			want: "postgres://app@db/main",
+		},
+		{
+			name: "sqlite",
+			dsn:  "file:./data.db",
+			in:   "file:./data.db",
+			want: "file:./data.db",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			m := New(nil, nil)
+			m.Learn(map[string]any{"dsn": tt.dsn, "query": "select 1"})
+			if got := m.String(tt.in); got != tt.want {
+				t.Errorf("String(%q) = %q, want %q", tt.in, got, tt.want)
+			}
+		})
+	}
+}

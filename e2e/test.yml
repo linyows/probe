@@ -351,7 +351,7 @@ jobs:
   steps:
   # The value carries a quote and a backslash, which Go, JSON and the log
   # escape differently, so each escaped form has to be hidden as well.
-  - name: secrets.yml hides the secret and the credential header (expected to fail with an action error)
+  - name: secrets.yml hides the secret, the credential header and the passwords (expected to fail with an action error)
     uses: shell
     with:
       cmd: |
@@ -364,8 +364,10 @@ jobs:
       res.stdout contains "token=<secret:E2E_TOKEN>" &&
       res.stderr contains "<redacted>" &&
       !(res.stdout contains "e2e-s3cr") && !(res.stderr contains "e2e-s3cr") &&
-      !(res.stdout contains "e2e-runtime-credential") && !(res.stderr contains "e2e-runtime-credential")
-  - name: The report files hold neither
+      !(res.stdout contains "e2e-runtime-credential") && !(res.stderr contains "e2e-runtime-credential") &&
+      !(res.stdout contains "e2e-imap-password") && !(res.stderr contains "e2e-imap-password") &&
+      !(res.stdout contains "e2e-dsn-password") && !(res.stderr contains "e2e-dsn-password")
+  - name: The report files hold none of them
     uses: shell
     with:
       cmd: cat {{vars.mask_dir}}/report.json {{vars.mask_dir}}/junit.xml {{vars.mask_dir}}/report.md
@@ -373,7 +375,9 @@ jobs:
       res.code == 0 &&
       res.stdout contains "<secret:E2E_TOKEN>" &&
       !(res.stdout contains "e2e-s3cr") &&
-      !(res.stdout contains "e2e-runtime-credential")
+      !(res.stdout contains "e2e-runtime-credential") &&
+      !(res.stdout contains "e2e-imap-password") &&
+      !(res.stdout contains "e2e-dsn-password")
   - name: Remove the output directory
     uses: shell
     with:

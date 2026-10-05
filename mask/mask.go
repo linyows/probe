@@ -4,6 +4,7 @@ package mask
 import (
 	"encoding/json"
 	"io"
+	"net/url"
 	"sort"
 	"strconv"
 	"strings"
@@ -13,16 +14,24 @@ import (
 // redactedValue replaces the value of a header that carries credentials.
 const redactedValue = "<redacted>"
 
-// sensitiveKeys are header names whose values are credentials whatever they
-// contain. A token obtained at run time, such as one returned by a login step,
-// is never declared as a secret, but it reaches the target through one of
-// these headers, so their values are hidden wherever they are shown.
+// sensitiveKeys are header and parameter names whose values are credentials
+// whatever they contain. A token obtained at run time, such as one returned by
+// a login step, is never declared as a secret, but it reaches the target
+// through one of these headers; a password written in a step's `with` need
+// not be declared either. Their values are hidden wherever they are shown.
 var sensitiveKeys = map[string]bool{
 	"authorization":       true,
 	"proxy-authorization": true,
 	"cookie":              true,
 	"set-cookie":          true,
+	"password":            true,
+	"key_passphrase":      true,
 }
+
+// dsnKey names the parameter that holds a database URL. Only the password in
+// it is a credential: the rest says which database was used, so it stays
+// visible.
+const dsnKey = "dsn"
 
 // Masker hides secret values in everything Probe prints or writes. It starts
 // with the secrets the workflow declares and learns the values of credential
@@ -138,8 +147,9 @@ func escapedForms(value string) []string {
 	return forms
 }
 
-// Learn registers the values of credential headers found anywhere in data, so
-// that they are hidden from then on. It is called with an action's parameters
+// Learn registers the values of credential headers and parameters found
+// anywhere in data, and the password in a database URL, so that they are
+// hidden from then on. It is called with an action's parameters
 // before the action runs, which is what keeps them out of the action's own
 // log records.
 func (m *Masker) Learn(data map[string]any) {
@@ -173,6 +183,10 @@ func collectSensitive(v any, found *[]string) {
 				collectStrings(e, found)
 				continue
 			}
+			if dsn, ok := e.(string); ok && strings.ToLower(k) == dsnKey {
+				*found = append(*found, dsnPassword(dsn)...)
+				continue
+			}
 			collectSensitive(e, found)
 		}
 	case map[string]string:
@@ -186,6 +200,32 @@ func collectSensitive(v any, found *[]string) {
 			collectSensitive(e, found)
 		}
 	}
+}
+
+// dsnPassword returns the password in a URL-style DSN, both as written and
+// percent-decoded, or nothing when it has none. It does not rely on url.Parse,
+// which rejects the tcp(host:port) address a MySQL DSN may carry.
+func dsnPassword(dsn string) []string {
+	_, rest, ok := strings.Cut(dsn, "://")
+	if !ok {
+		return nil
+	}
+	// The user info ends at the last @ before the path, since an unescaped
+	// password may itself contain an @.
+	authority, _, _ := strings.Cut(rest, "/")
+	at := strings.LastIndex(authority, "@")
+	if at < 0 {
+		return nil
+	}
+	_, password, ok := strings.Cut(authority[:at], ":")
+	if !ok || password == "" {
+		return nil
+	}
+	found := []string{password}
+	if decoded, err := url.PathUnescape(password); err == nil && decoded != password {
+		found = append(found, decoded)
+	}
+	return found
 }
 
 // collectStrings gathers the strings a header value holds; Set-Cookie, for

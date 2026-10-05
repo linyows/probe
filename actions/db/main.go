@@ -6,7 +6,6 @@ import (
 	"github.com/hashicorp/go-hclog"
 	"github.com/linyows/probe/actionrpc"
 	cl "github.com/linyows/probe/db"
-	"github.com/linyows/probe/truncate"
 )
 
 type Action struct {
@@ -14,9 +13,9 @@ type Action struct {
 }
 
 func (a *Action) Run(with map[string]any) (map[string]any, error) {
-	truncateLength := truncate.MaxLogLength
-	truncatedParams := truncate.Map(with, truncateLength)
-	a.log.Debug("received db request parameters", "params", truncatedParams)
+	// The password in the DSN is hidden by the workflow runner, which learns
+	// it before the action starts and masks the records this action logs.
+	actionrpc.LogParams(a.log, "received db request parameters", with)
 
 	// Validate required parameters
 	dsnVal, exists := with["dsn"]
@@ -46,15 +45,9 @@ func (a *Action) Run(with map[string]any) (map[string]any, error) {
 			a.log.Debug("database query completed", "rows_affected", result.Res.RowsAffected, "duration", result.RT)
 		}),
 	)
-	if err != nil {
-		a.log.Error("database query execution failed", "error", err)
-		return result, err
-	}
+	actionrpc.LogOutcome(a.log, "database query", result, err)
 
-	truncatedResult := truncate.Map(result, truncateLength)
-	a.log.Debug("database query completed", "result", truncatedResult)
-
-	return result, nil
+	return result, err
 }
 
 func Serve() {
