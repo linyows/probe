@@ -115,6 +115,8 @@ A var that reads itself, directly or through other vars, stops the workflow befo
 
 The templates in a list are evaluated as those in a map are, at any depth, so `ports: ["{{vars.http_port}}"]` holds the port.
 
+A var whose template cannot be evaluated, such as `{{nothing.here}}`, which reads a field of nil, stops the workflow before the first job starts with exit status 2. The error names the var and the template, as `vars.a: {{nothing.here}}: cannot fetch here from <nil>`. A var that reads one that failed is not evaluated, so its error is not repeated.
+
 ### `secrets`
 
 **Type:** Array of strings (optional)  
@@ -421,6 +423,25 @@ skipif: vars.environment == "local"
 ```
 
 `outputs` values are expressions too, so they take no braces.
+
+A template that cannot be evaluated is an error, never text in the value. A name that is not defined reads as nil and is not an error, but reading a field of nil is, as is an expression that does not parse:
+
+| Where the template is | What happens |
+|---|---|
+| A step's `with`, `vars` or `name` | The step fails with the kind `template`, and the action does not run. The error names the value, as `with.headers.authorization` |
+| A workflow's `vars` | The workflow stops before the first job, with exit status 2 |
+| A job's `name` | The job fails, with exit status 2 |
+| A step's `echo` | The error is shown in place of the text, and the step's result does not change |
+
+```yaml
+# Fails the step when no earlier step published outputs.login
+headers:
+  authorization: "Bearer {{outputs.login.token}}"
+
+# Falls back instead
+headers:
+  authorization: "Bearer {{outputs.login?.token ?? 'none'}}"
+```
 
 See [Built-in Functions](/reference/built-in-functions) for what can be called inside an expression.
 

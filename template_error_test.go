@@ -215,3 +215,30 @@ func TestWorkflow_TemplateErrorExitCode(t *testing.T) {
 		t.Errorf("exit status = %d, want %d", w.exitStatus, ExitTestFailed)
 	}
 }
+
+func TestWorkflow_evalVarsSkipsVarsReadingAFailedOne(t *testing.T) {
+	wf := &Workflow{
+		Name: "Test",
+		Vars: map[string]any{
+			"base":  "{{1 +}}",
+			"url":   "{{vars.base}}/x",
+			"all":   "{{toJSON(vars)}}",
+			"list":  []any{"ok", "{{nothing.here}}"},
+			"other": "fine",
+		},
+		env: map[string]string{"UNUSED": ""},
+	}
+	_, err := wf.evalVars()
+	if err == nil {
+		t.Fatal("expected an error")
+	}
+	errs := unwrapJoined(err)
+	if len(errs) != 2 {
+		t.Fatalf("expected the errors of base and list alone, got %d: %v", len(errs), err)
+	}
+	for _, m := range []string{"vars.base: {{1 +}}: ", "vars.list[1]: {{nothing.here}}: "} {
+		if !strings.Contains(err.Error(), m) {
+			t.Errorf("error %q does not contain %q", err.Error(), m)
+		}
+	}
+}
