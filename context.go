@@ -75,6 +75,8 @@ type JobContext struct {
 	background *procgroup.Tracker
 	// Directory of the workflow file, which local actions are relative to
 	baseDir string
+	// The state each action keeps in this run of the job
+	states *actionStates
 }
 
 // SetFailed marks the job context as failed

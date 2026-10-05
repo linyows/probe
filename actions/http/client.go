@@ -35,6 +35,9 @@ type Req struct {
 	// payload is sent in place of Body when it is set. It holds a multipart
 	// body, which may carry the bytes of files, and is never shown.
 	payload []byte
+	// jar sends and records cookies. Do uses one of its own when it is nil,
+	// so that cookies set on a redirect are sent on to where it leads.
+	jar *cookieJar
 }
 
 type Res struct {
@@ -43,6 +46,9 @@ type Res struct {
 	Header   map[string]string `map:"headers"`
 	Body     string            `map:"body"`     // Changed from []byte to string for text data
 	FilePath string            `map:"filepath"` // New field for binary file paths
+	// Cookies holds the names and values of the cookies the server set, on
+	// redirects included.
+	Cookies map[string]string `map:"cookies"`
 }
 
 type Result struct {
@@ -156,7 +162,13 @@ func (r *Req) Do() (*Result, error) {
 
 	result := &Result{Req: *r}
 
-	cl := &hp.Client{Timeout: timeout}
+	jar := r.jar
+	if jar == nil {
+		if jar, err = newCookieJar(r.URL, nil, nil); err != nil {
+			return nil, err
+		}
+	}
+	cl := &hp.Client{Timeout: timeout, Jar: jar}
 	start := time.Now()
 	res, err := cl.Do(req)
 	result.RT = time.Since(start)
@@ -171,8 +183,9 @@ func (r *Req) Do() (*Result, error) {
 	}
 
 	result.Res = Res{
-		Status: res.Status,
-		Code:   res.StatusCode,
+		Status:  res.Status,
+		Code:    res.StatusCode,
+		Cookies: jar.Received(),
 	}
 
 	// Determine status based on HTTP status code (200-299 = success, others = failure)
@@ -343,19 +356,41 @@ func MarshalBodyIfJSON(data, m map[string]any) {
 }
 
 func Request(data map[string]any, opts ...Option) (map[string]any, error) {
+	ret, _, err := RequestWithState(data, nil, opts...)
+	return ret, err
+}
+
+// RequestWithState is Request with the state the action keeps in a job. When
+// keep_cookies is true, the cookies kept in state are sent, and the state
+// returned keeps those the server set as well; otherwise the state returned
+// is nil, which leaves the job's state as it was.
+func RequestWithState(data, state map[string]any, opts ...Option) (map[string]any, map[string]any, error) {
+	ret, newState, err := request(data, state, opts...)
+	if err != nil {
+		return map[string]any{}, nil, err
+	}
+	return ret, newState, nil
+}
+
+func request(data, state map[string]any, opts ...Option) (map[string]any, map[string]any, error) {
 	// Create a copy to avoid modifying the original data
 	m := make(map[string]any)
 	maps.Copy(m, data)
 
 	// Resolve HTTP method fields (get, post, etc.) to method and url
 	if err := ResolveMethodAndURL(m); err != nil {
-		return map[string]any{}, err
+		return nil, nil, err
+	}
+
+	explicitCookies, keepCookies, err := takeCookies(m)
+	if err != nil {
+		return nil, nil, err
 	}
 
 	// form and multipart are turned into the body they stand for.
 	payload, multipartSpec, contentType, err := takeFormBody(m)
 	if err != nil {
-		return map[string]any{}, err
+		return nil, nil, err
 	}
 
 	// Handle body conversion for JSON content-type
@@ -385,11 +420,11 @@ func Request(data map[string]any, opts ...Option) (map[string]any, error) {
 		delete(m, "basic_auth")
 		value, err := basicAuthHeader(auth)
 		if err != nil {
-			return map[string]any{}, err
+			return nil, nil, err
 		}
 		for k := range customHeaders {
 			if strings.EqualFold(k, "authorization") {
-				return map[string]any{}, errors.New("basic_auth and an authorization header cannot be given together")
+				return nil, nil, errors.New("basic_auth and an authorization header cannot be given together")
 			}
 		}
 		if customHeaders == nil {
@@ -427,18 +462,27 @@ func Request(data map[string]any, opts ...Option) (map[string]any, error) {
 	r.cb = cb
 
 	if err := mapping.MapToStructByTags(m, r); err != nil {
-		return map[string]any{}, err
+		return nil, nil, err
 	}
 	r.payload = payload
 
+	var stored []storedCookie
+	if keepCookies {
+		stored = cookiesFromState(state)
+	}
+	r.jar, err = newCookieJar(r.URL, explicitCookies, stored)
+	if err != nil {
+		return nil, nil, err
+	}
+
 	ret, err := r.Do()
 	if err != nil {
-		return map[string]any{}, err
+		return nil, nil, err
 	}
 
 	mapRet, err := mapping.StructToMapByTags(ret)
 	if err != nil {
-		return map[string]any{}, err
+		return nil, nil, err
 	}
 
 	// A multipart request shows what was written in place of the body sent.
@@ -448,8 +492,13 @@ func Request(data map[string]any, opts ...Option) (map[string]any, error) {
 		}
 	}
 
+	var newState map[string]any
+	if keepCookies {
+		newState = cookiesToState(r.jar.Stored(stored))
+	}
+
 	// Return the result directly without flattening
-	return mapRet, nil
+	return mapRet, newState, nil
 }
 
 // basicAuthHeader builds the value of an Authorization header for HTTP Basic

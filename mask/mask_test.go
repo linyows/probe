@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"reflect"
 	"strconv"
 	"strings"
 	"sync"
@@ -267,6 +268,28 @@ func TestMasker_LearnFormPassword(t *testing.T) {
 	want := "password=<redacted>&user=alice"
 	if got != want {
 		t.Errorf("String() = %q, want %q", got, want)
+	}
+}
+
+// TestMasker_Cookies checks that the cookies the http action sends and
+// receives are hidden by value, with their names kept.
+func TestMasker_Cookies(t *testing.T) {
+	m := New(nil, nil)
+	m.Learn(map[string]any{"cookies": map[string]any{"session": "e2e-cookie-value"}})
+	if got := m.String("sent e2e-cookie-value"); got != "sent <redacted>" {
+		t.Errorf("String() = %q", got)
+	}
+
+	got := m.Map(map[string]any{
+		"res": map[string]any{"cookies": map[string]any{"session": "abc", "lang": "ja"}},
+		"req": map[string]any{"cookies": map[string]string{"token": "t"}},
+	})
+	want := map[string]any{
+		"res": map[string]any{"cookies": map[string]any{"session": redactedValue, "lang": redactedValue}},
+		"req": map[string]any{"cookies": map[string]any{"token": redactedValue}},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("Map() = %v, want %v", got, want)
 	}
 }
 

@@ -1,7 +1,9 @@
 package probe
 
 import (
+	"fmt"
 	"os"
+	"sync"
 
 	"github.com/hashicorp/go-hclog"
 	"github.com/linyows/probe/actionref"
@@ -43,11 +45,26 @@ type ActionRunner interface {
 	RunActions(name string, with map[string]any, opts RunOptions) (map[string]any, error)
 }
 
+// StatefulActionRunner is an ActionRunner that also carries the state an
+// action keeps in a job, as actionrpc.StatefulAction describes. A runner
+// that is not one runs every action without state.
+type StatefulActionRunner interface {
+	ActionRunner
+	RunActionsWithState(name string, with, state map[string]any, opts RunOptions) (result, newState map[string]any, err error)
+}
+
 // PluginActionRunner implements ActionRunner using the plugin system
 type PluginActionRunner struct{}
 
 // RunActions executes an action using the plugin system
 func (p *PluginActionRunner) RunActions(name string, with map[string]any, opts RunOptions) (map[string]any, error) {
+	result, _, err := p.RunActionsWithState(name, with, nil, opts)
+	return result, err
+}
+
+// RunActionsWithState executes an action using the plugin system, giving it
+// the state it left in the job and returning the state it leaves.
+func (p *PluginActionRunner) RunActionsWithState(name string, with, state map[string]any, opts RunOptions) (map[string]any, map[string]any, error) {
 	// Actions are separate processes: they log to stderr as JSON and the
 	// records are re-filtered here, so this level decides what the user sees.
 	log := hclog.New(&hclog.LoggerOptions{
@@ -56,27 +73,105 @@ func (p *PluginActionRunner) RunActions(name string, with map[string]any, opts R
 		Level:  opts.logLevel(),
 	})
 	if !actionref.IsExternal(name) {
-		return actionrpc.Run(name, with, log)
+		return actionrpc.RunWithState(name, with, state, log)
 	}
 	exe, err := actionref.Resolve(name, opts.BaseDir)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	return actionrpc.RunExecutable(exe.Path, exe.SHA256, with, log)
+	return actionrpc.RunExecutableWithState(exe.Path, exe.SHA256, with, state, log)
+}
+
+// runAction runs the action named name with the state it left in the job,
+// when runner carries state, and returns the state it leaves.
+func runAction(runner ActionRunner, name string, with, state map[string]any, opts RunOptions) (map[string]any, map[string]any, error) {
+	if sr, ok := runner.(StatefulActionRunner); ok {
+		return sr.RunActionsWithState(name, with, state, opts)
+	}
+	result, err := runner.RunActions(name, with, opts)
+	return result, nil, err
+}
+
+// actionStates holds the state each action keeps in one run of a job, keyed
+// by the action's name as the steps write it in uses.
+type actionStates struct {
+	mu     sync.Mutex
+	states map[string]map[string]any
+}
+
+func newActionStates() *actionStates {
+	return &actionStates{states: make(map[string]map[string]any)}
+}
+
+// get returns a copy of the state the action left, or nil when it left none.
+// A runner in this process may change what it is given, and the state kept
+// must not change with it, should the step then fail or time out.
+func (s *actionStates) get(name string) map[string]any {
+	if s == nil {
+		return nil
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	// What is kept was made sendable when it was set, so this cannot fail.
+	state, _ := actionrpc.Sendable(s.states[name])
+	return state
+}
+
+// set records the state the action leaves, in the form it takes when it is
+// sent, which is a copy of it: a runner in this process may still hold the
+// state it returned. A nil state keeps the one there was. A state that cannot
+// be sent is an error, as it is for an action in a process of its own.
+func (s *actionStates) set(name string, state map[string]any) error {
+	if s == nil || state == nil {
+		return nil
+	}
+	sendable, err := actionrpc.Sendable(state)
+	if err != nil {
+		return fmt.Errorf("cannot keep the action's state: %w", err)
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.states[name] = sendable
+	return nil
 }
 
 // MockActionRunner implements ActionRunner for testing
 type MockActionRunner struct {
 	Results map[string]map[string]any
 	Errors  map[string]error
+	// States is the state each action leaves in the job, keyed by its name.
+	States map[string]map[string]any
+	// Received records the state each call to an action was given, in order.
+	Received map[string][]map[string]any
+
+	mu sync.Mutex
 }
 
 // NewMockActionRunner creates a new mock action runner
 func NewMockActionRunner() *MockActionRunner {
 	return &MockActionRunner{
-		Results: make(map[string]map[string]any),
-		Errors:  make(map[string]error),
+		Results:  make(map[string]map[string]any),
+		Errors:   make(map[string]error),
+		States:   make(map[string]map[string]any),
+		Received: make(map[string][]map[string]any),
 	}
+}
+
+// RunActionsWithState records the state the action is given and returns the
+// result and the state set for it.
+func (m *MockActionRunner) RunActionsWithState(name string, with, state map[string]any, opts RunOptions) (map[string]any, map[string]any, error) {
+	m.mu.Lock()
+	if m.Received == nil {
+		m.Received = make(map[string][]map[string]any)
+	}
+	m.Received[name] = append(m.Received[name], state)
+	newState := m.States[name]
+	m.mu.Unlock()
+	result, err := m.RunActions(name, with, opts)
+	if err != nil {
+		return nil, nil, err
+	}
+	return result, newState, nil
 }
 
 // SetResult sets the expected result for an action

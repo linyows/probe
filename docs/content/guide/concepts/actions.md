@@ -717,6 +717,19 @@ type Action interface {
 
 `with` holds the step's `with` parameters. The returned map becomes the step's `req`, `res`, `rt` and `status`, as with the built-in actions. A map in the result may be keyed by strings, numbers or booleans; the keys are sent as text, so `map[int]string{404: "not found"}` arrives as `{"404": "not found"}`. A map with any other kind of key, or two keys that read the same, such as `1` and `"1"`, fails the step with an action error rather than losing entries.
 
+#### Keeping State Between Steps
+
+An action that keeps something from one step to the next, as the http action keeps cookies, also implements `actionrpc.StatefulAction`:
+
+```go
+type StatefulAction interface {
+    Action
+    RunWithState(with, state map[string]any) (result, newState map[string]any, err error)
+}
+```
+
+`state` is the state the action left in the job, or nil when it left none. Probe keeps `newState` without reading it, and passes it to the action in the next step of the same job that uses it. The state takes the form a result takes, maps keyed by strings, lists and plain values, and one that cannot take it fails the step with an action error. A nil `newState` keeps the state as it was, and so does a step that fails with an action error or times out. Each job keeps the state of each action apart, and each run of a repeated job, and a job run by the embedded action, starts with none. The state is not shown in the output, so it may hold credentials.
+
 ### External Actions
 
 An action can also live outside Probe, in a repository of its own. Probe downloads the executable that serves it and runs it as it runs a built-in action. A step names the action by repository and commit:

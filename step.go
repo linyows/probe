@@ -157,8 +157,9 @@ func (st *Step) executeSingleAction(runner ActionRunner, expW map[string]any, jC
 
 	// Execute action in goroutine
 	type result struct {
-		ret map[string]any
-		err error
+		ret   map[string]any
+		state map[string]any
+		err   error
 	}
 	resultCh := make(chan result, 1)
 
@@ -173,16 +174,23 @@ func (st *Step) executeSingleAction(runner ActionRunner, expW map[string]any, jC
 	done := beginBackground(jCtx.background, st.Uses)
 	go func() {
 		defer done()
-		ret, err := runner.RunActions(st.Uses, expW, RunOptions{Verbose: jCtx.Verbose, Quiet: quiet, Masker: masker, BaseDir: jCtx.baseDir})
+		opts := RunOptions{Verbose: jCtx.Verbose, Quiet: quiet, Masker: masker, BaseDir: jCtx.baseDir}
+		ret, state, err := runAction(runner, st.Uses, expW, jCtx.states.get(st.Uses), opts)
 		if err == nil {
 			trackBackground(jCtx.background, st.Uses, ret)
 		}
-		resultCh <- result{ret: ret, err: err}
+		resultCh <- result{ret: ret, state: state, err: err}
 	}()
 
-	// Wait for either completion or timeout
+	// Wait for either completion or timeout. The state of an action that
+	// timed out is not kept, as its result is not.
 	select {
 	case res := <-resultCh:
+		if res.err == nil {
+			if err := jCtx.states.set(st.Uses, res.state); err != nil {
+				return nil, err
+			}
+		}
 		return res.ret, res.err
 	case <-ctx.Done():
 		return nil, errors.New("action execution timed out after " + timeout.String())

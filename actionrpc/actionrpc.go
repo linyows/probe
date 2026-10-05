@@ -35,6 +35,16 @@ type Action interface {
 	Run(with map[string]any) (map[string]any, error)
 }
 
+// StatefulAction is an Action that keeps state in a job from one step that
+// uses it to the next, such as the cookies a server set. The runner keeps the
+// state the action returns without reading it, and passes it to the action
+// again in the next step of the job that uses it. The state starts empty in
+// each run of a job. A nil state keeps the state as it was.
+type StatefulAction interface {
+	Action
+	RunWithState(with, state map[string]any) (result, newState map[string]any, err error)
+}
+
 // Plugin serves an Action over gRPC, and is what the runner dispenses to call
 // one.
 type Plugin struct {
@@ -63,31 +73,53 @@ type Client struct {
 
 // Run calls the action with the given parameters.
 func (m *Client) Run(with map[string]any) (map[string]any, error) {
+	result, _, err := m.RunWithState(with, nil)
+	return result, err
+}
+
+// RunWithState calls the action with the given parameters and the state it
+// left in the job, and returns the state it leaves, which is nil when the
+// action keeps none.
+func (m *Client) RunWithState(with, state map[string]any) (map[string]any, map[string]any, error) {
 	// Convert map[string]any directly to protobuf.Struct
 	withStruct, err := structpb.NewStruct(with)
 	if err != nil {
-		return nil, fmt.Errorf("failed to convert parameters to protobuf struct: %v", err)
+		return nil, nil, fmt.Errorf("failed to convert parameters to protobuf struct: %v", err)
+	}
+	req := &pb.RunRequest{With: withStruct}
+	if state != nil {
+		req.State, err = structpb.NewStruct(state)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to convert state to protobuf struct: %v", err)
+		}
 	}
 
-	runRes, err := m.client.Run(context.Background(), &pb.RunRequest{
-		With: withStruct,
-	})
-
+	runRes, err := m.client.Run(context.Background(), req)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	// Convert protobuf.Struct back to map[string]any
 	// Apply convertFloatToInt to restore integer types that were converted to float64 by protobuf
+	result := map[string]any{}
 	if runRes.Result != nil {
-		result := runRes.Result.AsMap()
-		if converted, ok := convertFloatToInt(result).(map[string]any); ok {
-			return converted, nil
-		}
-		return result, nil
+		result = structToMap(runRes.Result)
 	}
+	var newState map[string]any
+	if runRes.State != nil {
+		newState = structToMap(runRes.State)
+	}
+	return result, newState, nil
+}
 
-	return map[string]any{}, nil
+// structToMap converts s to a map, with the integers protobuf turned into
+// float64 restored.
+func structToMap(s *structpb.Struct) map[string]any {
+	m := s.AsMap()
+	if converted, ok := convertFloatToInt(m).(map[string]any); ok {
+		return converted
+	}
+	return m
 }
 
 // Server answers the runner's calls with an Action.
@@ -98,25 +130,30 @@ type Server struct {
 
 // Run runs the action with the request's parameters.
 func (m *Server) Run(ctx context.Context, req *pb.RunRequest) (*pb.RunResponse, error) {
+	// The state is left out: it may hold credentials, such as cookies, that
+	// the runner has not learned to hide.
 	if m.log != nil {
-		m.log.Debug("ActionsServer.Run called", "request", req)
+		m.log.Debug("ActionsServer.Run called", "request", req.GetWith())
 	}
 
 	// Convert protobuf.Struct to map[string]any
 	// Apply convertFloatToInt to restore integer types that were converted to float64 by protobuf
-	var withMap map[string]any
+	withMap := make(map[string]any)
 	if req.With != nil {
-		result := req.With.AsMap()
-		if converted, ok := convertFloatToInt(result).(map[string]any); ok {
-			withMap = converted
-		} else {
-			withMap = result
-		}
-	} else {
-		withMap = make(map[string]any)
+		withMap = structToMap(req.With)
 	}
 
-	v, err := m.Impl.Run(withMap)
+	var v, newState map[string]any
+	var err error
+	if sa, ok := m.Impl.(StatefulAction); ok {
+		var state map[string]any
+		if req.State != nil {
+			state = structToMap(req.State)
+		}
+		v, newState, err = sa.RunWithState(withMap, state)
+	} else {
+		v, err = m.Impl.Run(withMap)
+	}
 	if err != nil {
 		if m.log != nil {
 			m.log.Error("Action execution failed", "error", err)
@@ -124,8 +161,11 @@ func (m *Server) Run(ctx context.Context, req *pb.RunRequest) (*pb.RunResponse, 
 		return &pb.RunResponse{}, err
 	}
 
+	// The result is logged as LogOutcome logs it, credentials hidden: the
+	// runner learns those in a result only once it has the result, after
+	// these records have gone out.
 	if m.log != nil {
-		m.log.Debug("ActionsServer received from action", "result", v)
+		m.log.Debug("ActionsServer received from action", "result", forLog(v))
 	}
 
 	// Convert map[string]any to protobuf.Struct
@@ -153,9 +193,42 @@ func (m *Server) Run(ctx context.Context, req *pb.RunRequest) (*pb.RunResponse, 
 	}
 
 	if m.log != nil {
-		m.log.Debug("ActionsServer final result struct", "result", resultStruct)
+		m.log.Debug("ActionsServer final result struct", "result", forLog(resultMap))
 	}
-	return &pb.RunResponse{Result: resultStruct}, nil
+	res := &pb.RunResponse{Result: resultStruct}
+	if newState != nil {
+		convertedState, err := convertForProtobuf(newState)
+		if err != nil {
+			return &pb.RunResponse{}, fmt.Errorf("cannot send the action's state: %w", err)
+		}
+		stateMap, _ := convertedState.(map[string]any)
+		res.State, err = structpb.NewStruct(stateMap)
+		if err != nil {
+			return &pb.RunResponse{}, fmt.Errorf("failed to convert state to protobuf struct: %v", err)
+		}
+	}
+	return res, nil
+}
+
+// Sendable returns a copy of v as an action in a process of its own sends
+// it and the runner receives it: maps keyed by strings, lists, and plain
+// values, with whole numbers as int64. The maps and lists are new, so the
+// copy shares none of them with v. It fails for a value that cannot be sent,
+// as sending it would.
+func Sendable(v map[string]any) (map[string]any, error) {
+	if v == nil {
+		return nil, nil
+	}
+	c, err := convertForProtobuf(v)
+	if err != nil {
+		return nil, err
+	}
+	m, _ := c.(map[string]any)
+	s, err := structpb.NewStruct(m)
+	if err != nil {
+		return nil, err
+	}
+	return structToMap(s), nil
 }
 
 // convertForProtobuf converts unsupported types to protobuf-compatible types.

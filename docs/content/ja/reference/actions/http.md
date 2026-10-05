@@ -30,6 +30,8 @@ steps:
 | `basic_auth` | Object | 任意 | - | HTTP Basic認証の`username`と`password`。`Authorization`ヘッダーとして送ります |
 | `form` | Object | 任意 | - | フォームのフィールド。`application/x-www-form-urlencoded`のボディとして送ります。[フォームの送信](#フォームの送信)を参照 |
 | `multipart` | Object | 任意 | - | フォームのフィールドとファイル。`multipart/form-data`のボディとして送ります。[ファイルのアップロード](#ファイルのアップロード)を参照 |
+| `cookies` | Object | 任意 | - | 送るCookie。名前と値で指定します。[Cookie](#cookie)を参照 |
+| `keep_cookies` | Boolean | 任意 | `false` | サーバーが設定したCookieをジョブで保持し、Cookieを保持する以降のステップで送ります。[Cookie](#cookie)を参照 |
 
 リダイレクトとTLS検証を指定するパラメータはありません。リダイレクトは既定で追跡します。
 
@@ -165,6 +167,7 @@ jobs:
 | `res.body` | Any | レスポンスボディ。JSONならオブジェクトや配列に解析され、それ以外は文字列 |
 | `res.rawbody` | String | 解析前のボディ。JSONとして解析したときに入ります |
 | `res.filepath` | String | バイナリレスポンスを保存したファイルのパス |
+| `res.cookies` | Object | サーバーが設定したCookie。名前と値で入り、リダイレクトの途中で設定されたものも含みます |
 | `rt.duration` | String | ラウンドトリップ時間（例: `"120ms"`） |
 | `rt.sec` | Float | ラウンドトリップ時間（秒） |
 | `status` | Integer | ステータスコードが2xxなら`0`、それ以外は`1` |
@@ -246,6 +249,51 @@ HTTP Basic認証を受け付けるサーバーには、`basic_auth`でユーザ�
 ```
 
 ユーザー名にはコロンを含められません。そこでユーザー名が終わったと解釈されるためです。パスワードは空でも構いません。送れるのはどちらか一方なので、`basic_auth`と`authorization`ヘッダーは同時に指定できません。パスワードと、そこから組み立てたヘッダーは、ほかの資格情報と同じく出力では伏せられます。
+
+### Cookie
+
+サーバーが設定したCookieは、ブラウザと同じくリダイレクト先にも送ります。そのため、セッションのCookieを設定してリダイレクトするログインでも、リダイレクト先のページまで届きます。設定されたCookieは、リダイレクトの途中で設定されたものも含めて、名前と値で`res.cookies`に入ります。
+
+`keep_cookies: true`を指定すると、サーバーが設定したCookieをジョブで保持し、同じジョブの以降のステップのうち、同じくCookieを保持するステップで送ります。どのCookieをどのURLへ送るかは、ブラウザと同じくドメイン、パス、有効期限、`Secure`属性に従います。サーバーが削除したCookieや期限が切れたCookieは送りません。ジョブの`defaults`に書けば、ジョブのすべてのリクエストに適用されます。
+
+```yaml
+- name: Logged-in pages
+  defaults:
+    http:
+      url: "{{vars.api_url}}"
+      keep_cookies: true
+  steps:
+    - name: Log in
+      uses: http
+      with:
+        post: /login
+        form:
+          user: "{{vars.user}}"
+          password: "{{vars.password}}"
+      test: res.code == 200 && res.cookies.session != ""
+
+    - name: My page
+      uses: http
+      with:
+        get: /me
+      test: res.code == 200
+```
+
+Cookieはジョブごとに保持するので、同時に走るジョブ同士で互いのCookieは見えません。繰り返すジョブの各回と、[embedded](/ja/reference/actions/embedded)アクションで実行するジョブは、Cookieを持たない状態から始まります。別のジョブへCookieを渡すには、アウトプットで渡し、渡した先で`cookies`を使って送ります。
+
+`cookies`は、`keep_cookies`の有無にかかわらず、名前と値でCookieを送ります。保持しているCookieに同じ名前のものがあれば、こちらで置き換えます。送り先はリクエストのホストだけで、リダイレクトで別のホストへ移ったときは送りません。`cookie`ヘッダーを書いた場合は、それもあわせて送ります。
+
+```yaml
+    - name: Someone else's session
+      uses: http
+      with:
+        get: /me
+        cookies:
+          session: "{{outputs.other.session}}"
+      test: res.code == 200
+```
+
+`cookies`と`res.cookies`の値は、ほかの認証情報と同じく出力では隠し、名前は表示します。
 
 ### エラーレスポンスの検証
 
