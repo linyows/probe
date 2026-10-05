@@ -909,7 +909,7 @@ The points below cover keeping environments apart, moving changes through them i
 
 One file per environment keeps the values apart and makes the differences visible in a diff.
 
-```yaml
+```text
 # Good: Clear environment separation
 environments/
 ├── development.yml
@@ -944,7 +944,9 @@ vars:
   environment: "{{ENVIRONMENT}}"
   api_base_url: "{{API_BASE_URL}}"
   api_token: "{{API_TOKEN}}"
+```
 
+```yaml
 - name: Pre-Test Validation
   echo: |
     Environment: {{vars.environment ? "✅" : "❌"}}

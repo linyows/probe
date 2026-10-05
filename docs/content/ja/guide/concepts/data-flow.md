@@ -113,8 +113,8 @@ steps:
     metrics: res.body.metrics
     
     # 配列
-    active_users: filter(res.body.users, #.active == true)
-    error_codes: map(res.body.errors, #.code)
+    active_users: 'filter(res.body.users, #.active == true)'
+    error_codes: 'map(res.body.errors, #.code)'
     
     # 計算された値
     success_rate: (res.body.successful_requests / res.body.total_requests) * 100
@@ -489,12 +489,12 @@ jobs:
   outputs:
     # 検証済み出力
     user_count: len(res.body.users)
-    valid_users: filter(res.body.users, #.id != null && #.email != null)
-    admin_users: filter(res.body.users, #.role == "admin")
+    valid_users: 'filter(res.body.users, #.id != null && #.email != null)'
+    admin_users: 'filter(res.body.users, #.role == "admin")'
     
     # データ品質メトリクス
-    data_completeness: len(filter(res.body.users, #.id != null && #.email != null)) / len(res.body.users)
-    has_admin_users: any(res.body.users, #.role == "admin")
+    data_completeness: 'len(filter(res.body.users, #.id != null && #.email != null)) / len(res.body.users)'
+    has_admin_users: 'any(res.body.users, #.role == "admin")'
     
     # レスポンスメタデータ
     data_freshness: res.headers["Last-Modified"]
@@ -542,8 +542,8 @@ outputs:
 
 # 良い例: 再利用を伴う単一計算
 outputs:
-  active_users: filter(res.body.users, #.active == true)
-  active_user_count: len(filter(res.body.users, #.active == true))
+  active_users: 'filter(res.body.users, #.active == true)'
+  active_user_count: 'len(filter(res.body.users, #.active == true))'
 
 # 避ける: 繰り返しの高コスト計算
 # outputs:
@@ -558,7 +558,7 @@ outputs:
 ```yaml
 # 良い例: 必要不可欠なデータのみを抽出
 outputs:
-  user_ids: map(res.body.users, #.id)
+  user_ids: 'map(res.body.users, #.id)'
   user_count: len(res.body.users)
   first_user: res.body.users[0]
 
@@ -585,12 +585,12 @@ outputs:
     status: res.body.metadata.status
     
     # 基準による特定レコードを抽出
-    critical_items: filter(res.body.data, #.priority == "critical")
-    error_items: filter(res.body.data, #.status == "error")
+    critical_items: 'filter(res.body.data, #.priority == "critical")'
+    error_items: 'filter(res.body.data, #.status == "error")'
     
     # 集計を計算
-    avg_score: sum(map(res.body.data, #.score)) / len(res.body.data)
-    max_score: max(map(res.body.data, #.score))
+    avg_score: 'sum(map(res.body.data, #.score)) / len(res.body.data)'
+    max_score: 'max(map(res.body.data, #.score))'
     
     # データセット全体は保存しない
     # full_dataset: res.body.data  # 大きなデータセットでは避ける
@@ -641,7 +641,7 @@ outputs:
 ```yaml
 # 良い例: 安全なデータアクセス
 outputs:
-  user_id: res.body.user && res.body.user.id ? res.body.user.id : null
+  user_id: 'res.body.user && res.body.user.id ? res.body.user.id : null'
   email_verified: res.body.user && res.body.user.email_verified == true
   profile_complete: res.body.user && res.body.user.profile && res.body.user.profile.complete == true
 

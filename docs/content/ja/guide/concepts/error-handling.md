@@ -200,7 +200,7 @@ jobs:
         url: "{{vars.service_url}}/health"
       outputs:
         service_healthy: res.code == 200
-        error_body: res.code != 200 ? res.body : null
+        error_body: 'res.code != 200 ? res.body : null'
 
 - id: recovery-procedures
   name: Recovery Procedures
@@ -414,9 +414,9 @@ jobs:
     status_code: res.code
     response_time: (rt.sec * 1000)
     response_size: res.body_size
-    error_message: res.code != 200 ? res.body : null
+    error_message: 'res.code != 200 ? res.body : null'
     response_headers: res.headers
-    partial_response: res.code != 200 ? res.body[0:500] : null
+    partial_response: 'res.code != 200 ? res.body[0:500] : null'
 
 - name: Error Analysis and Reporting
   echo: |
@@ -476,7 +476,7 @@ jobs:
       test: res.code == 200
       outputs:
         success: res.code == 200
-        error_code: res.code != 200 ? res.code : null
+        error_code: 'res.code != 200 ? res.code : null'
         trace_id: res.headers["X-Trace-Id"]
 
     - name: Service B Test
@@ -490,7 +490,7 @@ jobs:
       test: res.code == 200
       outputs:
         success: res.code == 200
-        error_code: res.code != 200 ? res.code : null
+        error_code: 'res.code != 200 ? res.code : null'
         trace_id: res.headers["X-Trace-Id"]
 
     - name: Service C Test
@@ -504,7 +504,7 @@ jobs:
       test: res.code == 200
       outputs:
         success: res.code == 200
-        error_code: res.code != 200 ? res.code : null
+        error_code: 'res.code != 200 ? res.code : null'
         trace_id: res.headers["X-Trace-Id"]
 
     - name: Error Correlation Report
@@ -712,82 +712,45 @@ jobs:
 
 ### エラー駆動通知
 
-エラーの重要度とコンテキストに基づいて通知を送信します：
+`needs`で依存しているジョブが失敗するとそのジョブはスキップされるため、通知は、対象のチェックと同じジョブのステップとして書きます。各チェックが見つけた内容を出力し、通知はそれが異常を示すときだけ実行します。失敗したステップの後のステップも実行されるため、通知まで到達します。
 
 ```yaml
 jobs:
-- id: error-notification
-  name: Error Notification System
-  needs: [health-check, performance-test, security-scan]
+- name: Health with alerts
   steps:
-    - name: Classify Errors
-      uses: hello
-      id: classification
-      echo: "Classifying detected errors"
+    - name: Health check
+      id: health
+      uses: http
+      with:
+        url: "{{vars.api_url}}/health"
+        method: GET
+      test: res.code == 200
       outputs:
-          
-        # エラー重要度計算
-        severity_level: |
+        healthy: res.code == 200
 
-    - name: Critical Alert
+    # 接続の拒否などでリクエスト自体が失敗するとoutputs.healthはないため、
+    # フォールバックでそれも異常として扱う
+    - name: Critical alert
       uses: smtp
+      skipif: outputs.health?.healthy ?? false
       with:
-        addr: "{{vars.SMTP_HOST}}:587"
-        from: "critical-alerts@company.com"
-        to: "oncall@company.com"
-        subject: "🚨 CRITICAL: {{vars.SERVICE_NAME}} Service Down"
-        session: 1
-        message: 1
-        length: 500
+        addr: "{{vars.smtp_host}}:587"
+        from: critical-alerts@example.com
+        to: oncall@example.com
+        subject: "CRITICAL: {{vars.service_name}} is down"
+      test: res.code == 0
       echo: |
-        CRITICAL SERVICE ALERT
-          
-        Service: {{vars.SERVICE_NAME}}
-        Environment: {{vars.NODE_ENV}}
+        Service: {{vars.service_name}}
+        Environment: {{vars.environment}}
         Time: {{unixtime()}}
-        Severity: {{outputs.classification.severity_level}}
-          
-        Issues Detected:
-          
-        IMMEDIATE ACTION REQUIRED
-          
-        This is a critical service failure requiring immediate attention.
-        Please check the service status and begin recovery procedures.
 
-    - name: Warning Alert
-      uses: smtp
-      with:
-        addr: "{{vars.SMTP_HOST}}:587"
-        from: "monitoring@company.com"
-        to: "dev-team@company.com"
-        subject: "⚠️ {{outputs.classification.severity_level}}: {{vars.SERVICE_NAME}} Issues Detected"
-        session: 1
-        message: 1
-        length: 500
-      echo: |
-        Service Monitoring Alert
-          
-        Service: {{vars.SERVICE_NAME}}
-        Environment: {{vars.NODE_ENV}}
-        Time: {{unixtime()}}
-        Severity: {{outputs.classification.severity_level}}
-          
-        Issues Detected:
-          
-        While the service is operational, these issues require attention
-        to prevent potential service degradation.
-
-    - name: Recovery Success Notification
+    - name: All systems operational
       uses: hello
-      echo: |
-        ✅ All Systems Operational
-          
-        Service: {{vars.SERVICE_NAME}}
-        Environment: {{vars.NODE_ENV}}
-        Monitoring Status: All checks passed
-          
-        No alerts sent - system is healthy.
+      skipif: '!(outputs.health?.healthy ?? false)'
+      echo: No alert sent; the health check passed.
 ```
+
+smtpアクションが送るのは生成されたテストメッセージで、本文を指定するパラメータはありません。そのため詳細は`echo`に書き、実行のレポートに載せます。
 
 ## ベストプラクティス
 

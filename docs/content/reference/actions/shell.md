@@ -257,7 +257,9 @@ The command itself can be assembled from variables, which is how one step deploy
 vars:
   target_env: "{{TARGET_ENV}}"
   deploy_key: "{{DEPLOY_KEY}}"
+```
 
+```yaml
 - name: "Deploy to Environment"
   uses: shell
   with:

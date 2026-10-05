@@ -21,7 +21,7 @@ steps:
       url: "{{vars.api_url}}/experimental"
     outputs:
       available: res.code == 200
-      detail: res.code >= 400 ? res.status : ""
+      detail: 'res.code >= 400 ? res.status : ""'
 
   - name: Report
     uses: hello

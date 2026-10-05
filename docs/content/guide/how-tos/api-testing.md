@@ -591,8 +591,8 @@ jobs:
         all(filter(res.body.orders, #.status == "completed"), #.completed_at != null)
       outputs:
         order_count: len(res.body.orders)
-        completed_orders: len(filter(res.body.orders, #.status == "completed"))
-        total_spent: sum(map(filter(res.body.orders, #.status == "completed"), #.total))
+        completed_orders: 'len(filter(res.body.orders, #.status == "completed"))'
+        total_spent: 'sum(map(filter(res.body.orders, #.status == "completed"), #.total))'
 
     - name: Validation Summary
       uses: hello
@@ -1158,7 +1158,9 @@ body: |
     "email": "test{{random_str(8)}}@example.com",
     "username": "user_{{unixtime()}}_{{random_str(4)}}"
   }
+```
 
+```yaml
 # Good: Clean up test data
 - name: Cleanup Test User
   uses: http
@@ -1193,7 +1195,9 @@ Sending input the API should reject is how its validation gets tested at all.
   with:
     body: '{"invalid": "data"}'
   test: res.code == 400
+```
 
+```yaml
 # Good: Validate error responses
 test: |
   res.code == 400 &&

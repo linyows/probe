@@ -53,7 +53,7 @@ jobs:
     with:
       cmd: echo "Hello, World!"
     test: res.code == 0
-    echo: {{ res.stdout }}
+    echo: "{{ res.stdout }}"
 ```
 
 このワークフローをファイルに保存して実行します：

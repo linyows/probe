@@ -275,7 +275,9 @@ res:
 vars:
   target_env: "{{TARGET_ENV}}"
   deploy_key: "{{DEPLOY_KEY}}"
+```
 
+```yaml
 - name: "Deploy to Environment"
   uses: shell
   with:

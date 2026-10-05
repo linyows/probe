@@ -1031,7 +1031,9 @@ A measurement means nothing without one taken when the service was known to be h
 # Good: Establish baseline before testing
 vars:
   api_url: "{{API_URL}}"
+```
 
+```yaml
 - name: Establish Baseline
   uses: http
   with:
