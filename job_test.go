@@ -609,3 +609,44 @@ func TestJob_RunIndependently_ErrorMessages(t *testing.T) {
 		t.Errorf("invalid step: errorMsg = %q", msg)
 	}
 }
+
+// RunIndependently resolves an external action only when a step runs it, as
+// it did before RunStandalone resolved them up front.
+func TestJob_RunIndependently_ResolvesActionsWhenRun(t *testing.T) {
+	missing := func() *Step { return &Step{Name: "missing", Uses: "./no-such-action", Test: "true"} }
+
+	tests := []struct {
+		name        string
+		job         *Job
+		wantSuccess bool
+		wantMsg     string
+	}{
+		{
+			name:        "a skipped job",
+			job:         &Job{Name: "j", SkipIf: "true", Steps: []*Step{missing()}},
+			wantSuccess: true,
+		},
+		{
+			name: "a skipped step",
+			job: &Job{Name: "j", Steps: []*Step{func() *Step {
+				st := missing()
+				st.SkipIf = "true"
+				return st
+			}()}},
+			wantSuccess: true,
+		},
+		{
+			name:    "a step that runs the action",
+			job:     &Job{Name: "j", Steps: []*Step{missing()}},
+			wantMsg: "execution error in job_start: job execution failed",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			success, _, _, msg, _ := tt.job.RunIndependently(map[string]any{}, newBufferPrinter(), "j")
+			if success != tt.wantSuccess || msg != tt.wantMsg {
+				t.Errorf("RunIndependently() = %v, %q; want %v, %q", success, msg, tt.wantSuccess, tt.wantMsg)
+			}
+		})
+	}
+}

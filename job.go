@@ -306,14 +306,18 @@ type JobRun struct {
 // A local action is resolved relative to baseDir, the directory of the file
 // the job comes from, or to the working directory when baseDir is empty.
 func (j *Job) RunStandalone(vars map[string]any, printer *Printer, jobID, baseDir string) JobRun {
-	run, _ := j.runStandalone(vars, printer, jobID, baseDir)
+	run, _ := j.runStandalone(vars, printer, jobID, baseDir, true)
 	return run
 }
 
 // RunIndependently executes a job independently with its own context and result tracking
 // Returns success/failure status, outputs, report, error message, and duration
+//
+// Unlike RunStandalone, it resolves an external action only when a step runs
+// it, as it did before RunStandalone existed: a skipped job or step does not
+// need its action, and one that cannot be resolved fails its step.
 func (j *Job) RunIndependently(vars map[string]any, printer *Printer, jobID string) (bool, map[string]any, string, string, time.Duration) {
-	run, failed := j.runStandalone(vars, printer, jobID, "")
+	run, failed := j.runStandalone(vars, printer, jobID, "", false)
 	errorMsg := ""
 	switch {
 	case run.Err != nil:
@@ -325,7 +329,8 @@ func (j *Job) RunIndependently(vars map[string]any, printer *Printer, jobID stri
 }
 
 // runStandalone is RunStandalone, also reporting whether a step failed.
-func (j *Job) runStandalone(vars map[string]any, printer *Printer, jobID, baseDir string) (JobRun, bool) {
+// resolveFirst resolves the job's external actions before any step runs.
+func (j *Job) runStandalone(vars map[string]any, printer *Printer, jobID, baseDir string, resolveFirst bool) (JobRun, bool) {
 	start := time.Now()
 	j.ID = jobID
 	// The job runs outside Workflow.Start, which is what installs a masker.
@@ -363,7 +368,11 @@ func (j *Job) runStandalone(vars map[string]any, printer *Printer, jobID, baseDi
 
 	// External actions are resolved before any step runs, as a workflow
 	// does, so that a bad reference stops the job before it changes anything.
-	failed, err := false, resolveExternalActions([]*Job{j}, baseDir)
+	var failed bool
+	var err error
+	if resolveFirst {
+		err = resolveExternalActions([]*Job{j}, baseDir)
+	}
 	if err == nil {
 		failed, err = j.run(ctx)
 	}
