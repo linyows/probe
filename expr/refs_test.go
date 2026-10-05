@@ -30,6 +30,7 @@ func TestRefs(t *testing.T) {
 		{"map", map[string]any{"user": "{{vars.user}}", "n": 1}, []string{"user"}, false},
 		{"array", []any{"{{vars.a}}", map[string]any{"b": "{{vars.b}}"}}, []string{"a", "b"}, false},
 		{"not a string", 42, nil, false},
+		{"map values in the order of sorted keys", map[string]any{"z": "{{vars.c}}", "a": "{{vars.b}}", "m": "{{vars.a}}"}, []string{"b", "a", "c"}, false},
 	}
 
 	for _, tt := range tests {

@@ -1,6 +1,9 @@
 package expr
 
 import (
+	"maps"
+	"slices"
+
 	"github.com/expr-lang/expr/ast"
 	"github.com/expr-lang/expr/parser"
 )
@@ -9,7 +12,8 @@ import (
 // as name.key or name['key']. v is a string, or a map or array of them at any
 // depth, as a value under vars is. dynamic is true when a template reads the
 // object in a way whose key cannot be known before it runs, such as name[k]
-// or the object as a whole, so that it may read any key.
+// or the object as a whole, so that it may read any key. keys come in the
+// order they are first read, a map's values in the order of its sorted keys.
 //
 // An expression that does not parse reads nothing here; evaluating it reports
 // the error.
@@ -33,8 +37,10 @@ func (f *refFinder) value(v any) {
 			f.expression(span.expr)
 		}
 	case map[string]any:
-		for _, val := range v {
-			f.value(val)
+		// In the order of the sorted keys, so that the keys returned do not
+		// depend on map iteration.
+		for _, key := range slices.Sorted(maps.Keys(v)) {
+			f.value(v[key])
 		}
 	case []any:
 		for _, val := range v {

@@ -3,6 +3,7 @@ package probe
 import (
 	"errors"
 	"fmt"
+	"maps"
 	"slices"
 	"strings"
 	"sync"
@@ -273,13 +274,21 @@ func (w *Workflow) evalVars() (map[string]any, error) {
 
 	vars := make(map[string]any)
 	env := strmapToAnymap(w.Env())
-	env["vars"] = vars
 
 	ev := &expr.Expr{}
 	for _, k := range order {
+		// Each var reads a copy of the vars evaluated so far. A template
+		// such as {{vars}} keeps the map it returns, and the map being
+		// filled in would then hold itself.
+		env["vars"] = maps.Clone(vars)
+
 		v := w.Vars[k]
 		if mapV, ok := v.(map[string]any); ok {
 			vars[k] = ev.EvalTemplateMap(mapV, env)
+		} else if arrV, ok := v.([]any); ok {
+			// Evaluated as a map's value is, so that an array at the top
+			// level renders the templates in it as one nested in a map does.
+			vars[k] = ev.EvalTemplateMap(map[string]any{k: arrV}, env)[k]
 		} else if strV, ok2 := v.(string); ok2 {
 			output, err := ev.EvalTemplate(strV, env)
 			if err != nil {
@@ -297,8 +306,9 @@ func (w *Workflow) evalVars() (map[string]any, error) {
 
 // varsOrder returns the names of vars in an order in which each comes after
 // the vars it reads. A var that reads vars by a key known only when it runs
-// comes after all the others. Names are otherwise sorted, so the order does
-// not depend on map iteration.
+// comes after all the others. Names are otherwise sorted, and Refs returns
+// the keys of a map in the order of its sorted keys, so neither the order nor
+// a reported cycle depends on map iteration.
 func varsOrder(vars map[string]any) ([]string, error) {
 	names := make([]string, 0, len(vars))
 	for k := range vars {
@@ -309,16 +319,20 @@ func varsOrder(vars map[string]any) ([]string, error) {
 	deps := make(map[string][]string, len(vars))
 	for _, k := range names {
 		keys, dynamic := expr.Refs(vars[k], "vars")
-		if dynamic {
-			keys = names
-		}
 		for _, d := range keys {
-			// A name that is not a var reads as nil, as it always has, and
-			// a var that reads vars as a whole does not read itself.
-			if _, ok := vars[d]; !ok || (dynamic && d == k) {
-				continue
+			// A name that is not a var reads as nil, as it always has.
+			if _, ok := vars[d]; ok {
+				deps[k] = append(deps[k], d)
 			}
-			deps[k] = append(deps[k], d)
+		}
+		if dynamic {
+			// A var that reads vars as a whole is taken to read every other
+			// var, but not itself: only a key it names reads itself.
+			for _, d := range names {
+				if d != k && !slices.Contains(deps[k], d) {
+					deps[k] = append(deps[k], d)
+				}
+			}
 		}
 	}
 

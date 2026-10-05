@@ -3,6 +3,7 @@ package probe
 import (
 	"bytes"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -772,6 +773,19 @@ func Test_evalVarsReadsOtherVars(t *testing.T) {
 			},
 		},
 		{
+			name: "an array at the top level",
+			vars: map[string]any{
+				"port":  "8080",
+				"list":  []any{"{{vars.port}}", map[string]any{"p": "{{vars.port}}"}},
+				"label": "{{vars.list[0]}}",
+			},
+			expected: map[string]any{
+				"port":  "8080",
+				"list":  []any{"8080", map[string]any{"p": "8080"}},
+				"label": "8080",
+			},
+		},
+		{
 			name: "a value that is not a string",
 			vars: map[string]any{
 				"retries": 3,
@@ -829,6 +843,50 @@ func Test_evalVarsReadsOneRandomValue(t *testing.T) {
 	}
 }
 
+func Test_evalVarsReadsVarsAsAWhole(t *testing.T) {
+	wf := &Workflow{
+		Name: "Test",
+		Vars: map[string]any{
+			"name":     "probe",
+			"snapshot": map[string]any{"all": "{{vars}}"},
+		},
+		env: map[string]string{"UNUSED": ""},
+	}
+	actual, err := wf.evalVars()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	expected := map[string]any{
+		"name":     "probe",
+		"snapshot": map[string]any{"all": map[string]any{"name": "probe"}},
+	}
+	if !reflect.DeepEqual(expected, actual) {
+		t.Errorf("expected %#v, got %#v", expected, actual)
+	}
+	// A var holding the map being filled in would make it cyclic, which JSON
+	// cannot encode.
+	if _, err := json.Marshal(actual); err != nil {
+		t.Errorf("vars cannot be encoded as JSON: %v", err)
+	}
+}
+
+func Test_evalVarsCycleIsReproducible(t *testing.T) {
+	// a reads b and c through the values of a map, and both read a back, so
+	// the cycle reported depends on which of them is visited first.
+	vars := map[string]any{
+		"a": map[string]any{"x": "{{vars.c}}", "y": "{{vars.b}}", "z": "{{vars.c}}"},
+		"b": "{{vars.a.y}}",
+		"c": "{{vars.a.x}}",
+	}
+	for i := 0; i < 50; i++ {
+		wf := &Workflow{Name: "Test", Vars: vars, env: map[string]string{"UNUSED": ""}}
+		_, err := wf.evalVars()
+		if err == nil || err.Error() != "vars: circular reference: a -> c -> a" {
+			t.Fatalf("run %d: error = %v, want the cycle through c", i, err)
+		}
+	}
+}
+
 func Test_evalVarsCircularReference(t *testing.T) {
 	tests := []struct {
 		name string
@@ -853,6 +911,19 @@ func Test_evalVarsCircularReference(t *testing.T) {
 				"c": "{{vars.b}}",
 			},
 			want: "vars: circular reference: a -> c -> b -> a",
+		},
+		{
+			name: "itself by name, along with a read of vars as a whole",
+			vars: map[string]any{
+				"a": "{{vars.a ?? 'fallback'}} {{toJSON(vars)}}",
+				"b": "b",
+			},
+			want: "vars: circular reference: a -> a",
+		},
+		{
+			name: "through an array var",
+			vars: map[string]any{"a": []any{"{{vars.b}}"}, "b": "{{vars.a[0]}}"},
+			want: "vars: circular reference: a -> b -> a",
 		},
 		{
 			name: "two vars read by keys known only at run time",
