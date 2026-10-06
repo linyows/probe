@@ -2,6 +2,7 @@ package expr
 
 import (
 	"reflect"
+	"slices"
 	"testing"
 )
 
@@ -63,5 +64,16 @@ func TestCallsTemplate(t *testing.T) {
 		if got := CallsTemplate(tt.v); got != tt.want {
 			t.Errorf("CallsTemplate(%#v) = %v, want %v", tt.v, got, tt.want)
 		}
+	}
+}
+
+func TestRefsAndCallsTemplateLookAtKeys(t *testing.T) {
+	v := map[string]any{"{{ vars.tenant }}": map[string]any{"{{ template(vars.t) }}": 1}}
+	keys, _ := Refs(v, "vars")
+	if !slices.Contains(keys, "tenant") || !slices.Contains(keys, "t") {
+		t.Errorf("Refs() = %v, want the vars the keys read", keys)
+	}
+	if !CallsTemplate(v) {
+		t.Error("CallsTemplate() = false, want the call in a key found")
 	}
 }

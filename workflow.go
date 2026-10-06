@@ -435,15 +435,42 @@ func evalVar(ev *expr.Expr, name string, v any, env any) (any, error) {
 		return out, nil
 	case []any:
 		// Evaluated as a map's value is, so that a list renders the
-		// templates in it as one nested in a map does.
-		out, err := ev.EvalTemplateMap(map[string]any{name: v}, env)
+		// templates in it as one nested in a map does. The map is keyed by a
+		// name of its own rather than the var's, which, holding a template,
+		// would be evaluated as a key is; the errors are named after the var.
+		const key = "list"
+		out, err := ev.EvalTemplateMap(map[string]any{key: v}, env)
 		if err != nil {
-			return nil, prefixFieldErrors(err, "vars.")
+			return nil, renameFieldErrors(err, key, "vars."+name)
 		}
-		return out[name], nil
+		return out[key], nil
 	default:
 		return v, nil
 	}
+}
+
+// renameFieldErrors names the value at the top of the path of each
+// *expr.FieldError joined into err, from, as to.
+func renameFieldErrors(err error, from, to string) error {
+	rename := func(path string) string {
+		if rest, ok := strings.CutPrefix(path, from); ok {
+			return to + rest
+		}
+		return path
+	}
+	var errs []error
+	for _, e := range unwrapJoined(err) {
+		var fe *expr.FieldError
+		if errors.As(e, &fe) {
+			evaluated := ""
+			if fe.EvaluatedPath != "" {
+				evaluated = rename(fe.EvaluatedPath)
+			}
+			e = &expr.FieldError{Path: rename(fe.Path), EvaluatedPath: evaluated, Err: fe.Err}
+		}
+		errs = append(errs, e)
+	}
+	return errors.Join(errs...)
 }
 
 // prefixFieldErrors puts prefix before the path of each *expr.FieldError
@@ -453,7 +480,11 @@ func prefixFieldErrors(err error, prefix string) error {
 	for _, e := range unwrapJoined(err) {
 		var fe *expr.FieldError
 		if errors.As(e, &fe) {
-			e = &expr.FieldError{Path: prefix + fe.Path, Err: fe.Err}
+			evaluated := ""
+			if fe.EvaluatedPath != "" {
+				evaluated = prefix + fe.EvaluatedPath
+			}
+			e = &expr.FieldError{Path: prefix + fe.Path, EvaluatedPath: evaluated, Err: fe.Err}
 		}
 		errs = append(errs, e)
 	}

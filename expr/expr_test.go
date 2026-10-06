@@ -2,6 +2,7 @@ package expr
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -1667,5 +1668,110 @@ func TestNilExprEvaluates(t *testing.T) {
 	got, err := e.EvalTemplate("{{ template('{{ 1 + 1 }}') }} {{ len('ab') }}", map[string]any{})
 	if err != nil || got != "2 2" {
 		t.Errorf("EvalTemplate() = %q, %v", got, err)
+	}
+}
+
+func TestEvalTemplateMapEvaluatesKeys(t *testing.T) {
+	e := &Expr{}
+	env := map[string]any{"vars": map[string]any{"tenant": `t"1`, "n": 2, "hdr": "x-tenant"}}
+
+	got, err := e.EvalTemplateMap(map[string]any{
+		"body": map[string]any{
+			"type":              "status",
+			"{{ vars.tenant }}": map[string]any{"active": true},
+			"item-{{ vars.n }}": "{{ vars.n }}",
+			"plain {not} templ": 1,
+		},
+		"headers": map[string]any{"{{ vars.hdr }}": "{{ vars.tenant }}"},
+	}, env)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := map[string]any{
+		"body": map[string]any{
+			"type":              "status",
+			`t"1`:               map[string]any{"active": true},
+			"item-2":            2,
+			"plain {not} templ": 1,
+		},
+		"headers": map[string]any{"x-tenant": `t"1`},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("EvalTemplateMap() = %#v, want %#v", got, want)
+	}
+}
+
+func TestEvalTemplateMapKeyErrors(t *testing.T) {
+	e := &Expr{}
+	env := map[string]any{"vars": map[string]any{"a": "type"}}
+
+	// A key that becomes another key is an error, named by the key written.
+	_, err := e.EvalTemplateMap(map[string]any{
+		"body": map[string]any{"type": 1, "{{ vars.a }}": 2},
+	}, env)
+	var fe *FieldError
+	if !errors.As(err, &fe) || fe.Path != "body.{{ vars.a }}" || !strings.Contains(err.Error(), `comes to the same key as "type"`) {
+		t.Errorf("error = %v, want one naming the keys as written", err)
+	}
+
+	// The key a template comes to may be a credential, such as a token, so
+	// the error names the keys as written alone.
+	secret := map[string]any{"vars": map[string]any{"a": "runtime-token", "b": "runtime-token"}}
+	_, err = e.EvalTemplateMap(map[string]any{"{{ vars.a }}": 1, "{{ vars.b }}": 2}, secret)
+	if err == nil || strings.Contains(err.Error(), "runtime-token") {
+		t.Errorf("error = %v, want one that does not show the key it came to", err)
+	}
+
+	// A key that cannot be evaluated is an error, and the others are kept.
+	got, err := e.EvalTemplateMap(map[string]any{"{{ nosuch() }}": 1, "ok": "{{ vars.a }}"}, env)
+	if !errors.As(err, &fe) || fe.Path != "{{ nosuch() }}" {
+		t.Errorf("error = %v, want one naming the key", err)
+	}
+	if !reflect.DeepEqual(got, map[string]any{"ok": "type"}) {
+		t.Errorf("EvalTemplateMap() = %#v, want the other keys kept", got)
+	}
+}
+
+// TestEvalTemplateMapLimitCountsEveryKey checks that keys that fail or
+// collide count against the number of keys a map is evaluated for.
+func TestEvalTemplateMapLimitCountsEveryKey(t *testing.T) {
+	input := make(map[string]any)
+	for i := 0; i < 1500; i++ {
+		input[fmt.Sprintf("{{ nosuch() }}-%04d", i)] = i
+	}
+	_, err := (&Expr{}).EvalTemplateMap(input, map[string]any{})
+	if n := len(unwrapAll(err)); n > 1001 {
+		t.Errorf("%d keys were evaluated, want no more than the limit", n)
+	}
+}
+
+// unwrapAll returns the errors joined into err.
+func unwrapAll(err error) []error {
+	if j, ok := err.(interface{ Unwrap() []error }); ok {
+		return j.Unwrap()
+	}
+	if err == nil {
+		return nil
+	}
+	return []error{err}
+}
+
+// TestEvalTemplateMapEvaluatedPath checks that an error under a key holding
+// templates also says the path as the keys were evaluated.
+func TestEvalTemplateMapEvaluatedPath(t *testing.T) {
+	_, err := (&Expr{}).EvalTemplateMap(map[string]any{
+		"headers": map[string]any{"{{ vars.h }}": "{{ nosuch() }}"},
+		"plain":   "{{ nosuch() }}",
+	}, map[string]any{"vars": map[string]any{"h": "authorization"}})
+	got := map[string]string{}
+	for _, e := range unwrapAll(err) {
+		var fe *FieldError
+		if errors.As(e, &fe) {
+			got[fe.Path] = fe.EvaluatedPath
+		}
+	}
+	want := map[string]string{"headers.{{ vars.h }}": "headers.authorization", "plain": "plain"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("paths = %v, want %v", got, want)
 	}
 }

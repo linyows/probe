@@ -988,8 +988,13 @@ func redactCredentialErrors(err error) error {
 	var errs []error
 	for _, e := range unwrapJoined(err) {
 		var fe *expr.FieldError
-		if errors.As(e, &fe) && pathHoldsCredential(fe.Path) {
-			e = &expr.FieldError{Path: fe.Path, Err: errCredentialTemplate}
+		// A key named by a template is a credential when it comes to name
+		// one, as a header named by a var may. Only a template that could
+		// not be evaluated is hidden: another error, such as two keys that
+		// come to one, quotes no credential.
+		var te *expr.TemplateError
+		if errors.As(e, &fe) && errors.As(fe.Err, &te) && (pathHoldsCredential(fe.Path) || pathHoldsCredential(fe.EvaluatedPath)) {
+			e = &expr.FieldError{Path: fe.Path, EvaluatedPath: fe.EvaluatedPath, Err: errCredentialTemplate}
 		}
 		errs = append(errs, e)
 	}

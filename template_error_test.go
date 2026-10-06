@@ -404,3 +404,71 @@ func TestWorkflow_RepeatKeepsFailureKind(t *testing.T) {
 		})
 	}
 }
+
+// TestWorkflow_TemplateErrorHidesCredentialsUnderAKeyTemplate checks that a
+// value under a key that becomes a credential header, such as one whose name
+// comes from a var, has the details of its error hidden as one under the
+// header written so does, while the error names the key as written.
+func TestWorkflow_TemplateErrorHidesCredentialsUnderAKeyTemplate(t *testing.T) {
+	runner := NewMockActionRunner()
+	runner.SetResult("ok", map[string]any{"req": map[string]any{}, "res": map[string]any{"code": 200}})
+	w := &Workflow{
+		Name: "credentials",
+		Vars: map[string]any{"header": "authorization"},
+		Jobs: []Job{{
+			Name: "job",
+			Steps: []*Step{{
+				Name: "a credential header named by a template",
+				Uses: "ok",
+				With: map[string]any{
+					"headers": map[string]any{"{{ vars.header }}": "{{ 'Bearer literal-token' + outputs.login.token }}"},
+				},
+				actionRunner: runner,
+			}},
+		}},
+		printer: newBufferPrinter(),
+	}
+
+	out, r := templateErrorOutput(t, w)
+	if strings.Contains(out, "literal-token") {
+		t.Errorf("the credential leaked into the output:\n%s", out)
+	}
+	want := "with.headers.{{ vars.header }}: the template could not be evaluated"
+	if msg := r.Jobs[0].Steps[0].Failure.Message; !strings.Contains(msg, want) {
+		t.Errorf("failure message %q does not contain %q", msg, want)
+	}
+}
+
+// TestWorkflow_KeyCollisionUnderACredentialIsShown checks that a key that
+// comes to a credential header taken is reported as such, rather than as a
+// template that could not be evaluated: it was, and its error holds no
+// credential.
+func TestWorkflow_KeyCollisionUnderACredentialIsShown(t *testing.T) {
+	runner := NewMockActionRunner()
+	runner.SetResult("ok", map[string]any{"req": map[string]any{}, "res": map[string]any{"code": 200}})
+	w := &Workflow{
+		Name: "collision",
+		Vars: map[string]any{"header": "authorization"},
+		Jobs: []Job{{
+			Name: "job",
+			Steps: []*Step{{
+				Name: "two authorization headers",
+				Uses: "ok",
+				With: map[string]any{
+					"headers": map[string]any{
+						"authorization":     "Bearer literal-token",
+						"{{ vars.header }}": "Bearer other-token",
+					},
+				},
+				actionRunner: runner,
+			}},
+		}},
+		printer: newBufferPrinter(),
+	}
+
+	_, r := templateErrorOutput(t, w)
+	want := `with.headers.{{ vars.header }}: key {{ vars.header }} comes to the same key as "authorization"`
+	if msg := r.Jobs[0].Steps[0].Failure.Message; !strings.Contains(msg, want) {
+		t.Errorf("failure message %q does not contain %q", msg, want)
+	}
+}

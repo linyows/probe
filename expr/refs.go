@@ -38,8 +38,9 @@ func (f *refFinder) value(v any) {
 		}
 	case map[string]any:
 		// In the order of the sorted keys, so that the keys returned do not
-		// depend on map iteration.
+		// depend on map iteration. A key may hold templates as well.
 		for _, key := range slices.Sorted(maps.Keys(v)) {
+			f.value(key)
 			f.value(v[key])
 		}
 	case []any:
@@ -112,8 +113,8 @@ func CallsTemplate(v any) bool {
 			}
 		}
 	case map[string]any:
-		for _, e := range v {
-			if CallsTemplate(e) {
+		for k, e := range v {
+			if CallsTemplate(k) || CallsTemplate(e) {
 				return true
 			}
 		}
