@@ -55,3 +55,26 @@ jobs:
       delete: /delete
     test: |
       res.code == 200
+  - name: Get an id
+    id: tenant
+    uses: http
+    with:
+      get: /uuid
+    test: res.code == 200
+    outputs:
+      id: res.body.uuid
+  # a key can be a template too, such as an id a previous step returned
+  - name: Post with the id as a key
+    uses: http
+    with:
+      post: /post
+      headers:
+        x-tenant-{{outputs.tenant.id}}: active
+      body:
+        type: status
+        "{{outputs.tenant.id}}":
+          active: true
+    test: |
+      res.code == 200 &&
+      res.body.json[outputs.tenant.id].active == true &&
+      any(keys(res.body.headers), lower(#) == "x-tenant-" + outputs.tenant.id)

@@ -48,6 +48,24 @@ A template ends at the `}}` that closes it, not at the first `}}` in the text. T
 
 `{{{` is read as a literal `{` followed by a template, so `{{{vars.name}}}` prints the value in braces. A template that starts with a map literal therefore needs a space after `{{`, as in `{{ {'a': 1} }}`. A `{{` that is never closed is left as text.
 
+A key of a map can hold templates as well, so that a key comes from a value known only when the workflow runs, such as an ID a previous step returned or a header name:
+
+```yaml
+- name: Activate the tenant
+  uses: http
+  with:
+    post: /status
+    headers:
+      content-type: application/json
+      "{{ vars.tenant_header }}": "{{ outputs.tenant.id }}"
+    body:
+      type: status
+      "{{ outputs.tenant.id }}":
+        active: true
+```
+
+A key is evaluated as text, as a key is one. Two keys that come to the same key are an error, and so is a key that cannot be evaluated; the error names the key as written. A var whose key reads another var is evaluated after it, as one whose value reads it is.
+
 ### Template Expression Context
 
 Template expressions have access to several data sources:

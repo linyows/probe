@@ -625,6 +625,9 @@ func (e *Expr) evalTemplateMap(input map[string]any, env any, path string, errs 
 	// Sorted so that the errors come in the same order on every run.
 	slices.Sort(keys)
 
+	// written records the key as written that each key comes from, to tell
+	// two that come to the same key apart.
+	written := make(map[string]string, len(keys))
 	for _, key := range keys {
 		// Security: Limit the number of processed keys to prevent DoS
 		if len(results) > 1000 {
@@ -632,11 +635,30 @@ func (e *Expr) evalTemplateMap(input map[string]any, env any, path string, errs 
 			break
 		}
 
+		// An error names the key as written, which is what can be found in
+		// the workflow.
 		keyPath := key
 		if path != "" {
 			keyPath = path + "." + key
 		}
-		results[key] = e.evalTemplateValue(input[key], env, keyPath, errs)
+
+		// A key holding templates is evaluated as text, as a key is one.
+		name := key
+		if len(findTemplates(key)) > 0 {
+			out, err := e.EvalTemplate(key, env)
+			if err != nil {
+				*errs = append(*errs, &FieldError{Path: keyPath, Err: err})
+				continue
+			}
+			name = out
+		}
+		if from, taken := written[name]; taken {
+			*errs = append(*errs, &FieldError{Path: keyPath, Err: fmt.Errorf("key %q is also written as %q", name, from)})
+			continue
+		}
+		written[name] = key
+
+		results[name] = e.evalTemplateValue(input[key], env, keyPath, errs)
 	}
 
 	return results

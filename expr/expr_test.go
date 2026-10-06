@@ -1669,3 +1669,56 @@ func TestNilExprEvaluates(t *testing.T) {
 		t.Errorf("EvalTemplate() = %q, %v", got, err)
 	}
 }
+
+func TestEvalTemplateMapEvaluatesKeys(t *testing.T) {
+	e := &Expr{}
+	env := map[string]any{"vars": map[string]any{"tenant": `t"1`, "n": 2, "hdr": "x-tenant"}}
+
+	got, err := e.EvalTemplateMap(map[string]any{
+		"body": map[string]any{
+			"type":              "status",
+			"{{ vars.tenant }}": map[string]any{"active": true},
+			"item-{{ vars.n }}": "{{ vars.n }}",
+			"plain {not} templ": 1,
+		},
+		"headers": map[string]any{"{{ vars.hdr }}": "{{ vars.tenant }}"},
+	}, env)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := map[string]any{
+		"body": map[string]any{
+			"type":              "status",
+			`t"1`:               map[string]any{"active": true},
+			"item-2":            2,
+			"plain {not} templ": 1,
+		},
+		"headers": map[string]any{"x-tenant": `t"1`},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("EvalTemplateMap() = %#v, want %#v", got, want)
+	}
+}
+
+func TestEvalTemplateMapKeyErrors(t *testing.T) {
+	e := &Expr{}
+	env := map[string]any{"vars": map[string]any{"a": "type"}}
+
+	// A key that becomes another key is an error, named by the key written.
+	_, err := e.EvalTemplateMap(map[string]any{
+		"body": map[string]any{"type": 1, "{{ vars.a }}": 2},
+	}, env)
+	var fe *FieldError
+	if !errors.As(err, &fe) || fe.Path != "body.{{ vars.a }}" || !strings.Contains(err.Error(), `key "type" is also written as "type"`) {
+		t.Errorf("error = %v, want one naming the key", err)
+	}
+
+	// A key that cannot be evaluated is an error, and the others are kept.
+	got, err := e.EvalTemplateMap(map[string]any{"{{ nosuch() }}": 1, "ok": "{{ vars.a }}"}, env)
+	if !errors.As(err, &fe) || fe.Path != "{{ nosuch() }}" {
+		t.Errorf("error = %v, want one naming the key", err)
+	}
+	if !reflect.DeepEqual(got, map[string]any{"ok": "type"}) {
+		t.Errorf("EvalTemplateMap() = %#v, want the other keys kept", got)
+	}
+}

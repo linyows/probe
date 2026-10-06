@@ -983,6 +983,27 @@ func Test_evalVarsTemplateReadsVarsByAKeyKnownWhenItRuns(t *testing.T) {
 	}
 }
 
+// Test_evalVarsKeyReadsAVar checks that a var whose key reads another var is
+// evaluated after it, as one whose value reads it is.
+func Test_evalVarsKeyReadsAVar(t *testing.T) {
+	wf := &Workflow{
+		Name: "Test",
+		Vars: map[string]any{
+			"body":   map[string]any{"{{ vars.tenant }}": map[string]any{"active": true}},
+			"tenant": "{{ TENANT }}",
+		},
+		env: map[string]string{"TENANT": "acme"},
+	}
+	actual, err := wf.evalVars()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := map[string]any{"acme": map[string]any{"active": true}}
+	if !reflect.DeepEqual(actual["body"], want) {
+		t.Errorf("body = %#v, want %#v", actual["body"], want)
+	}
+}
+
 func Test_evalVarsCycleIsReproducible(t *testing.T) {
 	// a reads b and c through the values of a map, and both read a back, so
 	// the cycle reported depends on which of them is visited first.
