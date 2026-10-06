@@ -15,6 +15,8 @@ func TestRequestStepSendsATraceHeader(t *testing.T) {
 	}))
 	defer srv.Close()
 
+	// A step without an id, as in a job run by the embedded action, is named
+	// as probe names one in a workflow.
 	step := actionrpc.Step{RunID: "7f3a9c21e4b05d68", JobID: "login", Index: 2, Repeat: 1, Attempt: 3}
 	tests := []struct {
 		name   string
@@ -28,14 +30,14 @@ func TestRequestStepSendsATraceHeader(t *testing.T) {
 			trace:  true,
 			step:   step,
 			header: "X-Probe-Trace",
-			want:   "run=7f3a9c21e4b05d68; job=login; step=2; repeat=1; attempt=3",
+			want:   "run=7f3a9c21e4b05d68; job=login; step=step_2; repeat=1; attempt=3",
 		},
 		{
 			name:   "a header name is used as given",
 			trace:  "X-Request-Id",
 			step:   step,
 			header: "X-Request-Id",
-			want:   "run=7f3a9c21e4b05d68; job=login; step=2; repeat=1; attempt=3",
+			want:   "run=7f3a9c21e4b05d68; job=login; step=step_2; repeat=1; attempt=3",
 		},
 		{
 			name:   "a step with an id is named by it",

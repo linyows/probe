@@ -56,14 +56,17 @@ func validHeaderName(s string) bool {
 	return true
 }
 
-// traceValue says where a request comes from: the run, the job, the step by
-// its id or else its position, the run of a repeated job and the attempt of a
-// retried step. Each value is escaped as in a query, so that one holding a
-// space, a semicolon or a letter outside ASCII cannot break the header.
+// traceValue says where a request comes from: the run, the job, the step,
+// the run of a repeated job and the attempt of a retried step. Each value is
+// escaped as in a query, so that one holding a space, a semicolon or a letter
+// outside ASCII cannot break the header.
 func traceValue(s actionrpc.Step) string {
+	// A step without an id, such as one in a job run by the embedded action,
+	// which probe does not give ids to, is named as probe names one in a
+	// workflow, step_<index>.
 	step := s.ID
 	if step == "" {
-		step = strconv.Itoa(s.Index)
+		step = "step_" + strconv.Itoa(s.Index)
 	}
 	return fmt.Sprintf("run=%s; job=%s; step=%s; repeat=%d; attempt=%d",
 		url.QueryEscape(s.RunID), url.QueryEscape(s.JobID), url.QueryEscape(step), s.Repeat, s.Attempt)
