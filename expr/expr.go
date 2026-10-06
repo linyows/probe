@@ -658,8 +658,10 @@ func (e *Expr) evalTemplateMap(input map[string]any, env any, path, evalPath str
 			name = out
 		}
 		nameEvalPath := joinPath(evalPath, name)
+		// The keys are named as written: the key they come to may be a
+		// credential, such as a token, which nothing has learned to hide.
 		if from, taken := written[name]; taken {
-			*errs = append(*errs, &FieldError{Path: keyPath, EvaluatedPath: nameEvalPath, Err: fmt.Errorf("key %q is also written as %q", name, from)})
+			*errs = append(*errs, &FieldError{Path: keyPath, EvaluatedPath: nameEvalPath, Err: fmt.Errorf("key %s comes to the same key as %q", key, from)})
 			continue
 		}
 		written[name] = key

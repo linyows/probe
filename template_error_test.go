@@ -438,3 +438,37 @@ func TestWorkflow_TemplateErrorHidesCredentialsUnderAKeyTemplate(t *testing.T) {
 		t.Errorf("failure message %q does not contain %q", msg, want)
 	}
 }
+
+// TestWorkflow_KeyCollisionUnderACredentialIsShown checks that a key that
+// comes to a credential header taken is reported as such, rather than as a
+// template that could not be evaluated: it was, and its error holds no
+// credential.
+func TestWorkflow_KeyCollisionUnderACredentialIsShown(t *testing.T) {
+	runner := NewMockActionRunner()
+	runner.SetResult("ok", map[string]any{"req": map[string]any{}, "res": map[string]any{"code": 200}})
+	w := &Workflow{
+		Name: "collision",
+		Vars: map[string]any{"header": "authorization"},
+		Jobs: []Job{{
+			Name: "job",
+			Steps: []*Step{{
+				Name: "two authorization headers",
+				Uses: "ok",
+				With: map[string]any{
+					"headers": map[string]any{
+						"authorization":     "Bearer literal-token",
+						"{{ vars.header }}": "Bearer other-token",
+					},
+				},
+				actionRunner: runner,
+			}},
+		}},
+		printer: newBufferPrinter(),
+	}
+
+	_, r := templateErrorOutput(t, w)
+	want := `with.headers.{{ vars.header }}: key {{ vars.header }} comes to the same key as "authorization"`
+	if msg := r.Jobs[0].Steps[0].Failure.Message; !strings.Contains(msg, want) {
+		t.Errorf("failure message %q does not contain %q", msg, want)
+	}
+}

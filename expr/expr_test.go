@@ -1710,8 +1710,16 @@ func TestEvalTemplateMapKeyErrors(t *testing.T) {
 		"body": map[string]any{"type": 1, "{{ vars.a }}": 2},
 	}, env)
 	var fe *FieldError
-	if !errors.As(err, &fe) || fe.Path != "body.{{ vars.a }}" || !strings.Contains(err.Error(), `key "type" is also written as "type"`) {
-		t.Errorf("error = %v, want one naming the key", err)
+	if !errors.As(err, &fe) || fe.Path != "body.{{ vars.a }}" || !strings.Contains(err.Error(), `comes to the same key as "type"`) {
+		t.Errorf("error = %v, want one naming the keys as written", err)
+	}
+
+	// The key a template comes to may be a credential, such as a token, so
+	// the error names the keys as written alone.
+	secret := map[string]any{"vars": map[string]any{"a": "runtime-token", "b": "runtime-token"}}
+	_, err = e.EvalTemplateMap(map[string]any{"{{ vars.a }}": 1, "{{ vars.b }}": 2}, secret)
+	if err == nil || strings.Contains(err.Error(), "runtime-token") {
+		t.Errorf("error = %v, want one that does not show the key it came to", err)
 	}
 
 	// A key that cannot be evaluated is an error, and the others are kept.
