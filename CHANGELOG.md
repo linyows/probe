@@ -4,6 +4,48 @@ Release notes for each version are generated from the commits by GoReleaser.
 This file records what those notes cannot carry well: changes that break code
 importing probe as a library.
 
+## v1.19.0 (2026-10-06)
+
+### Breaking Changes
+
+This release breaks the Go API in two narrow ways, both in what was added
+since v1.18.0. Code that only calls these functions is unaffected; code that
+uses them as values or compares them has to be updated.
+
+`(*Job).RunStandalone` takes options after its other parameters, as
+`...StandaloneOption`, so that a job run by the embedded action can be told
+the run of the step that embeds it with `WithRunID`. A call compiles as it
+did, but the method as a value has another type, so assigning it to a
+variable of the old function type, or an interface declaring the old
+signature, no longer compiles.
+
+| Before | After |
+|---|---|
+| `func(map[string]any, *Printer, string, string) JobRun` | `func(map[string]any, *Printer, string, string, ...StandaloneOption) JobRun` |
+
+`expr.Expr` has a field of function type, `BeforeTemplate`, which `template()`
+calls with the text it is about to expand, so `Expr` is no longer
+comparable: comparing two with `==`, or using one as a map key, no longer
+compiles.
+
+### Behaviour Changes
+
+Every request of the http action has a cookie jar, so a cookie a server
+sets on a redirect is sent on to where the redirect leads, as a browser
+sends it; it used to be dropped. A `cookie` header written in `headers` is
+still sent. The cookies set are in `res.cookies`, and are kept across steps
+only with the new `keep_cookies`.
+
+A key of a map in `with`, `vars` or a step's `vars` that holds `{{ }}` is
+now evaluated as a template, as a value is; it used to be sent as written.
+Two keys that come to the same key are an error.
+
+More is hidden in the output: the values of the http action's `cookies` and
+`res.cookies`, and a secret or credential as a form body percent-encodes it.
+With `-v`, the http action logs the method, URL, status and headers of each
+request and response, with credentials hidden, where it used to log only a
+warning that they could not be encoded.
+
 ## v1.18.0 (2026-10-05)
 
 ### Breaking Changes
