@@ -13,6 +13,7 @@ import (
 
 	"github.com/fatih/color"
 	"github.com/hashicorp/go-hclog"
+	"github.com/linyows/probe/actionrpc"
 	"github.com/linyows/probe/expr"
 	"github.com/linyows/probe/procgroup"
 )
@@ -1984,5 +1985,52 @@ func TestStep_processActionResultStdoutJSON(t *testing.T) {
 				t.Errorf("res.stdout = %#v, want it kept as %#v", step.ctx.Res["stdout"], stdout)
 			}
 		})
+	}
+}
+
+// TestStepTellsTheActionAboutTheStep checks that every call of an action is
+// told the run, the job and the step it is made for.
+func TestStepTellsTheActionAboutTheStep(t *testing.T) {
+	runner := NewMockActionRunner()
+	runner.SetResult("hello", map[string]any{"status": 0})
+	step := func(id, name, test string, retry *StepRetry) *Step {
+		return &Step{ID: id, Name: name, Uses: "hello", Test: test, Retry: retry, actionRunner: runner}
+	}
+	workflow := &Workflow{
+		Name: "steps",
+		Vars: map[string]any{"who": "alice"},
+		Jobs: []Job{
+			{
+				Name: "Log in {{ vars.who }}",
+				ID:   "login",
+				Steps: []*Step{
+					step("auth", "Post as {{ vars.who }}", "", nil),
+					step("", "Retried", "false", &StepRetry{MaxAttempts: 2, Interval: Interval{Duration: time.Millisecond}}),
+				},
+				Repeat: &Repeat{Count: 2},
+			},
+		},
+		printer: newBufferPrinter(),
+	}
+	_ = workflow.Start(Config{})
+
+	run := workflow.RunID()
+	if len(run) != 16 {
+		t.Fatalf("RunID() = %q, want 16 hex digits", run)
+	}
+	var got []actionrpc.Step
+	for _, c := range runner.Calls["hello"] {
+		got = append(got, c.Step)
+	}
+	first := func(repeat int) []actionrpc.Step {
+		return []actionrpc.Step{
+			{RunID: run, JobID: "login", JobName: "Log in alice", Index: 0, ID: "auth", Name: "Post as alice", Repeat: repeat, Attempt: 1},
+			{RunID: run, JobID: "login", JobName: "Log in alice", Index: 1, Name: "Retried", Repeat: repeat, Attempt: 1},
+			{RunID: run, JobID: "login", JobName: "Log in alice", Index: 1, Name: "Retried", Repeat: repeat, Attempt: 2},
+		}
+	}
+	want := append(first(0), first(1)...)
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("steps told =\n%+v\nwant\n%+v", got, want)
 	}
 }

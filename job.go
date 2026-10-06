@@ -63,6 +63,7 @@ func (j *Job) run(ctx JobContext) (failed bool, err error) {
 		ctx.Printer.PrintError("job %q: name: %v", j.Name, err)
 		return false, NewExecutionError("job_start", "failed to expand job name", err)
 	}
+	ctxPtr.jobName = j.Name
 
 	// Check if job should be skipped
 	if j.shouldSkip(ev, *ctxPtr) {
@@ -311,9 +312,29 @@ type JobRun struct {
 // RunStandalone runs the job outside a workflow, as an embedded job is run.
 // A local action is resolved relative to baseDir, the directory of the file
 // the job comes from, or to the working directory when baseDir is empty.
-func (j *Job) RunStandalone(vars map[string]any, printer *Printer, jobID, baseDir string) JobRun {
-	run, _ := j.runStandalone(vars, printer, jobID, baseDir, true)
+func (j *Job) RunStandalone(vars map[string]any, printer *Printer, jobID, baseDir string, opts ...StandaloneOption) JobRun {
+	cfg := standaloneConfig{}
+	for _, opt := range opts {
+		opt(&cfg)
+	}
+	run, _ := j.runStandalone(vars, printer, jobID, baseDir, cfg.runID, true)
 	return run
+}
+
+// StandaloneOption changes how RunStandalone runs a job.
+type StandaloneOption func(*standaloneConfig)
+
+type standaloneConfig struct {
+	runID string
+}
+
+// WithRunID runs the job as part of the run id names, such as the run of the
+// step that embeds it, so that its actions are told the same run. Without it
+// the job is a run of its own.
+func WithRunID(id string) StandaloneOption {
+	return func(c *standaloneConfig) {
+		c.runID = id
+	}
 }
 
 // RunIndependently executes a job independently with its own context and result tracking
@@ -323,7 +344,7 @@ func (j *Job) RunStandalone(vars map[string]any, printer *Printer, jobID, baseDi
 // it, as it did before RunStandalone existed: a skipped job or step does not
 // need its action, and one that cannot be resolved fails its step.
 func (j *Job) RunIndependently(vars map[string]any, printer *Printer, jobID string) (bool, map[string]any, string, string, time.Duration) {
-	run, failed := j.runStandalone(vars, printer, jobID, "", false)
+	run, failed := j.runStandalone(vars, printer, jobID, "", "", false)
 	errorMsg := ""
 	switch {
 	case run.Err != nil:
@@ -336,9 +357,12 @@ func (j *Job) RunIndependently(vars map[string]any, printer *Printer, jobID stri
 
 // runStandalone is RunStandalone, also reporting whether a step failed.
 // resolveFirst resolves the job's external actions before any step runs.
-func (j *Job) runStandalone(vars map[string]any, printer *Printer, jobID, baseDir string, resolveFirst bool) (JobRun, bool) {
+func (j *Job) runStandalone(vars map[string]any, printer *Printer, jobID, baseDir, runID string, resolveFirst bool) (JobRun, bool) {
 	start := time.Now()
 	j.ID = jobID
+	if runID == "" {
+		runID = newRunID()
+	}
 	// The job runs outside Workflow.Start, which is what installs a masker.
 	// One is installed here, so that credentials the job's own steps pass to
 	// actions are learned and hidden as they are in a workflow.
@@ -364,6 +388,7 @@ func (j *Job) runStandalone(vars map[string]any, printer *Printer, jobID, baseDi
 		countersMu: &sync.Mutex{},
 		background: procgroup.NewTracker(),
 		baseDir:    baseDir,
+		runID:      runID,
 	}
 	// This job runs inside the plugin process of the step that embeds it,
 	// which exits once the job is done, so its background processes go then.

@@ -42,6 +42,8 @@ type Option func(*Callback)
 type Callback struct {
 	before func(path string, vars map[string]any)
 	after  func(result *Result)
+	// runID is the run the job is part of, or empty for a run of its own.
+	runID string
 }
 
 func NewReq() *Req {
@@ -77,7 +79,11 @@ func (r *Req) Do() (*Result, error) {
 	// workflow is found next to the workflow file.
 	jobID := "embedded"
 	printer := probe.NewPrinter(true, []string{jobID})
-	run := job.RunStandalone(r.Vars, printer, jobID, filepath.Dir(absPath))
+	var opts []probe.StandaloneOption
+	if r.cb != nil && r.cb.runID != "" {
+		opts = append(opts, probe.WithRunID(r.cb.runID))
+	}
+	run := job.RunStandalone(r.Vars, printer, jobID, filepath.Dir(absPath), opts...)
 
 	result.RT = time.Since(start)
 
@@ -192,5 +198,13 @@ func WithBefore(f func(path string, vars map[string]any)) Option {
 func WithAfter(f func(result *Result)) Option {
 	return func(c *Callback) {
 		c.after = f
+	}
+}
+
+// WithRunID runs the job as part of the run id names, the run of the step
+// that embeds it, so that the actions of the job are told the same run.
+func WithRunID(id string) Option {
+	return func(c *Callback) {
+		c.runID = id
 	}
 }

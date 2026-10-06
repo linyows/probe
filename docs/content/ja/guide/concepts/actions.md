@@ -931,18 +931,37 @@ type Action interface {
 
 `with`にはステップの`with`パラメータが渡されます。返したマップは、組み込みアクションと同じくステップの`req`、`res`、`rt`、`status`になります。結果に含めるマップのキーは、文字列、数値、真偽値のいずれかにします。キーは文字列として送られるので、`map[int]string{404: "not found"}`は`{"404": "not found"}`として届きます。それ以外の型のキーや、`1`と`"1"`のように文字列にすると同じになるキーがあると、値を落とさずにステップをアクションエラーで失敗させます。
 
-#### ステップ間で状態を保持する
+#### ステップを知り、状態を保持する
 
-httpアクションがCookieを保持するように、ステップをまたいで何かを保持するアクションは、`actionrpc.StatefulAction`も実装します：
+httpアクションがトレースヘッダーやCookieのためにそうするように、実行するステップを知る必要があるアクションや、ステップをまたいで何かを保持するアクションは、`actionrpc.StepAction`も実装します：
 
 ```go
-type StatefulAction interface {
+type StepAction interface {
     Action
-    RunWithState(with, state map[string]any) (result, newState map[string]any, err error)
+    RunStep(call Call) (result, newState map[string]any, err error)
+}
+
+type Call struct {
+    With  map[string]any // ステップのwithパラメータ
+    State map[string]any // アクションがジョブに残した状態
+    Step  Step           // 実行するステップ
+}
+
+type Step struct {
+    RunID   string // probeの実行。すべてのステップで同じ
+    JobID   string
+    JobName string
+    Index   int    // ジョブの中でのステップの位置（0から）
+    ID      string
+    Name    string
+    Repeat  int    // 繰り返すジョブの何回目か（0から）
+    Attempt int    // リトライするステップの何回目の試行か（1から）
 }
 ```
 
-`state`には、そのアクションがジョブに残した状態が入ります。残していなければnilです。Probeは`newState`を読まずに保持し、同じジョブでそのアクションを使う次のステップに渡します。状態は結果と同じく、文字列をキーとするマップ、リスト、単純な値で表します。そう表せない状態は、ステップをアクションエラーで失敗させます。`newState`がnilの場合は、状態をそのまま保ちます。ステップがアクションエラーで失敗した場合やタイムアウトした場合も同様です。状態はジョブごと、アクションごとに分けて保持し、繰り返すジョブの各回と、embeddedアクションで実行するジョブは、状態を持たない状態から始まります。状態は出力に表示しないので、認証情報を入れても構いません。
+Probeは、こうしたアクションに実行するステップを常に伝えます。それをどう使うかはアクション次第です。`RunID`は、1回の実行のすべてのステップで同じで、embeddedアクションで実行するジョブでも同じです。
+
+`State`には、そのアクションがジョブに残した状態が入ります。残していなければnilです。Probeは`newState`を読まずに保持し、同じジョブでそのアクションを使う次のステップに渡します。状態は結果と同じく、文字列をキーとするマップ、リスト、単純な値で表します。そう表せない状態は、ステップをアクションエラーで失敗させます。`newState`がnilの場合は、状態をそのまま保ちます。ステップがアクションエラーで失敗した場合やタイムアウトした場合も同様です。状態はジョブごと、アクションごとに分けて保持し、繰り返すジョブの各回と、embeddedアクションで実行するジョブは、状態を持たない状態から始まります。状態は出力に表示しないので、認証情報を入れても構いません。
 
 ### 外部アクション
 

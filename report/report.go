@@ -124,7 +124,10 @@ const (
 // Report is the result of a workflow run in a form meant for machines: the
 // JSON file is this structure as is, and the other formats are rendered from it.
 type Report struct {
-	Name        string    `json:"name"`
+	Name string `json:"name"`
+	// RunID names the run, as actions are told it, such as in the trace
+	// header of the http action.
+	RunID       string    `json:"run_id,omitempty"`
 	Description string    `json:"description,omitempty"`
 	Status      string    `json:"status"`
 	StartedAt   time.Time `json:"started_at"`

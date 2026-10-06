@@ -441,17 +441,20 @@ func TestServer_RunUnsendableResult(t *testing.T) {
 	}
 }
 
-// statefulAction keeps the number of times it ran in its state.
+// statefulAction keeps the number of times it ran in its state, and records
+// the step it was told about.
 type statefulAction struct {
 	MockActions
 	keep bool
+	step Step
 }
 
-func (a *statefulAction) RunWithState(with, state map[string]any) (map[string]any, map[string]any, error) {
+func (a *statefulAction) RunStep(call Call) (map[string]any, map[string]any, error) {
+	a.step = call.Step
 	if a.keep {
 		return map[string]any{"kept": true}, nil, nil
 	}
-	n, _ := state["n"].(int64)
+	n, _ := call.State["n"].(int64)
 	return map[string]any{"n": n}, map[string]any{"n": n + 1, "secret": "s3cr3t"}, nil
 }
 
@@ -463,12 +466,12 @@ func (c directClient) Run(ctx context.Context, in *pb.RunRequest, _ ...grpc.Call
 	return c.s.Run(ctx, in)
 }
 
-func TestClientRunWithState(t *testing.T) {
+func TestClientRunStep(t *testing.T) {
 	var logBuf bytes.Buffer
 	log := hclog.New(&hclog.LoggerOptions{Output: &logBuf, Level: hclog.Debug})
 	c := &Client{client: directClient{&Server{Impl: &statefulAction{}, log: log}}}
 
-	result, state, err := c.RunWithState(map[string]any{"a": "b"}, nil)
+	result, state, err := c.RunStep(Call{With: map[string]any{"a": "b"}})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -479,7 +482,7 @@ func TestClientRunWithState(t *testing.T) {
 		t.Errorf("state = %v", state)
 	}
 
-	result, state, err = c.RunWithState(map[string]any{}, state)
+	result, state, err = c.RunStep(Call{With: map[string]any{}, State: state})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -493,10 +496,10 @@ func TestClientRunWithState(t *testing.T) {
 	}
 }
 
-func TestClientRunWithStateOfAnActionWithout(t *testing.T) {
+func TestClientRunStepOfAnActionWithoutState(t *testing.T) {
 	for _, impl := range []Action{&MockActions{}, &statefulAction{keep: true}} {
 		c := &Client{client: directClient{&Server{Impl: impl}}}
-		_, state, err := c.RunWithState(map[string]any{}, map[string]any{"n": 1})
+		_, state, err := c.RunStep(Call{With: map[string]any{}, State: map[string]any{"n": 1}})
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -570,5 +573,17 @@ func TestSendable(t *testing.T) {
 		if _, err := Sendable(map[string]any{"bad": v}); err == nil {
 			t.Errorf("%s cannot be sent", name)
 		}
+	}
+}
+
+func TestClientRunStepTellsTheStep(t *testing.T) {
+	a := &statefulAction{}
+	c := &Client{client: directClient{&Server{Impl: a}}}
+	step := Step{RunID: "r1", JobID: "login", JobName: "Log in", Index: 2, ID: "auth", Name: "Post", Repeat: 1, Attempt: 3}
+	if _, _, err := c.RunStep(Call{With: map[string]any{}, Step: step}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if a.step != step {
+		t.Errorf("the action was told %+v, want %+v", a.step, step)
 	}
 }

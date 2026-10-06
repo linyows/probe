@@ -10,6 +10,26 @@ message RunRequest {
     google.protobuf.Struct with = 2;
     // The state the action left in the job before, for a stateful action.
     google.protobuf.Struct state = 3;
+    // The step the action runs for.
+    Step step = 4;
+}
+
+// Step tells an action about the step it runs for, for it to use as it sees
+// fit, such as to say where a request comes from.
+message Step {
+    // The run of probe, the same for every step of every job in it.
+    string run_id = 1;
+    string job_id = 2;
+    string job_name = 3;
+    // The position of the step in the job, from 0.
+    int64 index = 4;
+    // The id the step is given, or empty.
+    string id = 5;
+    string name = 6;
+    // Which run of a repeated job, from 0.
+    int64 repeat = 7;
+    // Which attempt of a retried step, from 1.
+    int64 attempt = 8;
 }
 
 message RunResponse {

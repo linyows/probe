@@ -459,6 +459,12 @@ jobs:
       cmd: ./probe examples/file-template.yml
     test: res.code == 0
     echo: "{{res.stdout}}"
+  - name: http-trace.yml
+    uses: shell
+    with:
+      cmd: ./probe examples/http-trace.yml
+    test: res.code == 0
+    echo: "{{res.stdout}}"
   - name: secrets-cookies.yml hides the cookies given and kept
     uses: shell
     with:

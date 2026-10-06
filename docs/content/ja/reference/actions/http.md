@@ -31,6 +31,7 @@ steps:
 | `form` | Object | 任意 | - | フォームのフィールド。`application/x-www-form-urlencoded`のボディとして送ります。[フォームの送信](#フォームの送信)を参照 |
 | `multipart` | Object | 任意 | - | フォームのフィールドとファイル。`multipart/form-data`のボディとして送ります。[ファイルのアップロード](#ファイルのアップロード)を参照 |
 | `cookies` | Object | 任意 | - | 送るCookie。名前と値で指定します。[Cookie](#cookie)を参照 |
+| `trace_header` | BooleanまたはString | 任意 | `false` | リクエストの実行、ジョブ、ステップを示すヘッダーを送ります。`true`なら`X-Probe-Trace`、文字列ならその名前のヘッダーです。[リクエストのトレース](#リクエストのトレース)を参照 |
 | `keep_cookies` | Boolean | 任意 | `false` | サーバーが設定したCookieをジョブで保持し、Cookieを保持する以降のステップで送ります。[Cookie](#cookie)を参照 |
 
 リダイレクトとTLS検証を指定するパラメータはありません。リダイレクトは既定で追跡します。
@@ -294,6 +295,41 @@ Cookieはジョブごとに保持するので、同時に走るジョブ同士�
 ```
 
 `cookies`と`res.cookies`の値は、ほかの認証情報と同じく出力では隠し、名前は表示します。
+
+### リクエストのトレース
+
+`trace_header: true`を指定すると、各リクエストに送信元を示す`X-Probe-Trace`ヘッダーを付けます。サーバーのアクセスログで、どのリクエストかを見分けられます。
+
+```
+X-Probe-Trace: run=7f3a9c21e4b05d68; job=login; step=auth; repeat=0; attempt=1
+```
+
+| フィールド | 値 |
+|---|---|
+| `run` | probeの実行のID。その実行のすべてのリクエストで同じです。JSONレポートの`run_id`と同じ値で、embeddedアクションで実行するジョブも同じ値を使います |
+| `job` | ジョブのID |
+| `step` | ステップのID。IDのないステップは`step_<番号>`になります |
+| `repeat` | 繰り返すジョブの何回目か（0から） |
+| `attempt` | リトライするステップの何回目の試行か（1から） |
+
+空白、セミコロン、ASCII以外の文字を含む値は、URLのクエリと同じくエスケープします。ジョブの`defaults`に書けば、ジョブのすべてのリクエストに適用されます。`true`の代わりにヘッダー名を書くと、同じ値をその名前のヘッダーで送ります。サーバーが既にログに出しているヘッダーを使う場合に便利です。
+
+```yaml
+- name: Traced checks
+  defaults:
+    http:
+      url: "{{vars.api_url}}"
+      trace_header: X-Correlation-Id
+  steps:
+    - name: List users
+      id: users
+      uses: http
+      with:
+        get: /users
+      test: res.code == 200
+```
+
+このヘッダーは`headers`に書いたヘッダーと同じく送られ、`req.headers`にも表示されます。`headers`に同じ名前のヘッダーを書いた場合はエラーになります。オプション名が`trace`でないのは、`trace`がTRACEメソッドの省略記法だからです。
 
 ### エラーレスポンスの検証
 

@@ -16,6 +16,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/linyows/probe/actionrpc"
 	"github.com/linyows/probe/binary"
 	"github.com/linyows/probe/mapping"
 )
@@ -356,26 +357,28 @@ func MarshalBodyIfJSON(data, m map[string]any) {
 }
 
 func Request(data map[string]any, opts ...Option) (map[string]any, error) {
-	ret, _, err := RequestWithState(data, nil, opts...)
+	ret, _, err := RequestStep(actionrpc.Call{With: data}, opts...)
 	return ret, err
 }
 
-// RequestWithState is Request with the state the action keeps in a job. When
-// keep_cookies is true, the cookies kept in state are sent, and the state
-// returned keeps those the server set as well; otherwise the state returned
-// is nil, which leaves the job's state as it was.
-func RequestWithState(data, state map[string]any, opts ...Option) (map[string]any, map[string]any, error) {
-	ret, newState, err := request(data, state, opts...)
+// RequestStep is Request for a step, with the state the action keeps in a
+// job. When keep_cookies is true, the cookies kept in the state are sent, and
+// the state returned keeps those the server set as well; otherwise the state
+// returned is nil, which leaves the job's state as it was. When trace_header
+// is given, the request carries a header that names the run, job and step.
+func RequestStep(call actionrpc.Call, opts ...Option) (map[string]any, map[string]any, error) {
+	ret, newState, err := request(call, opts...)
 	if err != nil {
 		return map[string]any{}, nil, err
 	}
 	return ret, newState, nil
 }
 
-func request(data, state map[string]any, opts ...Option) (map[string]any, map[string]any, error) {
+func request(call actionrpc.Call, opts ...Option) (map[string]any, map[string]any, error) {
+	state := call.State
 	// Create a copy to avoid modifying the original data
 	m := make(map[string]any)
-	maps.Copy(m, data)
+	maps.Copy(m, call.With)
 
 	// Resolve HTTP method fields (get, post, etc.) to method and url
 	if err := ResolveMethodAndURL(m); err != nil {
@@ -387,6 +390,11 @@ func request(data, state map[string]any, opts ...Option) (map[string]any, map[st
 		return nil, nil, err
 	}
 
+	traceHeader, err := takeTrace(m)
+	if err != nil {
+		return nil, nil, err
+	}
+
 	// form and multipart are turned into the body they stand for.
 	payload, multipartSpec, contentType, err := takeFormBody(m)
 	if err != nil {
@@ -394,7 +402,7 @@ func request(data, state map[string]any, opts ...Option) (map[string]any, map[st
 	}
 
 	// Handle body conversion for JSON content-type
-	MarshalBodyIfJSON(data, m)
+	MarshalBodyIfJSON(call.With, m)
 
 	m = mapping.HeaderToStringValue(m)
 
@@ -446,6 +454,18 @@ func request(data, state map[string]any, opts ...Option) (map[string]any, map[st
 			customHeaders = make(map[string]string)
 		}
 		customHeaders["content-type"] = contentType
+	}
+
+	if traceHeader != "" {
+		for k := range customHeaders {
+			if strings.EqualFold(k, traceHeader) {
+				return nil, nil, fmt.Errorf("trace_header and a %s header cannot be given together", traceHeader)
+			}
+		}
+		if customHeaders == nil {
+			customHeaders = make(map[string]string)
+		}
+		customHeaders[traceHeader] = traceValue(call.Step)
 	}
 
 	// Create new request with merged headers

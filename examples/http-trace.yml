@@ -1,0 +1,38 @@
+name: Trace Header Example
+vars:
+  url: "{{URL ?? 'http://localhost:8080'}}"
+
+jobs:
+# trace_header sends a header that names the run, the job and the step, so
+# that a request in the server's access log can be told apart
+- name: Trace requests
+  id: traced
+  defaults:
+    http:
+      url: "{{vars.url}}"
+      trace_header: true
+      headers:
+        accept: application/json
+  steps:
+  - name: Send the default header
+    id: first
+    uses: http
+    with:
+      get: /headers
+    test: |
+      res.code == 200 &&
+      res.body.headers["X-Probe-Trace"] startsWith "run=" &&
+      res.body.headers["X-Probe-Trace"] contains "job=traced; step=first;"
+    echo: "{{ res.body.headers['X-Probe-Trace'] }}"
+
+  # a header name sends the trace in that header instead, such as one the
+  # server already logs; a step without an id is named by the one probe
+  # gives it, step_<index>
+  - name: Send it in another header
+    uses: http
+    with:
+      get: /headers
+      trace_header: X-Correlation-Id
+    test: |
+      res.body.headers["X-Correlation-Id"] contains "job=traced; step=step_1;" &&
+      res.body.headers["X-Probe-Trace"] == nil
