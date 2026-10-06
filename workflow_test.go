@@ -1004,6 +1004,32 @@ func Test_evalVarsKeyReadsAVar(t *testing.T) {
 	}
 }
 
+// Test_evalVarsListNamedLikeATemplate checks that a list var is evaluated
+// whatever its name holds, now that the keys of a map are templates too.
+func Test_evalVarsListNamedLikeATemplate(t *testing.T) {
+	wf := &Workflow{
+		Name: "Test",
+		Vars: map[string]any{
+			"odd{{name}}": []any{"{{ 1 + 1 }}"},
+			"bad":         []any{"ok", map[string]any{"x": "{{ nosuch() }}"}},
+		},
+		env: map[string]string{"UNUSED": ""},
+	}
+	_, err := wf.evalVars()
+	if err == nil || !strings.Contains(err.Error(), "vars.bad[1].x: ") {
+		t.Errorf("error = %v, want one naming vars.bad[1].x", err)
+	}
+
+	delete(wf.Vars, "bad")
+	actual, err := wf.evalVars()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !reflect.DeepEqual(actual["odd{{name}}"], []any{2}) {
+		t.Errorf("odd{{name}} = %#v, want the list evaluated", actual["odd{{name}}"])
+	}
+}
+
 func Test_evalVarsCycleIsReproducible(t *testing.T) {
 	// a reads b and c through the values of a map, and both read a back, so
 	// the cycle reported depends on which of them is visited first.
