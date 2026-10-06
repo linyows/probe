@@ -453,7 +453,11 @@ func prefixFieldErrors(err error, prefix string) error {
 	for _, e := range unwrapJoined(err) {
 		var fe *expr.FieldError
 		if errors.As(e, &fe) {
-			e = &expr.FieldError{Path: prefix + fe.Path, Err: fe.Err}
+			evaluated := ""
+			if fe.EvaluatedPath != "" {
+				evaluated = prefix + fe.EvaluatedPath
+			}
+			e = &expr.FieldError{Path: prefix + fe.Path, EvaluatedPath: evaluated, Err: fe.Err}
 		}
 		errs = append(errs, e)
 	}

@@ -404,3 +404,37 @@ func TestWorkflow_RepeatKeepsFailureKind(t *testing.T) {
 		})
 	}
 }
+
+// TestWorkflow_TemplateErrorHidesCredentialsUnderAKeyTemplate checks that a
+// value under a key that becomes a credential header, such as one whose name
+// comes from a var, has the details of its error hidden as one under the
+// header written so does, while the error names the key as written.
+func TestWorkflow_TemplateErrorHidesCredentialsUnderAKeyTemplate(t *testing.T) {
+	runner := NewMockActionRunner()
+	runner.SetResult("ok", map[string]any{"req": map[string]any{}, "res": map[string]any{"code": 200}})
+	w := &Workflow{
+		Name: "credentials",
+		Vars: map[string]any{"header": "authorization"},
+		Jobs: []Job{{
+			Name: "job",
+			Steps: []*Step{{
+				Name: "a credential header named by a template",
+				Uses: "ok",
+				With: map[string]any{
+					"headers": map[string]any{"{{ vars.header }}": "{{ 'Bearer literal-token' + outputs.login.token }}"},
+				},
+				actionRunner: runner,
+			}},
+		}},
+		printer: newBufferPrinter(),
+	}
+
+	out, r := templateErrorOutput(t, w)
+	if strings.Contains(out, "literal-token") {
+		t.Errorf("the credential leaked into the output:\n%s", out)
+	}
+	want := "with.headers.{{ vars.header }}: the template could not be evaluated"
+	if msg := r.Jobs[0].Steps[0].Failure.Message; !strings.Contains(msg, want) {
+		t.Errorf("failure message %q does not contain %q", msg, want)
+	}
+}

@@ -2,6 +2,7 @@ package expr
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -1720,5 +1721,49 @@ func TestEvalTemplateMapKeyErrors(t *testing.T) {
 	}
 	if !reflect.DeepEqual(got, map[string]any{"ok": "type"}) {
 		t.Errorf("EvalTemplateMap() = %#v, want the other keys kept", got)
+	}
+}
+
+// TestEvalTemplateMapLimitCountsEveryKey checks that keys that fail or
+// collide count against the number of keys a map is evaluated for.
+func TestEvalTemplateMapLimitCountsEveryKey(t *testing.T) {
+	input := make(map[string]any)
+	for i := 0; i < 1500; i++ {
+		input[fmt.Sprintf("{{ nosuch() }}-%04d", i)] = i
+	}
+	_, err := (&Expr{}).EvalTemplateMap(input, map[string]any{})
+	if n := len(unwrapAll(err)); n > 1001 {
+		t.Errorf("%d keys were evaluated, want no more than the limit", n)
+	}
+}
+
+// unwrapAll returns the errors joined into err.
+func unwrapAll(err error) []error {
+	if j, ok := err.(interface{ Unwrap() []error }); ok {
+		return j.Unwrap()
+	}
+	if err == nil {
+		return nil
+	}
+	return []error{err}
+}
+
+// TestEvalTemplateMapEvaluatedPath checks that an error under a key holding
+// templates also says the path as the keys were evaluated.
+func TestEvalTemplateMapEvaluatedPath(t *testing.T) {
+	_, err := (&Expr{}).EvalTemplateMap(map[string]any{
+		"headers": map[string]any{"{{ vars.h }}": "{{ nosuch() }}"},
+		"plain":   "{{ nosuch() }}",
+	}, map[string]any{"vars": map[string]any{"h": "authorization"}})
+	got := map[string]string{}
+	for _, e := range unwrapAll(err) {
+		var fe *FieldError
+		if errors.As(e, &fe) {
+			got[fe.Path] = fe.EvaluatedPath
+		}
+	}
+	want := map[string]string{"headers.{{ vars.h }}": "headers.authorization", "plain": "plain"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("paths = %v, want %v", got, want)
 	}
 }

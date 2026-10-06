@@ -567,7 +567,11 @@ func (e *TemplateError) Unwrap() error {
 // headers.authorization or items[0].name.
 type FieldError struct {
 	Path string
-	Err  error
+	// EvaluatedPath is Path with the keys that hold templates as they were
+	// evaluated, which is what tells a value such as a header named by a
+	// template apart. It is empty where it is not known.
+	EvaluatedPath string
+	Err           error
 }
 
 func (e *FieldError) Error() string {
@@ -611,11 +615,11 @@ func (e *Expr) EvalTemplateWithTypePreservation(input string, env any) (any, err
 // the values that could, such as credentials to hide from the errors.
 func (e *Expr) EvalTemplateMap(input map[string]any, env any) (map[string]any, error) {
 	var errs []error
-	results := e.evalTemplateMap(input, env, "", &errs)
+	results := e.evalTemplateMap(input, env, "", "", &errs)
 	return results, errors.Join(errs...)
 }
 
-func (e *Expr) evalTemplateMap(input map[string]any, env any, path string, errs *[]error) map[string]any {
+func (e *Expr) evalTemplateMap(input map[string]any, env any, path, evalPath string, errs *[]error) map[string]any {
 	results := make(map[string]any)
 
 	keys := make([]string, 0, len(input))
@@ -628,44 +632,43 @@ func (e *Expr) evalTemplateMap(input map[string]any, env any, path string, errs 
 	// written records the key as written that each key comes from, to tell
 	// two that come to the same key apart.
 	written := make(map[string]string, len(keys))
-	for _, key := range keys {
-		// Security: Limit the number of processed keys to prevent DoS
-		if len(results) > 1000 {
+	for i, key := range keys {
+		// Security: Limit the number of processed keys to prevent DoS. Every
+		// key counts, one that fails or collides too.
+		if i > 1000 {
 			results["_truncated"] = "Map processing truncated due to size limits"
 			break
 		}
 
 		// An error names the key as written, which is what can be found in
-		// the workflow.
-		keyPath := key
-		if path != "" {
-			keyPath = path + "." + key
-		}
+		// the workflow, and says the key as evaluated as well.
+		keyPath := joinPath(path, key)
 
 		// A key holding templates is evaluated as text, as a key is one.
 		name := key
 		if len(findTemplates(key)) > 0 {
 			out, err := e.EvalTemplate(key, env)
 			if err != nil {
-				*errs = append(*errs, &FieldError{Path: keyPath, Err: err})
+				*errs = append(*errs, &FieldError{Path: keyPath, EvaluatedPath: joinPath(evalPath, key), Err: err})
 				continue
 			}
 			name = out
 		}
+		nameEvalPath := joinPath(evalPath, name)
 		if from, taken := written[name]; taken {
-			*errs = append(*errs, &FieldError{Path: keyPath, Err: fmt.Errorf("key %q is also written as %q", name, from)})
+			*errs = append(*errs, &FieldError{Path: keyPath, EvaluatedPath: nameEvalPath, Err: fmt.Errorf("key %q is also written as %q", name, from)})
 			continue
 		}
 		written[name] = key
 
-		results[name] = e.evalTemplateValue(input[key], env, keyPath, errs)
+		results[name] = e.evalTemplateValue(input[key], env, keyPath, nameEvalPath, errs)
 	}
 
 	return results
 }
 
 // evalTemplateArray evaluates templates in array elements
-func (e *Expr) evalTemplateArray(input []any, env any, path string, errs *[]error) []any {
+func (e *Expr) evalTemplateArray(input []any, env any, path, evalPath string, errs *[]error) []any {
 	results := make([]any, len(input))
 
 	for i, val := range input {
@@ -675,25 +678,33 @@ func (e *Expr) evalTemplateArray(input []any, env any, path string, errs *[]erro
 			break
 		}
 
-		results[i] = e.evalTemplateValue(val, env, fmt.Sprintf("%s[%d]", path, i), errs)
+		results[i] = e.evalTemplateValue(val, env, fmt.Sprintf("%s[%d]", path, i), fmt.Sprintf("%s[%d]", evalPath, i), errs)
 	}
 
 	return results
 }
 
-func (e *Expr) evalTemplateValue(val any, env any, path string, errs *[]error) any {
+// joinPath returns the path of key in the map at path.
+func joinPath(path, key string) string {
+	if path == "" {
+		return key
+	}
+	return path + "." + key
+}
+
+func (e *Expr) evalTemplateValue(val any, env any, path, evalPath string, errs *[]error) any {
 	switch v := val.(type) {
 	case string:
 		output, err := e.EvalTemplateWithTypePreservation(v, env)
 		if err != nil {
-			*errs = append(*errs, &FieldError{Path: path, Err: err})
+			*errs = append(*errs, &FieldError{Path: path, EvaluatedPath: evalPath, Err: err})
 			return nil
 		}
 		return output
 	case map[string]any:
-		return e.evalTemplateMap(v, env, path, errs)
+		return e.evalTemplateMap(v, env, path, evalPath, errs)
 	case []any:
-		return e.evalTemplateArray(v, env, path, errs)
+		return e.evalTemplateArray(v, env, path, evalPath, errs)
 	default:
 		return v
 	}
