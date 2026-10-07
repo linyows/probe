@@ -1,0 +1,773 @@
+package probe
+
+import (
+	"bytes"
+	"fmt"
+	"maps"
+	"os"
+	"reflect"
+	"slices"
+	"sort"
+	"strings"
+
+	"github.com/goccy/go-yaml/ast"
+	"github.com/goccy/go-yaml/parser"
+	"github.com/linyows/probe/actionref"
+	"github.com/linyows/probe/expr"
+)
+
+// Severities of a Finding.
+const (
+	// SeverityError is a finding that stops the workflow from running as it
+	// is written, or that makes a step read what is never there.
+	SeverityError = "error"
+	// SeverityWarning is a finding that the workflow may run with, but that
+	// leaves it checking less than it seems to.
+	SeverityWarning = "warning"
+)
+
+// Finding is one thing Check found in a workflow.
+type Finding struct {
+	Severity string
+	File     string // the file it is in; empty when it cannot be told
+	Line     int    // the line it is on; 0 when it cannot be told
+	Where    string // the job and step it is in, such as job "Users", step 1 "Create"
+	Message  string
+}
+
+// String is the finding on one line, as probe check prints it.
+func (f Finding) String() string {
+	var b strings.Builder
+	if f.File != "" {
+		b.WriteString(f.File)
+		if f.Line > 0 {
+			fmt.Fprintf(&b, ":%d", f.Line)
+		}
+		b.WriteString(": ")
+	}
+	b.WriteString(f.Severity)
+	b.WriteString(": ")
+	if f.Where != "" {
+		b.WriteString(f.Where)
+		b.WriteString(": ")
+	}
+	b.WriteString(f.Message)
+	return b.String()
+}
+
+// CheckOptions tunes Check.
+type CheckOptions struct {
+	// Actions are the names of the actions a step may use, besides the
+	// external ones it names by a path or a repository. When it is empty,
+	// the names are not checked.
+	Actions []string
+}
+
+// Check reads the workflow at path, as a run reads it, and returns what is
+// wrong with it or weak in it, without running anything: keys a workflow
+// does not take, what a run would refuse to load, actions that do not
+// exist, needs that cannot be met, expressions and templates that do not
+// parse, and outputs read before or without being published, as errors;
+// and steps that nothing checks, or whose test reads nothing, as warnings.
+//
+// The error it returns is for a workflow that cannot be read at all, such
+// as a file that does not exist.
+func Check(path string, opts CheckOptions) ([]Finding, error) {
+	p := New(path, false)
+	files, err := p.yamlFiles()
+	if err != nil {
+		return nil, err
+	}
+	if len(files) == 0 {
+		return nil, fmt.Errorf("%s: no YAML file", path)
+	}
+	data, err := p.readYamlFiles(files)
+	if err != nil {
+		return nil, err
+	}
+
+	c := &checker{opts: opts, lines: map[string]int{}}
+	if err := c.mapFiles(files); err != nil {
+		return nil, err
+	}
+
+	// A key may be written more than once, as a run reads the workflow,
+	// so that the files given can override one another.
+	file, err := parser.ParseBytes([]byte(data), 0, parser.AllowDuplicateMapKey())
+	if err != nil {
+		c.add(SeverityError, 0, "", "YAML: %s", firstLine(err.Error()))
+		return c.sorted(), nil
+	}
+	for _, doc := range file.Docs {
+		c.walkWorkflow(doc.Body)
+	}
+
+	if err := p.Load(); err != nil {
+		c.add(SeverityError, 0, "", "%s", firstLine(err.Error()))
+		return c.sorted(), nil
+	}
+	c.wf = &p.workflow
+	c.checkActions()
+	c.checkNeeds()
+	c.checkSteps()
+	c.checkExpressions()
+	c.checkOutputs()
+	c.checkTests()
+	return c.sorted(), nil
+}
+
+type checker struct {
+	opts     CheckOptions
+	wf       *Workflow
+	findings []Finding
+	// lines are the lines of the keys of the workflow, by their path, such
+	// as jobs[0].steps[1].test, and of each job and step, by jobs[0] and
+	// jobs[0].steps[1].
+	lines map[string]int
+	// files are the files read, with the line of the text read that each
+	// one starts on.
+	files []fileStart
+}
+
+type fileStart struct {
+	name string
+	line int
+}
+
+// mapFiles notes the line each file starts on in the text read, the files
+// one after another, so that a line of the text can be told as a line of a
+// file. readYamlFiles adds a newline after a file that does not end in one,
+// unless it is the last.
+func (c *checker) mapFiles(files []string) error {
+	line := 1
+	for k, f := range files {
+		c.files = append(c.files, fileStart{name: f, line: line})
+		data, err := os.ReadFile(f)
+		if err != nil {
+			return err
+		}
+		line += bytes.Count(data, []byte("\n"))
+		if k < len(files)-1 && len(data) > 0 && data[len(data)-1] != '\n' {
+			line++
+		}
+	}
+	return nil
+}
+
+// position tells line, a line of the text read, as a file and a line of it.
+func (c *checker) position(line int) (string, int) {
+	if len(c.files) == 0 {
+		return "", 0
+	}
+	f := c.files[0]
+	for _, s := range c.files {
+		if line >= s.line {
+			f = s
+		}
+	}
+	if line <= 0 {
+		if len(c.files) > 1 {
+			return "", 0
+		}
+		return f.name, 0
+	}
+	return f.name, line - f.line + 1
+}
+
+func (c *checker) add(severity string, line int, where, format string, args ...any) {
+	file, l := c.position(line)
+	c.findings = append(c.findings, Finding{
+		Severity: severity,
+		File:     file,
+		Line:     l,
+		Where:    where,
+		Message:  fmt.Sprintf(format, args...),
+	})
+}
+
+// sorted returns the findings by file and line, keeping the order they were
+// found in for those on one line.
+func (c *checker) sorted() []Finding {
+	out := slices.Clone(c.findings)
+	sort.SliceStable(out, func(i, j int) bool {
+		if out[i].File != out[j].File {
+			return out[i].File < out[j].File
+		}
+		return out[i].Line < out[j].Line
+	})
+	return out
+}
+
+// line returns the line of path, or of the closest thing that holds it,
+// such as the step for a key of the step that is not written.
+func (c *checker) line(path string) int {
+	for {
+		if l, ok := c.lines[path]; ok {
+			return l
+		}
+		i := strings.LastIndexAny(path, ".[")
+		if i < 0 {
+			return 0
+		}
+		path = path[:i]
+	}
+}
+
+// Keys each part of a workflow takes, from the fields Probe decodes them into.
+var (
+	workflowKeys = yamlKeys(reflect.TypeFor[Workflow]())
+	jobKeys      = yamlKeys(reflect.TypeFor[Job]())
+	stepKeys     = yamlKeys(reflect.TypeFor[Step]())
+	retryKeys    = yamlKeys(reflect.TypeFor[StepRetry]())
+	repeatKeys   = yamlKeys(reflect.TypeFor[Repeat]())
+)
+
+func yamlKeys(t reflect.Type) []string {
+	var keys []string
+	for f := range t.Fields() {
+		name, _, _ := strings.Cut(f.Tag.Get("yaml"), ",")
+		if name != "" && name != "-" {
+			keys = append(keys, name)
+		}
+	}
+	sort.Strings(keys)
+	return keys
+}
+
+// pairs returns the keys and values of n, a mapping, which a mapping of one
+// key is parsed as on its own; nil when n is not a mapping.
+func pairs(n ast.Node) []*ast.MappingValueNode {
+	switch v := n.(type) {
+	case *ast.MappingNode:
+		return v.Values
+	case *ast.MappingValueNode:
+		return []*ast.MappingValueNode{v}
+	case *ast.AnchorNode:
+		return pairs(v.Value)
+	case *ast.TagNode:
+		return pairs(v.Value)
+	}
+	return nil
+}
+
+func items(n ast.Node) []ast.Node {
+	switch v := n.(type) {
+	case *ast.SequenceNode:
+		return v.Values
+	case *ast.AnchorNode:
+		return items(v.Value)
+	case *ast.TagNode:
+		return items(v.Value)
+	}
+	return nil
+}
+
+func lineOf(n ast.Node) int {
+	if n == nil || n.GetToken() == nil {
+		return 0
+	}
+	return n.GetToken().Position.Line
+}
+
+// holdsAnchor reports whether n defines an anchor at any depth, as a key a
+// workflow does not take may hold one for the files read after it.
+func holdsAnchor(n ast.Node) bool {
+	found := false
+	ast.Walk(visitorFunc(func(n ast.Node) bool {
+		if _, ok := n.(*ast.AnchorNode); ok {
+			found = true
+		}
+		return !found
+	}), n)
+	return found
+}
+
+type visitorFunc func(ast.Node) bool
+
+func (f visitorFunc) Visit(n ast.Node) ast.Visitor {
+	if f(n) {
+		return f
+	}
+	return nil
+}
+
+// keys checks the keys of the mapping n, at path, against those the part of
+// a workflow it is takes, and calls each with each key it takes.
+func (c *checker) keys(n ast.Node, path, where string, allowed []string, each func(key string, value ast.Node)) {
+	for _, kv := range pairs(n) {
+		if kv.Key == nil || kv.Key.GetToken() == nil {
+			continue
+		}
+		key := kv.Key.GetToken().Value
+		if kv.Key.IsMergeKey() {
+			continue
+		}
+		line := lineOf(kv.Key)
+		c.lines[join(path, key)] = line
+		if !slices.Contains(allowed, key) {
+			if holdsAnchor(kv.Value) {
+				continue
+			}
+			msg := fmt.Sprintf("unknown key %q", key)
+			if s := suggest(key, allowed); s != "" {
+				msg += fmt.Sprintf("; did you mean %q?", s)
+			}
+			c.add(SeverityError, line, where, "%s", msg)
+			continue
+		}
+		if each != nil {
+			each(key, kv.Value)
+		}
+	}
+}
+
+func join(path, key string) string {
+	if path == "" {
+		return key
+	}
+	return path + "." + key
+}
+
+func (c *checker) walkWorkflow(body ast.Node) {
+	c.keys(body, "", "", workflowKeys, func(key string, value ast.Node) {
+		if key == "vars" {
+			c.noteLines("vars", value)
+		}
+		if key != "jobs" {
+			return
+		}
+		for i, job := range items(value) {
+			jp := fmt.Sprintf("jobs[%d]", i)
+			c.lines[jp] = lineOf(job)
+			jobWhere := named(fmt.Sprintf("job %d", i), job)
+			c.keys(job, jp, jobWhere, jobKeys, func(key string, value ast.Node) {
+				switch key {
+				case "repeat":
+					c.keys(value, jp+".repeat", jobWhere, repeatKeys, nil)
+				case "steps":
+					for j, step := range items(value) {
+						sp := fmt.Sprintf("%s.steps[%d]", jp, j)
+						c.lines[sp] = lineOf(step)
+						where := named(fmt.Sprintf("%s, step %d", jobWhere, j), step)
+						c.keys(step, sp, where, stepKeys, func(key string, value ast.Node) {
+							switch key {
+							case "retry":
+								c.keys(value, sp+".retry", where, retryKeys, nil)
+							case "with", "vars", "outputs":
+								c.noteLines(sp+"."+key, value)
+							}
+						})
+					}
+				}
+			})
+		}
+	})
+}
+
+// named returns where, the part of a workflow n is, with its name when it
+// writes one, as job 0 "Users".
+func named(where string, n ast.Node) string {
+	for _, kv := range pairs(n) {
+		if kv.Key != nil && kv.Key.GetToken() != nil && kv.Key.GetToken().Value == "name" && kv.Value != nil && kv.Value.GetToken() != nil {
+			return fmt.Sprintf("%s %q", where, kv.Value.GetToken().Value)
+		}
+	}
+	return where
+}
+
+// noteLines notes the lines of the keys of n, a value such as with, at any
+// depth, under path, as with.headers.authorization, so that a finding in a
+// value can be told on its line.
+func (c *checker) noteLines(path string, n ast.Node) {
+	for _, kv := range pairs(n) {
+		if kv.Key == nil || kv.Key.GetToken() == nil || kv.Key.IsMergeKey() {
+			continue
+		}
+		kp := path + "." + kv.Key.GetToken().Value
+		c.lines[kp] = lineOf(kv.Key)
+		c.noteLines(kp, kv.Value)
+	}
+	for k, item := range items(n) {
+		ip := fmt.Sprintf("%s[%d]", path, k)
+		c.lines[ip] = lineOf(item)
+		c.noteLines(ip, item)
+	}
+}
+
+// suggest returns the key of allowed closest to key, when one is close
+// enough to be what was meant.
+func suggest(key string, allowed []string) string {
+	best, bestDist := "", 3
+	for _, a := range allowed {
+		if d := distance(key, a); d < bestDist {
+			best, bestDist = a, d
+		}
+	}
+	return best
+}
+
+// distance is the Levenshtein distance between a and b.
+func distance(a, b string) int {
+	prev := make([]int, len(b)+1)
+	for j := range prev {
+		prev[j] = j
+	}
+	for i := 1; i <= len(a); i++ {
+		cur := make([]int, len(b)+1)
+		cur[0] = i
+		for j := 1; j <= len(b); j++ {
+			cost := 1
+			if a[i-1] == b[j-1] {
+				cost = 0
+			}
+			cur[j] = min(prev[j]+1, cur[j-1]+1, prev[j-1]+cost)
+		}
+		prev = cur
+	}
+	return prev[len(b)]
+}
+
+func firstLine(s string) string {
+	line, _, _ := strings.Cut(strings.TrimSpace(s), "\n")
+	return line
+}
+
+func (c *checker) jobWhere(i int) string {
+	return fmt.Sprintf("job %d %q", i, c.wf.Jobs[i].Name)
+}
+
+func (c *checker) stepWhere(i, j int) string {
+	st := c.wf.Jobs[i].Steps[j]
+	if st.Name == "" {
+		return fmt.Sprintf("%s, step %d", c.jobWhere(i), j)
+	}
+	return fmt.Sprintf("%s, step %d %q", c.jobWhere(i), j, st.Name)
+}
+
+func (c *checker) checkActions() {
+	for i, job := range c.wf.Jobs {
+		for j, st := range job.Steps {
+			path := fmt.Sprintf("jobs[%d].steps[%d].uses", i, j)
+			if actionref.IsExternal(st.Uses) {
+				if _, err := actionref.Parse(st.Uses); err != nil {
+					c.add(SeverityError, c.line(path), c.stepWhere(i, j), "uses: %s", firstLine(err.Error()))
+				}
+				continue
+			}
+			if len(c.opts.Actions) == 0 || slices.Contains(c.opts.Actions, st.Uses) {
+				continue
+			}
+			msg := fmt.Sprintf("unknown action %q", st.Uses)
+			if s := suggest(st.Uses, c.opts.Actions); s != "" {
+				msg += fmt.Sprintf("; did you mean %q?", s)
+			}
+			c.add(SeverityError, c.line(path), c.stepWhere(i, j), "%s", msg)
+		}
+	}
+}
+
+func (c *checker) checkNeeds() {
+	ids := map[string]bool{}
+	for _, job := range c.wf.Jobs {
+		ids[job.ID] = true
+	}
+	unknown := false
+	for i, job := range c.wf.Jobs {
+		for _, need := range job.Needs {
+			if ids[need] {
+				continue
+			}
+			unknown = true
+			msg := fmt.Sprintf("needs: no job has the id %q", need)
+			if s := suggest(need, slices.Sorted(maps.Keys(ids))); s != "" {
+				msg += fmt.Sprintf("; did you mean %q?", s)
+			}
+			c.add(SeverityError, c.line(fmt.Sprintf("jobs[%d].needs", i)), c.jobWhere(i), "%s", msg)
+		}
+	}
+	if unknown {
+		return
+	}
+
+	s := NewJobScheduler()
+	for i := range c.wf.Jobs {
+		if err := s.AddJob(&c.wf.Jobs[i]); err != nil {
+			c.add(SeverityError, c.line(fmt.Sprintf("jobs[%d]", i)), c.jobWhere(i), "%s", firstLine(err.Error()))
+			return
+		}
+	}
+	if err := s.ValidateDependencies(); err != nil {
+		c.add(SeverityError, 0, "", "%s", firstLine(err.Error()))
+	}
+}
+
+func (c *checker) checkSteps() {
+	for i := range c.wf.Jobs {
+		if err := c.wf.Jobs[i].validateSteps(); err != nil {
+			c.add(SeverityError, c.line(fmt.Sprintf("jobs[%d].steps", i)), c.jobWhere(i), "%s", firstLine(err.Error()))
+		}
+	}
+}
+
+// expression checks that an expression parses.
+func (c *checker) expression(path, where, field, input string) {
+	if strings.TrimSpace(input) == "" {
+		return
+	}
+	if err := expr.Parse(input); err != nil {
+		c.add(SeverityError, c.line(path), where, "%s: %s", field, firstLine(err.Error()))
+	}
+}
+
+// templates checks that the templates in v, a string or a map or list of
+// them at any depth, keys too, parse.
+func (c *checker) templates(path, where, field string, v any) {
+	switch v := v.(type) {
+	case string:
+		for _, e := range expr.TemplateExprs(v) {
+			if err := expr.Parse(e); err != nil {
+				c.add(SeverityError, c.line(path), where, "%s: template {{%s}}: %s", field, e, firstLine(err.Error()))
+			}
+		}
+	case map[string]any:
+		for _, k := range slices.Sorted(maps.Keys(v)) {
+			c.templates(path+"."+k, where, field+"."+k, k)
+			c.templates(path+"."+k, where, field+"."+k, v[k])
+		}
+	case []any:
+		for i, e := range v {
+			c.templates(fmt.Sprintf("%s[%d]", path, i), where, fmt.Sprintf("%s[%d]", field, i), e)
+		}
+	}
+}
+
+func (c *checker) checkExpressions() {
+	c.templates("vars", "", "vars", c.wf.Vars)
+	for i, job := range c.wf.Jobs {
+		jp := fmt.Sprintf("jobs[%d]", i)
+		c.templates(jp+".name", c.jobWhere(i), "name", job.Name)
+		c.expression(jp+".skipif", c.jobWhere(i), "skipif", job.SkipIf)
+		for j, st := range job.Steps {
+			sp := fmt.Sprintf("%s.steps[%d]", jp, j)
+			where := c.stepWhere(i, j)
+			c.templates(sp+".name", where, "name", st.Name)
+			c.templates(sp+".with", where, "with", st.With)
+			c.templates(sp+".vars", where, "vars", st.Vars)
+			c.templates(sp+".echo", where, "echo", st.Echo)
+			c.expression(sp+".test", where, "test", st.Test)
+			c.expression(sp+".skipif", where, "skipif", st.SkipIf)
+			for _, k := range slices.Sorted(maps.Keys(st.Outputs)) {
+				c.expression(sp+".outputs."+k, where, "outputs."+k, st.Outputs[k])
+			}
+		}
+	}
+}
+
+// publisher is a step that publishes outputs.
+type publisher struct {
+	job, step int
+	id        string
+	keys      []string
+}
+
+func (c *checker) checkOutputs() {
+	byID := map[string]publisher{}
+	byKey := map[string][]publisher{}
+	for i, job := range c.wf.Jobs {
+		for j, st := range job.Steps {
+			p := publisher{job: i, step: j, id: st.ID, keys: slices.Sorted(maps.Keys(st.Outputs))}
+			byID[st.ID] = p
+			for _, k := range p.keys {
+				byKey[k] = append(byKey[k], p)
+			}
+		}
+	}
+	needs := c.ancestors()
+
+	// read checks the outputs input, an expression, reads at the point of
+	// job i and step j, -1 for a field of the job read before its steps.
+	// late is whether the field is read once the step has published its
+	// outputs, as test and echo are.
+	read := func(path, where, field string, i, j int, late bool, input string) {
+		chains := expr.Reads(input, "outputs")
+		// outputs.auth.token also reads outputs.auth, which is not reported
+		// on its own.
+		deeper := map[string]bool{}
+		for _, chain := range chains {
+			if len(chain) > 1 {
+				deeper[chain[0]] = true
+			}
+		}
+		seen := map[string]bool{}
+		for _, chain := range chains {
+			key := strings.Join(chain[:min(2, len(chain))], ".")
+			if seen[key] || (len(chain) == 1 && deeper[chain[0]]) {
+				continue
+			}
+			seen[key] = true
+			msg, severity := c.outputRead(chain, byID, byKey, needs, i, j, late)
+			if msg != "" {
+				c.add(severity, c.line(path), where, "%s: outputs.%s %s", field, key, msg)
+			}
+		}
+	}
+	readTemplates := func(path, where, field string, i, j int, late bool, v any) {
+		forStrings(path, v, func(path, s string) {
+			for _, e := range expr.TemplateExprs(s) {
+				read(path, where, field, i, j, late, e)
+			}
+		})
+	}
+
+	for i, job := range c.wf.Jobs {
+		jp := fmt.Sprintf("jobs[%d]", i)
+		readTemplates(jp+".name", c.jobWhere(i), "name", i, -1, false, job.Name)
+		read(jp+".skipif", c.jobWhere(i), "skipif", i, -1, false, job.SkipIf)
+		for j, st := range job.Steps {
+			sp := fmt.Sprintf("%s.steps[%d]", jp, j)
+			where := c.stepWhere(i, j)
+			readTemplates(sp+".name", where, "name", i, j, false, st.Name)
+			readTemplates(sp+".with", where, "with", i, j, false, st.With)
+			readTemplates(sp+".vars", where, "vars", i, j, false, st.Vars)
+			read(sp+".skipif", where, "skipif", i, j, false, st.SkipIf)
+			for _, k := range slices.Sorted(maps.Keys(st.Outputs)) {
+				read(sp+".outputs."+k, where, "outputs."+k, i, j, false, st.Outputs[k])
+			}
+			read(sp+".test", where, "test", i, j, true, st.Test)
+			readTemplates(sp+".echo", where, "echo", i, j, true, st.Echo)
+		}
+	}
+}
+
+// forStrings calls f with each string in v, a string or a map or list of
+// them at any depth, keys too, and the path it is at under path.
+func forStrings(path string, v any, f func(path, s string)) {
+	switch v := v.(type) {
+	case string:
+		f(path, v)
+	case map[string]any:
+		for _, k := range slices.Sorted(maps.Keys(v)) {
+			f(path+"."+k, k)
+			forStrings(path+"."+k, v[k], f)
+		}
+	case []any:
+		for i, e := range v {
+			forStrings(fmt.Sprintf("%s[%d]", path, i), e, f)
+		}
+	}
+}
+
+// outputRead returns what is wrong with reading chain from outputs at job i
+// and step j, and how bad it is; an empty message when nothing is.
+func (c *checker) outputRead(chain []string, byID map[string]publisher, byKey map[string][]publisher, needs []map[int]bool, i, j int, late bool) (string, string) {
+	// before reports whether p publishes before the point read, and whether
+	// it is only not ordered before it by needs.
+	before := func(p publisher) (ok, unordered bool) {
+		if p.job == i {
+			return p.step < j || (p.step == j && late), false
+		}
+		return needs[i][p.job], !needs[i][p.job]
+	}
+
+	if p, ok := byID[chain[0]]; ok && len(p.keys) > 0 {
+		if len(chain) > 1 && !slices.Contains(p.keys, chain[1]) {
+			return fmt.Sprintf("is not published: step %q publishes %s", p.id, strings.Join(p.keys, ", ")), SeverityError
+		}
+		ok, unordered := before(p)
+		switch {
+		case ok:
+			return "", ""
+		case unordered:
+			return fmt.Sprintf("may not be published yet: job %q does not need job %q, whose step publishes it", c.wf.Jobs[i].Name, c.wf.Jobs[p.job].Name), SeverityWarning
+		default:
+			return "is read before its step publishes it", SeverityError
+		}
+	}
+
+	pubs := byKey[chain[0]]
+	if len(pubs) == 0 {
+		msg := "is not published by any step"
+		if s := suggest(chain[0], c.publishedNames(byID, byKey)); s != "" {
+			msg += fmt.Sprintf("; did you mean %q?", s)
+		}
+		return msg, SeverityError
+	}
+	unorderedOnly := false
+	for _, p := range pubs {
+		ok, unordered := before(p)
+		if ok {
+			return "", ""
+		}
+		unorderedOnly = unorderedOnly || unordered
+	}
+	if unorderedOnly {
+		return fmt.Sprintf("may not be published yet: job %q does not need the job whose step publishes it", c.wf.Jobs[i].Name), SeverityWarning
+	}
+	return "is read before its step publishes it", SeverityError
+}
+
+func (c *checker) publishedNames(byID map[string]publisher, byKey map[string][]publisher) []string {
+	var names []string
+	for id, p := range byID {
+		if len(p.keys) > 0 {
+			names = append(names, id)
+		}
+	}
+	for k := range byKey {
+		names = append(names, k)
+	}
+	sort.Strings(names)
+	return names
+}
+
+// ancestors returns, for each job, the jobs it needs, directly or through
+// the jobs they need.
+func (c *checker) ancestors() []map[int]bool {
+	index := map[string]int{}
+	for i, job := range c.wf.Jobs {
+		index[job.ID] = i
+	}
+	out := make([]map[int]bool, len(c.wf.Jobs))
+	var visit func(i int, into map[int]bool)
+	visit = func(i int, into map[int]bool) {
+		for _, id := range c.wf.Jobs[i].Needs {
+			k, ok := index[id]
+			if !ok || into[k] {
+				continue
+			}
+			into[k] = true
+			visit(k, into)
+		}
+	}
+	for i := range c.wf.Jobs {
+		out[i] = map[int]bool{}
+		visit(i, out[i])
+	}
+	return out
+}
+
+// checkTests warns of steps that nothing checks, and of tests that read
+// nothing, which pass or fail whatever the step does.
+func (c *checker) checkTests() {
+	for i, job := range c.wf.Jobs {
+		for j, st := range job.Steps {
+			path := fmt.Sprintf("jobs[%d].steps[%d]", i, j)
+			switch {
+			case strings.TrimSpace(st.Test) == "":
+				if !checkedByContract(st.With) {
+					c.add(SeverityWarning, c.line(path), c.stepWhere(i, j), "nothing checks this step: it has no test")
+				}
+			case expr.Parse(st.Test) == nil && expr.ReadsNothing(st.Test):
+				c.add(SeverityWarning, c.line(path+".test"), c.stepWhere(i, j), "test reads nothing from the step, so it gives the same result whatever the step does")
+			}
+		}
+	}
+}
+
+// checkedByContract reports whether with asks the action to check the step
+// against a contract, as openapi asks the http action, which checks it as a
+// test does.
+func checkedByContract(with map[string]any) bool {
+	_, ok := with["openapi"].(map[string]any)
+	return ok
+}

@@ -157,7 +157,7 @@ func (c *Cmd) parseArgs(args []string) error {
 	return nil
 }
 
-var subCommands = []string{"gen", "dag", "coverage", "guide", "skill"}
+var subCommands = []string{"gen", "dag", "check", "coverage", "guide", "skill"}
 
 func isSubCommand(name string) bool {
 	return slices.Contains(subCommands, name)
@@ -193,6 +193,7 @@ https://github.com/linyows/probe (ver: %s, rev: %s)
 Usage: probe [options] <workflow-file>
        probe gen <openapi-file>
        probe dag [--mermaid] <workflow-file>
+       probe check <workflow-file>
        probe coverage <openapi-file> <report-file>
        probe guide [topic]
        probe skill [install [dir]]
@@ -206,6 +207,7 @@ Subcommands:
   gen <file>       Generate probe workflow YAML from OpenAPI specification
   dag <file>       Show job dependency graph as ASCII art (default)
                    Use --mermaid to output in Mermaid format
+  check <file>     Find what is wrong or weak in a workflow without running it
   coverage <openapi-file> <report-file>
                    Show which operations and responses of an OpenAPI document
                    the steps of a run checked, from its --report json file
@@ -293,6 +295,8 @@ func (c *Cmd) runSubCommand() int {
 		return c.runGen()
 	case "dag":
 		return c.runDag()
+	case "check":
+		return c.runCheck()
 	case "coverage":
 		return c.runCoverage()
 	case "guide":
@@ -384,6 +388,49 @@ func (c *Cmd) runDag() int {
 	}
 	_, _ = fmt.Fprint(c.outWriter, graph)
 	return 0
+}
+
+// runCheck prints what is wrong or weak in a workflow, without running it.
+// It exits with 2 when it finds an error, and with 0 when it finds only
+// warnings or nothing.
+func (c *Cmd) runCheck() int {
+	if len(c.SubCommandArgs) != 1 {
+		_, _ = fmt.Fprintf(c.errWriter, "[ERROR] workflow file is required\n")
+		_, _ = fmt.Fprintf(c.errWriter, "Usage: probe check <workflow-file>\n")
+		return probe.ExitConfigError
+	}
+
+	findings, err := probe.Check(c.SubCommandArgs[0], probe.CheckOptions{Actions: actions.Names()})
+	if err != nil {
+		_, _ = fmt.Fprintf(c.errWriter, "[ERROR] %v\n", err)
+		return probe.ExitConfigError
+	}
+
+	errs, warnings := 0, 0
+	for _, f := range findings {
+		_, _ = fmt.Fprintln(c.outWriter, f.String())
+		if f.Severity == probe.SeverityError {
+			errs++
+		} else {
+			warnings++
+		}
+	}
+	if len(findings) == 0 {
+		_, _ = fmt.Fprintln(c.outWriter, "No problems found")
+		return 0
+	}
+	_, _ = fmt.Fprintf(c.outWriter, "\n%s, %s\n", plural(errs, "error"), plural(warnings, "warning"))
+	if errs > 0 {
+		return probe.ExitConfigError
+	}
+	return 0
+}
+
+func plural(n int, word string) string {
+	if n == 1 {
+		return "1 " + word
+	}
+	return fmt.Sprintf("%d %ss", n, word)
 }
 
 // runCoverage prints which operations and responses of an OpenAPI document
