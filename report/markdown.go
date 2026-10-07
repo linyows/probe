@@ -80,6 +80,12 @@ func writeMarkdownFailure(b *strings.Builder, job Job, st Step, payloads bool) {
 
 	if st.Failure != nil {
 		fmt.Fprintf(b, "%s: %s\n\n", st.Failure.Kind, st.Failure.Message)
+		for _, v := range st.Failure.Violations {
+			fmt.Fprintf(b, "- %s\n", v)
+		}
+		if len(st.Failure.Violations) > 0 {
+			b.WriteString("\n")
+		}
 	}
 	if st.Repeat != nil {
 		fmt.Fprintf(b, "%d of %d iterations succeeded.\n\n", st.Repeat.Success, st.Repeat.Total)

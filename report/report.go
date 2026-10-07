@@ -119,6 +119,9 @@ const (
 	FailureTestType  = "test_type"  // The test expression did not evaluate to a boolean
 	FailureAction    = "action"     // The action itself returned an error
 	FailureTemplate  = "template"   // A template in the step's with, vars or name could not be evaluated
+	// The response broke the contract the action checked it against, such
+	// as an OpenAPI document.
+	FailureContractResponse = "contract_response"
 )
 
 // Report is the result of a workflow run in a form meant for machines: the
@@ -194,6 +197,29 @@ type Failure struct {
 	Message  string         `json:"message"`
 	Request  map[string]any `json:"request,omitempty"`
 	Response map[string]any `json:"response,omitempty"`
+	// Violations are what broke the contract, when Kind is a contract's.
+	Violations []Violation `json:"violations,omitempty"`
+}
+
+// Violation is one thing a contract does not allow.
+type Violation struct {
+	In      string `json:"in"`              // Where it was found, such as response
+	Field   string `json:"field,omitempty"` // The field, such as /items/0/id
+	Reason  string `json:"reason,omitempty"`
+	Message string `json:"message"`
+}
+
+// String is the violation on one line: the field, what is wrong with it and
+// why.
+func (v Violation) String() string {
+	s := v.Message
+	if v.Reason != "" {
+		s += ": " + v.Reason
+	}
+	if v.Field != "" {
+		s = v.Field + ": " + s
+	}
+	return v.In + ": " + s
 }
 
 // New returns a report of a run with no jobs yet; AddJob adds them.
@@ -256,6 +282,12 @@ func (r *Report) Mask(m *mask.Masker) {
 				f.Message = m.String(f.Message)
 				f.Request = m.Map(f.Request)
 				f.Response = m.Map(f.Response)
+				for k := range f.Violations {
+					v := &f.Violations[k]
+					v.Field = m.String(v.Field)
+					v.Reason = m.String(v.Reason)
+					v.Message = m.String(v.Message)
+				}
 			}
 		}
 	}
@@ -295,6 +327,9 @@ func failureDetail(st Step) string {
 		return b.String()
 	}
 	fmt.Fprintf(&b, "%s: %s\n", st.Failure.Kind, st.Failure.Message)
+	for _, v := range st.Failure.Violations {
+		fmt.Fprintf(&b, "- %s\n", v)
+	}
 	if st.Failure.Request != nil {
 		fmt.Fprintf(&b, "\nrequest:\n%s\n", indentJSON(st.Failure.Request))
 	}

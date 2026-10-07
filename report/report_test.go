@@ -446,6 +446,12 @@ func TestReport_Mask(t *testing.T) {
 					Message:  "msg sekret",
 					Request:  map[string]any{"authorization": "Bearer z", "q": "sekret"},
 					Response: map[string]any{"body": "sekret"},
+					Violations: []Violation{{
+						In:      "response",
+						Field:   "$.sekret",
+						Reason:  "got sekret",
+						Message: "body sekret",
+					}},
 				},
 			}},
 		}},
@@ -460,7 +466,89 @@ func TestReport_Mask(t *testing.T) {
 	if strings.Contains(buf.String(), "sekret") || strings.Contains(buf.String(), "Bearer z") {
 		t.Errorf("report still shows a secret:\n%s", buf.String())
 	}
-	if got := strings.Count(buf.String(), "<secret:S>"); got != 9 {
-		t.Errorf("masked %d values, want 9:\n%s", got, buf.String())
+	if got := strings.Count(buf.String(), "<secret:S>"); got != 12 {
+		t.Errorf("masked %d values, want 12:\n%s", got, buf.String())
+	}
+}
+
+func TestViolation_String(t *testing.T) {
+	tests := []struct {
+		v    Violation
+		want string
+	}{
+		{Violation{In: "response", Message: "path not found"}, "response: path not found"},
+		{Violation{In: "response", Message: "body failed", Reason: "missing name"}, "response: body failed: missing name"},
+		{Violation{In: "response", Field: "$.id", Message: "body failed", Reason: "want integer"}, "response: $.id: body failed: want integer"},
+	}
+	for _, tt := range tests {
+		if got := tt.v.String(); got != tt.want {
+			t.Errorf("String() = %q, want %q", got, tt.want)
+		}
+	}
+}
+
+func TestFailureDetail_Violations(t *testing.T) {
+	got := failureDetail(Step{Failure: &Failure{
+		Kind:    FailureContractResponse,
+		Message: "the response breaks its contract in 1 place",
+		Violations: []Violation{
+			{In: "response", Field: "$.id", Message: "body failed", Reason: "want integer"},
+		},
+	}})
+	want := "contract_response: the response breaks its contract in 1 place\n- response: $.id: body failed: want integer\n"
+	if got != want {
+		t.Errorf("failureDetail = %q, want %q", got, want)
+	}
+}
+
+// newContractReport returns the report of a run whose one step broke its
+// contract.
+func newContractReport() *Report {
+	return &Report{
+		Name:   "Contract",
+		Status: Failed,
+		Jobs: []Job{{
+			ID: "users", Name: "Users", Status: Failed,
+			Steps: []Step{{
+				Index: 0, Name: "Get a user", Status: Failed,
+				Failure: &Failure{
+					Kind:     FailureContractResponse,
+					Message:  "the response breaks its contract in 1 place",
+					Response: map[string]any{"code": 200},
+					Violations: []Violation{
+						{In: "response", Field: "$.id", Message: "body failed", Reason: "want integer"},
+					},
+				},
+			}},
+		}},
+	}
+}
+
+func TestReport_WriteJUnit_Contract(t *testing.T) {
+	var buf bytes.Buffer
+	if err := newContractReport().WriteJUnit(&buf); err != nil {
+		t.Fatal(err)
+	}
+	var doc junitTestSuites
+	if err := xml.Unmarshal(buf.Bytes(), &doc); err != nil {
+		t.Fatalf("output is not valid XML: %v\n%s", err, buf.String())
+	}
+	c := doc.Suites[0].Cases[0]
+	if c.Failure == nil || c.Failure.Type != FailureContractResponse {
+		t.Fatalf("a broken contract should be a <failure>, got %+v", c)
+	}
+	if !strings.Contains(c.Failure.Body, "- response: $.id: body failed: want integer") {
+		t.Errorf("failure body should list the violation, got %q", c.Failure.Body)
+	}
+}
+
+func TestReport_WriteMarkdown_Contract(t *testing.T) {
+	var buf bytes.Buffer
+	if err := newContractReport().WriteMarkdown(&buf); err != nil {
+		t.Fatal(err)
+	}
+	want := "contract_response: the response breaks its contract in 1 place\n\n- response: $.id: body failed: want integer\n\n"
+	if !strings.Contains(buf.String(), want) {
+		t.Errorf("markdown should list the violation after the kind, got:\n%s", buf.String())
 	}
 }

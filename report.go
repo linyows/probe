@@ -104,10 +104,11 @@ func buildStepReport(sr StepResult) report.Step {
 
 	if f := sr.Failure; f != nil && step.Status == report.Failed {
 		step.Failure = &report.Failure{
-			Kind:     f.Kind,
-			Message:  f.Message,
-			Request:  jsonSafeMap(f.Request),
-			Response: jsonSafeMap(f.Response),
+			Kind:       f.Kind,
+			Message:    f.Message,
+			Request:    jsonSafeMap(f.Request),
+			Response:   jsonSafeMap(f.Response),
+			Violations: f.Violations,
 		}
 	}
 

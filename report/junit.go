@@ -150,8 +150,8 @@ func (s *junitTestSuite) add(tc junitTestCase) {
 	s.Cases = append(s.Cases, tc)
 }
 
-// junitFailure maps a failed step to a <failure> when its test was false and
-// to an <error> otherwise.
+// junitFailure maps a failed step to a <failure> when its test was false or
+// its response broke its contract, and to an <error> otherwise.
 func junitFailure(st Step) (failure, errElem *junitProblem) {
 	p := &junitProblem{Body: failureDetail(st)}
 	if st.Failure == nil {
@@ -165,7 +165,7 @@ func junitFailure(st Step) (failure, errElem *junitProblem) {
 
 	p.Message = st.Failure.Message
 	p.Type = st.Failure.Kind
-	if st.Failure.Kind == FailureAssertion {
+	if st.Failure.Kind == FailureAssertion || st.Failure.Kind == FailureContractResponse {
 		return p, nil
 	}
 	return nil, p

@@ -636,6 +636,17 @@ func (p *Printer) generateTestFailure(testExpr string, result any, req, res map[
 	return output
 }
 
+// generateContractFailure formats a response that breaks its contract: each
+// violation, then the request and response as a failed test shows them.
+func (p *Printer) generateContractFailure(f *StepFailure) string {
+	var b strings.Builder
+	for _, v := range f.Violations {
+		b.WriteString(indentDetail(p.masker.String(v.String())))
+	}
+	b.WriteString(p.generateTestFailure("", nil, f.Request, f.Response))
+	return b.String()
+}
+
 // generateTestError formats test evaluation error output
 func (p *Printer) generateTestError(testExpr string, err error) string {
 	if p.verbose {

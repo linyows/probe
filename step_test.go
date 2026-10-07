@@ -16,6 +16,7 @@ import (
 	"github.com/linyows/probe/actionrpc"
 	"github.com/linyows/probe/expr"
 	"github.com/linyows/probe/procgroup"
+	"github.com/linyows/probe/report"
 )
 
 func TestStep_parseWaitDuration(t *testing.T) {
@@ -2032,5 +2033,189 @@ func TestStepTellsTheActionAboutTheStep(t *testing.T) {
 	want := append(first(0), first(1)...)
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("steps told =\n%+v\nwant\n%+v", got, want)
+	}
+}
+
+// violationsRes is the res of an action that checked the response against a
+// contract and found what is given.
+func violationsRes(vs ...map[string]any) map[string]any {
+	list := []any{}
+	for _, v := range vs {
+		list = append(list, v)
+	}
+	return map[string]any{"code": 200, "violations": list}
+}
+
+func TestStep_check_Contract(t *testing.T) {
+	broken := map[string]any{"in": "response", "field": "$.id", "reason": "want integer", "message": "body failed"}
+
+	tests := []struct {
+		name        string
+		test        string
+		res         map[string]any
+		wantChecked bool
+		wantOK      bool
+		wantKind    string
+	}{
+		{name: "no contract and no test", res: map[string]any{"code": 200}},
+		{name: "a contract kept, without a test", res: violationsRes(), wantChecked: true, wantOK: true},
+		{name: "a contract kept, with a test that holds", test: "res.code == 200", res: violationsRes(), wantChecked: true, wantOK: true},
+		{name: "a contract kept, with a test that fails", test: "res.code == 201", res: violationsRes(), wantChecked: true, wantKind: FailureAssertion},
+		{name: "a contract broken, without a test", res: violationsRes(broken), wantChecked: true, wantKind: FailureContractResponse},
+		{name: "a contract broken, with a test that holds", test: "res.code == 200", res: violationsRes(broken), wantChecked: true, wantKind: FailureContractResponse},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			st := &Step{Test: tt.test, Expr: &expr.Expr{}, ctx: StepContext{Res: tt.res}}
+			if got := st.checked(); got != tt.wantChecked {
+				t.Fatalf("checked() = %v, want %v", got, tt.wantChecked)
+			}
+			if !tt.wantChecked {
+				return
+			}
+			_, ok := st.check(newBufferPrinter())
+			if ok != tt.wantOK {
+				t.Fatalf("check() = %v, want %v", ok, tt.wantOK)
+			}
+			if tt.wantOK {
+				if st.failure != nil {
+					t.Errorf("failure = %+v, want nil", st.failure)
+				}
+				return
+			}
+			if st.failure == nil || st.failure.Kind != tt.wantKind {
+				t.Fatalf("failure = %+v, want kind %q", st.failure, tt.wantKind)
+			}
+		})
+	}
+}
+
+func TestStep_contractFailure(t *testing.T) {
+	st := &Step{ctx: StepContext{
+		Req: map[string]any{"url": "http://example.com/v1/users/2"},
+		Res: violationsRes(
+			map[string]any{"in": "response", "reason": "missing property 'name'", "message": "body failed"},
+			map[string]any{"in": "response", "field": "$.id", "reason": "got string, want integer", "message": "body failed"},
+		),
+	}}
+
+	f := st.contractFailure()
+	if f == nil {
+		t.Fatal("contractFailure() = nil, want a failure")
+	}
+	if f.Kind != FailureContractResponse {
+		t.Errorf("Kind = %q, want %q", f.Kind, FailureContractResponse)
+	}
+	if f.Message != "the response breaks its contract in 2 places" {
+		t.Errorf("Message = %q", f.Message)
+	}
+	want := []report.Violation{
+		{In: "response", Reason: "missing property 'name'", Message: "body failed"},
+		{In: "response", Field: "$.id", Reason: "got string, want integer", Message: "body failed"},
+	}
+	if !reflect.DeepEqual(f.Violations, want) {
+		t.Errorf("Violations = %+v, want %+v", f.Violations, want)
+	}
+	if f.Request == nil || f.Response == nil {
+		t.Error("the failure should carry the request and response, as a failed test does")
+	}
+}
+
+func TestStep_createStepResult_Contract(t *testing.T) {
+	broken := map[string]any{"in": "response", "message": "GET Path '/v1/teams' not found"}
+
+	tests := []struct {
+		name       string
+		res        map[string]any
+		wantStatus StatusType
+	}{
+		{name: "a response that keeps to its contract passes without a test", res: violationsRes(), wantStatus: StatusSuccess},
+		{name: "a response that breaks its contract fails", res: violationsRes(broken), wantStatus: StatusError},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			st := &Step{Idx: 0, Expr: &expr.Expr{}, ctx: StepContext{Res: tt.res}}
+			jCtx := &JobContext{Printer: newBufferPrinter(), Result: NewResult()}
+
+			result := st.createStepResult("Contract", jCtx)
+			if result.Status != tt.wantStatus {
+				t.Errorf("Status = %v, want %v", result.Status, tt.wantStatus)
+			}
+			if !result.HasTest {
+				t.Error("HasTest = false, want true: the contract checks the step")
+			}
+			if tt.wantStatus != StatusError {
+				return
+			}
+			if result.Failure == nil || len(result.Failure.Violations) != 1 {
+				t.Fatalf("Failure = %+v, want the violation", result.Failure)
+			}
+			if !strings.Contains(result.TestOutput, "GET Path '/v1/teams' not found") {
+				t.Errorf("TestOutput = %q, want the violation", result.TestOutput)
+			}
+			if got := jCtx.Result.exitCode(true); got != ExitTestFailed {
+				t.Errorf("exit code = %d, want %d", got, ExitTestFailed)
+			}
+		})
+	}
+}
+
+func TestStep_executeActionWithRetry_ContractBroken(t *testing.T) {
+	callCount := 0
+	mock := &CountingMockActionRunner{
+		callCount: &callCount,
+		resultFunc: func(count int) map[string]any {
+			res := violationsRes()
+			if count <= 2 {
+				res = violationsRes(map[string]any{"in": "response", "message": "body failed"})
+			}
+			return map[string]any{"status": 0, "res": res}
+		},
+	}
+	step := &Step{
+		Uses: "http",
+		Test: "res.code == 200",
+		Retry: &StepRetry{
+			MaxAttempts: 3,
+			Interval:    Interval{Duration: 10 * time.Millisecond},
+		},
+		Expr: &expr.Expr{},
+	}
+	jCtx := &JobContext{Printer: newBufferPrinter()}
+
+	if _, err := step.executeActionWithRetry(mock, map[string]any{}, jCtx, "test"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// The test holds every time; the attempts that break the contract are
+	// retried as failed tests are.
+	if callCount != 3 {
+		t.Errorf("attempts = %d, want 3", callCount)
+	}
+}
+
+func TestStep_handleRepeatExecution_Contract(t *testing.T) {
+	step := &Step{Idx: 0, Expr: &expr.Expr{}}
+	jCtx := &JobContext{
+		Printer:      newBufferPrinter(),
+		StepCounters: make(map[int]StepRepeatCounter),
+		countersMu:   &sync.Mutex{},
+		RepeatTotal:  2,
+		Result:       NewResult(),
+	}
+
+	step.ctx = StepContext{Res: violationsRes()}
+	step.handleRepeatExecution(jCtx, "Contract", false)
+	step.ctx = StepContext{Res: violationsRes(map[string]any{"in": "response", "message": "body failed"})}
+	step.handleRepeatExecution(jCtx, "Contract", false)
+
+	counter := jCtx.StepCounters[0]
+	if counter.SuccessCount != 1 || counter.FailureCount != 1 {
+		t.Errorf("counts = %d/%d, want 1 success and 1 failure", counter.SuccessCount, counter.FailureCount)
+	}
+	if !counter.Checked {
+		t.Error("Checked = false, want true")
+	}
+	if counter.Failure == nil || counter.Failure.Kind != FailureContractResponse {
+		t.Errorf("Failure = %+v, want a contract failure", counter.Failure)
 	}
 }

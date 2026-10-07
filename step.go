@@ -17,6 +17,7 @@ import (
 	"github.com/linyows/probe/jsonutil"
 	"github.com/linyows/probe/mask"
 	"github.com/linyows/probe/procgroup"
+	"github.com/linyows/probe/report"
 )
 
 const (
@@ -324,9 +325,10 @@ func (st *Step) executeActionWithRetry(runner ActionRunner, expW map[string]any,
 		// Process action result to set context for test evaluation
 		st.processActionResult(result, jCtx)
 
-		// Evaluate test expression to determine success
+		// Evaluate test expression to determine success; a response that
+		// breaks its contract fails as a test does.
 		exprOut, err := st.evalTest()
-		testOk := err == nil && exprOut == true
+		testOk := err == nil && exprOut == true && st.contractFailure() == nil
 		if testOk {
 			if jCtx.Verbose {
 				jCtx.Printer.LogDebug("Action succeeded on attempt %d", attempt)
@@ -473,7 +475,7 @@ func (st *Step) createStepResult(name string, jCtx *JobContext) StepResult {
 	result := StepResult{
 		Index:    st.Idx,
 		Name:     name,
-		HasTest:  st.Test != "",
+		HasTest:  st.checked(),
 		RT:       "",
 		WaitTime: st.getWaitTimeForDisplay(),
 		Test:     st.Test,
@@ -500,8 +502,8 @@ func (st *Step) createStepResult(name string, jCtx *JobContext) StepResult {
 		}
 	}
 
-	if st.Test != "" {
-		testOutput, ok := st.DoTest(jCtx.Printer)
+	if st.checked() {
+		testOutput, ok := st.check(jCtx.Printer)
 		if ok {
 			result.Status = StatusSuccess
 		} else {
@@ -530,14 +532,14 @@ func (st *Step) getEchoOutput(printer *Printer) string {
 
 func (st *Step) handleRepeatExecution(jCtx *JobContext, name string, hasError bool) {
 	// Execute test first (outside of lock)
-	hasTest := st.Test != ""
+	hasTest := st.checked()
 	testResult := true
 
 	// If there was an error, always count as failure
 	if hasError {
 		testResult = false
 	} else if hasTest {
-		_, testResult = st.DoTest(jCtx.Printer)
+		_, testResult = st.check(jCtx.Printer)
 		if !testResult {
 			jCtx.SetFailed()
 			jCtx.Result.recordFailure(st.failure.Kind)
@@ -578,6 +580,9 @@ func (st *Step) handleRepeatExecution(jCtx *JobContext, name string, hasError bo
 		counter.SuccessCount++
 	}
 	counter.LastResult = testResult
+	if st.contractChecked() {
+		counter.Checked = true
+	}
 	if counter.Failure == nil {
 		counter.Failure = failure
 	}
@@ -598,6 +603,64 @@ func (st *Step) handleRepeatExecution(jCtx *JobContext, name string, hasError bo
 			jCtx.Printer.PrintEchoContent(echoRaw)
 		}
 	}
+}
+
+// contractChecked reports whether the action checked the response against
+// a contract, such as an OpenAPI document. It then returns res.violations,
+// empty when the response keeps to the contract.
+func (st *Step) contractChecked() bool {
+	_, ok := st.ctx.Res["violations"].([]any)
+	return ok
+}
+
+// checked reports whether anything checks the step: its test, or a contract
+// the action checked the response against.
+func (st *Step) checked() bool {
+	return st.Test != "" || st.contractChecked()
+}
+
+// contractFailure returns why the response breaks its contract, or nil when
+// it keeps to it or the action checked it against none.
+func (st *Step) contractFailure() *StepFailure {
+	list, _ := st.ctx.Res["violations"].([]any)
+	if len(list) == 0 {
+		return nil
+	}
+	vs := make([]report.Violation, 0, len(list))
+	for _, item := range list {
+		m, _ := item.(map[string]any)
+		str := func(k string) string {
+			s, _ := m[k].(string)
+			return s
+		}
+		vs = append(vs, report.Violation{
+			In:      str("in"),
+			Field:   str("field"),
+			Reason:  str("reason"),
+			Message: str("message"),
+		})
+	}
+	msg := "the response breaks its contract in 1 place"
+	if len(vs) > 1 {
+		msg = fmt.Sprintf("the response breaks its contract in %d places", len(vs))
+	}
+	f := st.newFailure(FailureContractResponse, msg)
+	f.Violations = vs
+	return f
+}
+
+// check checks the step: the response against its contract, then the test,
+// which is not evaluated when the response breaks the contract.
+func (st *Step) check(printer *Printer) (string, bool) {
+	if f := st.contractFailure(); f != nil {
+		st.failure = f
+		return printer.generateContractFailure(f), false
+	}
+	if st.Test == "" {
+		st.failure = nil
+		return "", true
+	}
+	return st.DoTest(printer)
 }
 
 // evalTest evaluates the test expression and returns the raw result

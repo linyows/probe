@@ -164,6 +164,15 @@ func TestBuildReport_FailureOnlyOnFailedSteps(t *testing.T) {
 	}
 }
 
+func TestBuildReport_FailureCarriesViolations(t *testing.T) {
+	vs := []report.Violation{{In: "response", Field: "$.id", Message: "body failed"}}
+	sr := StepResult{Status: StatusError, Failure: &StepFailure{Kind: FailureContractResponse, Violations: vs}}
+	got := buildStepReport(sr).Failure
+	if got == nil || !reflect.DeepEqual(got.Violations, vs) {
+		t.Errorf("Failure = %+v, want the violations carried over", got)
+	}
+}
+
 func TestBuildReport_NilResult(t *testing.T) {
 	r := BuildReport("Empty", "", nil, []string{"a"}, time.Time{}, time.Time{})
 	if r.Status != report.Passed || len(r.Jobs) != 0 {

@@ -233,7 +233,7 @@ func (e *Executor) appendRepeatStepResults(ctx *JobContext) {
 		ctx.countersMu.Unlock()
 
 		if exists {
-			hasTest := step.Test != ""
+			hasTest := step.Test != "" || counter.Checked
 
 			// Determine status based on repeat counter results
 			var status StatusType
