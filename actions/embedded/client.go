@@ -103,6 +103,11 @@ func (r *Req) Do() (*Result, error) {
 	if run.Err != nil {
 		errorMsg = run.Err.Error()
 	}
+	// A step the guard refused refuses the step that embeds the job, so
+	// that the run tells it as such, exits as it would, and does not retry.
+	if run.Refused != nil {
+		return result, run.Refused
+	}
 
 	result.Res = Res{
 		Code:    code,

@@ -712,4 +712,18 @@ func TestRunStandaloneUnderAGuard(t *testing.T) {
 	if n := len(runner.Calls["ssh"]) + len(runner.Calls["./no-such-action"]); n != 0 {
 		t.Errorf("the refused actions were run %d times, want none", n)
 	}
+	// The first refusal is told, so that the step that embeds the job is
+	// refused as well.
+	if run.Refused == nil || !strings.Contains(run.Refused.Reason, `step 1 "does not" of the embedded job: the action ssh does not keep to the guard`) {
+		t.Errorf("Refused = %+v, want the refusal of the ssh step", run.Refused)
+	}
+}
+
+func TestRunStandaloneWithoutARefusal(t *testing.T) {
+	runner := NewMockActionRunner()
+	job := &Job{Name: "embedded", Steps: []*Step{{Name: "fails", Uses: "hello", Test: "false", actionRunner: runner}}}
+	run := job.RunStandalone(map[string]any{}, newBufferPrinter(), "embedded", t.TempDir())
+	if run.Success || run.Refused != nil {
+		t.Errorf("Success = %v, Refused = %+v; want a failure that is not a refusal", run.Success, run.Refused)
+	}
 }

@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/linyows/probe/actionrpc"
 )
 
 func TestNewReq(t *testing.T) {
@@ -264,5 +266,23 @@ func TestWithAfter(t *testing.T) {
 	}
 	if capturedResult != testResult {
 		t.Error("after callback did not receive correct result")
+	}
+}
+
+func TestExecuteUnderAGuard(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "job.yml")
+	job := "name: inner\nsteps:\n- name: Write\n  uses: ssh\n  with:\n    host: prod.example.com\n    user: root\n    cmd: rm -rf /tmp/x\n  test: res.code == 0\n"
+	if err := os.WriteFile(path, []byte(job), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	guard := actionrpc.Guard{ReadOnly: true, Keeping: []string{"embedded", "hello", "http", "db"}}
+
+	_, err := Execute(map[string]any{"path": path}, WithGuard(guard))
+	if !actionrpc.IsRefused(err) {
+		t.Fatalf("err = %v, want the step refused, so that the step embedding the job is", err)
+	}
+	if !strings.Contains(err.Error(), `step 0 "Write" of the embedded job`) {
+		t.Errorf("err = %v, want it to name the step refused", err)
 	}
 }

@@ -3,6 +3,7 @@ package probe
 import (
 	"fmt"
 	"github.com/linyows/probe/actionrpc"
+	"strings"
 	"sync"
 	"time"
 
@@ -306,6 +307,10 @@ type JobRun struct {
 	// a step is invalid or an action cannot be resolved. A step that fails
 	// leaves it nil and Success false.
 	Err error
+	// Refused is set when the guard the job ran under refused a step, the
+	// first one, so that the step that embeds the job is refused as well
+	// rather than failing as a job whose test was false.
+	Refused *actionrpc.Refused
 	// Duration is how long the job took.
 	Duration time.Duration
 }
@@ -364,6 +369,22 @@ func (j *Job) RunIndependently(vars map[string]any, printer *Printer, jobID stri
 		errorMsg = errStepsFailed(j.Name).Error()
 	}
 	return run.Success, run.Outputs, run.Report, errorMsg, run.Duration
+}
+
+// firstRefusal returns why the guard refused the first step of jr it
+// refused, or nil when it refused none.
+func firstRefusal(jr *JobResult) *actionrpc.Refused {
+	for _, sr := range jr.StepResults {
+		f := sr.Failure
+		if sr.RepeatCounter != nil {
+			f = sr.RepeatCounter.Failure
+		}
+		if f != nil && f.Kind == FailureRefused {
+			reason := strings.TrimPrefix(f.Message, "refused: ")
+			return &actionrpc.Refused{Reason: fmt.Sprintf("step %d %q of the embedded job: %s", sr.Index, sr.Name, reason)}
+		}
+	}
+	return nil
 }
 
 // runStandalone is RunStandalone, also reporting whether a step failed.
@@ -428,6 +449,8 @@ func (j *Job) runStandalone(vars map[string]any, printer *Printer, jobID, baseDi
 		jr.Status = "Failed"
 	}
 	jr.Success = run.Success
+
+	run.Refused = firstRefusal(jr)
 
 	run.Duration = time.Since(start)
 	jr.EndTime = jr.StartTime.Add(run.Duration)
