@@ -1,13 +1,13 @@
 openapi: 3.0.3
 info:
-  title: httpbin, described wrongly
+  title: httpbin, described for steps that break it
   version: "1"
 paths:
   /uuid:
     get:
       responses:
         "200":
-          description: A UUID under a name httpbin does not use
+          description: A UUID under a name httpbin does not use, so the response breaks it
           content:
             application/json:
               schema:
@@ -16,3 +16,22 @@ paths:
                 properties:
                   id:
                     type: string
+  /anything/users:
+    post:
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name:
+                  type: string
+      responses:
+        "200":
+          description: The request, echoed
+          content:
+            application/json:
+              schema:
+                type: object

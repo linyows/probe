@@ -17,3 +17,23 @@ paths:
                   uuid:
                     type: string
                     format: uuid
+  /anything/users:
+    post:
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name:
+                  type: string
+      responses:
+        "200":
+          description: The request, echoed
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [json]

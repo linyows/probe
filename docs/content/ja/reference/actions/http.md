@@ -33,7 +33,7 @@ steps:
 | `cookies` | Object | 任意 | - | 送るCookie。名前と値で指定します。[Cookie](#cookie)を参照 |
 | `trace_header` | BooleanまたはString | 任意 | `false` | リクエストの実行、ジョブ、ステップを示すヘッダーを送ります。`true`なら`X-Probe-Trace`、文字列ならその名前のヘッダーです。[リクエストのトレース](#リクエストのトレース)を参照 |
 | `keep_cookies` | Boolean | 任意 | `false` | サーバーが設定したCookieをジョブで保持し、Cookieを保持する以降のステップで送ります。[Cookie](#cookie)を参照 |
-| `openapi` | Objectまたは`false` | 任意 | - | `spec`をパスとするOpenAPIドキュメントとレスポンスを照合し、違反があればステップを失敗させます。`false`はジョブの`defaults`が求める照合を外します。[OpenAPIによるレスポンスの検証](#openapiによるレスポンスの検証)を参照 |
+| `openapi` | Objectまたは`false` | 任意 | - | `spec`をパスとするOpenAPIドキュメントとリクエストおよびレスポンスを照合し、どちらかに違反があればステップを失敗させます。`request: false`はレスポンスだけを照合し、`false`はジョブの`defaults`が求める照合を外します。[OpenAPIによる検証](#openapiによる検証)を参照 |
 
 リダイレクトとTLS検証を指定するパラメータはありません。リダイレクトは既定で追跡します。
 
@@ -170,7 +170,7 @@ jobs:
 | `res.rawbody` | String | 解析前のボディ。JSONとして解析したときに入ります |
 | `res.filepath` | String | バイナリレスポンスを保存したファイルのパス |
 | `res.cookies` | Object | サーバーが設定したCookie。名前と値で入り、リダイレクトの途中で設定されたものも含みます |
-| `res.violations` | Array | レスポンスのうちOpenAPIドキュメントが許さないもの。すべて許されていれば空です。`openapi`を指定したときだけ入ります |
+| `res.violations` | Array | リクエストとレスポンスのうちOpenAPIドキュメントが許さないもの。すべて許されていれば空です。`openapi`を指定したときだけ入ります |
 | `rt.duration` | String | ラウンドトリップ時間（例: `"120ms"`） |
 | `rt.sec` | Float | ラウンドトリップ時間（秒） |
 | `status` | Integer | ステータスコードが2xxなら`0`、それ以外は`1` |
@@ -333,23 +333,35 @@ X-Probe-Trace: run=7f3a9c21e4b05d68; job=login; step=auth; repeat=0; attempt=1
 
 このヘッダーは`headers`に書いたヘッダーと同じく送られ、`req.headers`にも表示されます。`headers`に同じ名前のヘッダーを書いた場合はエラーになります。オプション名が`trace`でないのは、`trace`がTRACEメソッドの省略記法だからです。
 
-### OpenAPIによるレスポンスの検証
+### OpenAPIによる検証
 
-`openapi`を指定すると、各レスポンスをOpenAPIドキュメントと照合します。ステップに書いた`test`とは独立に、何が正しいかをドキュメントが決めます。ジョブの`defaults`に書けば、ジョブのすべてのリクエストを照合します。
+`openapi`を指定すると、各リクエストとそのレスポンスをOpenAPIドキュメントと照合します。ステップに書いた`test`とは独立に、何が正しいかをドキュメントが決めます。ジョブの`defaults`に書けば、ジョブのすべてのリクエストを照合します。
 
 ```yaml
 - name: Users
   defaults:
     http:
       url: "{{vars.api_url}}"
+      headers:
+        content-type: application/json
       openapi:
         spec: ./openapi.yml
   steps:
-    - name: Get a user
+    - name: Create a user
       uses: http
       with:
-        get: /users/1
+        post: /users
+        body:
+          name: probe
       test: res.body.name == "probe"
+    - name: Reject a user without a name
+      uses: http
+      with:
+        post: /users
+        body: {}
+        openapi:
+          request: false
+      test: res.code == 400
     - name: Health
       uses: http
       with:
@@ -358,16 +370,24 @@ X-Probe-Trace: run=7f3a9c21e4b05d68; job=login; step=auth; repeat=0; attempt=1
       test: res.code == 200
 ```
 
-レスポンスは、リクエストのメソッドとパスでオペレーションに対応付けます。パスの先頭からはドキュメントの`servers`のパスを除き、リダイレクトされた場合は最後のリクエストを使います。次の場合、ステップは種類`contract_response`で失敗します。
+リクエストとレスポンスは、リクエストのメソッドとパスでオペレーションに対応付けます。パスの先頭からはドキュメントの`servers`のパスを除きます。リクエストはステップが送ったとおりに、`cookies`で送ったCookieや`keep_cookies`で保持したCookieも含めて照合し、次の場合にステップは種類`contract_request`で失敗します。
+
+- パス、クエリ、ヘッダー、Cookieのパラメータが、必須なのにない、またはスキーマに合わない
+- ボディが、必須なのにない、`Content-Type`がオペレーションの宣言する型ではない、またはスキーマに合わない
+- オペレーションの`security`が求める認証情報がない
+
+レスポンスは、リダイレクトされた場合は最後のリクエストで照合し、次の場合にステップは種類`contract_response`で失敗します。
 
 - メソッドとパスに対応するオペレーションがドキュメントにない
 - オペレーションがそのステータスコードも`default`のレスポンスも宣言していない
 - レスポンスの`Content-Type`が、そのレスポンスの宣言する型ではない
 - レスポンスが宣言するヘッダー、またはボディがスキーマに合わない
 
-`test`が成り立っていても失敗し、`test`は評価しません。`test`のないステップは、レスポンスがドキュメントに合っていれば成功します。ドキュメントが検証したからです。違反はそれぞれ`res.violations`、端末、レポートに`{in, field, reason, message}`の形で入ります。`field`は`$.id`のようなボディのフィールドで、該当するときだけ入ります。
+両方に違反がある場合、種類は`contract_request`です。ワークフローがドキュメントの許さないものを送っており、それがレスポンスの違反の原因かもしれないからです。`test`が成り立っていても失敗し、`test`は評価しません。`test`のないステップは、リクエストとレスポンスがドキュメントに合っていれば成功します。ドキュメントが検証したからです。違反はそれぞれ`res.violations`、端末、レポートに`{in, field, reason, message}`の形で入ります。`in`は`request`か`response`で、`field`は`$.id`のようなボディのフィールドです。`field`は該当するときだけ入ります。
 
-`spec`はProbeを実行したディレクトリからのパスです。ドキュメントはリクエストを送る前に読むため、読めない、または解析できないドキュメントを指定したステップは、何も送らずにアクションのエラーとして失敗します。ステップに`openapi: false`を書くと、ドキュメントが扱わないエンドポイントなどで照合を外せます。照合するのはレスポンスだけで、リクエストは照合しません。
+拒否されることを確かめるために、ドキュメントの許さないものをわざと送るステップには`request: false`を書きます。レスポンスは引き続き照合するため、ドキュメントが宣言していない拒否の仕方をすればステップは失敗します。`security`が求める認証情報なしで送るリクエストもこれにあたり、`401`を確かめる場合などに使います。
+
+`spec`はProbeを実行したディレクトリからのパスです。ドキュメントはリクエストを送る前に読むため、読めない、または解析できないドキュメントを指定したステップは、何も送らずにアクションのエラーとして失敗します。ステップに`openapi: false`を書くと、ドキュメントが扱わないエンドポイントなどで照合を外せます。
 
 ### エラーレスポンスの検証
 

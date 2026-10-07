@@ -161,6 +161,7 @@ A step's status is `passed`, `failed`, `skipped`, or `untested` when it ran with
 | `action` | The action returned an error, such as a refused connection | `<error>` |
 | `template` | A template in the step's `with`, `vars` or `name` could not be evaluated, so the action did not run | `<error>` |
 | `contract_response` | The response broke the contract the action checked it against, such as an OpenAPI document | `<failure>` |
+| `contract_request` | The request broke the contract the action checked it against: the workflow sent what an OpenAPI document does not allow | `<error>` |
 
 A step in a job with `repeat` fails when any iteration fails, and reports how many iterations passed and why the first failing one failed. When an action sets `dump: false` on its response, the request and response are left out of the report as they are left out of the terminal.
 

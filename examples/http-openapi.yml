@@ -7,8 +7,8 @@ jobs:
   defaults:
     http:
       url: "{{vars.url}}"
-      # every response of the job is checked against the document;
-      # the path is relative to the working directory
+      # every request and response of the job is checked against the
+      # document; the path is relative to the working directory
       openapi:
         spec: ./examples/fixtures/httpbin-openapi.yml
   steps:
@@ -19,6 +19,17 @@ jobs:
     with:
       get: /uuid
     test: res.body.uuid != ""
+
+  # the request is checked too: a body without a name would fail the step
+  - name: Create a user
+    uses: http
+    with:
+      post: /anything/users
+      headers:
+        content-type: application/json
+      body:
+        name: alice
+    test: res.body.json.name == "alice"
 
   # a step can leave out the check for an endpoint the document does not cover
   - name: Echo a request

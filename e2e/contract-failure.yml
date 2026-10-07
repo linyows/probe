@@ -15,3 +15,20 @@ jobs:
     with:
       get: /uuid
     test: res.code == 200
+
+- name: A request that breaks its contract
+  defaults:
+    http:
+      url: "{{vars.url}}"
+      openapi:
+        spec: ./e2e/contract-openapi.yml
+  steps:
+  - name: Create a user without a name
+    uses: http
+    with:
+      post: /anything/users
+      headers:
+        content-type: application/json
+      body:
+        role: admin
+    test: res.code == 200

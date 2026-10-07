@@ -104,6 +104,7 @@ The exit code says what to look at:
    - `test_error` or `test_type`: the expression itself is wrong. Check field names against `probe guide <action>` and the syntax against `probe guide concepts/expressions`.
    - `template`: a template in the step's `with`, `vars` or `name` could not be evaluated, so the action did not run. The message names the value, as `with.headers.authorization`. Usually an earlier step did not publish the output it reads; check that step, or fall back with `?.` and `??`.
    - `action`: the action could not run. Check the URL or host, credentials, and `timeout`.
+   - `contract_request`: the step sent what the OpenAPI document given in `openapi` does not allow. Fix the step to send what the document asks for. Only when the step means to send it, to see it rejected, add `request: false` under `openapi`.
    - `contract_response`: the response broke the OpenAPI document given in `openapi`. Each violation names what is wrong, and the field when there is one. The document says what is right, so fix the server, or the document when it is the one that is out of date; do not drop `openapi` to make the step pass.
 3. For more detail, run with `-v`, which prints every request and response. Declared secrets and credential headers are masked there too.
 4. After a fix, run the workflow again and confirm the exit code is `0` before calling it done.

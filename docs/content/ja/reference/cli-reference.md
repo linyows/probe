@@ -161,6 +161,7 @@ PROBE_OUTPUT=stream probe workflow.yml
 | `action` | 接続の拒否など、アクションがエラーを返した | `<error>` |
 | `template` | ステップの`with`、`vars`、`name`のテンプレートを評価できず、アクションを実行しなかった | `<error>` |
 | `contract_response` | OpenAPIドキュメントなど、アクションが照合した契約にレスポンスが違反した | `<failure>` |
+| `contract_request` | アクションが照合した契約にリクエストが違反した。OpenAPIドキュメントが許さないものをワークフローが送った | `<error>` |
 
 `repeat`付きのジョブのステップは、1回でも失敗すれば失敗として扱い、成功した回数と、最初に失敗した回の理由を記録します。アクションがレスポンスに`dump: false`を設定した場合は、端末と同じくレポートにもリクエストとレスポンスを含めません。
 
