@@ -188,7 +188,7 @@ Each action keeps to the guard as far as it can tell what it is about to do:
 | Action | `--read-only` | `--allow-host` |
 |---|---|---|
 | `http` | Sends only `GET`, `HEAD` and `OPTIONS` | The host of the URL, and of each redirect; a URL without a port is taken at the port of its scheme |
-| `db` | Runs one statement that starts with `SELECT`, `SHOW`, `DESCRIBE`, `DESC`, `EXPLAIN` or `WITH` and holds no semicolon but at its end, in a read-only transaction, or on a SQLite connection that only queries, so that the database refuses a write the statement hides | The server the driver connects to: for PostgreSQL the `host` and `port` parameters, and `PGHOST` and `PGPORT`, count; the driver's port when none is named; a SQLite file names no host |
+| `db` | Runs one statement that starts with `SELECT`, `SHOW`, `DESCRIBE`, `DESC`, `EXPLAIN` or `WITH` and holds no semicolon but at its end, in a read-only transaction, or on a SQLite connection that only queries, so that the database refuses a write the statement hides | Each server the driver may connect to: for PostgreSQL those lib/pq resolves the DSN to, with its parameters, a service file and `PGHOST`, `PGHOSTADDR`, `PGPORT` and the like, every host of a list, and the address of `hostaddr` when it is given; the driver's port when none is named; a SQLite file names no host |
 | `embedded` | Runs the job under the guard | Runs the job under the guard |
 | `hello` | Nothing to refuse | Nothing to reach |
 

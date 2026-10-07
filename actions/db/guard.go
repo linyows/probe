@@ -4,10 +4,11 @@ import (
 	"fmt"
 	"net"
 	"net/url"
-	"os"
 	"slices"
+	"strconv"
 	"strings"
 
+	"github.com/lib/pq"
 	"github.com/linyows/probe/actionrpc"
 )
 
@@ -32,13 +33,15 @@ var readVerbs = []string{"SELECT", "SHOW", "DESCRIBE", "DESC", "EXPLAIN", "WITH"
 // as one that ends the read-only transaction or turns query_only off.
 func (r *Req) checkGuard(guard actionrpc.Guard) error {
 	if len(guard.AllowHosts) > 0 {
-		host, ok, err := r.host()
+		hosts, ok, err := r.hosts()
 		if err != nil {
 			return actionrpc.Refuse("%v", err)
 		}
 		if ok {
-			if err := guard.CheckHost(host); err != nil {
-				return err
+			for _, host := range hosts {
+				if err := guard.CheckHost(host); err != nil {
+					return err
+				}
 			}
 		}
 	}
@@ -64,43 +67,51 @@ func (r *Req) checkGuard(guard actionrpc.Guard) error {
 	return nil
 }
 
-// host returns the host and port of the server the DSN connects to, and
-// false for a SQLite database. For PostgreSQL it is the server lib/pq
-// connects to: the host and port parameters of the DSN override the ones
-// before the path, and PGHOST and PGPORT fill in what the DSN leaves out.
-// A DSN it cannot tell the server of is an error, which refuses it.
-func (r *Req) host() (string, bool, error) {
-	if r.Driver == "sqlite" {
-		return "", false, nil
+// hosts returns the host and port of each server the DSN may connect to,
+// and false for a SQLite database, which is a local file. For PostgreSQL
+// they are the servers lib/pq resolves the DSN to, the same DSN it then
+// connects with: its host, hostaddr and port parameters, a service file, and
+// PGHOST, PGHOSTADDR, PGPORT and the like count, and every host of a list.
+// A DSN it cannot tell the servers of is an error, which refuses it.
+func (r *Req) hosts() ([]string, bool, error) {
+	switch r.Driver {
+	case "sqlite":
+		return nil, false, nil
+	case "postgres":
+		cfg, err := pq.NewConfig(r.DSN)
+		if err != nil {
+			return nil, true, fmt.Errorf("the DSN cannot be read for its server: %w", err)
+		}
+		servers := []pq.ConfigMultihost{{Host: cfg.Host, Hostaddr: cfg.Hostaddr, Port: cfg.Port}}
+		servers = append(servers, cfg.Multi...)
+		var out []string
+		for _, s := range servers {
+			// hostaddr is the address dialed, when it is given.
+			host := s.Host
+			if s.Hostaddr.IsValid() {
+				host = s.Hostaddr.String()
+			}
+			if host == "" {
+				host = "localhost"
+			}
+			port := strconv.Itoa(int(s.Port))
+			if s.Port == 0 {
+				port = defaultPorts[r.Driver]
+			}
+			out = append(out, net.JoinHostPort(host, port))
+		}
+		return out, true, nil
 	}
 	u, err := url.Parse(r.DSN)
 	if err != nil {
-		return "", true, err
+		return nil, true, err
 	}
 	host, port := u.Hostname(), u.Port()
-	if r.Driver == "postgres" {
-		q := u.Query()
-		if q.Has("hostaddr") || strings.Contains(q.Get("host"), ",") {
-			return "", true, fmt.Errorf("the DSN names its server by hostaddr or by several hosts, which the run cannot check against the hosts it allows")
-		}
-		if h := q.Get("host"); h != "" {
-			host = h
-		}
-		if p := q.Get("port"); p != "" {
-			port = p
-		}
-		if host == "" {
-			host = os.Getenv("PGHOST")
-		}
-		if port == "" {
-			port = os.Getenv("PGPORT")
-		}
-	}
 	if host == "" {
 		host = "localhost"
 	}
 	if port == "" {
 		port = defaultPorts[r.Driver]
 	}
-	return net.JoinHostPort(host, port), true, nil
+	return []string{net.JoinHostPort(host, port)}, true, nil
 }
