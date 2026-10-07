@@ -63,6 +63,9 @@ type Result struct {
 	// violations are what the contract does not allow in the response; nil
 	// when there is no contract.
 	violations []any
+	// matched is what the contract matched the response to; nil when there
+	// is no contract or the document has no operation for the request.
+	matched map[string]any
 }
 
 func NewReq() *Req {
@@ -240,7 +243,7 @@ func (r *Req) Do() (*Result, error) {
 		if r.payload != nil {
 			sentBody = r.payload
 		}
-		result.violations = r.contract.check(sent, sentBody, res, body)
+		result.violations, result.matched = r.contract.check(sent, sentBody, res, body)
 	}
 
 	return result, nil
@@ -535,10 +538,14 @@ func request(call actionrpc.Call, opts ...Option) (map[string]any, map[string]an
 		return nil, nil, err
 	}
 
-	// The violations are in res, where the runner looks for them.
-	if ret.violations != nil {
-		if res, ok := mapRet["res"].(map[string]any); ok {
+	// The violations, and what the response was matched to, are in res,
+	// where the runner looks for them.
+	if res, ok := mapRet["res"].(map[string]any); ok {
+		if ret.violations != nil {
 			res["violations"] = ret.violations
+		}
+		if ret.matched != nil {
+			res["contract"] = ret.matched
 		}
 	}
 

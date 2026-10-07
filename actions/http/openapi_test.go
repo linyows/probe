@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -282,6 +283,51 @@ func TestRequestStepChecksAgainstOpenAPI(t *testing.T) {
 			}
 			if _, ok := ret["req"].(map[string]any)["openapi"]; ok {
 				t.Error("openapi should not be carried into req")
+			}
+		})
+	}
+}
+
+func TestRequestStepReportsWhatTheResponseWasMatchedTo(t *testing.T) {
+	srv := usersServer(t)
+	spec := writeSpec(t, srv.URL)
+
+	tests := []struct {
+		name string
+		with map[string]any
+		want map[string]any // nil when the document has no operation
+	}{
+		{name: "by status code", with: map[string]any{"get": "/users/1"},
+			want: map[string]any{"spec": spec, "operation": "GET /users/{id}", "response": "200"}},
+		{name: "after a redirect, by where it leads", with: map[string]any{"get": "/old"},
+			want: map[string]any{"spec": spec, "operation": "GET /users/{id}", "response": "200"}},
+		{name: "by a range of codes", with: map[string]any{"get": "/items"},
+			want: map[string]any{"spec": spec, "operation": "GET /items", "response": "2XX"}},
+		{name: "by default", with: map[string]any{"post": "/items"},
+			want: map[string]any{"spec": spec, "operation": "POST /items", "response": "default"}},
+		{name: "a status the operation does not declare", with: map[string]any{"get": "/users/3"},
+			want: map[string]any{"spec": spec, "operation": "GET /users/{id}"}},
+		{name: "a path the document does not have", with: map[string]any{"get": "/teams"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			with := map[string]any{"url": srv.URL + "/v1", "openapi": map[string]any{"spec": spec}}
+			for k, v := range tt.with {
+				with[k] = v
+			}
+			ret, _, err := RequestStep(actionrpc.Call{With: with})
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			got, ok := ret["res"].(map[string]any)["contract"]
+			if tt.want == nil {
+				if ok {
+					t.Errorf("res.contract = %#v, want none", got)
+				}
+				return
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("res.contract = %#v, want %#v", got, tt.want)
 			}
 		})
 	}

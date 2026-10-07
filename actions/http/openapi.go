@@ -9,6 +9,7 @@ import (
 	"mime"
 	hp "net/http"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/pb33f/libopenapi"
@@ -29,8 +30,12 @@ type contract struct {
 	// step that sends what the document does not allow on purpose, to see
 	// it rejected, turns it off.
 	request bool
-	// model is the document, which undeclared walks to find what a body
-	// holds that it does not declare; nil unless the contract is strict.
+	// strict is whether what the document does not declare breaks it.
+	strict bool
+	// spec is the path of the document, as the step gives it.
+	spec string
+	// model is the document, which tells which operation and response a
+	// response was matched to, and which undeclared walks.
 	model *v3.Document
 }
 
@@ -120,15 +125,11 @@ func loadContract(path string, strict bool) (*contract, error) {
 	if len(errs) > 0 {
 		return nil, fmt.Errorf("openapi.spec: %s: %w", path, errors.Join(errs...))
 	}
-	c := &contract{v: v}
-	if strict {
-		m, err := doc.BuildV3Model()
-		if err != nil {
-			return nil, fmt.Errorf("openapi.spec: %s: %w", path, err)
-		}
-		c.model = &m.Model
+	m, err := doc.BuildV3Model()
+	if err != nil {
+		return nil, fmt.Errorf("openapi.spec: %s: %w", path, err)
 	}
-	return c, nil
+	return &contract{v: v, strict: strict, spec: path, model: &m.Model}, nil
 }
 
 // check returns what in the request and the response the document does not
@@ -136,11 +137,17 @@ func loadContract(path string, strict bool) (*contract, error) {
 // all of it. req is the request the step sent, with reqBody, the body sent;
 // res is the response, with resBody, its body, which has been read.
 //
+// It also returns what the response was matched to, which a report of the
+// coverage of the document counts: the document, the operation, such as
+// GET /users/{id}, and the response the operation declares for it, such as
+// 200, 2XX or default, which is left out when it declares none. It is nil
+// when the document has no operation for the request.
+//
 // The request is checked as the step sent it, before any redirect, which
 // the client made rather than the step. The response is matched to an
 // operation by the request that received it, the last one when the request
 // was redirected.
-func (c *contract) check(req *hp.Request, reqBody []byte, res *hp.Response, resBody []byte) []any {
+func (c *contract) check(req *hp.Request, reqBody []byte, res *hp.Response, resBody []byte) ([]any, map[string]any) {
 	out := []any{}
 	if c.request {
 		out = append(out, c.checkRequest(req, reqBody)...)
@@ -151,12 +158,22 @@ func (c *contract) check(req *hp.Request, reqBody []byte, res *hp.Response, resB
 	_, errs := c.v.ValidateHttpResponse(res.Request, &r)
 	out = append(out, violations("response", strictKept(errs))...)
 
-	if c.model != nil {
-		if op := c.operation(res.Request); op != nil {
-			out = append(out, undeclaredIn("response", responseSchema(op, res), resBody)...)
-		}
+	op, template := c.operation(res.Request)
+	if op == nil {
+		return out, nil
 	}
-	return out
+	matched := map[string]any{
+		"spec":      c.spec,
+		"operation": res.Request.Method + " " + template,
+	}
+	key, resp := responseOf(op, res.StatusCode)
+	if resp != nil {
+		matched["response"] = key
+	}
+	if c.strict && resp != nil {
+		out = append(out, undeclaredIn("response", mediaSchema(resp.Content, res.Header.Get("Content-Type")), resBody)...)
+	}
+	return out, matched
 }
 
 // checkRequest returns what in the request the document does not allow. A
@@ -175,8 +192,8 @@ func (c *contract) checkRequest(req *hp.Request, body []byte) []any {
 	}
 	out := violations("request", kept)
 
-	if c.model != nil {
-		if op := c.operation(req); op != nil {
+	if c.strict {
+		if op, _ := c.operation(req); op != nil {
 			out = append(out, undeclaredIn("request", requestSchema(op, req.Header.Get("Content-Type")), body)...)
 		}
 	}
@@ -204,31 +221,36 @@ func strictKept(errs []*verrors.ValidationError) []*verrors.ValidationError {
 }
 
 // operation returns the operation the document has for the method and path
-// of req, or nil when it has none.
-func (c *contract) operation(req *hp.Request) *v3.Operation {
-	item, _, _ := paths.FindPath(req, c.model, nil)
+// of req, with the path as the document writes it, such as /users/{id}, or
+// nil when it has none.
+func (c *contract) operation(req *hp.Request) (*v3.Operation, string) {
+	item, _, template := paths.FindPath(req, c.model, nil)
 	if item == nil {
-		return nil
+		return nil, ""
 	}
+	var op *v3.Operation
 	switch req.Method {
 	case hp.MethodGet:
-		return item.Get
+		op = item.Get
 	case hp.MethodPut:
-		return item.Put
+		op = item.Put
 	case hp.MethodPost:
-		return item.Post
+		op = item.Post
 	case hp.MethodDelete:
-		return item.Delete
+		op = item.Delete
 	case hp.MethodOptions:
-		return item.Options
+		op = item.Options
 	case hp.MethodHead:
-		return item.Head
+		op = item.Head
 	case hp.MethodPatch:
-		return item.Patch
+		op = item.Patch
 	case hp.MethodTrace:
-		return item.Trace
+		op = item.Trace
 	}
-	return nil
+	if op == nil {
+		return nil, ""
+	}
+	return op, template
 }
 
 // requestSchema returns the schema of the request body op takes as
@@ -240,27 +262,24 @@ func requestSchema(op *v3.Operation, contentType string) *base.Schema {
 	return mediaSchema(op.RequestBody.Content, contentType)
 }
 
-// responseSchema returns the schema op declares for the body of res: by its
-// status code, a range such as 2XX, or the default response.
-func responseSchema(op *v3.Operation, res *hp.Response) *base.Schema {
+// responseOf returns the response op declares for the status code, with the
+// key it is declared under: the code, a range such as 2XX, or default. It
+// returns nil when op declares none.
+func responseOf(op *v3.Operation, code int) (string, *v3.Response) {
 	if op.Responses == nil {
-		return nil
+		return "", nil
 	}
-	resp := op.Responses.FindResponseByCode(res.StatusCode)
-	if resp == nil && op.Responses.Codes != nil {
-		for _, code := range []string{fmt.Sprintf("%dXX", res.StatusCode/100), fmt.Sprintf("%dxx", res.StatusCode/100)} {
-			if resp = op.Responses.Codes.GetOrZero(code); resp != nil {
-				break
+	if op.Responses.Codes != nil {
+		for _, key := range []string{strconv.Itoa(code), fmt.Sprintf("%dXX", code/100), fmt.Sprintf("%dxx", code/100)} {
+			if resp := op.Responses.Codes.GetOrZero(key); resp != nil {
+				return key, resp
 			}
 		}
 	}
-	if resp == nil {
-		resp = op.Responses.Default
+	if op.Responses.Default != nil {
+		return "default", op.Responses.Default
 	}
-	if resp == nil {
-		return nil
-	}
-	return mediaSchema(resp.Content, res.Header.Get("Content-Type"))
+	return "", nil
 }
 
 // mediaSchema returns the schema content declares for contentType, when it
