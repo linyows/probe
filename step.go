@@ -502,6 +502,8 @@ func (st *Step) createStepResult(name string, jCtx *JobContext) StepResult {
 		}
 	}
 
+	result.Contract = st.contractMatched()
+
 	if st.checked() {
 		testOutput, ok := st.check(jCtx.Printer)
 		if ok {
@@ -583,6 +585,9 @@ func (st *Step) handleRepeatExecution(jCtx *JobContext, name string, hasError bo
 	if st.contractChecked() {
 		counter.Checked = true
 	}
+	if counter.Contract == nil {
+		counter.Contract = st.contractMatched()
+	}
 	if counter.Failure == nil {
 		counter.Failure = failure
 	}
@@ -611,6 +616,21 @@ func (st *Step) handleRepeatExecution(jCtx *JobContext, name string, hasError bo
 func (st *Step) contractChecked() bool {
 	_, ok := st.ctx.Res["violations"].([]any)
 	return ok
+}
+
+// contractMatched returns what the action matched the response to in the
+// contract it checked it against, or nil when it checked none or the
+// contract has nothing the response matches.
+func (st *Step) contractMatched() *report.Contract {
+	m, ok := st.ctx.Res["contract"].(map[string]any)
+	if !ok {
+		return nil
+	}
+	str := func(k string) string {
+		s, _ := m[k].(string)
+		return s
+	}
+	return &report.Contract{Spec: str("spec"), Operation: str("operation"), Response: str("response")}
 }
 
 // checked reports whether anything checks the step: its test, or a contract
@@ -1054,6 +1074,8 @@ func (st *Step) createFailedStepResult(name string, jCtx *JobContext) StepResult
 			result.Report = report
 		}
 	}
+
+	result.Contract = st.contractMatched()
 
 	// Include error information if available
 	if st.err != nil {

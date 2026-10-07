@@ -256,6 +256,7 @@ func (e *Executor) appendRepeatStepResults(ctx *JobContext) {
 				HasTest:       hasTest,
 				RepeatCounter: &counter,
 				Test:          step.Test,
+				Contract:      counter.Contract,
 			}
 			if counter.Failure != nil {
 				f := *counter.Failure

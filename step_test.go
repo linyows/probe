@@ -2269,3 +2269,78 @@ func TestStep_contractFailure_Kind(t *testing.T) {
 		})
 	}
 }
+
+func TestStep_contractMatched(t *testing.T) {
+	tests := []struct {
+		name string
+		res  map[string]any
+		want *report.Contract
+	}{
+		{name: "no contract", res: map[string]any{"code": 200}},
+		{
+			name: "an operation and a response",
+			res:  map[string]any{"contract": map[string]any{"spec": "openapi.yml", "operation": "GET /users/{id}", "response": "200"}},
+			want: &report.Contract{Spec: "openapi.yml", Operation: "GET /users/{id}", Response: "200"},
+		},
+		{
+			name: "an operation that declares no response for the status",
+			res:  map[string]any{"contract": map[string]any{"spec": "openapi.yml", "operation": "GET /users/{id}"}},
+			want: &report.Contract{Spec: "openapi.yml", Operation: "GET /users/{id}"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			st := &Step{ctx: StepContext{Res: tt.res}}
+			if got := st.contractMatched(); !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("contractMatched() = %+v, want %+v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestStep_createStepResult_ContractMatched(t *testing.T) {
+	res := violationsRes()
+	res["contract"] = map[string]any{"spec": "openapi.yml", "operation": "GET /users/{id}", "response": "200"}
+	st := &Step{Expr: &expr.Expr{}, ctx: StepContext{Res: res}}
+	jCtx := &JobContext{Printer: newBufferPrinter(), Result: NewResult()}
+
+	result := st.createStepResult("Get a user", jCtx)
+	want := &report.Contract{Spec: "openapi.yml", Operation: "GET /users/{id}", Response: "200"}
+	if !reflect.DeepEqual(result.Contract, want) {
+		t.Errorf("Contract = %+v, want %+v", result.Contract, want)
+	}
+}
+
+func TestStep_handleRepeatExecution_ContractMatched(t *testing.T) {
+	step := &Step{Idx: 0, Expr: &expr.Expr{}}
+	jCtx := &JobContext{
+		Printer:      newBufferPrinter(),
+		StepCounters: make(map[int]StepRepeatCounter),
+		countersMu:   &sync.Mutex{},
+		RepeatTotal:  2,
+		Result:       NewResult(),
+		CurrentJobID: "job-1",
+	}
+	jCtx.Result.Jobs["job-1"] = &JobResult{JobID: "job-1"}
+
+	for _, response := range []string{"200", "2XX"} {
+		res := violationsRes()
+		res["contract"] = map[string]any{"spec": "openapi.yml", "operation": "GET /items", "response": response}
+		step.ctx = StepContext{Res: res}
+		step.handleRepeatExecution(jCtx, "Items", false)
+	}
+
+	// The first iteration's is kept, as its failure is.
+	want := &report.Contract{Spec: "openapi.yml", Operation: "GET /items", Response: "200"}
+	if got := jCtx.StepCounters[0].Contract; !reflect.DeepEqual(got, want) {
+		t.Errorf("Contract = %+v, want %+v", got, want)
+	}
+
+	// The step's result, made from the counter, carries it.
+	e := &Executor{job: &Job{ID: "job-1", Steps: []*Step{step}}}
+	e.appendRepeatStepResults(jCtx)
+	results := jCtx.Result.Jobs["job-1"].StepResults
+	if len(results) != 1 || !reflect.DeepEqual(results[0].Contract, want) {
+		t.Errorf("StepResults = %+v, want one carrying %+v", results, want)
+	}
+}

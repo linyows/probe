@@ -173,6 +173,19 @@ func TestBuildReport_FailureCarriesViolations(t *testing.T) {
 	}
 }
 
+func TestBuildReport_StepCarriesContract(t *testing.T) {
+	c := &report.Contract{Spec: "openapi.yml", Operation: "GET /users/{id}", Response: "200"}
+	for _, sr := range []StepResult{
+		{Status: StatusSuccess, Contract: c},
+		{Status: StatusError, Contract: c},
+		{Status: StatusSuccess, Contract: c, RepeatCounter: &StepRepeatCounter{SuccessCount: 1, Checked: true}},
+	} {
+		if got := buildStepReport(sr).Contract; got != c {
+			t.Errorf("Contract = %+v, want %+v", got, c)
+		}
+	}
+}
+
 func TestBuildReport_NilResult(t *testing.T) {
 	r := BuildReport("Empty", "", nil, []string{"a"}, time.Time{}, time.Time{})
 	if r.Status != report.Passed || len(r.Jobs) != 0 {

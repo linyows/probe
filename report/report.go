@@ -179,6 +179,17 @@ type Step struct {
 	Repeat     *Repeat  `json:"repeat,omitempty"`
 	Echo       string   `json:"echo,omitempty"`
 	Failure    *Failure `json:"failure,omitempty"`
+	// Contract is what the action matched the response to in the contract
+	// it checked it against, such as an operation of an OpenAPI document.
+	Contract *Contract `json:"contract,omitempty"`
+}
+
+// Contract is what a response was matched to in a contract, which a report
+// of the coverage of the contract counts.
+type Contract struct {
+	Spec      string `json:"spec"`               // The contract, such as the path of an OpenAPI document
+	Operation string `json:"operation"`          // Such as GET /users/{id}
+	Response  string `json:"response,omitempty"` // Such as 200, 2XX or default; empty when none is declared
 }
 
 // Retry records how many attempts a retried step took.

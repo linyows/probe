@@ -102,6 +102,8 @@ func buildStepReport(sr StepResult) report.Step {
 		step.Echo = unindentEcho(sr.EchoOutput)
 	}
 
+	step.Contract = sr.Contract
+
 	if f := sr.Failure; f != nil && step.Status == report.Failed {
 		step.Failure = &report.Failure{
 			Kind:       f.Kind,

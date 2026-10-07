@@ -32,6 +32,9 @@ type StepRepeatCounter struct {
 	// Checked is whether an action checked a response against a contract,
 	// which checks the step as a test does.
 	Checked bool
+	// Contract is what the first iteration's response was matched to in
+	// its contract.
+	Contract *report.Contract
 }
 
 // StepResult represents the result of a step execution
@@ -55,6 +58,9 @@ type StepResult struct {
 	Test    string        // The test expression, empty when the step has none
 	Elapsed time.Duration // Wall time from the action's start to the result
 	Failure *StepFailure  // Why the step failed; nil unless Status is StatusError
+	// Contract is what the response was matched to in the contract the
+	// action checked it against; nil when it checked none.
+	Contract *report.Contract
 }
 
 // Failure kinds recorded on a StepFailure. They are the kinds a report
