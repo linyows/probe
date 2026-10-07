@@ -12,6 +12,18 @@ type Action struct {
 }
 
 func (a *Action) Run(with map[string]any) (map[string]any, error) {
+	ret, _, err := a.RunStep(actionrpc.Call{With: with})
+	return ret, err
+}
+
+// RunStep runs the query under the guard of the run, which may allow only
+// reading, or only some hosts.
+func (a *Action) RunStep(call actionrpc.Call) (map[string]any, map[string]any, error) {
+	ret, err := a.run(call.With, call.Guard)
+	return ret, nil, err
+}
+
+func (a *Action) run(with map[string]any, guard actionrpc.Guard) (map[string]any, error) {
 	// The password in the DSN is hidden by the workflow runner, which learns
 	// it before the action starts and masks the records this action logs.
 	actionrpc.LogParams(a.log, "received db request parameters", with)
@@ -43,6 +55,7 @@ func (a *Action) Run(with map[string]any) (map[string]any, error) {
 		WithAfter(func(result *Result) {
 			a.log.Debug("database query completed", "rows_affected", result.Res.RowsAffected, "duration", result.RT)
 		}),
+		WithGuard(guard),
 	)
 	actionrpc.LogOutcome(a.log, "database query", result, err)
 

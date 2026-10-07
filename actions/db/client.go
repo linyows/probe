@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/linyows/probe/actionrpc"
 	"github.com/linyows/probe/mapping"
 
 	_ "github.com/go-sql-driver/mysql"
@@ -26,6 +27,15 @@ type Req struct {
 	Params  []any  `map:"params"`
 	Timeout string `map:"timeout"`
 	cb      *Callback
+	// readOnly runs the query where the database refuses a write: in a
+	// read-only transaction, or on a SQLite connection that only queries.
+	readOnly bool
+}
+
+// queryer runs a query: a database, a connection or a transaction.
+type queryer interface {
+	QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
+	ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
 }
 
 type Res struct {
@@ -217,12 +227,22 @@ func (r *Req) Execute(driverDSN string, timeout time.Duration) (res map[string]a
 		strings.HasPrefix(trimmedQuery, "EXPLAIN") ||
 		strings.HasPrefix(trimmedQuery, "WITH") // CTE queries
 
+	var q queryer = db
+	if r.readOnly {
+		ro, done, roErr := r.readOnlyQueryer(ctx, db)
+		if roErr != nil {
+			return r.createErrorResult(start, timeoutError(ctx, roErr, timeout))
+		}
+		defer done()
+		q = ro
+	}
+
 	var result *Result
 
 	if isSelect {
-		result, err = r.executeSelectQuery(ctx, db, start)
+		result, err = r.executeSelectQuery(ctx, q, start)
 	} else {
-		result, err = r.executeNonSelectQuery(ctx, db, start)
+		result, err = r.executeNonSelectQuery(ctx, q, start)
 	}
 
 	if err != nil {
@@ -243,7 +263,34 @@ func (r *Req) Execute(driverDSN string, timeout time.Duration) (res map[string]a
 	return mapResult, nil
 }
 
-func (r *Req) executeSelectQuery(ctx context.Context, db *sql.DB, start time.Time) (res *Result, err error) {
+// readOnlyQueryer returns where to run the query so that the database
+// refuses a write itself, with what to call once it has run: a SQLite
+// connection told to only query, or a read-only transaction, which is
+// rolled back, as it holds nothing to keep.
+func (r *Req) readOnlyQueryer(ctx context.Context, db *sql.DB) (queryer, func(), error) {
+	conn, err := db.Conn(ctx)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to connect to database: %w", err)
+	}
+	if r.Driver == "sqlite" {
+		if _, err := conn.ExecContext(ctx, "PRAGMA query_only = ON"); err != nil {
+			_ = conn.Close()
+			return nil, nil, fmt.Errorf("failed to make the connection read-only: %w", err)
+		}
+		return conn, func() { _ = conn.Close() }, nil
+	}
+	tx, err := conn.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
+	if err != nil {
+		_ = conn.Close()
+		return nil, nil, fmt.Errorf("failed to begin a read-only transaction: %w", err)
+	}
+	return tx, func() {
+		_ = tx.Rollback()
+		_ = conn.Close()
+	}, nil
+}
+
+func (r *Req) executeSelectQuery(ctx context.Context, db queryer, start time.Time) (res *Result, err error) {
 	rows, err := db.QueryContext(ctx, r.Query, r.Params...)
 	if err != nil {
 		return nil, err
@@ -309,7 +356,7 @@ func (r *Req) executeSelectQuery(ctx context.Context, db *sql.DB, start time.Tim
 	}, nil
 }
 
-func (r *Req) executeNonSelectQuery(ctx context.Context, db *sql.DB, start time.Time) (*Result, error) {
+func (r *Req) executeNonSelectQuery(ctx context.Context, db queryer, start time.Time) (*Result, error) {
 	result, err := db.ExecContext(ctx, r.Query, r.Params...)
 	if err != nil {
 		return nil, err
@@ -379,6 +426,8 @@ type Option func(*Callback)
 type Callback struct {
 	before func(query string, params []any)
 	after  func(result *Result)
+	// guard is what the run allows.
+	guard actionrpc.Guard
 }
 
 func ExecuteQuery(data map[string]any, opts ...Option) (map[string]any, error) {
@@ -393,7 +442,19 @@ func ExecuteQuery(data map[string]any, opts ...Option) (map[string]any, error) {
 	}
 	req.cb = cb
 
+	if err := req.checkGuard(cb.guard); err != nil {
+		return map[string]any{}, err
+	}
+	req.readOnly = cb.guard.ReadOnly
+
 	return req.Execute(driverDSN, timeout)
+}
+
+// WithGuard runs the query under the guard of the run.
+func WithGuard(guard actionrpc.Guard) Option {
+	return func(c *Callback) {
+		c.guard = guard
+	}
 }
 
 func WithBefore(f func(query string, params []any)) Option {
