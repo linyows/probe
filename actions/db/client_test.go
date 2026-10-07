@@ -563,3 +563,22 @@ func TestExecuteQueryReadOnlySQLite(t *testing.T) {
 		t.Errorf("rows left = %v, want 1: nothing should have been deleted", row["n"])
 	}
 }
+
+func TestExecuteQueryReadOnlySQLiteRefusesAPragmaOnConnecting(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "pragma.db")
+	if _, err := ExecuteQuery(map[string]any{"dsn": "file:" + path, "query": "CREATE TABLE t (v INTEGER)"}); err != nil {
+		t.Fatal(err)
+	}
+	_, err := ExecuteQuery(map[string]any{"dsn": "file:" + path + "?_pragma=user_version(7)", "query": "SELECT 1"}, WithGuard(actionrpc.Guard{ReadOnly: true}))
+	if !actionrpc.IsRefused(err) {
+		t.Fatalf("err = %v, want a refusal", err)
+	}
+	res, err := ExecuteQuery(map[string]any{"dsn": "file:" + path, "query": "SELECT user_version FROM pragma_user_version"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	row := res["res"].(map[string]any)["rows"].([]any)[0].(map[string]any)
+	if v, _ := row["user_version"].(int64); v != 0 {
+		t.Errorf("user_version = %v, want 0: the pragma should not have run", row["user_version"])
+	}
+}

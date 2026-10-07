@@ -2,12 +2,14 @@ package db
 
 import (
 	"fmt"
+	"maps"
 	"net"
 	"net/url"
 	"slices"
 	"strconv"
 	"strings"
 
+	"github.com/go-sql-driver/mysql"
 	"github.com/lib/pq"
 	"github.com/linyows/probe/actionrpc"
 )
@@ -47,6 +49,9 @@ func (r *Req) checkGuard(guard actionrpc.Guard) error {
 	}
 	if !guard.ReadOnly {
 		return nil
+	}
+	if err := r.checkConnectOptions(); err != nil {
+		return err
 	}
 	query := strings.TrimRight(strings.TrimSpace(r.Query), "; \t\r\n")
 	words := strings.Fields(query)
@@ -114,4 +119,46 @@ func (r *Req) hosts() ([]string, bool, error) {
 		port = defaultPorts[r.Driver]
 	}
 	return []string{net.JoinHostPort(host, port)}, true, nil
+}
+
+// sqliteReadOptions are the parameters of a SQLite DSN allowed under a
+// read-only guard: none of them runs a statement when the connection opens.
+var sqliteReadOptions = []string{"mode", "cache", "immutable", "_txlock", "_time_format"}
+
+// checkConnectOptions returns a Refused error when the DSN would have the
+// driver run a statement as the connection opens, before the query runs in
+// its read-only transaction: for MySQL, multiStatements, or a system
+// variable, which go-sql-driver sets with a statement of its own; for
+// SQLite, any parameter but those known not to run one, such as _pragma.
+// PostgreSQL sends its parameters at startup, where no statement runs.
+func (r *Req) checkConnectOptions() error {
+	switch r.Driver {
+	case "mysql":
+		_, driverDSN, err := parseDSN(r.DSN)
+		if err != nil {
+			return actionrpc.Refuse("the DSN cannot be read: %v", err)
+		}
+		cfg, err := mysql.ParseDSN(driverDSN)
+		if err != nil {
+			return actionrpc.Refuse("the DSN cannot be read: %v", err)
+		}
+		if cfg.MultiStatements {
+			return actionrpc.Refuse("the DSN allows multiStatements, and the run is read-only")
+		}
+		if len(cfg.Params) > 0 {
+			return actionrpc.Refuse("the DSN sets %s on connecting, with a statement run before the read-only transaction, and the run is read-only", strings.Join(slices.Sorted(maps.Keys(cfg.Params)), ", "))
+		}
+	case "sqlite":
+		_, query, _ := strings.Cut(r.DSN, "?")
+		params, err := url.ParseQuery(query)
+		if err != nil {
+			return actionrpc.Refuse("the DSN cannot be read: %v", err)
+		}
+		for _, name := range slices.Sorted(maps.Keys(params)) {
+			if !slices.Contains(sqliteReadOptions, name) {
+				return actionrpc.Refuse("the DSN sets %s, which may run a statement on connecting, and the run is read-only; only %s are allowed", name, strings.Join(sqliteReadOptions, ", "))
+			}
+		}
+	}
+	return nil
 }

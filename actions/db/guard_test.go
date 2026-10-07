@@ -106,3 +106,49 @@ func TestReqCheckGuardPostgreSQLBackslash(t *testing.T) {
 		t.Errorf("checkGuard = %v, want a refusal", err)
 	}
 }
+
+// A DSN can have the driver run a statement as the connection opens,
+// before the query runs in its read-only transaction, so that under a
+// read-only guard only the options known not to are allowed.
+func TestReqCheckGuardConnectOptions(t *testing.T) {
+	readOnly := actionrpc.Guard{ReadOnly: true}
+	tests := []struct {
+		name    string
+		dsn     string
+		refused string // a part of the reason; empty when the DSN is allowed
+	}{
+		{name: "MySQL without options", dsn: "mysql://root:p@localhost:3306/app"},
+		{name: "MySQL with options of the driver", dsn: "mysql://root:p@localhost:3306/app?timeout=5s&parseTime=true&charset=utf8mb4"},
+		{name: "MySQL with multiStatements", dsn: "mysql://root:p@localhost:3306/app?multiStatements=true", refused: "allows multiStatements"},
+		{name: "MySQL with a system variable", dsn: "mysql://root:p@localhost:3306/app?sql_mode=%27%27", refused: "the DSN sets sql_mode on connecting"},
+		{name: "MySQL with a statement hidden in a system variable", dsn: "mysql://root:p@localhost:3306/app?multiStatements=true&sql_mode=%27%27%3BDELETE%20FROM%20t", refused: "allows multiStatements"},
+		{name: "SQLite without options", dsn: "file:./app.db"},
+		{name: "SQLite opened read-only", dsn: "file:./app.db?mode=ro&_txlock=deferred"},
+		{name: "SQLite with a pragma", dsn: "file:./app.db?_pragma=user_version(7)", refused: "the DSN sets _pragma"},
+		{name: "SQLite with an unknown option", dsn: "file:./app.db?vfs=mine", refused: "the DSN sets vfs"},
+		{name: "PostgreSQL with options", dsn: "postgres://u:p@localhost/app?sslmode=disable&options=-c%20statement_timeout%3D5000"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			driver, _, err := parseDSN(tt.dsn)
+			if err != nil {
+				t.Fatal(err)
+			}
+			r := &Req{Driver: driver, DSN: tt.dsn, Query: "SELECT 1"}
+			err = r.checkGuard(readOnly)
+			if tt.refused == "" {
+				if err != nil {
+					t.Errorf("checkGuard = %v, want nil", err)
+				}
+				return
+			}
+			if !actionrpc.IsRefused(err) || !strings.Contains(err.Error(), tt.refused) {
+				t.Errorf("checkGuard = %v, want a refusal saying %q", err, tt.refused)
+			}
+			// Without the guard, the options are the workflow's to set.
+			if err := r.checkGuard(actionrpc.Guard{}); err != nil {
+				t.Errorf("checkGuard without a guard = %v, want nil", err)
+			}
+		})
+	}
+}
