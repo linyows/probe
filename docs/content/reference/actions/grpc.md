@@ -108,7 +108,7 @@ The step fails with the kind `contract_request` when the request body, as JSON, 
 - the server's request or response message, or a message in them at any depth, has another name than the files', lacks a field the files declare, or declares a field by the same number with another name, type or cardinality
 - a field of the response is not encoded as the files declare its number, such as a string where they declare an `int32`
 
-With `strict: true`, a field the server declares, or sends, that the files do not declare fails the step too. Without it such a field is let through, as protobuf lets a newer peer's fields through. `request: false` checks the server and its response alone, for a step that sends what the files do not allow on purpose. A response with a status other than `OK` has no message to check. Each violation is in `res.violations`, the terminal and the reports, with the field, such as `$.user.email`.
+With `strict: true`, a field the server declares, or sends, that the files do not declare fails the step too. Without it such a field is let through, as protobuf lets a newer peer's fields through. A request body that the server's own definition cannot take either cannot be sent, so nothing is sent, and the step fails as `contract_request`, with `res.status_code` empty, rather than as an action error. `request: false` checks the server and its response alone, for a step that sends what the files do not allow on purpose. A response with a status other than `OK` has no message to check. Each violation is in `res.violations`, the terminal and the reports, with the field, such as `$.user.email`.
 
 proto3 declares no required fields and no ranges, so the files say what shape the messages have rather than which values they may hold.
 

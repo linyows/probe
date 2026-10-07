@@ -213,6 +213,14 @@ func (r *Req) invokeMethod(ctx context.Context, conn *grpc.ClientConn, reflectio
 	requestMsg := dynamicpb.NewMessage(methodDesc.Input())
 	if r.Body != "" {
 		if err := protojson.Unmarshal([]byte(r.Body), requestMsg); err != nil {
+			// A body the .proto files refuse as well is the workflow's
+			// mistake, which fails the step as a request that breaks its
+			// contract rather than as an action that could not run. The
+			// call cannot be made with it, so nothing is sent, and no status
+			// comes back.
+			if hasRequestViolation(violations) {
+				return &Res{Metadata: map[string]string{}, violations: violations}, nil
+			}
 			return nil, fmt.Errorf("failed to unmarshal request JSON: %w", err)
 		}
 	}

@@ -355,6 +355,17 @@ func (c *contract) unread(msg protoreflect.Message, path string) []any {
 	return out
 }
 
+// hasRequestViolation reports whether violations hold one found in the
+// request.
+func hasRequestViolation(violations []any) bool {
+	for _, v := range violations {
+		if m, ok := v.(map[string]any); ok && m["in"] == "request" {
+			return true
+		}
+	}
+	return false
+}
+
 // violation is one thing a contract does not allow, found in the request
 // or the response as in says.
 func violation(in, message, reason, field string) map[string]any {

@@ -247,3 +247,44 @@ func TestCompareMessagesCardinality(t *testing.T) {
 		t.Errorf("violations = %v, want none for the same definition", out)
 	}
 }
+
+// A request body the server's definition cannot take either cannot be sent,
+// so the step fails as a request that breaks its contract, with nothing
+// sent, rather than as an action that could not run.
+func TestRequestBodyNeitherDefinitionTakes(t *testing.T) {
+	addr := startUserServer(t)
+	path := writeProto(t, userProto(t))
+	with := func(proto map[string]any) map[string]any {
+		w := map[string]any{"addr": addr, "service": "UserService", "method": "GetUser", "body": `{"user_id": 123}`}
+		if proto != nil {
+			w["proto"] = proto
+		}
+		return w
+	}
+	files := map[string]any{"files": []any{path}, "import_paths": []any{filepath.Dir(path)}}
+
+	ret, err := Request(with(files))
+	if err != nil {
+		t.Fatalf("err = %v, want the violation as a result", err)
+	}
+	res := ret["res"].(map[string]any)
+	if res["status_code"] != "" {
+		t.Errorf("status_code = %v, want none: nothing should have been sent", res["status_code"])
+	}
+	vs, _ := res["violations"].([]any)
+	if len(vs) != 1 || vs[0].(map[string]any)["in"] != "request" {
+		t.Errorf("violations = %v, want the request's", vs)
+	}
+	if ret["status"] != 1 {
+		t.Errorf("status = %v, want 1", ret["status"])
+	}
+
+	// Without a contract, or with the request left unchecked, it stays an
+	// error of the action.
+	unchecked := map[string]any{"files": []any{path}, "import_paths": []any{filepath.Dir(path)}, "request": false}
+	for _, proto := range []map[string]any{nil, unchecked} {
+		if _, err := Request(with(proto)); err == nil || !strings.Contains(err.Error(), "failed to unmarshal request JSON") {
+			t.Errorf("with proto %v: err = %v, want the action's error", proto, err)
+		}
+	}
+}
