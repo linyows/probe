@@ -354,7 +354,7 @@ It reports as an **error**:
 It reports as a **warning**:
 
 - an output read from a job that is not needed, directly or through others, by the job that reads it, so that it may not be published yet
-- a step that nothing checks: it has no `test`, and the action is not asked to check it against a contract, as `openapi` asks the http action
+- a step that nothing checks: it has no `test`, and the action is not asked to check it against a contract, as `openapi` asks the http action and `proto` the grpc action
 - a `test` that reads nothing, such as `1 == 1`, which gives the same result whatever the step does
 
 It exits with status 2 when it finds an error, and with 0 when it finds only warnings or nothing.
