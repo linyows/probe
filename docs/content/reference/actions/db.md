@@ -314,6 +314,10 @@ The database action implements several security measures:
 - **Driver Validation**: Only supports approved database drivers
 - **DSN Validation**: Validates connection string format before execution
 
+## Under a Guard
+
+Run with `--read-only`, the action runs only one statement that starts with `SELECT`, `SHOW`, `DESCRIBE`, `DESC`, `EXPLAIN` or `WITH`, and refuses any other statement, or more than one, before connecting. It runs that statement in a read-only transaction, or on a SQLite connection that only queries, so that the database itself refuses a write the statement hides, such as `WITH x AS (DELETE ...) SELECT ...`; that step fails as the database reports it. Run with `--allow-host`, it refuses a DSN whose host the run does not allow, taking a DSN without a port at the driver's port; a SQLite file names no host. A refused step fails with the kind `refused`. See [`--read-only`](/reference/cli-reference#--read-only).
+
 ## Error Handling
 
 A query the database rejects, or a connection that fails, does not stop the step: `res.code` is `1` and the database's message is in `res.error`, so the test can check for the failure it expects. The message depends on the database; SQLite reports a missing table as `no such table`.

@@ -411,6 +411,10 @@ X-Probe-Trace: run=7f3a9c21e4b05d68; job=login; step=auth; repeat=0; attempt=1
 
 各ステップのレスポンスを対応付けたオペレーションとレスポンスは、`res.contract`とJSONレポートに入ります。[`probe coverage`](/ja/reference/cli-reference#coverage)は、そのレポートから、ドキュメントのうちどのステップも検証していないものを示します。
 
+### ガードの下での動作
+
+`--read-only`を指定して実行すると、`GET`、`HEAD`、`OPTIONS`だけを送り、それ以外のメソッドは送る前に拒否します。`--allow-host`を指定して実行すると、許可されていないホストへのURLやリダイレクトを拒否します。ポートのないURLは、スキームの既定のポートとして扱います。拒否されたステップは種類`refused`で失敗します。[`--read-only`](/ja/reference/cli-reference#--read-only)を参照してください。
+
 ### エラーレスポンスの検証
 
 ここではエラーが期待される結果です。そのためステータスとエラーのボディを検証します。

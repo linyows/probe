@@ -411,6 +411,10 @@ A schema that writes `additionalProperties` says itself what more it allows: `tr
 
 Which operation and response each step's response was matched to is in `res.contract` and in the JSON report, and [`probe coverage`](/reference/cli-reference#coverage) tells from the report which ones of the document no step checked.
 
+### Under a Guard
+
+Run with `--read-only`, the action sends only `GET`, `HEAD` and `OPTIONS`, and refuses any other method before sending it. Run with `--allow-host`, it refuses a URL, or a redirect, to a host the run does not allow, taking a URL without a port at the port of its scheme. A refused step fails with the kind `refused`. See [`--read-only`](/reference/cli-reference#--read-only).
+
 ### Checking an Error Response
 
 Here the error is the expected result, so the test asserts on the status and the error body.
