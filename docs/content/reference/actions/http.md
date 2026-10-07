@@ -364,8 +364,11 @@ The response is matched to an operation by the method and path of the request, w
 - the operation declares neither the status code nor a `default` response
 - the response's `Content-Type` is not one the response declares
 - a header the response declares, or the body, does not keep to its schema
+- a JSON body is empty, or is `null` where its schema does not allow null
 
-The step fails even when its `test` holds, and the `test` is not evaluated. A step without a `test` whose response keeps to the document passes, since the document checked it. Each violation is in `res.violations`, the terminal and the reports, as `{in, field, reason, message}`; `field` names the field of the body, such as `$.id`, when there is one.
+Bodies are checked as JSON, text, XML, YAML, CSV and forms. A body of another type, such as an image or a PDF, is checked for its `Content-Type` alone.
+
+The step fails even when its `test` holds, and the `test` is not evaluated. A step without a `test` whose response keeps to the document passes, since the document checked it, and with `retry` it is retried until its response keeps to the document, as a step is until its `test` holds. Each violation is in `res.violations`, the terminal and the reports, as `{in, field, reason, message}`; `field` names the field of the body, such as `$.id`, when there is one.
 
 `spec` is a path from the directory Probe runs in. The document is read before the request is sent, so a step whose document cannot be read or parsed fails as an action error without sending anything. `openapi: false` on a step leaves out the check, such as for an endpoint the document does not cover. Only the response is checked; the request is not.
 
