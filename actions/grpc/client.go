@@ -43,6 +43,8 @@ type Req struct {
 	CAFile   string            `map:"ca_file"`
 	Metadata map[string]string `map:"metadata"`
 	cb       *Callback
+	// contract, when it is set, checks the call against .proto files.
+	contract *contract
 }
 
 type Res struct {
@@ -50,6 +52,9 @@ type Res struct {
 	StatusCode    string            `map:"status_code"`
 	StatusMessage string            `map:"status_message"`
 	Metadata      map[string]string `map:"metadata"`
+	// violations are what the .proto files do not allow in the call; nil
+	// when there is no contract.
+	violations []any
 }
 
 type Result struct {
@@ -189,6 +194,21 @@ func (r *Req) invokeMethod(ctx context.Context, conn *grpc.ClientConn, reflectio
 		return nil, fmt.Errorf("method %s not found in service %s", r.Method, r.Service)
 	}
 
+	// The .proto files, when they are given, are checked against the
+	// request, the server's definition and then the response.
+	var violations []any
+	var spec protoreflect.MethodDescriptor
+	if r.contract != nil {
+		violations = []any{}
+		spec = r.contract.method(r.Service, r.Method)
+		if spec == nil {
+			violations = append(violations, violation("response", fmt.Sprintf("the .proto files declare no method %s in %s", r.Method, r.Service), "", ""))
+		} else {
+			violations = append(violations, r.contract.checkRequest(spec, r.Body)...)
+			violations = append(violations, r.contract.checkDefinition(spec, methodDesc)...)
+		}
+	}
+
 	// Create dynamic message for request
 	requestMsg := dynamicpb.NewMessage(methodDesc.Input())
 	if r.Body != "" {
@@ -230,6 +250,11 @@ func (r *Req) invokeMethod(ctx context.Context, conn *grpc.ClientConn, reflectio
 		StatusCode:    "OK",
 		StatusMessage: "",
 		Metadata:      metadataMap,
+		violations:    violations,
+	}
+	// Only a call that succeeded answers with a message to check.
+	if err == nil && spec != nil {
+		res.violations = append(res.violations, r.contract.checkResponse(spec, responseMsg)...)
 	}
 
 	// A status the server sent is its answer, which a test can check like an
@@ -436,10 +461,16 @@ func Request(data map[string]any, opts ...Option) (map[string]any, error) {
 		}
 	}
 
+	contract, err := takeProto(m)
+	if err != nil {
+		return map[string]any{}, err
+	}
+
 	m = mapping.HeaderToStringValue(m)
 
 	// Create new request
 	r := NewReq()
+	r.contract = contract
 
 	cb := &Callback{}
 	for _, opt := range opts {
@@ -459,6 +490,13 @@ func Request(data map[string]any, opts ...Option) (map[string]any, error) {
 	mapRet, err := mapping.StructToMapByTags(ret)
 	if err != nil {
 		return map[string]any{}, err
+	}
+
+	// The violations are in res, where the runner looks for them.
+	if ret.Res.violations != nil {
+		if res, ok := mapRet["res"].(map[string]any); ok {
+			res["violations"] = ret.Res.violations
+		}
 	}
 
 	return mapRet, nil
