@@ -827,6 +827,18 @@ func TestCmd_guard(t *testing.T) {
 			want: actionrpc.Guard{AllowHosts: []string{"a.example.com"}},
 		},
 		{name: "PROBE_READ_ONLY that is not a boolean", args: []string{"w.yml"}, env: map[string]string{"PROBE_READ_ONLY": "yes"}, wantErr: "PROBE_READ_ONLY must be true or false"},
+		{
+			name: "flags given false or empty win over environment variables",
+			args: []string{"--read-only=false", "--allow-host=", "--allow-action=", "w.yml"},
+			env:  map[string]string{"PROBE_READ_ONLY": "true", "PROBE_ALLOW_HOSTS": "a.example.com", "PROBE_ALLOW_ACTIONS": "shell"},
+			want: actionrpc.Guard{},
+		},
+		{
+			name: "--read-only=true",
+			args: []string{"--read-only=true", "--allow-action=", "w.yml"},
+			env:  map[string]string{"PROBE_ALLOW_ACTIONS": "shell"},
+			want: actionrpc.Guard{ReadOnly: true},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -856,6 +868,13 @@ func TestCmd_guard(t *testing.T) {
 				t.Errorf("guard = %+v, want %+v", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestCmd_readOnlyTakesABoolean(t *testing.T) {
+	c := newBufferCmd()
+	if err := c.parseArgs([]string{"--read-only=maybe", "w.yml"}); err == nil || !strings.Contains(err.Error(), "must be true or false") {
+		t.Errorf("parseArgs(--read-only=maybe) = %v, want an error", err)
 	}
 }
 

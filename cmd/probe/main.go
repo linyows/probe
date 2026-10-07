@@ -45,12 +45,15 @@ type Cmd struct {
 	ReadOnly       bool
 	AllowHosts     string
 	AllowActions   string
-	validFlags     []string
-	ver            string
-	rev            string
-	outWriter      io.Writer
-	errWriter      io.Writer
-	mocking        bool
+	// guardFlags are the guard's flags given, apart from their values, so
+	// that a flag given empty or false wins over its environment variable.
+	guardFlags map[string]bool
+	validFlags []string
+	ver        string
+	rev        string
+	outWriter  io.Writer
+	errWriter  io.Writer
+	mocking    bool
 }
 
 func newCmd() *Cmd {
@@ -130,7 +133,17 @@ func (c *Cmd) parseArgs(args []string) error {
 				}
 				c.Output = flagValue
 			case "read-only":
+				// --read-only alone turns it on; --read-only=false turns it
+				// off over PROBE_READ_ONLY.
 				c.ReadOnly = true
+				if hasValue {
+					v, err := parseBool(flagValue)
+					if err != nil {
+						return fmt.Errorf("%s: %w", arg, err)
+					}
+					c.ReadOnly = v
+				}
+				c.markGuardFlag(flagName)
 			case "allow-host", "allow-action":
 				if !hasValue {
 					if i+1 >= len(args) || strings.HasPrefix(args[i+1], "-") {
@@ -144,6 +157,7 @@ func (c *Cmd) parseArgs(args []string) error {
 				} else {
 					c.AllowActions = flagValue
 				}
+				c.markGuardFlag(flagName)
 			case "report":
 				// Accept both --report=junit and --report junit
 				if !hasValue {
@@ -418,26 +432,44 @@ func (c *Cmd) runDag() int {
 	return 0
 }
 
+func (c *Cmd) markGuardFlag(name string) {
+	if c.guardFlags == nil {
+		c.guardFlags = map[string]bool{}
+	}
+	c.guardFlags[name] = true
+}
+
+// parseBool reads the value of a boolean flag or environment variable:
+// true or 1, and false, 0 or empty.
+func parseBool(s string) (bool, error) {
+	switch strings.ToLower(strings.TrimSpace(s)) {
+	case "", "0", "false":
+		return false, nil
+	case "1", "true":
+		return true, nil
+	default:
+		return false, fmt.Errorf("must be true or false, not %q", s)
+	}
+}
+
 // guard returns the guard of the run from the flags, each of which wins over
-// its environment variable: PROBE_READ_ONLY, PROBE_ALLOW_HOSTS and
-// PROBE_ALLOW_ACTIONS.
+// its environment variable when it is given, even empty or false:
+// PROBE_READ_ONLY, PROBE_ALLOW_HOSTS and PROBE_ALLOW_ACTIONS.
 func (c *Cmd) guard() (actionrpc.Guard, error) {
 	readOnly := c.ReadOnly
-	if !readOnly {
-		switch strings.ToLower(strings.TrimSpace(os.Getenv("PROBE_READ_ONLY"))) {
-		case "", "0", "false":
-		case "1", "true":
-			readOnly = true
-		default:
-			return actionrpc.Guard{}, fmt.Errorf("PROBE_READ_ONLY must be true or false, not %q", os.Getenv("PROBE_READ_ONLY"))
+	if !c.guardFlags["read-only"] {
+		v, err := parseBool(os.Getenv("PROBE_READ_ONLY"))
+		if err != nil {
+			return actionrpc.Guard{}, fmt.Errorf("PROBE_READ_ONLY %w", err)
 		}
+		readOnly = v
 	}
 	hosts := c.AllowHosts
-	if hosts == "" {
+	if !c.guardFlags["allow-host"] {
 		hosts = os.Getenv("PROBE_ALLOW_HOSTS")
 	}
 	allowed := c.AllowActions
-	if allowed == "" {
+	if !c.guardFlags["allow-action"] {
 		allowed = os.Getenv("PROBE_ALLOW_ACTIONS")
 	}
 	return actionrpc.Guard{
