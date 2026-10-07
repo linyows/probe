@@ -152,3 +152,32 @@ func TestReqCheckGuardConnectOptions(t *testing.T) {
 		})
 	}
 }
+
+// The MySQL server checked is the address go-sql-driver dials, which a path
+// that holds an @tcp(...) of its own would otherwise hide.
+func TestReqCheckGuardMySQLAddress(t *testing.T) {
+	guard := actionrpc.Guard{AllowHosts: []string{"allowed.example"}}
+	tests := []struct {
+		dsn     string
+		refused string // a part of the reason; empty when the DSN is allowed
+	}{
+		{dsn: "mysql://u:p@allowed.example:3306/app"},
+		{dsn: "mysql://u:p@allowed.example/app"},
+		{dsn: "mysql://u:p@allowed.example:3306/x@tcp(evil.example:3306)/app", refused: "the host evil.example:3306 is not one the run allows"},
+		{dsn: "mysql://u:p@allowed.example:3306/app)tcp(evil.example:3306/x", refused: "the DSN cannot be read for its server"},
+		{dsn: "mysql://u:p@/app", refused: "the host localhost:3306 is not one the run allows"},
+	}
+	for _, tt := range tests {
+		r := &Req{Driver: "mysql", DSN: tt.dsn, Query: "SELECT 1"}
+		err := r.checkGuard(guard)
+		if tt.refused == "" {
+			if err != nil {
+				t.Errorf("checkGuard(%s) = %v, want nil", tt.dsn, err)
+			}
+			continue
+		}
+		if !actionrpc.IsRefused(err) || !strings.Contains(err.Error(), tt.refused) {
+			t.Errorf("checkGuard(%s) = %v, want a refusal saying %q", tt.dsn, err, tt.refused)
+		}
+	}
+}

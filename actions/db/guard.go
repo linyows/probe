@@ -73,7 +73,8 @@ func (r *Req) checkGuard(guard actionrpc.Guard) error {
 }
 
 // hosts returns the host and port of each server the DSN may connect to,
-// and false for a SQLite database, which is a local file. For PostgreSQL
+// and false for a SQLite database, which is a local file. Each is told by
+// the driver's own reading of the DSN it connects with. For PostgreSQL
 // they are the servers lib/pq resolves the DSN to, the same DSN it then
 // connects with: its host, hostaddr and port parameters, a service file, and
 // PGHOST, PGHOSTADDR, PGPORT and the like count, and every host of a list.
@@ -107,18 +108,21 @@ func (r *Req) hosts() ([]string, bool, error) {
 		}
 		return out, true, nil
 	}
-	u, err := url.Parse(r.DSN)
+	// For MySQL it is the address go-sql-driver reads from the DSN the URL
+	// is turned into, which is what it dials: a path can hold an @tcp(...)
+	// of its own that the driver takes for the address.
+	_, driverDSN, err := parseDSN(r.DSN)
 	if err != nil {
 		return nil, true, err
 	}
-	host, port := u.Hostname(), u.Port()
-	if host == "" {
-		host = "localhost"
+	cfg, err := mysql.ParseDSN(driverDSN)
+	if err != nil {
+		return nil, true, fmt.Errorf("the DSN cannot be read for its server: %w", err)
 	}
-	if port == "" {
-		port = defaultPorts[r.Driver]
+	if cfg.Net != "tcp" {
+		return nil, true, fmt.Errorf("the DSN connects over %s, which the run cannot check against the hosts it allows", cfg.Net)
 	}
-	return []string{net.JoinHostPort(host, port)}, true, nil
+	return []string{cfg.Addr}, true, nil
 }
 
 // sqliteReadOptions are the parameters of a SQLite DSN allowed under a
