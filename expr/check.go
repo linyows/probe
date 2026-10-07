@@ -1,0 +1,110 @@
+package expr
+
+import (
+	"github.com/expr-lang/expr/ast"
+	"github.com/expr-lang/expr/parser"
+)
+
+// Parse reports whether input is an expression that parses, without
+// evaluating it, so that a workflow can be checked before it runs.
+func Parse(input string) error {
+	_, err := parser.Parse(input)
+	return err
+}
+
+// TemplateExprs returns the expressions of the {{ }} templates in s, in the
+// order they come.
+func TemplateExprs(s string) []string {
+	var out []string
+	for _, span := range findTemplates(s) {
+		out = append(out, span.expr)
+	}
+	return out
+}
+
+// Reads returns the constant keys that input, an expression, reads from the
+// object name, as chains: outputs.auth.token is read as [auth token], and
+// as [auth] too. A key read in a way that cannot be known before it runs,
+// such as name[k], is not returned. An expression that does not parse reads
+// nothing here.
+func Reads(input, name string) [][]string {
+	tree, err := parser.Parse(input)
+	if err != nil {
+		return nil
+	}
+	c := &chainCollector{name: name}
+	ast.Walk(&tree.Node, c)
+	return c.chains
+}
+
+type chainCollector struct {
+	name   string
+	chains [][]string
+}
+
+func (c *chainCollector) Visit(node *ast.Node) {
+	if chain, ok := memberChain(*node, c.name); ok && len(chain) > 0 {
+		c.chains = append(c.chains, chain)
+	}
+}
+
+// memberChain returns the constant keys read from the identifier name by n,
+// a chain of member accesses such as name.a.b, or false when n is not one.
+func memberChain(n ast.Node, name string) ([]string, bool) {
+	switch v := n.(type) {
+	case *ast.IdentifierNode:
+		return nil, v.Value == name
+	case *ast.MemberNode:
+		key, ok := v.Property.(*ast.StringNode)
+		if !ok {
+			return nil, false
+		}
+		chain, ok := memberChain(v.Node, name)
+		if !ok {
+			return nil, false
+		}
+		return append(chain, key.Value), true
+	case *ast.ChainNode:
+		return memberChain(v.Node, name)
+	}
+	return nil, false
+}
+
+// ReadsNothing reports whether input, an expression that parses, reads no
+// variable, so that it evaluates the same whatever it is evaluated against,
+// as true or 1 == 1 does. A function it calls, such as now(), is not a
+// variable.
+func ReadsNothing(input string) bool {
+	tree, err := parser.Parse(input)
+	if err != nil {
+		return false
+	}
+	f := &identFinder{callees: map[ast.Node]bool{}}
+	ast.Walk(&tree.Node, f)
+	// Walk visits the callee of a call before the call, so which
+	// identifiers are callees is known only once it is done.
+	for _, id := range f.idents {
+		if !f.callees[id] {
+			return false
+		}
+	}
+	return !f.pointer
+}
+
+type identFinder struct {
+	callees map[ast.Node]bool
+	idents  []ast.Node
+	pointer bool
+}
+
+func (f *identFinder) Visit(node *ast.Node) {
+	switch n := (*node).(type) {
+	case *ast.CallNode:
+		f.callees[n.Callee] = true
+	case *ast.IdentifierNode:
+		f.idents = append(f.idents, n)
+	case *ast.PointerNode:
+		// # in a predicate reads the element the predicate is given.
+		f.pointer = true
+	}
+}
