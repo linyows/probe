@@ -85,6 +85,7 @@ probe base.yml,staging.yml            # merge files, later ones override
 probe dag workflow.yml                # check the job graph without running
 probe -v workflow.yml                 # also print every request and response
 probe --report json=probe.json,markdown=probe.md workflow.yml
+probe coverage openapi.yml probe.json # what of the OpenAPI document no step checked
 ```
 
 The exit code says what to look at:
@@ -92,9 +93,11 @@ The exit code says what to look at:
 | Code | Meaning | Where to look |
 |---|---|---|
 | `0` | Every job succeeded | |
-| `1` | A `test` was false, could not be evaluated, or was not a boolean, or a step's template could not be evaluated | The response, or the test expression or template |
+| `1` | A `test` was false, could not be evaluated, or was not a boolean, a step's template could not be evaluated, or a request or response broke its OpenAPI document | The response, or the test expression or template |
 | `2` | The workflow or the command line is wrong | The `[ERROR]` line on stderr: YAML, an unknown `needs`, a step id, a flag |
 | `3` | An action returned an error, such as a refused connection or a timeout | Whether the target is reachable, and the action's parameters |
+
+When the http steps give `openapi`, run `probe coverage` after the workflow passes. An operation or a response marked `-` is one no step checked: add a step for it when it matters, such as an error response a client relies on.
 
 ## Debug a failure
 

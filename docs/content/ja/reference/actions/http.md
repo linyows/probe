@@ -171,6 +171,7 @@ jobs:
 | `res.filepath` | String | バイナリレスポンスを保存したファイルのパス |
 | `res.cookies` | Object | サーバーが設定したCookie。名前と値で入り、リダイレクトの途中で設定されたものも含みます |
 | `res.violations` | Array | リクエストとレスポンスのうちOpenAPIドキュメントが許さないもの。すべて許されていれば空です。`openapi`を指定したときだけ入ります |
+| `res.contract` | Object | OpenAPIドキュメントでレスポンスを対応付けた先。`spec`、`GET /users/{id}`のような`operation`、`200`、`2XX`、`default`のような`response`が入ります。`response`は、オペレーションがそのステータスのレスポンスを宣言していない場合は入りません。ドキュメントにリクエストのオペレーションがある場合だけ入ります |
 | `rt.duration` | String | ラウンドトリップ時間（例: `"120ms"`） |
 | `rt.sec` | Float | ラウンドトリップ時間（秒） |
 | `status` | Integer | ステータスコードが2xxなら`0`、それ以外は`1` |
@@ -404,6 +405,8 @@ X-Probe-Trace: run=7f3a9c21e4b05d68; job=login; step=auth; repeat=0; attempt=1
 `additionalProperties`を書いたスキーマは、ほかに何を許すかを自ら示しています。`true`やスキーマ（`labels`のようなマップ）はほかのプロパティを許し、`false`は`strict`がなくても違反になります。`type: object`とだけ書いたような、プロパティを何も宣言していないスキーマは何でも許します。`allOf`、`oneOf`、`anyOf`のスキーマが宣言するプロパティは、宣言されたものとして扱います。ヘッダーとCookieはstrictに照合しません。`Server`やロードバランサーのCookieなど、プロキシ、サーバー、クライアントが付けるものをドキュメントが宣言することはまれだからです。違反は見つかった場所によって`contract_request`か`contract_response`になり、`field`には`$.owner.email`のようにプロパティが入ります。
 
 `spec`はProbeを実行したディレクトリからのパスです。ドキュメントはリクエストを送る前に読むため、読めない、または解析できないドキュメントを指定したステップは、何も送らずにアクションのエラーとして失敗します。ステップに`openapi: false`を書くと、ドキュメントが扱わないエンドポイントなどで照合を外せます。
+
+各ステップのレスポンスを対応付けたオペレーションとレスポンスは、`res.contract`とJSONレポートに入ります。[`probe coverage`](/ja/reference/cli-reference#coverage)は、そのレポートから、ドキュメントのうちどのステップも検証していないものを示します。
 
 ### エラーレスポンスの検証
 

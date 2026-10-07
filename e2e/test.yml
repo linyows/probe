@@ -468,8 +468,16 @@ jobs:
   - name: http-openapi.yml
     uses: shell
     with:
-      cmd: ./probe examples/http-openapi.yml
+      cmd: ./probe --report json=/tmp/probe-e2e-openapi.json examples/http-openapi.yml
     test: res.code == 0
+    echo: "{{res.stdout}}"
+  - name: coverage of the document http-openapi.yml checked
+    uses: shell
+    with:
+      cmd: ./probe coverage ./examples/fixtures/httpbin-openapi.yml /tmp/probe-e2e-openapi.json
+    test: |
+      res.code == 0 &&
+      res.stdout contains "Operations: 2 of 2 checked (100.0%)"
     echo: "{{res.stdout}}"
   - name: contract-failure.yml fails what breaks an OpenAPI document, strictly too
     uses: shell

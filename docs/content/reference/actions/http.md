@@ -171,6 +171,7 @@ After the request, `res` holds what came back.
 | `res.filepath` | String | Path to the saved file when the response is binary |
 | `res.cookies` | Object | The cookies the server set, by name, on redirects included |
 | `res.violations` | Array | What the OpenAPI document does not allow in the request and the response, empty when it allows all of it. Present only when `openapi` is given |
+| `res.contract` | Object | What the response was matched to in the OpenAPI document: `spec`, `operation` such as `GET /users/{id}`, and `response` such as `200`, `2XX` or `default`, left out when the operation declares none for the status. Present only when the document has an operation for the request |
 | `rt.duration` | String | Round-trip time, such as `"120ms"` |
 | `rt.sec` | Float | Round-trip time in seconds |
 | `status` | Integer | `0` when the status code is 2xx, `1` otherwise |
@@ -404,6 +405,8 @@ A schema usually allows properties it does not declare, so a response that also 
 A schema that writes `additionalProperties` says itself what more it allows: `true` or a schema, as a map such as `labels` has, allows more, and `false` fails without `strict`. A schema that declares no properties, such as one that says only `type: object`, allows any. The properties declared by the schemas of `allOf`, `oneOf` and `anyOf` count as declared. Headers and cookies are not checked strictly, since proxies, servers and clients add ones a document rarely declares, such as `Server` or a load balancer's cookie. A violation is reported as `contract_request` or `contract_response` by where it is found, with the property in `field`, such as `$.owner.email`.
 
 `spec` is a path from the directory Probe runs in. The document is read before the request is sent, so a step whose document cannot be read or parsed fails as an action error without sending anything. `openapi: false` on a step leaves out the check, such as for an endpoint the document does not cover.
+
+Which operation and response each step's response was matched to is in `res.contract` and in the JSON report, and [`probe coverage`](/reference/cli-reference#coverage) tells from the report which ones of the document no step checked.
 
 ### Checking an Error Response
 
