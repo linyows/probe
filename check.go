@@ -777,9 +777,13 @@ func (c *checker) checkTests() {
 }
 
 // checkedByContract reports whether with asks the action to check the step
-// against a contract, as openapi asks the http action, which checks it as a
-// test does.
+// against a contract, as openapi asks the http action and proto the grpc
+// action, which checks it as a test does.
 func checkedByContract(with map[string]any) bool {
-	_, ok := with["openapi"].(map[string]any)
-	return ok
+	for _, key := range []string{"openapi", "proto"} {
+		if _, ok := with[key].(map[string]any); ok {
+			return true
+		}
+	}
+	return false
 }
