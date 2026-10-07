@@ -33,7 +33,7 @@ steps:
 | `cookies` | Object | 任意 | - | 送るCookie。名前と値で指定します。[Cookie](#cookie)を参照 |
 | `trace_header` | BooleanまたはString | 任意 | `false` | リクエストの実行、ジョブ、ステップを示すヘッダーを送ります。`true`なら`X-Probe-Trace`、文字列ならその名前のヘッダーです。[リクエストのトレース](#リクエストのトレース)を参照 |
 | `keep_cookies` | Boolean | 任意 | `false` | サーバーが設定したCookieをジョブで保持し、Cookieを保持する以降のステップで送ります。[Cookie](#cookie)を参照 |
-| `openapi` | Objectまたは`false` | 任意 | - | `spec`をパスとするOpenAPIドキュメントとリクエストおよびレスポンスを照合し、どちらかに違反があればステップを失敗させます。`request: false`はレスポンスだけを照合し、`false`はジョブの`defaults`が求める照合を外します。[OpenAPIによる検証](#openapiによる検証)を参照 |
+| `openapi` | Objectまたは`false` | 任意 | - | `spec`をパスとするOpenAPIドキュメントとリクエストおよびレスポンスを照合し、どちらかに違反があればステップを失敗させます。`request: false`はレスポンスだけを照合し、`strict: true`はドキュメントが宣言していないプロパティも違反にし、`false`はジョブの`defaults`が求める照合を外します。[OpenAPIによる検証](#openapiによる検証)を参照 |
 
 リダイレクトとTLS検証を指定するパラメータはありません。リダイレクトは既定で追跡します。
 
@@ -386,6 +386,22 @@ X-Probe-Trace: run=7f3a9c21e4b05d68; job=login; step=auth; repeat=0; attempt=1
 両方に違反がある場合、種類は`contract_request`です。ワークフローがドキュメントの許さないものを送っており、それがレスポンスの違反の原因かもしれないからです。`test`が成り立っていても失敗し、`test`は評価しません。`test`のないステップは、リクエストとレスポンスがドキュメントに合っていれば成功します。ドキュメントが検証したからです。違反はそれぞれ`res.violations`、端末、レポートに`{in, field, reason, message}`の形で入ります。`in`は`request`か`response`で、`field`は`$.id`のようなボディのフィールドです。`field`は該当するときだけ入ります。
 
 拒否されることを確かめるために、ドキュメントの許さないものをわざと送るステップには`request: false`を書きます。レスポンスは引き続き照合するため、ドキュメントが宣言していない拒否の仕方をすればステップは失敗します。`security`が求める認証情報なしで送るリクエストもこれにあたり、`401`を確かめる場合などに使います。
+
+#### strict
+
+スキーマは通常、宣言していないプロパティも許します。そのため、たとえば`password_hash`まで返すレスポンスもスキーマに合っていることになります。`strict: true`を指定すると、次の場合にもステップは失敗します。
+
+- JSONのボディに、スキーマが宣言していないプロパティがある。対象は、プロパティか`patternProperties`を書き、`additionalProperties`を書いていないスキーマです
+- オペレーションが宣言していないクエリパラメータがある
+- リクエストに`readOnly`のプロパティ、レスポンスに`writeOnly`のプロパティがある
+
+```yaml
+      openapi:
+        spec: ./openapi.yml
+        strict: true
+```
+
+`additionalProperties`を書いたスキーマは、ほかに何を許すかを自ら示しています。`true`やスキーマ（`labels`のようなマップ）はほかのプロパティを許し、`false`は`strict`がなくても違反になります。`type: object`とだけ書いたような、プロパティを何も宣言していないスキーマは何でも許します。`allOf`、`oneOf`、`anyOf`のスキーマが宣言するプロパティは、宣言されたものとして扱います。ヘッダーとCookieはstrictに照合しません。`Server`やロードバランサーのCookieなど、プロキシ、サーバー、クライアントが付けるものをドキュメントが宣言することはまれだからです。違反は見つかった場所によって`contract_request`か`contract_response`になり、`field`には`$.owner.email`のようにプロパティが入ります。
 
 `spec`はProbeを実行したディレクトリからのパスです。ドキュメントはリクエストを送る前に読むため、読めない、または解析できないドキュメントを指定したステップは、何も送らずにアクションのエラーとして失敗します。ステップに`openapi: false`を書くと、ドキュメントが扱わないエンドポイントなどで照合を外せます。
 

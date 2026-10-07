@@ -35,3 +35,15 @@ paths:
             application/json:
               schema:
                 type: object
+  /get:
+    get:
+      responses:
+        "200":
+          description: The request, echoed, though httpbin returns more than url
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  url:
+                    type: string

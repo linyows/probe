@@ -9,8 +9,10 @@ jobs:
       url: "{{vars.url}}"
       # every request and response of the job is checked against the
       # document; the path is relative to the working directory
+      # strict also fails a property the document does not declare
       openapi:
         spec: ./examples/fixtures/httpbin-openapi.yml
+        strict: true
   steps:
   # the document checks the status and the body, so the test only says
   # what the document cannot

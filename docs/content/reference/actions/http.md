@@ -33,7 +33,7 @@ The fields below describe the request. All of them accept template expressions.
 | `cookies` | Object | No | - | Cookies to send, by name. See [Cookies](#cookies) |
 | `trace_header` | Boolean or String | No | `false` | Send a header that names the run, job and step of the request: `X-Probe-Trace` for `true`, or the header named. See [Tracing Requests](#tracing-requests) |
 | `keep_cookies` | Boolean | No | `false` | Keep the cookies the server sets in the job, and send them in the following steps that keep cookies. See [Cookies](#cookies) |
-| `openapi` | Object or `false` | No | - | Check the request and the response against the OpenAPI document whose path is `spec`, and fail the step when either breaks it. `request: false` checks the response alone, and `false` leaves out a check the job's `defaults` ask for. See [Checking Against OpenAPI](#checking-against-openapi) |
+| `openapi` | Object or `false` | No | - | Check the request and the response against the OpenAPI document whose path is `spec`, and fail the step when either breaks it. `request: false` checks the response alone, `strict: true` also fails a property the document does not declare, and `false` leaves out a check the job's `defaults` ask for. See [Checking Against OpenAPI](#checking-against-openapi) |
 
 There are no parameters for redirects or TLS verification. Redirects are followed by default.
 
@@ -386,6 +386,22 @@ The response is checked by the last request when it was redirected, and the step
 When both break the document, the kind is `contract_request`: the workflow sent what the document does not allow, which may be why the response breaks it too. The step fails even when its `test` holds, and the `test` is not evaluated. A step without a `test` whose request and response keep to the document passes, since the document checked them. Each violation is in `res.violations`, the terminal and the reports, as `{in, field, reason, message}`, where `in` is `request` or `response` and `field` names the field of the body, such as `$.id`, when there is one.
 
 A step that sends what the document does not allow on purpose, to see it rejected, writes `request: false`, which still checks the response, so a rejection the document does not declare fails the step. A request without the credentials `security` requires is one, as when checking for a `401`.
+
+#### Strict
+
+A schema usually allows properties it does not declare, so a response that also returns, say, `password_hash` keeps to it. With `strict: true`, the step fails on:
+
+- a property of a JSON body that its schema does not declare, where the schema writes properties or `patternProperties` and leaves `additionalProperties` out
+- a query parameter the operation does not declare
+- a `readOnly` property in the request, and a `writeOnly` property in the response
+
+```yaml
+      openapi:
+        spec: ./openapi.yml
+        strict: true
+```
+
+A schema that writes `additionalProperties` says itself what more it allows: `true` or a schema, as a map such as `labels` has, allows more, and `false` fails without `strict`. A schema that declares no properties, such as one that says only `type: object`, allows any. The properties declared by the schemas of `allOf`, `oneOf` and `anyOf` count as declared. Headers and cookies are not checked strictly, since proxies, servers and clients add ones a document rarely declares, such as `Server` or a load balancer's cookie. A violation is reported as `contract_request` or `contract_response` by where it is found, with the property in `field`, such as `$.owner.email`.
 
 `spec` is a path from the directory Probe runs in. The document is read before the request is sent, so a step whose document cannot be read or parsed fails as an action error without sending anything. `openapi: false` on a step leaves out the check, such as for an endpoint the document does not cover.
 

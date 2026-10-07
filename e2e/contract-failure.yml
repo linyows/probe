@@ -32,3 +32,17 @@ jobs:
       body:
         role: admin
     test: res.code == 200
+
+- name: A response with a property its contract does not declare
+  defaults:
+    http:
+      url: "{{vars.url}}"
+      openapi:
+        spec: ./e2e/contract-openapi.yml
+        strict: true
+  steps:
+  - name: Echo a request
+    uses: http
+    with:
+      get: /get
+    test: res.code == 200
