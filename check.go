@@ -766,7 +766,7 @@ func (c *checker) checkTests() {
 			path := fmt.Sprintf("jobs[%d].steps[%d]", i, j)
 			switch {
 			case strings.TrimSpace(st.Test) == "":
-				if !checkedByContract(st.With) {
+				if !checkedByContract(st.Uses, st.With) {
 					c.add(SeverityWarning, c.line(path), c.stepWhere(i, j), "nothing checks this step: it has no test")
 				}
 			case expr.Parse(st.Test) == nil && expr.ReadsNothing(st.Test):
@@ -776,12 +776,17 @@ func (c *checker) checkTests() {
 	}
 }
 
-// checkedByContract reports whether with asks the action to check the step
-// against a contract, as openapi asks the http action and proto the grpc
-// action, which checks it as a test does.
-func checkedByContract(with map[string]any) bool {
-	for _, key := range []string{"openapi", "proto"} {
-		if _, ok := with[key].(map[string]any); ok {
+// contracts are the keys of with that ask an action to check a step
+// against a contract, by the action that does.
+var contracts = map[string]string{"openapi": "http", "proto": "grpc"}
+
+// checkedByContract reports whether with asks the action uses to check the
+// step against a contract, as openapi asks the http action and proto the
+// grpc action, which checks it as a test does. The same key given to
+// another action asks it nothing of the kind.
+func checkedByContract(uses string, with map[string]any) bool {
+	for key, action := range contracts {
+		if _, ok := with[key].(map[string]any); ok && uses == action {
 			return true
 		}
 	}

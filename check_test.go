@@ -400,6 +400,12 @@ jobs:
       method: GetUser
       proto:
         files: [./users.proto]
+  - name: A proto that is not the grpc action's
+    uses: shell
+    with:
+      cmd: echo
+      proto:
+        files: [./users.proto]
   - name: Always
     uses: hello
     test: 1 == 1
@@ -410,8 +416,9 @@ jobs:
 			want: []want{
 				{SeverityWarning, 5, "nothing checks this step: it has no test"},
 				{SeverityWarning, 13, "nothing checks this step: it has no test"},
-				{SeverityWarning, 28, "test reads nothing from the step"},
-				{SeverityWarning, 31, "test reads nothing from the step"},
+				{SeverityWarning, 26, "nothing checks this step: it has no test"},
+				{SeverityWarning, 34, "test reads nothing from the step"},
+				{SeverityWarning, 37, "test reads nothing from the step"},
 			},
 		},
 	}
