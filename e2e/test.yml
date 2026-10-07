@@ -465,6 +465,29 @@ jobs:
       cmd: ./probe examples/http-trace.yml
     test: res.code == 0
     echo: "{{res.stdout}}"
+  - name: http-openapi.yml
+    uses: shell
+    with:
+      cmd: ./probe --report json=/tmp/probe-e2e-openapi.json examples/http-openapi.yml
+    test: res.code == 0
+    echo: "{{res.stdout}}"
+  - name: coverage of the document http-openapi.yml checked
+    uses: shell
+    with:
+      cmd: ./probe coverage ./examples/fixtures/httpbin-openapi.yml /tmp/probe-e2e-openapi.json
+    test: |
+      res.code == 0 &&
+      res.stdout contains "Operations: 2 of 2 checked (100.0%)"
+    echo: "{{res.stdout}}"
+  - name: contract-failure.yml fails what breaks an OpenAPI document, strictly too
+    uses: shell
+    with:
+      cmd: ./probe e2e/contract-failure.yml
+    test: |
+      res.code == 1 &&
+      res.stdout contains "missing property 'id'" &&
+      res.stdout contains "missing property 'name'" &&
+      res.stdout contains "property 'origin' is not declared in the schema"
   - name: secrets-cookies.yml hides the cookies given and kept
     uses: shell
     with:

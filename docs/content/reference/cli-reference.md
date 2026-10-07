@@ -144,14 +144,14 @@ A format without a path is written to its default file in the current directory.
 
 | Format | Default file | Contents |
 |---|---|---|
-| `json` | `probe-report.json` | The whole run: status, timings, a summary of jobs and steps by status, and every step with its test and, when it failed, the reason and the request and response |
+| `json` | `probe-report.json` | The whole run: status, timings, a summary of jobs and steps by status, and every step with its test, what its response was matched to in an OpenAPI document as `contract`, and, when it failed, the reason and the request and response |
 | `junit` | `probe-junit.xml` | JUnit XML with a `testsuite` per job and a `testcase` per step, for CI systems that read test results |
 | `markdown` | `probe-report.md` | A summary line, a table of jobs, and a section per failed step |
 | `github-summary` | `$GITHUB_STEP_SUMMARY` | The `markdown` page, appended to the GitHub Actions job summary |
 
 `github-summary` appends rather than overwrites, since earlier steps and other tools write to the same summary. Outside GitHub Actions, where `GITHUB_STEP_SUMMARY` is not set and no path is given, it prints a warning and is skipped without changing the exit code, so one command line serves CI and a local run. GitHub accepts at most 1 MiB of summary per step: when the page would go over, the requests and responses are left out, and if it is still too large the page is cut short at a failed step, with a note saying so. If earlier steps have left no room at all, nothing is written and a warning says so, so that the summary they wrote is not lost. Parent directories of an explicit path are created as for the other formats. An explicit path is kept inside the current directory in the same way, refusing any symlink that leads out, since the summary is appended to rather than replaced; the path in `GITHUB_STEP_SUMMARY` is used as given.
 
-A step's status is `passed`, `failed`, `skipped`, or `untested` when it ran without a `test`. A failed step records one of these reasons:
+A step's status is `passed`, `failed`, `skipped`, or `untested` when it ran without a `test` and nothing else checked it, such as an OpenAPI document. A failed step records one of these reasons:
 
 | Kind | Meaning | JUnit element |
 |---|---|---|
@@ -160,6 +160,8 @@ A step's status is `passed`, `failed`, `skipped`, or `untested` when it ran with
 | `test_type` | The `test` expression did not evaluate to a boolean | `<error>` |
 | `action` | The action returned an error, such as a refused connection | `<error>` |
 | `template` | A template in the step's `with`, `vars` or `name` could not be evaluated, so the action did not run | `<error>` |
+| `contract_response` | The response broke the contract the action checked it against, such as an OpenAPI document | `<failure>` |
+| `contract_request` | The request broke the contract the action checked it against: the workflow sent what an OpenAPI document does not allow | `<error>` |
 
 A step in a job with `repeat` fails when any iteration fails, and reports how many iterations passed and why the first failing one failed. When an action sets `dump: false` on its response, the request and response are left out of the report as they are left out of the terminal.
 
@@ -174,7 +176,7 @@ PROBE_REPORT=markdown probe workflow.yml
 
 ## Subcommands
 
-A subcommand replaces the run with something else: `gen` writes a starting workflow, `dag` prints the dependency graph a workflow describes, `guide` prints this documentation, and `skill` sets up a coding agent to use Probe.
+A subcommand replaces the run with something else: `gen` writes a starting workflow, `dag` prints the dependency graph a workflow describes, `coverage` tells how much of an OpenAPI document a run checked, `guide` prints this documentation, and `skill` sets up a coding agent to use Probe.
 
 ### `gen`
 
@@ -266,6 +268,34 @@ This is useful for:
 - Debugging job dependency configurations
 - Generating documentation with rendered diagrams
 - Embedding in Markdown files for automatic rendering
+
+### `coverage`
+
+Tell which operations and responses of an OpenAPI document the steps of a run checked, from the report the run wrote with `--report json`. A step counts when the http action checked its response against the document with `openapi`, whether the step passed or not.
+
+**Usage:**
+```bash
+probe --report json workflow.yml
+probe coverage openapi.yml probe-report.json
+```
+
+**Output Example:**
+```
+Coverage of openapi.yml
+
+✓ GET /users/{id} (2 steps)
+    ✓ 200 (2 steps)
+    - 404
+- DELETE /users/{id}
+    - 204
+✓ GET /items (1 step)
+    ✓ default (1 step)
+
+Operations: 2 of 3 checked (66.7%)
+Responses:  2 of 4 checked (50.0%)
+```
+
+Each operation the document declares is listed with the responses it declares, such as `200`, `2XX` or `default`, marked `✓` when a step's response was matched to it and `-` when none was. A step whose status code the operation does not declare counts for the operation alone. Steps count for the document given when they name it by the same path, written in another way such as `./openapi.yml` too; a report whose steps name none of them is an error that lists those they name. It exits with status 0 whatever the coverage, and with 2 when the document or the report cannot be read.
 
 ### `guide`
 
@@ -456,7 +486,7 @@ The exit code says not only whether a run failed but what has to be looked at, s
 | Exit Code | Meaning | Description |
 |-----------|---------|-------------|
 | `0` | Success | Every job completed and every test passed |
-| `1` | Test failed | A `test` evaluated to false, could not be evaluated, or did not evaluate to a boolean, or a template a step needed could not be evaluated |
+| `1` | Test failed | A `test` evaluated to false, could not be evaluated, or did not evaluate to a boolean, a template a step needed could not be evaluated, or a request or response broke the OpenAPI document the http action checked it against |
 | `2` | Configuration error | The workflow or the command line is wrong: a missing file, invalid YAML, an unknown `needs`, an invalid step ID, an unknown flag or report format. A report file that cannot be written also exits `2` |
 | `3` | Action error | An action returned an error, such as a refused connection or a timeout, so its test could not be checked |
 

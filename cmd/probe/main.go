@@ -157,7 +157,7 @@ func (c *Cmd) parseArgs(args []string) error {
 	return nil
 }
 
-var subCommands = []string{"gen", "dag", "guide", "skill"}
+var subCommands = []string{"gen", "dag", "coverage", "guide", "skill"}
 
 func isSubCommand(name string) bool {
 	return slices.Contains(subCommands, name)
@@ -193,6 +193,7 @@ https://github.com/linyows/probe (ver: %s, rev: %s)
 Usage: probe [options] <workflow-file>
        probe gen <openapi-file>
        probe dag [--mermaid] <workflow-file>
+       probe coverage <openapi-file> <report-file>
        probe guide [topic]
        probe skill [install [dir]]
 
@@ -205,6 +206,9 @@ Subcommands:
   gen <file>       Generate probe workflow YAML from OpenAPI specification
   dag <file>       Show job dependency graph as ASCII art (default)
                    Use --mermaid to output in Mermaid format
+  coverage <openapi-file> <report-file>
+                   Show which operations and responses of an OpenAPI document
+                   the steps of a run checked, from its --report json file
   guide [topic]    Print a page of the documentation as Markdown
                    Without a topic, list the topics
   skill            Print the skill that teaches coding agents to use Probe
@@ -289,6 +293,8 @@ func (c *Cmd) runSubCommand() int {
 		return c.runGen()
 	case "dag":
 		return c.runDag()
+	case "coverage":
+		return c.runCoverage()
 	case "guide":
 		return c.runGuide()
 	case "skill":
@@ -377,6 +383,32 @@ func (c *Cmd) runDag() int {
 		return probe.ExitConfigError
 	}
 	_, _ = fmt.Fprint(c.outWriter, graph)
+	return 0
+}
+
+// runCoverage prints which operations and responses of an OpenAPI document
+// the steps of a run checked, as its JSON report records them.
+func (c *Cmd) runCoverage() int {
+	if len(c.SubCommandArgs) != 2 {
+		_, _ = fmt.Fprintf(c.errWriter, "[ERROR] an OpenAPI spec file and a report file are required\n")
+		_, _ = fmt.Fprintf(c.errWriter, "Usage: probe coverage <openapi-file> <report-file>\n")
+		return probe.ExitConfigError
+	}
+
+	r, err := oas.ReadReport(c.SubCommandArgs[1])
+	if err != nil {
+		_, _ = fmt.Fprintf(c.errWriter, "[ERROR] %v\n", err)
+		return probe.ExitConfigError
+	}
+	cov, err := oas.NewCoverage(c.SubCommandArgs[0], r)
+	if err != nil {
+		_, _ = fmt.Fprintf(c.errWriter, "[ERROR] %v\n", err)
+		return probe.ExitConfigError
+	}
+	if err := cov.Write(c.outWriter); err != nil {
+		_, _ = fmt.Fprintf(c.errWriter, "[ERROR] %v\n", err)
+		return probe.ExitConfigError
+	}
 	return 0
 }
 

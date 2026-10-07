@@ -33,6 +33,7 @@ The fields below describe the request. All of them accept template expressions.
 | `cookies` | Object | No | - | Cookies to send, by name. See [Cookies](#cookies) |
 | `trace_header` | Boolean or String | No | `false` | Send a header that names the run, job and step of the request: `X-Probe-Trace` for `true`, or the header named. See [Tracing Requests](#tracing-requests) |
 | `keep_cookies` | Boolean | No | `false` | Keep the cookies the server sets in the job, and send them in the following steps that keep cookies. See [Cookies](#cookies) |
+| `openapi` | Object or `false` | No | - | Check the request and the response against the OpenAPI document whose path is `spec`, and fail the step when either breaks it. `request: false` checks the response alone, `strict: true` also fails a property the document does not declare, and `false` leaves out a check the job's `defaults` ask for. See [Checking Against OpenAPI](#checking-against-openapi) |
 
 There are no parameters for redirects or TLS verification. Redirects are followed by default.
 
@@ -169,6 +170,8 @@ After the request, `res` holds what came back.
 | `res.rawbody` | String | The unparsed body, present when the body was parsed as JSON |
 | `res.filepath` | String | Path to the saved file when the response is binary |
 | `res.cookies` | Object | The cookies the server set, by name, on redirects included |
+| `res.violations` | Array | What the OpenAPI document does not allow in the request and the response, empty when it allows all of it. Present only when `openapi` is given |
+| `res.contract` | Object | What the response was matched to in the OpenAPI document: `spec`, `operation` such as `GET /users/{id}`, and `response` such as `200`, `2XX` or `default`, left out when the operation declares none for the status. Present only when the document has an operation for the request |
 | `rt.duration` | String | Round-trip time, such as `"120ms"` |
 | `rt.sec` | Float | Round-trip time in seconds |
 | `status` | Integer | `0` when the status code is 2xx, `1` otherwise |
@@ -330,6 +333,83 @@ A value that holds a space, a semicolon or a letter outside ASCII is escaped as 
 ```
 
 The header is sent as written in `headers` is, and shows in `req.headers`. It cannot be given together with a header of the same name in `headers`. The option is not named `trace`, which is the shorthand of the TRACE method.
+
+### Checking Against OpenAPI
+
+With `openapi`, each request and its response are checked against an OpenAPI document, which says what is right independently of the `test` written for the step. Set in a job's `defaults`, it checks every request of the job:
+
+```yaml
+- name: Users
+  defaults:
+    http:
+      url: "{{vars.api_url}}"
+      headers:
+        content-type: application/json
+      openapi:
+        spec: ./openapi.yml
+  steps:
+    - name: Create a user
+      uses: http
+      with:
+        post: /users
+        body:
+          name: probe
+      test: res.body.name == "probe"
+    - name: Reject a user without a name
+      uses: http
+      with:
+        post: /users
+        body: {}
+        openapi:
+          request: false
+      test: res.code == 400
+    - name: Health
+      uses: http
+      with:
+        get: /health
+        openapi: false
+      test: res.code == 200
+```
+
+The request and the response are matched to an operation by the method and path of the request, with the path of the document's `servers` taken off the front. The request is checked as the step sent it, with the cookies sent from `cookies` or kept by `keep_cookies`, and the step fails with the kind `contract_request` when:
+
+- a path, query, header or cookie parameter is missing where it is required, or does not keep to its schema
+- the body is missing where it is required, its `Content-Type` is not one the operation declares, or it does not keep to its schema
+- the credentials the operation's `security` requires are missing
+
+The response is checked by the last request when it was redirected, and the step fails with the kind `contract_response` when:
+
+- the document has no operation for the method and path
+- the operation declares neither the status code nor a `default` response
+- the response's `Content-Type` is not one the response declares
+- a header the response declares, or the body, does not keep to its schema
+- a JSON body is empty, or is `null` where its schema does not allow null
+
+Bodies are checked as JSON, text, XML, YAML, CSV and forms. A body of another type, such as an image or a PDF, is checked for its `Content-Type` alone.
+
+When both break the document, the kind is `contract_request`: the workflow sent what the document does not allow, which may be why the response breaks it too. The step fails even when its `test` holds, and the `test` is not evaluated. A step without a `test` whose request and response keep to the document passes, since the document checked them, and with `retry` it is retried until they keep to the document, as a step is until its `test` holds. Each violation is in `res.violations`, the terminal and the reports, as `{in, field, reason, message}`, where `in` is `request` or `response` and `field` names the field of the body, such as `$.id`, when there is one.
+
+A step that sends what the document does not allow on purpose, to see it rejected, writes `request: false`, which still checks the response, so a rejection the document does not declare fails the step. A request without the credentials `security` requires is one, as when checking for a `401`.
+
+#### Strict
+
+A schema usually allows properties it does not declare, so a response that also returns, say, `password_hash` keeps to it. With `strict: true`, the step fails on:
+
+- a property of a JSON body that its schema does not declare, where the schema writes properties or `patternProperties` and leaves `additionalProperties` out
+- a query parameter the operation does not declare
+- a `readOnly` property in the request, and a `writeOnly` property in the response
+
+```yaml
+      openapi:
+        spec: ./openapi.yml
+        strict: true
+```
+
+A schema that writes `additionalProperties` says itself what more it allows: `true` or a schema, as a map such as `labels` has, allows more, and `false` fails without `strict`. A schema that declares no properties, such as one that says only `type: object`, allows any. The properties declared by the schemas of `allOf`, `oneOf` and `anyOf` count as declared. Headers and cookies are not checked strictly, since proxies, servers and clients add ones a document rarely declares, such as `Server` or a load balancer's cookie. A violation is reported as `contract_request` or `contract_response` by where it is found, with the property in `field`, such as `$.owner.email`.
+
+`spec` is a path from the directory Probe runs in. The document is read before the request is sent, so a step whose document cannot be read or parsed fails as an action error without sending anything. `openapi: false` on a step leaves out the check, such as for an endpoint the document does not cover.
+
+Which operation and response each step's response was matched to is in `res.contract` and in the JSON report, and [`probe coverage`](/reference/cli-reference#coverage) tells from the report which ones of the document no step checked.
 
 ### Checking an Error Response
 

@@ -8,7 +8,8 @@ const (
 	// ExitOK means every job succeeded.
 	ExitOK = 0
 	// ExitTestFailed means a test did not hold: it evaluated to false, could
-	// not be evaluated, or did not evaluate to a boolean.
+	// not be evaluated, or did not evaluate to a boolean; or a request or a
+	// response broke the contract an action checked it against.
 	ExitTestFailed = 1
 	// ExitConfigError means the workflow or the command line was wrong, or a
 	// report file could not be written, so the run could not do what it was

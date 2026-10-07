@@ -119,6 +119,12 @@ const (
 	FailureTestType  = "test_type"  // The test expression did not evaluate to a boolean
 	FailureAction    = "action"     // The action itself returned an error
 	FailureTemplate  = "template"   // A template in the step's with, vars or name could not be evaluated
+	// The response broke the contract the action checked it against, such
+	// as an OpenAPI document.
+	FailureContractResponse = "contract_response"
+	// The request broke the contract the action checked it against: the
+	// workflow sent what the contract does not allow.
+	FailureContractRequest = "contract_request"
 )
 
 // Report is the result of a workflow run in a form meant for machines: the
@@ -173,6 +179,17 @@ type Step struct {
 	Repeat     *Repeat  `json:"repeat,omitempty"`
 	Echo       string   `json:"echo,omitempty"`
 	Failure    *Failure `json:"failure,omitempty"`
+	// Contract is what the action matched the response to in the contract
+	// it checked it against, such as an operation of an OpenAPI document.
+	Contract *Contract `json:"contract,omitempty"`
+}
+
+// Contract is what a response was matched to in a contract, which a report
+// of the coverage of the contract counts.
+type Contract struct {
+	Spec      string `json:"spec"`               // The contract, such as the path of an OpenAPI document
+	Operation string `json:"operation"`          // Such as GET /users/{id}
+	Response  string `json:"response,omitempty"` // Such as 200, 2XX or default; empty when none is declared
 }
 
 // Retry records how many attempts a retried step took.
@@ -194,6 +211,29 @@ type Failure struct {
 	Message  string         `json:"message"`
 	Request  map[string]any `json:"request,omitempty"`
 	Response map[string]any `json:"response,omitempty"`
+	// Violations are what broke the contract, when Kind is a contract's.
+	Violations []Violation `json:"violations,omitempty"`
+}
+
+// Violation is one thing a contract does not allow.
+type Violation struct {
+	In      string `json:"in"`              // Where it was found: request or response
+	Field   string `json:"field,omitempty"` // The field, such as /items/0/id
+	Reason  string `json:"reason,omitempty"`
+	Message string `json:"message"`
+}
+
+// String is the violation on one line: the field, what is wrong with it and
+// why.
+func (v Violation) String() string {
+	s := v.Message
+	if v.Reason != "" {
+		s += ": " + v.Reason
+	}
+	if v.Field != "" {
+		s = v.Field + ": " + s
+	}
+	return v.In + ": " + s
 }
 
 // New returns a report of a run with no jobs yet; AddJob adds them.
@@ -256,6 +296,12 @@ func (r *Report) Mask(m *mask.Masker) {
 				f.Message = m.String(f.Message)
 				f.Request = m.Map(f.Request)
 				f.Response = m.Map(f.Response)
+				for k := range f.Violations {
+					v := &f.Violations[k]
+					v.Field = m.String(v.Field)
+					v.Reason = m.String(v.Reason)
+					v.Message = m.String(v.Message)
+				}
 			}
 		}
 	}
@@ -295,6 +341,9 @@ func failureDetail(st Step) string {
 		return b.String()
 	}
 	fmt.Fprintf(&b, "%s: %s\n", st.Failure.Kind, st.Failure.Message)
+	for _, v := range st.Failure.Violations {
+		fmt.Fprintf(&b, "- %s\n", v)
+	}
 	if st.Failure.Request != nil {
 		fmt.Fprintf(&b, "\nrequest:\n%s\n", indentJSON(st.Failure.Request))
 	}

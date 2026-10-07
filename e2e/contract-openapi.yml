@@ -1,0 +1,49 @@
+openapi: 3.0.3
+info:
+  title: httpbin, described for steps that break it
+  version: "1"
+paths:
+  /uuid:
+    get:
+      responses:
+        "200":
+          description: A UUID under a name httpbin does not use, so the response breaks it
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [id]
+                properties:
+                  id:
+                    type: string
+  /anything/users:
+    post:
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name:
+                  type: string
+      responses:
+        "200":
+          description: The request, echoed
+          content:
+            application/json:
+              schema:
+                type: object
+  /get:
+    get:
+      responses:
+        "200":
+          description: The request, echoed, though httpbin returns more than url
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  url:
+                    type: string

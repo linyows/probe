@@ -106,7 +106,7 @@ func TestCmd_usage(t *testing.T) {
 }
 
 func TestCmd_start(t *testing.T) {
-	help := " __  __  __  __  __\n|  ||  ||  ||  || _|\n|  ||  /| |||  /|  |\n| | |  \\| |||  \\| _|\n|_| |_\\_|__||__||__|\n\nProbe - A YAML-based workflow automation tool.\nhttps://github.com/linyows/probe (ver: dev, rev: unknown)\n\nUsage: probe [options] <workflow-file>\n       probe gen <openapi-file>\n       probe dag [--mermaid] <workflow-file>\n       probe guide [topic]\n       probe skill [install [dir]]\n\nArguments:\n  workflow-file    Path to YAML workflow file(s). Multiple files can be\n                   specified with comma-separated paths (e.g., \"base.yml,override.yml\")\n                   to merge configurations.\n\nSubcommands:\n  gen <file>       Generate probe workflow YAML from OpenAPI specification\n  dag <file>       Show job dependency graph as ASCII art (default)\n                   Use --mermaid to output in Mermaid format\n  guide [topic]    Print a page of the documentation as Markdown\n                   Without a topic, list the topics\n  skill            Print the skill that teaches coding agents to use Probe\n                   install [dir] writes it to dir (.claude/skills/probe)\n\nOptions:\n  -h, --help       Show command usage\n      --version    Show version information\n      --timing     Show timing (start time, response time)\n  -v, --verbose    Show verbose log\n      --output     Report output: auto, spinner or stream (env: PROBE_OUTPUT)\n      --report     Write reports: json, junit, markdown, github-summary as format[=path],... (env: PROBE_REPORT)\n"
+	help := " __  __  __  __  __\n|  ||  ||  ||  || _|\n|  ||  /| |||  /|  |\n| | |  \\| |||  \\| _|\n|_| |_\\_|__||__||__|\n\nProbe - A YAML-based workflow automation tool.\nhttps://github.com/linyows/probe (ver: dev, rev: unknown)\n\nUsage: probe [options] <workflow-file>\n       probe gen <openapi-file>\n       probe dag [--mermaid] <workflow-file>\n       probe coverage <openapi-file> <report-file>\n       probe guide [topic]\n       probe skill [install [dir]]\n\nArguments:\n  workflow-file    Path to YAML workflow file(s). Multiple files can be\n                   specified with comma-separated paths (e.g., \"base.yml,override.yml\")\n                   to merge configurations.\n\nSubcommands:\n  gen <file>       Generate probe workflow YAML from OpenAPI specification\n  dag <file>       Show job dependency graph as ASCII art (default)\n                   Use --mermaid to output in Mermaid format\n  coverage <openapi-file> <report-file>\n                   Show which operations and responses of an OpenAPI document\n                   the steps of a run checked, from its --report json file\n  guide [topic]    Print a page of the documentation as Markdown\n                   Without a topic, list the topics\n  skill            Print the skill that teaches coding agents to use Probe\n                   install [dir] writes it to dir (.claude/skills/probe)\n\nOptions:\n  -h, --help       Show command usage\n      --version    Show version information\n      --timing     Show timing (start time, response time)\n  -v, --verbose    Show verbose log\n      --output     Report output: auto, spinner or stream (env: PROBE_OUTPUT)\n      --report     Write reports: json, junit, markdown, github-summary as format[=path],... (env: PROBE_REPORT)\n"
 
 	tests := []struct {
 		name           string
@@ -351,6 +351,72 @@ func TestCmd_gen(t *testing.T) {
 				if !strings.Contains(errOutput, tt.errContain) {
 					t.Errorf("error output should contain %q, got: %s", tt.errContain, errOutput)
 				}
+			}
+		})
+	}
+}
+
+func TestCmd_coverage(t *testing.T) {
+	dir := t.TempDir()
+	spec := filepath.Join(dir, "openapi.yml")
+	if err := os.WriteFile(spec, []byte(`openapi: 3.0.3
+info: {title: users, version: "1"}
+paths:
+  /users:
+    get:
+      responses:
+        "200": {description: users}
+`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	reportFile := filepath.Join(dir, "probe-report.json")
+	if err := os.WriteFile(reportFile, []byte(`{"jobs":[{"steps":[{"index":0,"contract":{"spec":"`+spec+`","operation":"GET /users","response":"200"}}]}]}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	tests := []struct {
+		name       string
+		args       []string
+		expectCode int
+		contains   string
+		errContain string
+	}{
+		{
+			name:       "coverage of a document by a report",
+			args:       []string{"probe", "coverage", spec, reportFile},
+			expectCode: 0,
+			contains:   "Operations: 1 of 1 checked (100.0%)",
+		},
+		{
+			name:       "coverage without a report",
+			args:       []string{"probe", "coverage", spec},
+			expectCode: probe.ExitConfigError,
+			errContain: "an OpenAPI spec file and a report file are required",
+		},
+		{
+			name:       "coverage with a report that cannot be read",
+			args:       []string{"probe", "coverage", spec, filepath.Join(dir, "none.json")},
+			expectCode: probe.ExitConfigError,
+			errContain: "failed to read report",
+		},
+		{
+			name:       "coverage with a document the report did not check",
+			args:       []string{"probe", "coverage", "../../testdata/petstore.yml", reportFile},
+			expectCode: probe.ExitConfigError,
+			errContain: "no step of the report was checked against ../../testdata/petstore.yml",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c := newBufferCmd()
+			if code := c.start(tt.args); code != tt.expectCode {
+				t.Errorf("start(%v) = %d, want %d; stderr: %s", tt.args, code, tt.expectCode, c.errWriter)
+			}
+			if out := fmt.Sprintf("%s", c.outWriter); !strings.Contains(out, tt.contains) {
+				t.Errorf("output should contain %q, got: %s", tt.contains, out)
+			}
+			if errOut := fmt.Sprintf("%s", c.errWriter); !strings.Contains(errOut, tt.errContain) {
+				t.Errorf("error output should contain %q, got: %s", tt.errContain, errOut)
 			}
 		})
 	}

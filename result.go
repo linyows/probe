@@ -29,6 +29,12 @@ type StepRepeatCounter struct {
 	// result keeps the kind of failure, such as an action error, rather than
 	// only the count.
 	Failure *StepFailure
+	// Checked is whether an action checked a response against a contract,
+	// which checks the step as a test does.
+	Checked bool
+	// Contract is what the first iteration's response was matched to in
+	// its contract.
+	Contract *report.Contract
 }
 
 // StepResult represents the result of a step execution
@@ -52,6 +58,9 @@ type StepResult struct {
 	Test    string        // The test expression, empty when the step has none
 	Elapsed time.Duration // Wall time from the action's start to the result
 	Failure *StepFailure  // Why the step failed; nil unless Status is StatusError
+	// Contract is what the response was matched to in the contract the
+	// action checked it against; nil when it checked none.
+	Contract *report.Contract
 }
 
 // Failure kinds recorded on a StepFailure. They are the kinds a report
@@ -62,6 +71,9 @@ const (
 	FailureTestType  = report.FailureTestType
 	FailureAction    = report.FailureAction
 	FailureTemplate  = report.FailureTemplate
+
+	FailureContractResponse = report.FailureContractResponse
+	FailureContractRequest  = report.FailureContractRequest
 )
 
 // StepFailure describes a failed step without terminal formatting, so that
@@ -73,6 +85,8 @@ type StepFailure struct {
 	// nil when the action asked not to be dumped (res.dump: false).
 	Request  map[string]any
 	Response map[string]any
+	// Violations are what broke the contract, when Kind is a contract's.
+	Violations []report.Violation
 }
 
 // JobResult stores execution results for a job

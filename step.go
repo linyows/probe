@@ -17,6 +17,7 @@ import (
 	"github.com/linyows/probe/jsonutil"
 	"github.com/linyows/probe/mask"
 	"github.com/linyows/probe/procgroup"
+	"github.com/linyows/probe/report"
 )
 
 const (
@@ -281,11 +282,6 @@ func (st *Step) executeActionWithRetry(runner ActionRunner, expW map[string]any,
 	retry := st.Retry
 	st.retryAttempt = 0
 
-	// If no test is configured, don't retry - execute once
-	if st.Test == "" {
-		return st.executeSingleAction(runner, expW, jCtx, false)
-	}
-
 	// Initial delay if specified
 	if retry.InitialDelay.Duration > 0 {
 		if jCtx.Verbose {
@@ -304,13 +300,21 @@ func (st *Step) executeActionWithRetry(runner ActionRunner, expW map[string]any,
 		}
 
 		// Only the final attempt reports a failure as such; before that the
-		// step still has a chance to succeed.
+		// step still has a chance to succeed. Whether a step without a test
+		// is checked at all, by a contract, is known only from its first
+		// result, so its first attempt reports a failure as a final one.
 		st.attempt = attempt
-		result, err := st.executeSingleAction(runner, expW, jCtx, attempt < retry.MaxAttempts)
+		quiet := attempt < retry.MaxAttempts && (st.Test != "" || attempt > 1)
+		result, err := st.executeSingleAction(runner, expW, jCtx, quiet)
 		lastResult = result
 		lastErr = err
 
 		if err != nil {
+			// A step without a test is retried only once a contract has
+			// shown that something checks it.
+			if st.Test == "" && attempt == 1 {
+				return result, err
+			}
 			// Action execution failed, retry
 			if attempt < retry.MaxAttempts {
 				if jCtx.Verbose {
@@ -324,9 +328,19 @@ func (st *Step) executeActionWithRetry(runner ActionRunner, expW map[string]any,
 		// Process action result to set context for test evaluation
 		st.processActionResult(result, jCtx)
 
-		// Evaluate test expression to determine success
-		exprOut, err := st.evalTest()
-		testOk := err == nil && exprOut == true
+		// A step that nothing checks runs once, as there is nothing a
+		// retry could wait for.
+		if !st.checked() {
+			return result, nil
+		}
+
+		// A response that breaks its contract fails as a test does, and the
+		// test is not evaluated, as check does not evaluate it.
+		testOk := st.contractFailure() == nil
+		if testOk && st.Test != "" {
+			exprOut, err := st.evalTest()
+			testOk = err == nil && exprOut == true
+		}
 		if testOk {
 			if jCtx.Verbose {
 				jCtx.Printer.LogDebug("Action succeeded on attempt %d", attempt)
@@ -473,7 +487,7 @@ func (st *Step) createStepResult(name string, jCtx *JobContext) StepResult {
 	result := StepResult{
 		Index:    st.Idx,
 		Name:     name,
-		HasTest:  st.Test != "",
+		HasTest:  st.checked(),
 		RT:       "",
 		WaitTime: st.getWaitTimeForDisplay(),
 		Test:     st.Test,
@@ -500,8 +514,10 @@ func (st *Step) createStepResult(name string, jCtx *JobContext) StepResult {
 		}
 	}
 
-	if st.Test != "" {
-		testOutput, ok := st.DoTest(jCtx.Printer)
+	result.Contract = st.contractMatched()
+
+	if st.checked() {
+		testOutput, ok := st.check(jCtx.Printer)
 		if ok {
 			result.Status = StatusSuccess
 		} else {
@@ -530,14 +546,14 @@ func (st *Step) getEchoOutput(printer *Printer) string {
 
 func (st *Step) handleRepeatExecution(jCtx *JobContext, name string, hasError bool) {
 	// Execute test first (outside of lock)
-	hasTest := st.Test != ""
+	hasTest := st.checked()
 	testResult := true
 
 	// If there was an error, always count as failure
 	if hasError {
 		testResult = false
 	} else if hasTest {
-		_, testResult = st.DoTest(jCtx.Printer)
+		_, testResult = st.check(jCtx.Printer)
 		if !testResult {
 			jCtx.SetFailed()
 			jCtx.Result.recordFailure(st.failure.Kind)
@@ -578,6 +594,12 @@ func (st *Step) handleRepeatExecution(jCtx *JobContext, name string, hasError bo
 		counter.SuccessCount++
 	}
 	counter.LastResult = testResult
+	if st.contractChecked() {
+		counter.Checked = true
+	}
+	if counter.Contract == nil {
+		counter.Contract = st.contractMatched()
+	}
 	if counter.Failure == nil {
 		counter.Failure = failure
 	}
@@ -598,6 +620,105 @@ func (st *Step) handleRepeatExecution(jCtx *JobContext, name string, hasError bo
 			jCtx.Printer.PrintEchoContent(echoRaw)
 		}
 	}
+}
+
+// contractChecked reports whether the action checked the response against
+// a contract, such as an OpenAPI document. It then returns res.violations,
+// empty when the response keeps to the contract.
+func (st *Step) contractChecked() bool {
+	_, ok := st.ctx.Res["violations"].([]any)
+	return ok
+}
+
+// contractMatched returns what the action matched the response to in the
+// contract it checked it against, or nil when it checked none or the
+// contract has nothing the response matches.
+func (st *Step) contractMatched() *report.Contract {
+	m, ok := st.ctx.Res["contract"].(map[string]any)
+	if !ok {
+		return nil
+	}
+	str := func(k string) string {
+		s, _ := m[k].(string)
+		return s
+	}
+	return &report.Contract{Spec: str("spec"), Operation: str("operation"), Response: str("response")}
+}
+
+// checked reports whether anything checks the step: its test, or a contract
+// the action checked the response against.
+func (st *Step) checked() bool {
+	return st.Test != "" || st.contractChecked()
+}
+
+// contractFailure returns why the request or the response breaks its
+// contract, or nil when both keep to it or the action checked them against
+// none.
+func (st *Step) contractFailure() *StepFailure {
+	list, _ := st.ctx.Res["violations"].([]any)
+	if len(list) == 0 {
+		return nil
+	}
+	vs := make([]report.Violation, 0, len(list))
+	for _, item := range list {
+		m, _ := item.(map[string]any)
+		str := func(k string) string {
+			s, _ := m[k].(string)
+			return s
+		}
+		vs = append(vs, report.Violation{
+			In:      str("in"),
+			Field:   str("field"),
+			Reason:  str("reason"),
+			Message: str("message"),
+		})
+	}
+	// A request that breaks the contract is the workflow's to fix, and the
+	// response to it may break the contract only because of it, so the
+	// request decides the kind.
+	var inRequest, inResponse int
+	for _, v := range vs {
+		if v.In == "request" {
+			inRequest++
+		} else {
+			inResponse++
+		}
+	}
+	var kind, msg string
+	switch {
+	case inRequest == 0:
+		kind, msg = FailureContractResponse, "the response breaks its contract in "+places(inResponse)
+	case inResponse == 0:
+		kind, msg = FailureContractRequest, "the request breaks its contract in "+places(inRequest)
+	default:
+		kind = FailureContractRequest
+		msg = fmt.Sprintf("the request breaks its contract in %s, and the response in %s", places(inRequest), places(inResponse))
+	}
+	f := st.newFailure(kind, msg)
+	f.Violations = vs
+	return f
+}
+
+// places is n places in words, as in "in 1 place" or "in 2 places".
+func places(n int) string {
+	if n == 1 {
+		return "1 place"
+	}
+	return fmt.Sprintf("%d places", n)
+}
+
+// check checks the step: the request and the response against their
+// contract, then the test, which is not evaluated when either breaks it.
+func (st *Step) check(printer *Printer) (string, bool) {
+	if f := st.contractFailure(); f != nil {
+		st.failure = f
+		return printer.generateContractFailure(f), false
+	}
+	if st.Test == "" {
+		st.failure = nil
+		return "", true
+	}
+	return st.DoTest(printer)
 }
 
 // evalTest evaluates the test expression and returns the raw result
@@ -965,6 +1086,8 @@ func (st *Step) createFailedStepResult(name string, jCtx *JobContext) StepResult
 			result.Report = report
 		}
 	}
+
+	result.Contract = st.contractMatched()
 
 	// Include error information if available
 	if st.err != nil {

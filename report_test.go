@@ -164,6 +164,28 @@ func TestBuildReport_FailureOnlyOnFailedSteps(t *testing.T) {
 	}
 }
 
+func TestBuildReport_FailureCarriesViolations(t *testing.T) {
+	vs := []report.Violation{{In: "response", Field: "$.id", Message: "body failed"}}
+	sr := StepResult{Status: StatusError, Failure: &StepFailure{Kind: FailureContractResponse, Violations: vs}}
+	got := buildStepReport(sr).Failure
+	if got == nil || !reflect.DeepEqual(got.Violations, vs) {
+		t.Errorf("Failure = %+v, want the violations carried over", got)
+	}
+}
+
+func TestBuildReport_StepCarriesContract(t *testing.T) {
+	c := &report.Contract{Spec: "openapi.yml", Operation: "GET /users/{id}", Response: "200"}
+	for _, sr := range []StepResult{
+		{Status: StatusSuccess, Contract: c},
+		{Status: StatusError, Contract: c},
+		{Status: StatusSuccess, Contract: c, RepeatCounter: &StepRepeatCounter{SuccessCount: 1, Checked: true}},
+	} {
+		if got := buildStepReport(sr).Contract; got != c {
+			t.Errorf("Contract = %+v, want %+v", got, c)
+		}
+	}
+}
+
 func TestBuildReport_NilResult(t *testing.T) {
 	r := BuildReport("Empty", "", nil, []string{"a"}, time.Time{}, time.Time{})
 	if r.Status != report.Passed || len(r.Jobs) != 0 {

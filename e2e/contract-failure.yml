@@ -1,0 +1,48 @@
+name: Contract Failure
+vars:
+  url: "{{URL ?? 'http://localhost:8080'}}"
+
+jobs:
+- name: A response that breaks its contract
+  defaults:
+    http:
+      url: "{{vars.url}}"
+      openapi:
+        spec: ./e2e/contract-openapi.yml
+  steps:
+  - name: Get a UUID
+    uses: http
+    with:
+      get: /uuid
+    test: res.code == 200
+
+- name: A request that breaks its contract
+  defaults:
+    http:
+      url: "{{vars.url}}"
+      openapi:
+        spec: ./e2e/contract-openapi.yml
+  steps:
+  - name: Create a user without a name
+    uses: http
+    with:
+      post: /anything/users
+      headers:
+        content-type: application/json
+      body:
+        role: admin
+    test: res.code == 200
+
+- name: A response with a property its contract does not declare
+  defaults:
+    http:
+      url: "{{vars.url}}"
+      openapi:
+        spec: ./e2e/contract-openapi.yml
+        strict: true
+  steps:
+  - name: Echo a request
+    uses: http
+    with:
+      get: /get
+    test: res.code == 200

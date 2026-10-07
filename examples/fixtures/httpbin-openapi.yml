@@ -1,0 +1,39 @@
+openapi: 3.0.3
+info:
+  title: httpbin
+  version: "1"
+paths:
+  /uuid:
+    get:
+      responses:
+        "200":
+          description: A random UUID
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [uuid]
+                properties:
+                  uuid:
+                    type: string
+                    format: uuid
+  /anything/users:
+    post:
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name:
+                  type: string
+      responses:
+        "200":
+          description: The request, echoed
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [json]
