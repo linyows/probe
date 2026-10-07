@@ -552,3 +552,24 @@ func TestReport_WriteMarkdown_Contract(t *testing.T) {
 		t.Errorf("markdown should list the violation after the kind, got:\n%s", buf.String())
 	}
 }
+
+func TestReport_WriteJUnit_ContractRequest(t *testing.T) {
+	r := newContractReport()
+	f := r.Jobs[0].Steps[0].Failure
+	f.Kind = FailureContractRequest
+	f.Violations[0].In = "request"
+
+	var buf bytes.Buffer
+	if err := r.WriteJUnit(&buf); err != nil {
+		t.Fatal(err)
+	}
+	var doc junitTestSuites
+	if err := xml.Unmarshal(buf.Bytes(), &doc); err != nil {
+		t.Fatalf("output is not valid XML: %v\n%s", err, buf.String())
+	}
+	// A request the contract does not allow is a mistake in the test, as a
+	// test that cannot be evaluated is.
+	if c := doc.Suites[0].Cases[0]; c.Error == nil || c.Error.Type != FailureContractRequest {
+		t.Errorf("a request that breaks its contract should be an <error>, got %+v", c)
+	}
+}

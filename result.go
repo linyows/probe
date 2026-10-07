@@ -67,6 +67,7 @@ const (
 	FailureTemplate  = report.FailureTemplate
 
 	FailureContractResponse = report.FailureContractResponse
+	FailureContractRequest  = report.FailureContractRequest
 )
 
 // StepFailure describes a failed step without terminal formatting, so that

@@ -20,6 +20,8 @@ func TestResult_exitCode(t *testing.T) {
 		{"assertion", true, []string{FailureAssertion}, ExitTestFailed},
 		{"test error", true, []string{FailureTestError}, ExitTestFailed},
 		{"test type", true, []string{FailureTestType}, ExitTestFailed},
+		{"contract response", true, []string{FailureContractResponse}, ExitTestFailed},
+		{"contract request", true, []string{FailureContractRequest}, ExitTestFailed},
 		{"action", true, []string{FailureAction}, ExitActionError},
 		{"action wins over assertion", true, []string{FailureAssertion, FailureAction}, ExitActionError},
 		{"config", true, []string{failureConfig}, ExitConfigError},

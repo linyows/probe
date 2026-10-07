@@ -2063,6 +2063,7 @@ func TestStep_check_Contract(t *testing.T) {
 		{name: "a contract kept, with a test that fails", test: "res.code == 201", res: violationsRes(), wantChecked: true, wantKind: FailureAssertion},
 		{name: "a contract broken, without a test", res: violationsRes(broken), wantChecked: true, wantKind: FailureContractResponse},
 		{name: "a contract broken, with a test that holds", test: "res.code == 200", res: violationsRes(broken), wantChecked: true, wantKind: FailureContractResponse},
+		{name: "a request that breaks the contract", test: "res.code == 200", res: violationsRes(map[string]any{"in": "request", "message": "body failed"}), wantChecked: true, wantKind: FailureContractRequest},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -2217,5 +2218,54 @@ func TestStep_handleRepeatExecution_Contract(t *testing.T) {
 	}
 	if counter.Failure == nil || counter.Failure.Kind != FailureContractResponse {
 		t.Errorf("Failure = %+v, want a contract failure", counter.Failure)
+	}
+}
+
+func TestStep_contractFailure_Kind(t *testing.T) {
+	request := map[string]any{"in": "request", "message": "request body failed"}
+	response := map[string]any{"in": "response", "message": "response body failed"}
+
+	tests := []struct {
+		name        string
+		violations  []map[string]any
+		wantKind    string
+		wantMessage string
+	}{
+		{
+			name:        "in the response",
+			violations:  []map[string]any{response},
+			wantKind:    FailureContractResponse,
+			wantMessage: "the response breaks its contract in 1 place",
+		},
+		{
+			name:        "in the request",
+			violations:  []map[string]any{request, request},
+			wantKind:    FailureContractRequest,
+			wantMessage: "the request breaks its contract in 2 places",
+		},
+		{
+			name:        "in both, where the request decides the kind",
+			violations:  []map[string]any{request, response, response},
+			wantKind:    FailureContractRequest,
+			wantMessage: "the request breaks its contract in 1 place, and the response in 2 places",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			st := &Step{ctx: StepContext{Res: violationsRes(tt.violations...)}}
+			f := st.contractFailure()
+			if f == nil {
+				t.Fatal("contractFailure() = nil, want a failure")
+			}
+			if f.Kind != tt.wantKind {
+				t.Errorf("Kind = %q, want %q", f.Kind, tt.wantKind)
+			}
+			if f.Message != tt.wantMessage {
+				t.Errorf("Message = %q, want %q", f.Message, tt.wantMessage)
+			}
+			if len(f.Violations) != len(tt.violations) {
+				t.Errorf("Violations = %+v, want %d", f.Violations, len(tt.violations))
+			}
+		})
 	}
 }

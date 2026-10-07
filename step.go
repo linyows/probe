@@ -619,8 +619,9 @@ func (st *Step) checked() bool {
 	return st.Test != "" || st.contractChecked()
 }
 
-// contractFailure returns why the response breaks its contract, or nil when
-// it keeps to it or the action checked it against none.
+// contractFailure returns why the request or the response breaks its
+// contract, or nil when both keep to it or the action checked them against
+// none.
 func (st *Step) contractFailure() *StepFailure {
 	list, _ := st.ctx.Res["violations"].([]any)
 	if len(list) == 0 {
@@ -640,17 +641,42 @@ func (st *Step) contractFailure() *StepFailure {
 			Message: str("message"),
 		})
 	}
-	msg := "the response breaks its contract in 1 place"
-	if len(vs) > 1 {
-		msg = fmt.Sprintf("the response breaks its contract in %d places", len(vs))
+	// A request that breaks the contract is the workflow's to fix, and the
+	// response to it may break the contract only because of it, so the
+	// request decides the kind.
+	var inRequest, inResponse int
+	for _, v := range vs {
+		if v.In == "request" {
+			inRequest++
+		} else {
+			inResponse++
+		}
 	}
-	f := st.newFailure(FailureContractResponse, msg)
+	var kind, msg string
+	switch {
+	case inRequest == 0:
+		kind, msg = FailureContractResponse, "the response breaks its contract in "+places(inResponse)
+	case inResponse == 0:
+		kind, msg = FailureContractRequest, "the request breaks its contract in "+places(inRequest)
+	default:
+		kind = FailureContractRequest
+		msg = fmt.Sprintf("the request breaks its contract in %s, and the response in %s", places(inRequest), places(inResponse))
+	}
+	f := st.newFailure(kind, msg)
 	f.Violations = vs
 	return f
 }
 
-// check checks the step: the response against its contract, then the test,
-// which is not evaluated when the response breaks the contract.
+// places is n places in words, as in "in 1 place" or "in 2 places".
+func places(n int) string {
+	if n == 1 {
+		return "1 place"
+	}
+	return fmt.Sprintf("%d places", n)
+}
+
+// check checks the step: the request and the response against their
+// contract, then the test, which is not evaluated when either breaks it.
 func (st *Step) check(printer *Printer) (string, bool) {
 	if f := st.contractFailure(); f != nil {
 		st.failure = f

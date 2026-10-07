@@ -122,6 +122,9 @@ const (
 	// The response broke the contract the action checked it against, such
 	// as an OpenAPI document.
 	FailureContractResponse = "contract_response"
+	// The request broke the contract the action checked it against: the
+	// workflow sent what the contract does not allow.
+	FailureContractRequest = "contract_request"
 )
 
 // Report is the result of a workflow run in a form meant for machines: the
@@ -203,7 +206,7 @@ type Failure struct {
 
 // Violation is one thing a contract does not allow.
 type Violation struct {
-	In      string `json:"in"`              // Where it was found, such as response
+	In      string `json:"in"`              // Where it was found: request or response
 	Field   string `json:"field,omitempty"` // The field, such as /items/0/id
 	Reason  string `json:"reason,omitempty"`
 	Message string `json:"message"`
