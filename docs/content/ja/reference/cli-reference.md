@@ -176,7 +176,7 @@ PROBE_REPORT=markdown probe workflow.yml
 
 ## サブコマンド
 
-サブコマンドを指定すると、ワークフローの実行の代わりに別の処理を行います。`gen`は雛形のワークフローを生成し、`dag`はワークフローが表す依存関係のグラフを出力し、`coverage`は実行がOpenAPIドキュメントのどこまでを検証したかを示し、`guide`はこのドキュメントを出力し、`skill`はコーディングエージェントがProbeを使えるように準備します。
+サブコマンドを指定すると、ワークフローの実行の代わりに別の処理を行います。`gen`は雛形のワークフローを生成し、`dag`はワークフローが表す依存関係のグラフを出力し、`check`はワークフローを実行せずに誤りや弱点を見つけ、`coverage`は実行がOpenAPIドキュメントのどこまでを検証したかを示し、`guide`はこのドキュメントを出力し、`skill`はコーディングエージェントがProbeを使えるように準備します。
 
 ### `gen`
 
@@ -268,6 +268,44 @@ flowchart LR
 - ジョブ依存関係の設定をデバッグ
 - ドキュメントやダイアグラムの生成
 - Markdownファイルへの埋め込み
+
+### `check`
+
+ワークフローを実行せずに、誤りや弱点を見つけます。人やコーディングエージェントが書いたワークフローを、テスト対象のシステムに届く前に確かめられます。実行時と同じく複数のファイルを読み合わせる場合は、カンマ区切りで1つの引数として渡します。
+
+**使い方:**
+```bash
+probe check workflow.yml
+probe check base.yml,staging.yml
+```
+
+**出力例:**
+```
+workflow.yml:10: error: job 0 "Users", step 0 "Log in": unknown key "tset"; did you mean "test"?
+workflow.yml:14: error: job 0 "Users", step 1 "Read": unknown action "htp"; did you mean "http"?
+workflow.yml:18: error: job 0 "Users", step 1 "Read": with: outputs.login.tokn is not published: step "login" publishes token
+workflow.yml:39: warning: job 1 "Other", step 0 "Reads users": with: outputs.login.token may not be published yet: job "Other" does not need job "Users", whose step publishes it
+
+3 errors, 1 warning
+```
+
+**エラー**として報告するもの:
+
+- ワークフロー、ジョブ、ステップ、`retry`、`repeat`が受け付けないキー。実行時は無視されます。後に読むファイルのためにYAMLのアンカーを持つキーは対象外です
+- `name`がない、IDが重複しているなど、実行時に読み込みを拒否されるもの
+- 組み込みでも外部でもないアクション、解析できない外部アクションの指定
+- どのジョブも指していない`needs`、循環する`needs`
+- 実行時に拒否されるステップID
+- 解析できない式（`test`、`skipif`、`outputs`）とテンプレート（`name`、`with`、`vars`、`echo`）
+- どのステップも公開していない出力、そのステップが公開していない出力、そのステップが公開する前に読む出力（同じジョブの前のステップから読む場合など）の参照
+
+**警告**として報告するもの:
+
+- 読む側のジョブが直接にも間接にも`needs`で指定していないジョブの出力の参照。まだ公開されていないかもしれません
+- 何も検証していないステップ。`test`がなく、httpアクションの`openapi`のように契約との照合をアクションに求めてもいないもの
+- `1 == 1`のように何も読まない`test`。ステップが何をしても結果が変わりません
+
+エラーが見つかれば終了ステータスは2、警告だけか何も見つからなければ0です。
 
 ### `coverage`
 

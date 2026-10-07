@@ -454,6 +454,8 @@ See [Built-in Functions](/reference/built-in-functions) for what can be called i
 - `repeat.count` must be zero or greater, and `retry.max_attempts` at least 1.
 - A step must have an `id` for its `outputs` to be published.
 
+`probe check` reports these without running the workflow, together with keys a workflow does not take, expressions that do not parse and outputs read before they are published. See the [CLI Reference](/reference/cli-reference#check).
+
 ## File Merging
 
 Several files can be combined by passing them comma-separated. They are concatenated in order, and a top-level key defined more than once takes the value from the last file:
