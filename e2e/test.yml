@@ -465,6 +465,19 @@ jobs:
       cmd: ./probe examples/http-trace.yml
     test: res.code == 0
     echo: "{{res.stdout}}"
+  - name: http-openapi.yml
+    uses: shell
+    with:
+      cmd: ./probe examples/http-openapi.yml
+    test: res.code == 0
+    echo: "{{res.stdout}}"
+  - name: contract-failure.yml fails a response that breaks its OpenAPI document
+    uses: shell
+    with:
+      cmd: ./probe e2e/contract-failure.yml
+    test: |
+      res.code == 1 &&
+      res.stdout contains "missing property 'id'"
   - name: secrets-cookies.yml hides the cookies given and kept
     uses: shell
     with:

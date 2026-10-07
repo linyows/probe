@@ -33,6 +33,7 @@ The fields below describe the request. All of them accept template expressions.
 | `cookies` | Object | No | - | Cookies to send, by name. See [Cookies](#cookies) |
 | `trace_header` | Boolean or String | No | `false` | Send a header that names the run, job and step of the request: `X-Probe-Trace` for `true`, or the header named. See [Tracing Requests](#tracing-requests) |
 | `keep_cookies` | Boolean | No | `false` | Keep the cookies the server sets in the job, and send them in the following steps that keep cookies. See [Cookies](#cookies) |
+| `openapi` | Object or `false` | No | - | Check the response against the OpenAPI document whose path is `spec`, and fail the step when it breaks it. `false` leaves out a check the job's `defaults` ask for. See [Checking Responses Against OpenAPI](#checking-responses-against-openapi) |
 
 There are no parameters for redirects or TLS verification. Redirects are followed by default.
 
@@ -169,6 +170,7 @@ After the request, `res` holds what came back.
 | `res.rawbody` | String | The unparsed body, present when the body was parsed as JSON |
 | `res.filepath` | String | Path to the saved file when the response is binary |
 | `res.cookies` | Object | The cookies the server set, by name, on redirects included |
+| `res.violations` | Array | What the OpenAPI document does not allow in the response, empty when it allows all of it. Present only when `openapi` is given |
 | `rt.duration` | String | Round-trip time, such as `"120ms"` |
 | `rt.sec` | Float | Round-trip time in seconds |
 | `status` | Integer | `0` when the status code is 2xx, `1` otherwise |
@@ -330,6 +332,42 @@ A value that holds a space, a semicolon or a letter outside ASCII is escaped as 
 ```
 
 The header is sent as written in `headers` is, and shows in `req.headers`. It cannot be given together with a header of the same name in `headers`. The option is not named `trace`, which is the shorthand of the TRACE method.
+
+### Checking Responses Against OpenAPI
+
+With `openapi`, each response is checked against an OpenAPI document, which says what is right independently of the `test` written for the step. Set in a job's `defaults`, it checks every request of the job:
+
+```yaml
+- name: Users
+  defaults:
+    http:
+      url: "{{vars.api_url}}"
+      openapi:
+        spec: ./openapi.yml
+  steps:
+    - name: Get a user
+      uses: http
+      with:
+        get: /users/1
+      test: res.body.name == "probe"
+    - name: Health
+      uses: http
+      with:
+        get: /health
+        openapi: false
+      test: res.code == 200
+```
+
+The response is matched to an operation by the method and path of the request, with the path of the document's `servers` taken off the front, and by the last request when it was redirected. The step fails with the kind `contract_response` when:
+
+- the document has no operation for the method and path
+- the operation declares neither the status code nor a `default` response
+- the response's `Content-Type` is not one the response declares
+- a header the response declares, or the body, does not keep to its schema
+
+The step fails even when its `test` holds, and the `test` is not evaluated. A step without a `test` whose response keeps to the document passes, since the document checked it. Each violation is in `res.violations`, the terminal and the reports, as `{in, field, reason, message}`; `field` names the field of the body, such as `$.id`, when there is one.
+
+`spec` is a path from the directory Probe runs in. The document is read before the request is sent, so a step whose document cannot be read or parsed fails as an action error without sending anything. `openapi: false` on a step leaves out the check, such as for an endpoint the document does not cover. Only the response is checked; the request is not.
 
 ### Checking an Error Response
 

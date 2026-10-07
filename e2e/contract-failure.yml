@@ -1,0 +1,17 @@
+name: Contract Failure
+vars:
+  url: "{{URL ?? 'http://localhost:8080'}}"
+
+jobs:
+- name: A response that breaks its contract
+  defaults:
+    http:
+      url: "{{vars.url}}"
+      openapi:
+        spec: ./e2e/contract-openapi.yml
+  steps:
+  - name: Get a UUID
+    uses: http
+    with:
+      get: /uuid
+    test: res.code == 200

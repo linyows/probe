@@ -1,0 +1,18 @@
+openapi: 3.0.3
+info:
+  title: httpbin, described wrongly
+  version: "1"
+paths:
+  /uuid:
+    get:
+      responses:
+        "200":
+          description: A UUID under a name httpbin does not use
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [id]
+                properties:
+                  id:
+                    type: string
