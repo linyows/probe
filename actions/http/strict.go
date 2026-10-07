@@ -145,15 +145,6 @@ func composed(schemas []*base.Schema) []*base.Schema {
 	return out
 }
 
-// schemaOf returns the schema p stands for, or nil when there is none or it
-// cannot be built.
-func schemaOf(p *base.SchemaProxy) *base.Schema {
-	if p == nil {
-		return nil
-	}
-	return p.Schema()
-}
-
 func sortedKeys(m map[string][]*base.Schema) []string {
 	keys := make([]string, 0, len(m))
 	for k := range m {

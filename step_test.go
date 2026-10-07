@@ -1491,10 +1491,14 @@ type CountingMockActionRunner struct {
 	result     map[string]any
 	resultFunc func(count int) map[string]any
 	callCount  *int
+	err        error // returned by every call when set
 }
 
 func (m *CountingMockActionRunner) RunActions(name string, with map[string]any, opts RunOptions) (map[string]any, error) {
 	*m.callCount++
+	if m.err != nil {
+		return nil, m.err
+	}
 	if m.resultFunc != nil {
 		return m.resultFunc(*m.callCount), nil
 	}
@@ -2342,5 +2346,82 @@ func TestStep_handleRepeatExecution_ContractMatched(t *testing.T) {
 	results := jCtx.Result.Jobs["job-1"].StepResults
 	if len(results) != 1 || !reflect.DeepEqual(results[0].Contract, want) {
 		t.Errorf("StepResults = %+v, want one carrying %+v", results, want)
+	}
+}
+
+func TestStep_executeActionWithRetry_ContractOnly(t *testing.T) {
+	broken := map[string]any{"in": "response", "message": "body failed"}
+
+	tests := []struct {
+		name         string
+		brokenUntil  int // the attempts up to this one break the contract
+		wantAttempts int
+	}{
+		{name: "retried until the contract holds", brokenUntil: 2, wantAttempts: 3},
+		{name: "retried as many times as allowed", brokenUntil: 5, wantAttempts: 3},
+		{name: "not retried when the contract holds", brokenUntil: 0, wantAttempts: 1},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			callCount := 0
+			mock := &CountingMockActionRunner{
+				callCount: &callCount,
+				resultFunc: func(count int) map[string]any {
+					res := violationsRes()
+					if count <= tt.brokenUntil {
+						res = violationsRes(broken)
+					}
+					return map[string]any{"status": 0, "res": res}
+				},
+			}
+			// No test: the contract alone checks the step.
+			step := &Step{
+				Uses:  "http",
+				Retry: &StepRetry{MaxAttempts: 3, Interval: Interval{Duration: time.Millisecond}},
+				Expr:  &expr.Expr{},
+			}
+			jCtx := &JobContext{Printer: newBufferPrinter()}
+
+			if _, err := step.executeActionWithRetry(mock, map[string]any{}, jCtx, "test"); err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if callCount != tt.wantAttempts {
+				t.Errorf("attempts = %d, want %d", callCount, tt.wantAttempts)
+			}
+		})
+	}
+}
+
+func TestStep_executeActionWithRetry_UncheckedRunsOnce(t *testing.T) {
+	tests := []struct {
+		name   string
+		result map[string]any
+		err    error
+	}{
+		{name: "a result nothing checks", result: map[string]any{"status": 1, "res": map[string]any{"code": 500}}},
+		{name: "an action error", err: fmt.Errorf("connection refused")},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			callCount := 0
+			mock := &CountingMockActionRunner{callCount: &callCount, result: tt.result, err: tt.err}
+			step := &Step{
+				Uses:  "http",
+				Retry: &StepRetry{MaxAttempts: 3, Interval: Interval{Duration: time.Millisecond}},
+				Expr:  &expr.Expr{},
+			}
+			jCtx := &JobContext{Printer: newBufferPrinter()}
+
+			_, err := step.executeActionWithRetry(mock, map[string]any{}, jCtx, "test")
+			if (err != nil) != (tt.err != nil) {
+				t.Errorf("err = %v, want %v", err, tt.err)
+			}
+			if callCount != 1 {
+				t.Errorf("attempts = %d, want 1", callCount)
+			}
+			if step.retryAttempt != 0 {
+				t.Errorf("retryAttempt = %d, want 0: a step nothing checks is not retried", step.retryAttempt)
+			}
+		})
 	}
 }

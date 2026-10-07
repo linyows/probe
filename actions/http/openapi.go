@@ -9,6 +9,7 @@ import (
 	"mime"
 	hp "net/http"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -113,7 +114,12 @@ func loadContract(path string, strict bool) (*contract, error) {
 	if err != nil {
 		return nil, fmt.Errorf("openapi.spec: %s: %w", path, err)
 	}
-	var opts []config.Option
+	// Bodies of the types the validator can decode besides JSON, such as
+	// text, XML and forms, are checked against their schemas too. A body of
+	// a type it cannot decode, such as an image or a PDF, is left
+	// unchecked rather than failed, as a document declares such bodies
+	// rightly.
+	opts := []config.Option{config.WithStandardBodyDecoders()}
 	if strict {
 		opts = append(opts,
 			config.WithStrictMode(),
@@ -170,8 +176,13 @@ func (c *contract) check(req *hp.Request, reqBody []byte, res *hp.Response, resB
 	if resp != nil {
 		matched["response"] = key
 	}
-	if c.strict && resp != nil {
-		out = append(out, undeclaredIn("response", mediaSchema(resp.Content, res.Header.Get("Content-Type")), resBody)...)
+	if resp != nil {
+		if res.Request.Method != hp.MethodHead {
+			out = append(out, emptyOrNull(resp.Content, res.Header.Get("Content-Type"), resBody)...)
+		}
+		if c.strict {
+			out = append(out, undeclaredIn("response", mediaSchema(resp.Content, res.Header.Get("Content-Type")), resBody)...)
+		}
 	}
 	return out, matched
 }
@@ -220,6 +231,95 @@ func strictKept(errs []*verrors.ValidationError) []*verrors.ValidationError {
 	return kept
 }
 
+// requestSchema returns the schema of the request body op takes as
+// contentType, or nil when it declares none.
+func requestSchema(op *v3.Operation, contentType string) *base.Schema {
+	if op.RequestBody == nil {
+		return nil
+	}
+	return mediaSchema(op.RequestBody.Content, contentType)
+}
+
+// undeclaredIn returns a violation for each property of body, a JSON body
+// found in the request or the response as in says, that schema does not
+// declare. A body that is not JSON is checked by the validator alone.
+func undeclaredIn(in string, schema *base.Schema, body []byte) []any {
+	if schema == nil {
+		return nil
+	}
+	var data any
+	if err := json.Unmarshal(body, &data); err != nil {
+		return nil
+	}
+	var out []any
+	for _, p := range undeclared(schema, data) {
+		out = append(out, undeclaredViolation(in, p))
+	}
+	return out
+}
+
+// emptyOrNull returns a violation when body, a JSON body that content
+// declares a schema for, is empty or null and the schema does not allow
+// null. The validator checks neither: it takes both for a body with nothing
+// to check.
+func emptyOrNull(content *orderedmap.Map[string, *v3.MediaType], contentType string, body []byte) []any {
+	schema := mediaSchema(content, contentType)
+	if schema == nil {
+		return nil
+	}
+	switch strings.TrimSpace(string(body)) {
+	case "":
+		mediaType, _, _ := mime.ParseMediaType(contentType)
+		return []any{violation("response", "response body is empty", "the response declares a schema for "+mediaType, "")}
+	case "null":
+		if !allowsNull(schema, 0) {
+			return []any{violation("response", "response body is null", "the schema does not allow null", "")}
+		}
+	}
+	return nil
+}
+
+// allowsNull reports whether schema allows null: by nullable: true, as
+// OpenAPI 3.0 writes it, by the type null, as 3.1 does, or by an enum that
+// holds null. A schema that names no type allows null when the schemas it is
+// composed of do: all of allOf, and any of oneOf or anyOf.
+func allowsNull(s *base.Schema, depth int) bool {
+	if s == nil || depth > maxNullDepth {
+		return true
+	}
+	if len(s.Enum) > 0 {
+		for _, n := range s.Enum {
+			if n != nil && n.Tag == "!!null" {
+				return true
+			}
+		}
+		return false
+	}
+	if (s.Nullable != nil && *s.Nullable) || slices.Contains(s.Type, "null") {
+		return true
+	}
+	if len(s.Type) > 0 {
+		return false
+	}
+	for _, p := range s.AllOf {
+		if !allowsNull(schemaOf(p), depth+1) {
+			return false
+		}
+	}
+	if len(s.OneOf)+len(s.AnyOf) == 0 {
+		return true
+	}
+	for _, p := range append(slices.Clone(s.OneOf), s.AnyOf...) {
+		if allowsNull(schemaOf(p), depth+1) {
+			return true
+		}
+	}
+	return false
+}
+
+// maxNullDepth bounds how deep allowsNull follows allOf, oneOf and anyOf.
+const maxNullDepth = 64
+
 // operation returns the operation the document has for the method and path
 // of req, with the path as the document writes it, such as /users/{id}, or
 // nil when it has none.
@@ -251,15 +351,6 @@ func (c *contract) operation(req *hp.Request) (*v3.Operation, string) {
 		return nil, ""
 	}
 	return op, template
-}
-
-// requestSchema returns the schema of the request body op takes as
-// contentType, or nil when it declares none.
-func requestSchema(op *v3.Operation, contentType string) *base.Schema {
-	if op.RequestBody == nil {
-		return nil
-	}
-	return mediaSchema(op.RequestBody.Content, contentType)
 }
 
 // responseOf returns the response op declares for the status code, with the
@@ -298,22 +389,13 @@ func mediaSchema(content *orderedmap.Map[string, *v3.MediaType], contentType str
 	return nil
 }
 
-// undeclaredIn returns a violation for each property of body, a JSON body
-// found in the request or the response as in says, that schema does not
-// declare. A body that is not JSON is checked by the validator alone.
-func undeclaredIn(in string, schema *base.Schema, body []byte) []any {
-	if schema == nil {
+// schemaOf returns the schema p stands for, or nil when there is none or it
+// cannot be built.
+func schemaOf(p *base.SchemaProxy) *base.Schema {
+	if p == nil {
 		return nil
 	}
-	var data any
-	if err := json.Unmarshal(body, &data); err != nil {
-		return nil
-	}
-	var out []any
-	for _, p := range undeclared(schema, data) {
-		out = append(out, undeclaredViolation(in, p))
-	}
-	return out
+	return p.Schema()
 }
 
 // violations turns the errors of the validator into the violations a step
