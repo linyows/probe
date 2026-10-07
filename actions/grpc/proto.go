@@ -236,6 +236,12 @@ func (c *contract) compareMessages(spec, server protoreflect.MessageDescriptor, 
 			out = append(out, violation("response", fmt.Sprintf("the server's %s declares %s %s = %d", server.FullName(), fieldType(v), v.Name(), v.Number()), fmt.Sprintf("the .proto files declare %s %s = %d", fieldType(s), s.Name(), s.Number()), field))
 			continue
 		}
+		// proto2 tells a required field from an optional one, which the type
+		// alone does not.
+		if v.Cardinality() != s.Cardinality() {
+			out = append(out, violation("response", fmt.Sprintf("the server's %s declares %s %s as %s", server.FullName(), fieldType(v), v.Name(), v.Cardinality()), fmt.Sprintf("the .proto files declare it %s", s.Cardinality()), field))
+			continue
+		}
 		if s.Message() != nil && !s.IsMap() {
 			out = append(out, c.compareMessages(s.Message(), v.Message(), field, seen)...)
 		}

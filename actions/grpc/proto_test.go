@@ -13,6 +13,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/reflection"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
 // userServer answers GetUser with one user, or NOT_FOUND.
@@ -217,5 +218,32 @@ func TestTakeProtoRejected(t *testing.T) {
 				t.Errorf("err = %v, want %q", err, tt.wantErr)
 			}
 		})
+	}
+}
+
+func TestCompareMessagesCardinality(t *testing.T) {
+	compile := func(label string) *contract {
+		dir := t.TempDir()
+		path := filepath.Join(dir, "m.proto")
+		if err := os.WriteFile(path, []byte("syntax = \"proto2\";\nmessage M { "+label+" string a = 1; }\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		c, err := loadContract([]string{path}, []string{dir})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return c
+	}
+	message := func(c *contract) protoreflect.MessageDescriptor {
+		return c.files[0].Messages().ByName("M")
+	}
+	spec, server := compile("required"), compile("optional")
+
+	out := spec.compareMessages(message(spec), message(server), "$", map[[2]protoreflect.FullName]bool{})
+	if len(out) != 1 || !strings.Contains(out[0].(map[string]any)["message"].(string), "declares string a as optional") {
+		t.Errorf("violations = %v, want the cardinality told apart", out)
+	}
+	if out := spec.compareMessages(message(spec), message(spec), "$", map[[2]protoreflect.FullName]bool{}); len(out) != 0 {
+		t.Errorf("violations = %v, want none for the same definition", out)
 	}
 }
