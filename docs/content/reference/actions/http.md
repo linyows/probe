@@ -382,8 +382,11 @@ The response is checked by the last request when it was redirected, and the step
 - the operation declares neither the status code nor a `default` response
 - the response's `Content-Type` is not one the response declares
 - a header the response declares, or the body, does not keep to its schema
+- a JSON body is empty, or is `null` where its schema does not allow null
 
-When both break the document, the kind is `contract_request`: the workflow sent what the document does not allow, which may be why the response breaks it too. The step fails even when its `test` holds, and the `test` is not evaluated. A step without a `test` whose request and response keep to the document passes, since the document checked them. Each violation is in `res.violations`, the terminal and the reports, as `{in, field, reason, message}`, where `in` is `request` or `response` and `field` names the field of the body, such as `$.id`, when there is one.
+Bodies are checked as JSON, text, XML, YAML, CSV and forms. A body of another type, such as an image or a PDF, is checked for its `Content-Type` alone.
+
+When both break the document, the kind is `contract_request`: the workflow sent what the document does not allow, which may be why the response breaks it too. The step fails even when its `test` holds, and the `test` is not evaluated. A step without a `test` whose request and response keep to the document passes, since the document checked them, and with `retry` it is retried until they keep to the document, as a step is until its `test` holds. Each violation is in `res.violations`, the terminal and the reports, as `{in, field, reason, message}`, where `in` is `request` or `response` and `field` names the field of the body, such as `$.id`, when there is one.
 
 A step that sends what the document does not allow on purpose, to see it rejected, writes `request: false`, which still checks the response, so a rejection the document does not declare fails the step. A request without the credentials `security` requires is one, as when checking for a `401`.
 
