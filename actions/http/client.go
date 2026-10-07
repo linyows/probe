@@ -39,6 +39,9 @@ type Req struct {
 	// jar sends and records cookies. Do uses one of its own when it is nil,
 	// so that cookies set on a redirect are sent on to where it leads.
 	jar *cookieJar
+	// contract, when it is set, checks the response against an OpenAPI
+	// document.
+	contract *contract
 }
 
 type Res struct {
@@ -57,6 +60,9 @@ type Result struct {
 	Res    Res           `map:"res"`
 	RT     time.Duration `map:"rt"`
 	Status int           `map:"status"`
+	// violations are what the contract does not allow in the response; nil
+	// when there is no contract.
+	violations []any
 }
 
 func NewReq() *Req {
@@ -218,6 +224,10 @@ func (r *Req) Do() (*Result, error) {
 		header[k] = strings.Join(v, ", ")
 	}
 	result.Res.Header = header
+
+	if r.contract != nil {
+		result.violations = r.contract.check(res, body)
+	}
 
 	return result, nil
 }
@@ -395,6 +405,11 @@ func request(call actionrpc.Call, opts ...Option) (map[string]any, map[string]an
 		return nil, nil, err
 	}
 
+	contract, err := takeOpenAPI(m)
+	if err != nil {
+		return nil, nil, err
+	}
+
 	// form and multipart are turned into the body they stand for.
 	payload, multipartSpec, contentType, err := takeFormBody(m)
 	if err != nil {
@@ -485,6 +500,7 @@ func request(call actionrpc.Call, opts ...Option) (map[string]any, map[string]an
 		return nil, nil, err
 	}
 	r.payload = payload
+	r.contract = contract
 
 	var stored []storedCookie
 	if keepCookies {
@@ -503,6 +519,13 @@ func request(call actionrpc.Call, opts ...Option) (map[string]any, map[string]an
 	mapRet, err := mapping.StructToMapByTags(ret)
 	if err != nil {
 		return nil, nil, err
+	}
+
+	// The violations are in res, where the runner looks for them.
+	if ret.violations != nil {
+		if res, ok := mapRet["res"].(map[string]any); ok {
+			res["violations"] = ret.violations
+		}
 	}
 
 	// A multipart request shows what was written in place of the body sent.
