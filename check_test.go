@@ -278,7 +278,72 @@ jobs:
 				{SeverityError, 13, "with: outputs.later_id is read before its step publishes it"},
 				{SeverityError, 19, "with: outputs.later.id is read before its step publishes it"},
 				{SeverityWarning, 29, `with: outputs.later.id may not be published yet: job "Other" does not need job "Users"`},
-				{SeverityWarning, 29, `with: outputs.later_id may not be published yet: job "Other" does not need the job`},
+				{SeverityWarning, 29, `with: outputs.later_id may not be published yet: job "Other" does not need job "Users"`},
+			},
+		},
+		{
+			name: "an id a step without one is given in another job",
+			workflow: `name: given ids
+jobs:
+- name: A
+  id: a
+  steps:
+  - name: Explicit
+    id: step_0
+    uses: hello
+    test: res.code == 0
+    outputs:
+      v: res.code
+  - name: Without an id
+    uses: hello
+    test: res.code == 0
+    outputs:
+      w: res.code
+- name: B
+  needs: [a]
+  steps:
+  - name: Without an id and outputs
+    uses: hello
+    test: res.code == 0
+  - name: Reads
+    uses: hello
+    with:
+      v: "{{ outputs.step_0.v }} {{ outputs.step_1.w }}"
+    test: res.code == 0
+`,
+		},
+		{
+			name: "one id given to publishing steps of two jobs",
+			workflow: `name: shared ids
+jobs:
+- name: A
+  steps:
+  - uses: hello
+    test: res.code == 0
+    outputs:
+      a: res.code
+- name: B
+  steps:
+  - uses: hello
+    test: res.code == 0
+    outputs:
+      b: res.code
+- name: C
+  steps:
+  - uses: hello
+    with:
+      v: "{{ outputs.step_0.a }} {{ outputs.step_0.b }} {{ outputs.step_0.c }}"
+    test: res.code == 0
+  - uses: hello
+    with:
+      v: "{{ outputs.step_0 }}"
+    test: res.code == 0
+`,
+			want: []want{
+				{SeverityWarning, 19, `with: outputs.step_0.a may not be published yet: job "C" does not need job "A"`},
+				{SeverityWarning, 19, `with: outputs.step_0.b may not be published yet: job "C" does not need job "B"`},
+				{SeverityError, 19, `with: outputs.step_0.c is not published: step "step_0" publishes a, b`},
+				{SeverityWarning, 23, `with: outputs.step_0 may not be published yet: job "C" does not need the jobs whose steps publish it`},
 			},
 		},
 		{

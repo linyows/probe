@@ -571,12 +571,17 @@ type publisher struct {
 }
 
 func (c *checker) checkOutputs() {
-	byID := map[string]publisher{}
+	// A step without an id is given one by its index, step_0 and so on, in
+	// each job, so one id may name steps of several jobs. Only the steps
+	// that publish outputs are kept under it, each of them.
+	byID := map[string][]publisher{}
 	byKey := map[string][]publisher{}
 	for i, job := range c.wf.Jobs {
 		for j, st := range job.Steps {
 			p := publisher{job: i, step: j, id: st.ID, keys: slices.Sorted(maps.Keys(st.Outputs))}
-			byID[st.ID] = p
+			if len(p.keys) > 0 {
+				byID[st.ID] = append(byID[st.ID], p)
+			}
 			for _, k := range p.keys {
 				byKey[k] = append(byKey[k], p)
 			}
@@ -659,65 +664,72 @@ func forStrings(path string, v any, f func(path, s string)) {
 
 // outputRead returns what is wrong with reading chain from outputs at job i
 // and step j, and how bad it is; an empty message when nothing is.
-func (c *checker) outputRead(chain []string, byID map[string]publisher, byKey map[string][]publisher, needs []map[int]bool, i, j int, late bool) (string, string) {
-	// before reports whether p publishes before the point read, and whether
-	// it is only not ordered before it by needs.
-	before := func(p publisher) (ok, unordered bool) {
-		if p.job == i {
-			return p.step < j || (p.step == j && late), false
+func (c *checker) outputRead(chain []string, byID, byKey map[string][]publisher, needs []map[int]bool, i, j int, late bool) (string, string) {
+	if pubs := byID[chain[0]]; len(pubs) > 0 {
+		if len(chain) > 1 {
+			var with []publisher
+			var keys []string
+			for _, p := range pubs {
+				if slices.Contains(p.keys, chain[1]) {
+					with = append(with, p)
+				}
+				keys = append(keys, p.keys...)
+			}
+			if len(with) == 0 {
+				slices.Sort(keys)
+				return fmt.Sprintf("is not published: step %q publishes %s", chain[0], strings.Join(slices.Compact(keys), ", ")), SeverityError
+			}
+			pubs = with
 		}
-		return needs[i][p.job], !needs[i][p.job]
-	}
-
-	if p, ok := byID[chain[0]]; ok && len(p.keys) > 0 {
-		if len(chain) > 1 && !slices.Contains(p.keys, chain[1]) {
-			return fmt.Sprintf("is not published: step %q publishes %s", p.id, strings.Join(p.keys, ", ")), SeverityError
-		}
-		ok, unordered := before(p)
-		switch {
-		case ok:
-			return "", ""
-		case unordered:
-			return fmt.Sprintf("may not be published yet: job %q does not need job %q, whose step publishes it", c.wf.Jobs[i].Name, c.wf.Jobs[p.job].Name), SeverityWarning
-		default:
-			return "is read before its step publishes it", SeverityError
-		}
+		return c.ordered(pubs, needs, i, j, late)
 	}
 
 	pubs := byKey[chain[0]]
 	if len(pubs) == 0 {
 		msg := "is not published by any step"
-		if s := suggest(chain[0], c.publishedNames(byID, byKey)); s != "" {
+		if s := suggest(chain[0], publishedNames(byID, byKey)); s != "" {
 			msg += fmt.Sprintf("; did you mean %q?", s)
 		}
 		return msg, SeverityError
 	}
-	unorderedOnly := false
-	for _, p := range pubs {
-		ok, unordered := before(p)
-		if ok {
-			return "", ""
-		}
-		unorderedOnly = unorderedOnly || unordered
-	}
-	if unorderedOnly {
-		return fmt.Sprintf("may not be published yet: job %q does not need the job whose step publishes it", c.wf.Jobs[i].Name), SeverityWarning
-	}
-	return "is read before its step publishes it", SeverityError
+	return c.ordered(pubs, needs, i, j, late)
 }
 
-func (c *checker) publishedNames(byID map[string]publisher, byKey map[string][]publisher) []string {
-	var names []string
-	for id, p := range byID {
-		if len(p.keys) > 0 {
-			names = append(names, id)
+// ordered returns what is wrong with reading what pubs publish at job i and
+// step j: nothing when one of them publishes it before, an error when each
+// of them is a step that comes later, and a warning when one is in a job
+// that job i does not need, so that it may or may not have run.
+func (c *checker) ordered(pubs []publisher, needs []map[int]bool, i, j int, late bool) (string, string) {
+	var unordered []publisher
+	for _, p := range pubs {
+		if p.job == i {
+			if p.step < j || (p.step == j && late) {
+				return "", ""
+			}
+			continue
 		}
+		if needs[i][p.job] {
+			return "", ""
+		}
+		unordered = append(unordered, p)
 	}
+	switch len(unordered) {
+	case 0:
+		return "is read before its step publishes it", SeverityError
+	case 1:
+		return fmt.Sprintf("may not be published yet: job %q does not need job %q, whose step publishes it", c.wf.Jobs[i].Name, c.wf.Jobs[unordered[0].job].Name), SeverityWarning
+	default:
+		return fmt.Sprintf("may not be published yet: job %q does not need the jobs whose steps publish it", c.wf.Jobs[i].Name), SeverityWarning
+	}
+}
+
+func publishedNames(byID, byKey map[string][]publisher) []string {
+	names := slices.Collect(maps.Keys(byID))
 	for k := range byKey {
 		names = append(names, k)
 	}
 	sort.Strings(names)
-	return names
+	return slices.Compact(names)
 }
 
 // ancestors returns, for each job, the jobs it needs, directly or through
