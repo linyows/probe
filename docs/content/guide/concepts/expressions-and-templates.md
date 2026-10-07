@@ -64,7 +64,7 @@ A key of a map can hold templates as well, so that a key comes from a value know
         active: true
 ```
 
-A key is evaluated as text, as a key is one. Two keys that come to the same key are an error, and so is a key that cannot be evaluated; the error names the key as written. A var whose key reads another var is evaluated after it, as one whose value reads it is.
+A key is evaluated as text, as a key is one. Two keys that come to the same key are an error, and so is a key that cannot be evaluated; the error names the key as written. A var whose key reads another var is evaluated after it, as one whose value reads it is. The name of a var itself, a key directly under `vars`, is not evaluated: it names the var as written.
 
 ### Template Expression Context
 

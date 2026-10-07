@@ -71,7 +71,7 @@ jobs:
 - `test` and `outputs` values are expressions, written without braces. `with` values, `echo`, step and job names, and `vars` are templates with `{{ }}`.
 - `test` must evaluate to a boolean. A number or string fails the step with `test_type`.
 - `outputs` need the step's `id`. Read them as `outputs.<step-id>.<name>`; an id with a hyphen needs brackets: `outputs['create-user'].user_id`.
-- Templates are evaluated in values, never in keys: `"{{vars.name}}": x` sends the literal key.
+- Templates are evaluated in keys as well as values, at any depth of `with` and of a map under `vars`: `"{{vars.header}}": x` sends the key it comes to. Two keys that come to the same key fail the step. The name of a var itself is not evaluated: `vars: {"{{vars.name}}": x}` defines a var named as written.
 - A template ends at the `}}` that closes it: braces of a map literal nest, and `}}` inside a quoted string does not end it. Start a template that begins with a map literal with a space, `{{ {'a': 1} }}`, since `{{{` is read as a literal `{` followed by a template. A `{{` that is never closed is left as text.
 - Defaults shared by the steps of a job go in that job's `defaults`, keyed by action name. There is no top-level `defaults` or `env`.
 - List secrets under `secrets` by environment variable name. Never write a credential into the YAML.
