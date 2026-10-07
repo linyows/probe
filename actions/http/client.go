@@ -175,6 +175,16 @@ func (r *Req) Do() (*Result, error) {
 			return nil, err
 		}
 	}
+	// The contract checks the request as it is sent, with the cookies the
+	// client adds from the jar, which change once the response sets some.
+	var sent *hp.Request
+	if r.contract != nil {
+		sent = req.Clone(req.Context())
+		for _, c := range jar.Cookies(req.URL) {
+			sent.AddCookie(c)
+		}
+	}
+
 	cl := &hp.Client{Timeout: timeout, Jar: jar}
 	start := time.Now()
 	res, err := cl.Do(req)
@@ -226,7 +236,11 @@ func (r *Req) Do() (*Result, error) {
 	result.Res.Header = header
 
 	if r.contract != nil {
-		result.violations = r.contract.check(res, body)
+		sentBody := []byte(r.Body)
+		if r.payload != nil {
+			sentBody = r.payload
+		}
+		result.violations = r.contract.check(sent, sentBody, res, body)
 	}
 
 	return result, nil

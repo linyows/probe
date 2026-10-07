@@ -11,11 +11,16 @@ import (
 	"github.com/pb33f/libopenapi"
 	validator "github.com/pb33f/libopenapi-validator"
 	verrors "github.com/pb33f/libopenapi-validator/errors"
+	"github.com/pb33f/libopenapi-validator/helpers"
 )
 
-// contract checks responses against an OpenAPI document.
+// contract checks requests and responses against an OpenAPI document.
 type contract struct {
 	v validator.Validator
+	// request is whether the request is checked as well as the response. A
+	// step that sends what the document does not allow on purpose, to see
+	// it rejected, turns it off.
+	request bool
 }
 
 // takeOpenAPI removes openapi from the parameters and returns the contract it
@@ -38,15 +43,26 @@ func takeOpenAPI(m map[string]any) (*contract, error) {
 		return nil, nil
 	case map[string]any:
 		for k := range o {
-			if k != "spec" {
-				return nil, fmt.Errorf("openapi takes spec, not %s", k)
+			if k != "spec" && k != "request" {
+				return nil, fmt.Errorf("openapi takes spec and request, not %s", k)
 			}
 		}
 		path, ok := o["spec"].(string)
 		if !ok || path == "" {
 			return nil, errors.New("openapi.spec must be the path of an OpenAPI document")
 		}
-		return loadContract(path)
+		request := true
+		if r, ok := o["request"]; ok {
+			if request, ok = r.(bool); !ok {
+				return nil, errors.New("openapi.request must be true or false")
+			}
+		}
+		c, err := loadContract(path)
+		if err != nil {
+			return nil, err
+		}
+		c.request = request
+		return c, nil
 	default:
 		return nil, errors.New("openapi must be a map with spec, or false")
 	}
@@ -69,40 +85,65 @@ func loadContract(path string) (*contract, error) {
 	return &contract{v: v}, nil
 }
 
-// check returns what in the response the document does not allow, as the
-// violations a step reports, or an empty list when it allows all of it. The
-// response is matched to an operation by the request that received it, the
-// last one when the request was redirected. body is the body of the
-// response, which has been read.
-func (c *contract) check(res *hp.Response, body []byte) []any {
+// check returns what in the request and the response the document does not
+// allow, as the violations a step reports, or an empty list when it allows
+// all of it. req is the request the step sent, with reqBody, the body sent;
+// res is the response, with resBody, its body, which has been read.
+//
+// The request is checked as the step sent it, before any redirect, which
+// the client made rather than the step. The response is matched to an
+// operation by the request that received it, the last one when the request
+// was redirected.
+func (c *contract) check(req *hp.Request, reqBody []byte, res *hp.Response, resBody []byte) []any {
+	out := []any{}
+	if c.request {
+		out = append(out, c.checkRequest(req, reqBody)...)
+	}
+
 	r := *res
+	r.Body = io.NopCloser(bytes.NewReader(resBody))
+	_, errs := c.v.ValidateHttpResponse(res.Request, &r)
+	return append(out, violations("response", errs)...)
+}
+
+// checkRequest returns what in the request the document does not allow. A
+// request to an operation the document does not have is left to the check
+// of the response, which reports it, so that it is not reported twice.
+func (c *contract) checkRequest(req *hp.Request, body []byte) []any {
+	r := req.Clone(req.Context())
 	r.Body = io.NopCloser(bytes.NewReader(body))
 
-	_, errs := c.v.ValidateHttpResponse(res.Request, &r)
-	return violations(errs)
+	_, errs := c.v.ValidateHttpRequest(r)
+	kept := errs[:0]
+	for _, e := range errs {
+		if e.ValidationType != helpers.PathValidation {
+			kept = append(kept, e)
+		}
+	}
+	return violations("request", kept)
 }
 
 // violations turns the errors of the validator into the violations a step
-// reports: one for each failure of a schema, which names the field, and one
-// for each other error.
-func violations(errs []*verrors.ValidationError) []any {
+// reports, found in the request or the response as in says: one for each
+// failure of a schema, which names the field, and one for each other error.
+func violations(in string, errs []*verrors.ValidationError) []any {
 	out := []any{}
 	for _, e := range errs {
 		if len(e.SchemaValidationErrors) == 0 {
-			out = append(out, violation(e.Message, e.Reason, ""))
+			out = append(out, violation(in, e.Message, e.Reason, ""))
 			continue
 		}
 		for _, se := range e.SchemaValidationErrors {
-			out = append(out, violation(e.Message, se.Reason, se.FieldPath))
+			out = append(out, violation(in, e.Message, se.Reason, se.FieldPath))
 		}
 	}
 	return out
 }
 
-// violation is one violation, found in the response.
-func violation(message, reason, field string) map[string]any {
+// violation is one violation, found in the request or the response.
+func violation(in, message, reason, field string) map[string]any {
 	v := map[string]any{
-		"in":      "response",
+		"in":      in,
 		"message": message,
 	}
 	if reason != "" {
