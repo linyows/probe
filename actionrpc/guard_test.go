@@ -4,7 +4,11 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"strings"
 	"testing"
+
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 func TestGuard_Active(t *testing.T) {
@@ -150,5 +154,38 @@ func TestClientRunStepCarriesARefusal(t *testing.T) {
 	c = &Client{client: directClient{&Server{Impl: failing}}}
 	if _, _, err := c.RunStep(Call{With: map[string]any{}}); err == nil || IsRefused(err) {
 		t.Errorf("err = %v, want an error that is not a refusal", err)
+	}
+}
+
+// A PermissionDenied an action passes on, such as one a gRPC server
+// answered with, is an error of the action rather than a refusal of the
+// guard.
+func TestClientRunStepKeepsAPermissionDeniedOfTheAction(t *testing.T) {
+	denied := &MockActions{RunFunc: func(map[string]any) (map[string]any, error) {
+		return nil, fmt.Errorf("reflection: %w", status.Error(codes.PermissionDenied, "denied by the server"))
+	}}
+	c := &Client{client: directClient{&Server{Impl: denied}}}
+	_, _, err := c.RunStep(Call{With: map[string]any{}})
+	if err == nil || IsRefused(err) {
+		t.Fatalf("err = %v, want an error of the action, not a refusal", err)
+	}
+	if !strings.Contains(err.Error(), "denied by the server") {
+		t.Errorf("err = %v, want the server's reason", err)
+	}
+}
+
+func TestStatusOfARefusal(t *testing.T) {
+	err := fromStatus(toStatus(Refuse("POST may write")))
+	var r *Refused
+	if !errors.As(err, &r) || r.Reason != "POST may write" {
+		t.Errorf("a refusal sent and received = %v, want the refusal", err)
+	}
+	plain := status.Error(codes.PermissionDenied, "no")
+	if got := fromStatus(plain); IsRefused(got) {
+		t.Errorf("a PermissionDenied without the mark = %v, want it as it was", got)
+	}
+	other := errors.New("boom")
+	if got := toStatus(other); got != other {
+		t.Errorf("toStatus(%v) = %v, want it as it was", other, got)
 	}
 }

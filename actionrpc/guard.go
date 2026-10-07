@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/linyows/probe/pb"
+	"google.golang.org/genproto/googleapis/rpc/errdetails"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -111,21 +112,36 @@ func IsRefused(err error) bool {
 	return errors.As(err, &r)
 }
 
+// refusedInfo marks the gRPC status a Refused error is carried in, apart
+// from a PermissionDenied an action passes on from a server it called.
+var refusedInfo = &errdetails.ErrorInfo{Domain: "probe", Reason: "GUARD_REFUSED"}
+
 // toStatus turns a Refused error into the gRPC status that carries it to
-// the runner, and leaves any other error as it is.
+// the runner, marked as a refusal, and leaves any other error as it is.
 func toStatus(err error) error {
 	var r *Refused
-	if errors.As(err, &r) {
+	if !errors.As(err, &r) {
+		return err
+	}
+	s, detailErr := status.New(codes.PermissionDenied, r.Reason).WithDetails(refusedInfo)
+	if detailErr != nil {
 		return status.Error(codes.PermissionDenied, r.Reason)
 	}
-	return err
+	return s.Err()
 }
 
 // fromStatus turns the gRPC status a Refused error was carried in back
-// into one, and leaves any other error as it is.
+// into one, and leaves any other error as it is: a PermissionDenied without
+// the mark of a refusal stays an error of the action.
 func fromStatus(err error) error {
-	if s, ok := status.FromError(err); ok && s.Code() == codes.PermissionDenied {
-		return &Refused{Reason: s.Message()}
+	s, ok := status.FromError(err)
+	if !ok || s.Code() != codes.PermissionDenied {
+		return err
+	}
+	for _, d := range s.Details() {
+		if info, ok := d.(*errdetails.ErrorInfo); ok && info.GetDomain() == refusedInfo.Domain && info.GetReason() == refusedInfo.Reason {
+			return &Refused{Reason: s.Message()}
+		}
 	}
 	return err
 }
