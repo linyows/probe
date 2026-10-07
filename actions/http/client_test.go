@@ -8,11 +8,13 @@ import (
 	"net/http/httptest"
 	"reflect"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/hashicorp/go-hclog"
 	"github.com/jarcoal/httpmock"
+	"github.com/linyows/probe/actionrpc"
 )
 
 func TestNewReq(t *testing.T) {
@@ -879,4 +881,86 @@ func TestRequestBasicAuthRejected(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestRequestStepUnderAGuard(t *testing.T) {
+	var hits atomic.Int32
+	srv := httptest.NewServer(hp.HandlerFunc(func(w hp.ResponseWriter, r *hp.Request) {
+		hits.Add(1)
+		if r.URL.Path == "/away" {
+			// localhost is the server's own address by another name.
+			hp.Redirect(w, r, strings.Replace(srvURL(r), "127.0.0.1", "localhost", 1)+"/ok", hp.StatusFound)
+			return
+		}
+		w.WriteHeader(hp.StatusOK)
+	}))
+	defer srv.Close()
+	host := strings.TrimPrefix(srv.URL, "http://")
+
+	tests := []struct {
+		name     string
+		guard    actionrpc.Guard
+		with     map[string]any
+		refused  string // a part of the reason; empty when the request is sent
+		wantHits int32
+	}{
+		{name: "GET under read-only", guard: actionrpc.Guard{ReadOnly: true}, with: map[string]any{"get": "/ok"}, wantHits: 1},
+		{name: "HEAD under read-only", guard: actionrpc.Guard{ReadOnly: true}, with: map[string]any{"method": "HEAD"}, wantHits: 1},
+		{name: "POST under read-only", guard: actionrpc.Guard{ReadOnly: true}, with: map[string]any{"post": "/items"}, refused: "POST " + srv.URL + "/items may write"},
+		{name: "DELETE under read-only", guard: actionrpc.Guard{ReadOnly: true}, with: map[string]any{"delete": "/items/1"}, refused: "DELETE"},
+		{name: "POST without a guard", with: map[string]any{"post": "/items"}, wantHits: 1},
+		{name: "a host allowed", guard: actionrpc.Guard{AllowHosts: []string{"127.0.0.1"}}, with: map[string]any{"get": "/ok"}, wantHits: 1},
+		{name: "a host and port allowed", guard: actionrpc.Guard{AllowHosts: []string{host}}, with: map[string]any{"get": "/ok"}, wantHits: 1},
+		{name: "a host not allowed", guard: actionrpc.Guard{AllowHosts: []string{"api.example.com"}}, with: map[string]any{"get": "/ok"}, refused: "the host " + host + " is not one the run allows"},
+		{name: "a redirect to a host not allowed", guard: actionrpc.Guard{AllowHosts: []string{"127.0.0.1"}}, with: map[string]any{"get": "/away"}, refused: "the host localhost:", wantHits: 1},
+		{name: "a redirect without a guard", with: map[string]any{"get": "/away"}, wantHits: 2},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			hits.Store(0)
+			with := map[string]any{"url": srv.URL}
+			for k, v := range tt.with {
+				with[k] = v
+			}
+			_, _, err := RequestStep(actionrpc.Call{With: with, Guard: tt.guard})
+			if tt.refused == "" {
+				if err != nil {
+					t.Fatalf("unexpected error: %v", err)
+				}
+			} else if !actionrpc.IsRefused(err) || !strings.Contains(err.Error(), tt.refused) {
+				t.Fatalf("err = %v, want a refusal saying %q", err, tt.refused)
+			}
+			if n := hits.Load(); n != tt.wantHits {
+				t.Errorf("the server was sent %d requests, want %d", n, tt.wantHits)
+			}
+		})
+	}
+}
+
+func TestCheckGuardTakesTheSchemePort(t *testing.T) {
+	tests := []struct {
+		url   string
+		allow string
+		want  bool
+	}{
+		{"http://api.example.com/x", "api.example.com:80", true},
+		{"https://api.example.com/x", "api.example.com:443", true},
+		{"https://api.example.com/x", "api.example.com:80", false},
+		{"https://api.example.com:8443/x", "api.example.com:8443", true},
+	}
+	for _, tt := range tests {
+		req, err := hp.NewRequest(hp.MethodGet, tt.url, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		r := &Req{guard: actionrpc.Guard{AllowHosts: []string{tt.allow}}}
+		if err := r.checkGuard(req); (err == nil) != tt.want {
+			t.Errorf("checkGuard(%s) under %s = %v, want allowed %v", tt.url, tt.allow, err, tt.want)
+		}
+	}
+}
+
+// srvURL is the address the request r was sent to.
+func srvURL(r *hp.Request) string {
+	return "http://" + r.Host
 }
