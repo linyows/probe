@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/linyows/probe/actionrpc"
+	"github.com/pb33f/libopenapi"
 )
 
 // writeSpec writes an OpenAPI document of the users API served under /v1 of
@@ -290,5 +291,149 @@ func TestRequestStepOpenAPIRejected(t *testing.T) {
 	// A step whose document cannot be used sends nothing.
 	if n := hits.Load(); n != 0 {
 		t.Errorf("the server was sent %d requests, want 0", n)
+	}
+}
+
+func TestRequestStepChecksBodiesBeyondJSON(t *testing.T) {
+	srv := httptest.NewServer(hp.HandlerFunc(func(w hp.ResponseWriter, r *hp.Request) {
+		bodies := map[string]struct{ contentType, body string }{
+			"/text/long":     {"text/plain", "abcd"},
+			"/text/short":    {"text/plain", "abc"},
+			"/json/null":     {"application/json", "null"},
+			"/json/nullable": {"application/json", "null"},
+			"/json/empty":    {"application/json", ""},
+			"/pdf":           {"application/pdf", "%PDF-1.7"},
+		}
+		b, ok := bodies[r.URL.Path]
+		if !ok {
+			w.WriteHeader(hp.StatusNoContent)
+			return
+		}
+		w.Header().Set("Content-Type", b.contentType)
+		_, _ = w.Write([]byte(b.body))
+	}))
+	defer srv.Close()
+
+	object := `{type: object, required: [id], properties: {id: {type: integer}}}`
+	spec := `openapi: 3.0.3
+info: {title: bodies, version: "1"}
+paths:
+  /text/long:
+    get:
+      responses:
+        "200": {description: text, content: {text/plain: {schema: {type: string, maxLength: 3}}}}
+  /text/short:
+    get:
+      responses:
+        "200": {description: text, content: {text/plain: {schema: {type: string, maxLength: 3}}}}
+  /json/null:
+    get:
+      responses:
+        "200": {description: an object, content: {application/json: {schema: ` + object + `}}}
+  /json/nullable:
+    get:
+      responses:
+        "200": {description: an object or null, content: {application/json: {schema: {type: object, nullable: true}}}}
+  /json/empty:
+    get:
+      responses:
+        "200": {description: an object, content: {application/json: {schema: ` + object + `}}}
+  /pdf:
+    get:
+      responses:
+        "200": {description: a PDF, content: {application/pdf: {schema: {type: string, format: binary}}}}
+  /none:
+    get:
+      responses:
+        "204": {description: nothing}
+`
+	path := filepath.Join(t.TempDir(), "openapi.yml")
+	if err := os.WriteFile(path, []byte(spec), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	tests := []struct {
+		path string
+		want string // the violation expected, matched by substring; empty for none
+	}{
+		{"/text/long", "maxLength: got 4, want 3"},
+		{"/text/short", ""},
+		{"/json/null", "the schema does not allow null"},
+		{"/json/nullable", ""},
+		{"/json/empty", "the response declares a schema for application/json"},
+		// A body of a type the validator cannot decode is left unchecked.
+		{"/pdf", ""},
+		{"/none", ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.path, func(t *testing.T) {
+			ret, _, err := RequestStep(actionrpc.Call{With: map[string]any{
+				"url":     srv.URL,
+				"get":     tt.path,
+				"openapi": map[string]any{"spec": path},
+			}})
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			got := ret["res"].(map[string]any)["violations"].([]any)
+			if tt.want == "" {
+				if len(got) != 0 {
+					t.Errorf("violations = %#v, want none", got)
+				}
+				return
+			}
+			if len(got) != 1 {
+				t.Fatalf("violations = %#v, want 1", got)
+			}
+			v := got[0].(map[string]any)
+			if text := v["message"].(string) + " " + v["reason"].(string); !strings.Contains(text, tt.want) {
+				t.Errorf("violation = %#v, want it to say %q", v, tt.want)
+			}
+		})
+	}
+}
+
+func TestAllowsNull(t *testing.T) {
+	const doc = `openapi: 3.1.0
+info: {title: null, version: "1"}
+paths: {}
+components:
+  schemas:
+    Object: {type: object}
+    Nullable: {type: object, nullable: true}
+    TypeNull: {type: [object, "null"]}
+    EnumWithNull: {enum: [a, null]}
+    EnumWithoutNull: {enum: [a, b]}
+    Untyped: {description: anything}
+    AllOfObject: {allOf: [{$ref: "#/components/schemas/Object"}]}
+    AllOfNullable: {allOf: [{$ref: "#/components/schemas/Object"}], nullable: true}
+    OneOfWithNull: {oneOf: [{$ref: "#/components/schemas/Object"}, {type: "null"}]}
+    AnyOfObjects: {anyOf: [{$ref: "#/components/schemas/Object"}, {type: string}]}
+`
+	d, err := libopenapi.NewDocument([]byte(doc))
+	if err != nil {
+		t.Fatal(err)
+	}
+	m, err := d.BuildV3Model()
+	if err != nil {
+		t.Fatal(err)
+	}
+	tests := map[string]bool{
+		"Object":          false,
+		"Nullable":        true,
+		"TypeNull":        true,
+		"EnumWithNull":    true,
+		"EnumWithoutNull": false,
+		"Untyped":         true,
+		"AllOfObject":     false,
+		"AllOfNullable":   true,
+		"OneOfWithNull":   true,
+		"AnyOfObjects":    false,
+	}
+	for name, want := range tests {
+		s := m.Model.Components.Schemas.GetOrZero(name).Schema()
+		if got := allowsNull(s, 0); got != want {
+			t.Errorf("allowsNull(%s) = %v, want %v", name, got, want)
+		}
 	}
 }

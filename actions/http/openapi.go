@@ -5,13 +5,22 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"mime"
 	hp "net/http"
 	"os"
+	"slices"
+	"strconv"
+	"strings"
 
 	"github.com/pb33f/libopenapi"
 	validator "github.com/pb33f/libopenapi-validator"
+	"github.com/pb33f/libopenapi-validator/config"
 	verrors "github.com/pb33f/libopenapi-validator/errors"
 	"github.com/pb33f/libopenapi-validator/helpers"
+	"github.com/pb33f/libopenapi-validator/paths"
+	"github.com/pb33f/libopenapi/datamodel/high/base"
+	v3 "github.com/pb33f/libopenapi/datamodel/high/v3"
+	"github.com/pb33f/libopenapi/orderedmap"
 )
 
 // contract checks requests and responses against an OpenAPI document.
@@ -21,6 +30,9 @@ type contract struct {
 	// step that sends what the document does not allow on purpose, to see
 	// it rejected, turns it off.
 	request bool
+	// model is the document, which tells which operation and response a
+	// response was matched to.
+	model *v3.Document
 }
 
 // takeOpenAPI removes openapi from the parameters and returns the contract it
@@ -78,11 +90,20 @@ func loadContract(path string) (*contract, error) {
 	if err != nil {
 		return nil, fmt.Errorf("openapi.spec: %s: %w", path, err)
 	}
-	v, errs := validator.NewValidator(doc)
+	// Bodies of the types the validator can decode besides JSON, such as
+	// text, XML and forms, are checked against their schemas too. A body of
+	// a type it cannot decode, such as an image or a PDF, is left
+	// unchecked rather than failed, as a document declares such bodies
+	// rightly.
+	v, errs := validator.NewValidator(doc, config.WithStandardBodyDecoders())
 	if len(errs) > 0 {
 		return nil, fmt.Errorf("openapi.spec: %s: %w", path, errors.Join(errs...))
 	}
-	return &contract{v: v}, nil
+	m, err := doc.BuildV3Model()
+	if err != nil {
+		return nil, fmt.Errorf("openapi.spec: %s: %w", path, err)
+	}
+	return &contract{v: v, model: &m.Model}, nil
 }
 
 // check returns what in the request and the response the document does not
@@ -103,7 +124,14 @@ func (c *contract) check(req *hp.Request, reqBody []byte, res *hp.Response, resB
 	r := *res
 	r.Body = io.NopCloser(bytes.NewReader(resBody))
 	_, errs := c.v.ValidateHttpResponse(res.Request, &r)
-	return append(out, violations("response", errs)...)
+	out = append(out, violations("response", errs)...)
+
+	if op, _ := c.operation(res.Request); op != nil && res.Request.Method != hp.MethodHead {
+		if _, resp := responseOf(op, res.StatusCode); resp != nil {
+			out = append(out, emptyOrNull(resp.Content, res.Header.Get("Content-Type"), resBody)...)
+		}
+	}
+	return out
 }
 
 // checkRequest returns what in the request the document does not allow. A
@@ -121,6 +149,146 @@ func (c *contract) checkRequest(req *hp.Request, body []byte) []any {
 		}
 	}
 	return violations("request", kept)
+}
+
+// emptyOrNull returns a violation when body, a JSON body that content
+// declares a schema for, is empty or null and the schema does not allow
+// null. The validator checks neither: it takes both for a body with nothing
+// to check.
+func emptyOrNull(content *orderedmap.Map[string, *v3.MediaType], contentType string, body []byte) []any {
+	schema := mediaSchema(content, contentType)
+	if schema == nil {
+		return nil
+	}
+	switch strings.TrimSpace(string(body)) {
+	case "":
+		mediaType, _, _ := mime.ParseMediaType(contentType)
+		return []any{violation("response", "response body is empty", "the response declares a schema for "+mediaType, "")}
+	case "null":
+		if !allowsNull(schema, 0) {
+			return []any{violation("response", "response body is null", "the schema does not allow null", "")}
+		}
+	}
+	return nil
+}
+
+// allowsNull reports whether schema allows null: by nullable: true, as
+// OpenAPI 3.0 writes it, by the type null, as 3.1 does, or by an enum that
+// holds null. A schema that names no type allows null when the schemas it is
+// composed of do: all of allOf, and any of oneOf or anyOf.
+func allowsNull(s *base.Schema, depth int) bool {
+	if s == nil || depth > maxNullDepth {
+		return true
+	}
+	if len(s.Enum) > 0 {
+		for _, n := range s.Enum {
+			if n != nil && n.Tag == "!!null" {
+				return true
+			}
+		}
+		return false
+	}
+	if (s.Nullable != nil && *s.Nullable) || slices.Contains(s.Type, "null") {
+		return true
+	}
+	if len(s.Type) > 0 {
+		return false
+	}
+	for _, p := range s.AllOf {
+		if !allowsNull(schemaOf(p), depth+1) {
+			return false
+		}
+	}
+	if len(s.OneOf)+len(s.AnyOf) == 0 {
+		return true
+	}
+	for _, p := range append(slices.Clone(s.OneOf), s.AnyOf...) {
+		if allowsNull(schemaOf(p), depth+1) {
+			return true
+		}
+	}
+	return false
+}
+
+// maxNullDepth bounds how deep allowsNull follows allOf, oneOf and anyOf.
+const maxNullDepth = 64
+
+// operation returns the operation the document has for the method and path
+// of req, with the path as the document writes it, such as /users/{id}, or
+// nil when it has none.
+func (c *contract) operation(req *hp.Request) (*v3.Operation, string) {
+	item, _, template := paths.FindPath(req, c.model, nil)
+	if item == nil {
+		return nil, ""
+	}
+	var op *v3.Operation
+	switch req.Method {
+	case hp.MethodGet:
+		op = item.Get
+	case hp.MethodPut:
+		op = item.Put
+	case hp.MethodPost:
+		op = item.Post
+	case hp.MethodDelete:
+		op = item.Delete
+	case hp.MethodOptions:
+		op = item.Options
+	case hp.MethodHead:
+		op = item.Head
+	case hp.MethodPatch:
+		op = item.Patch
+	case hp.MethodTrace:
+		op = item.Trace
+	}
+	if op == nil {
+		return nil, ""
+	}
+	return op, template
+}
+
+// responseOf returns the response op declares for the status code, with the
+// key it is declared under: the code, a range such as 2XX, or default. It
+// returns nil when op declares none.
+func responseOf(op *v3.Operation, code int) (string, *v3.Response) {
+	if op.Responses == nil {
+		return "", nil
+	}
+	if op.Responses.Codes != nil {
+		for _, key := range []string{strconv.Itoa(code), fmt.Sprintf("%dXX", code/100), fmt.Sprintf("%dxx", code/100)} {
+			if resp := op.Responses.Codes.GetOrZero(key); resp != nil {
+				return key, resp
+			}
+		}
+	}
+	if op.Responses.Default != nil {
+		return "default", op.Responses.Default
+	}
+	return "", nil
+}
+
+// mediaSchema returns the schema content declares for contentType, when it
+// is JSON, or nil.
+func mediaSchema(content *orderedmap.Map[string, *v3.MediaType], contentType string) *base.Schema {
+	if content == nil || !isJSONMediaType(contentType) {
+		return nil
+	}
+	want, _, _ := mime.ParseMediaType(contentType)
+	for name, mt := range content.FromOldest() {
+		got, _, err := mime.ParseMediaType(name)
+		if err == nil && strings.EqualFold(got, want) && mt != nil {
+			return schemaOf(mt.Schema)
+		}
+	}
+	return nil
+}
+
+// schemaOf returns the schema p stands for, or nil when there is none or it
+// cannot be built.
+func schemaOf(p *base.SchemaProxy) *base.Schema {
+	if p == nil {
+		return nil
+	}
+	return p.Schema()
 }
 
 // violations turns the errors of the validator into the violations a step
