@@ -38,6 +38,18 @@ var builtin = map[string]func(){
 	"ssh":          ssh.Serve,
 }
 
+// keeping are the built-in actions that keep to the guard of a run
+// themselves: http and db refuse what it does not allow, embedded runs its
+// job under it, and hello reaches nothing.
+var keeping = []string{"db", "embedded", "hello", "http"}
+
+// Keeping returns the names of the built-in actions that keep to the guard
+// of a run, such as --read-only, in alphabetical order. Any other action is
+// refused under a guard unless it is allowed by name.
+func Keeping() []string {
+	return append([]string(nil), keeping...)
+}
+
 // Lookup returns the serve function of a built-in action.
 func Lookup(name string) (func(), bool) {
 	serve, ok := builtin[name]

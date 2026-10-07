@@ -2,6 +2,7 @@ package probe
 
 import (
 	"fmt"
+	"github.com/linyows/probe/actionrpc"
 	"sync"
 	"time"
 
@@ -317,7 +318,7 @@ func (j *Job) RunStandalone(vars map[string]any, printer *Printer, jobID, baseDi
 	for _, opt := range opts {
 		opt(&cfg)
 	}
-	run, _ := j.runStandalone(vars, printer, jobID, baseDir, cfg.runID, true)
+	run, _ := j.runStandalone(vars, printer, jobID, baseDir, cfg, true)
 	return run
 }
 
@@ -326,6 +327,7 @@ type StandaloneOption func(*standaloneConfig)
 
 type standaloneConfig struct {
 	runID string
+	guard actionrpc.Guard
 }
 
 // WithRunID runs the job as part of the run id names, such as the run of the
@@ -337,6 +339,15 @@ func WithRunID(id string) StandaloneOption {
 	}
 }
 
+// WithGuard runs the job under guard, such as the guard of the run of the
+// step that embeds it, so that a workflow cannot get round its guard by
+// embedding a job.
+func WithGuard(guard actionrpc.Guard) StandaloneOption {
+	return func(c *standaloneConfig) {
+		c.guard = guard
+	}
+}
+
 // RunIndependently executes a job independently with its own context and result tracking
 // Returns success/failure status, outputs, report, error message, and duration
 //
@@ -344,7 +355,7 @@ func WithRunID(id string) StandaloneOption {
 // it, as it did before RunStandalone existed: a skipped job or step does not
 // need its action, and one that cannot be resolved fails its step.
 func (j *Job) RunIndependently(vars map[string]any, printer *Printer, jobID string) (bool, map[string]any, string, string, time.Duration) {
-	run, failed := j.runStandalone(vars, printer, jobID, "", "", false)
+	run, failed := j.runStandalone(vars, printer, jobID, "", standaloneConfig{}, false)
 	errorMsg := ""
 	switch {
 	case run.Err != nil:
@@ -357,9 +368,10 @@ func (j *Job) RunIndependently(vars map[string]any, printer *Printer, jobID stri
 
 // runStandalone is RunStandalone, also reporting whether a step failed.
 // resolveFirst resolves the job's external actions before any step runs.
-func (j *Job) runStandalone(vars map[string]any, printer *Printer, jobID, baseDir, runID string, resolveFirst bool) (JobRun, bool) {
+func (j *Job) runStandalone(vars map[string]any, printer *Printer, jobID, baseDir string, cfg standaloneConfig, resolveFirst bool) (JobRun, bool) {
 	start := time.Now()
 	j.ID = jobID
+	runID := cfg.runID
 	if runID == "" {
 		runID = newRunID()
 	}
@@ -383,6 +395,7 @@ func (j *Job) runStandalone(vars map[string]any, printer *Printer, jobID, baseDi
 		Result:  result,
 		Config: Config{
 			Verbose: printer.verbose,
+			Guard:   cfg.guard,
 		},
 		Printer:    printer,
 		countersMu: &sync.Mutex{},
@@ -402,7 +415,7 @@ func (j *Job) runStandalone(vars map[string]any, printer *Printer, jobID, baseDi
 	var failed bool
 	var err error
 	if resolveFirst {
-		err = resolveExternalActions([]*Job{j}, baseDir)
+		err = resolveExternalActions([]*Job{j}, baseDir, cfg.guard)
 	}
 	if err == nil {
 		failed, err = j.run(ctx)

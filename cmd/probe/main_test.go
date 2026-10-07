@@ -4,10 +4,12 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
 	"github.com/linyows/probe"
+	"github.com/linyows/probe/actionrpc"
 	"github.com/linyows/probe/actions"
 )
 
@@ -106,7 +108,7 @@ func TestCmd_usage(t *testing.T) {
 }
 
 func TestCmd_start(t *testing.T) {
-	help := " __  __  __  __  __\n|  ||  ||  ||  || _|\n|  ||  /| |||  /|  |\n| | |  \\| |||  \\| _|\n|_| |_\\_|__||__||__|\n\nProbe - A YAML-based workflow automation tool.\nhttps://github.com/linyows/probe (ver: dev, rev: unknown)\n\nUsage: probe [options] <workflow-file>\n       probe gen <openapi-file>\n       probe dag [--mermaid] <workflow-file>\n       probe check <workflow-file>\n       probe coverage <openapi-file> <report-file>\n       probe guide [topic]\n       probe skill [install [dir]]\n\nArguments:\n  workflow-file    Path to YAML workflow file(s). Multiple files can be\n                   specified with comma-separated paths (e.g., \"base.yml,override.yml\")\n                   to merge configurations.\n\nSubcommands:\n  gen <file>       Generate probe workflow YAML from OpenAPI specification\n  dag <file>       Show job dependency graph as ASCII art (default)\n                   Use --mermaid to output in Mermaid format\n  check <file>     Find what is wrong or weak in a workflow without running it\n  coverage <openapi-file> <report-file>\n                   Show which operations and responses of an OpenAPI document\n                   the steps of a run checked, from its --report json file\n  guide [topic]    Print a page of the documentation as Markdown\n                   Without a topic, list the topics\n  skill            Print the skill that teaches coding agents to use Probe\n                   install [dir] writes it to dir (.claude/skills/probe)\n\nOptions:\n  -h, --help       Show command usage\n      --version    Show version information\n      --timing     Show timing (start time, response time)\n  -v, --verbose    Show verbose log\n      --output     Report output: auto, spinner or stream (env: PROBE_OUTPUT)\n      --report     Write reports: json, junit, markdown, github-summary as format[=path],... (env: PROBE_REPORT)\n"
+	help := " __  __  __  __  __\n|  ||  ||  ||  || _|\n|  ||  /| |||  /|  |\n| | |  \\| |||  \\| _|\n|_| |_\\_|__||__||__|\n\nProbe - A YAML-based workflow automation tool.\nhttps://github.com/linyows/probe (ver: dev, rev: unknown)\n\nUsage: probe [options] <workflow-file>\n       probe gen <openapi-file>\n       probe dag [--mermaid] <workflow-file>\n       probe check <workflow-file>\n       probe coverage <openapi-file> <report-file>\n       probe guide [topic]\n       probe skill [install [dir]]\n\nArguments:\n  workflow-file    Path to YAML workflow file(s). Multiple files can be\n                   specified with comma-separated paths (e.g., \"base.yml,override.yml\")\n                   to merge configurations.\n\nSubcommands:\n  gen <file>       Generate probe workflow YAML from OpenAPI specification\n  dag <file>       Show job dependency graph as ASCII art (default)\n                   Use --mermaid to output in Mermaid format\n  check <file>     Find what is wrong or weak in a workflow without running it\n  coverage <openapi-file> <report-file>\n                   Show which operations and responses of an OpenAPI document\n                   the steps of a run checked, from its --report json file\n  guide [topic]    Print a page of the documentation as Markdown\n                   Without a topic, list the topics\n  skill            Print the skill that teaches coding agents to use Probe\n                   install [dir] writes it to dir (.claude/skills/probe)\n\nOptions:\n  -h, --help         Show command usage\n      --version      Show version information\n      --timing       Show timing (start time, response time)\n  -v, --verbose      Show verbose log\n      --output       Report output: auto, spinner or stream (env: PROBE_OUTPUT)\n      --report       Write reports: json, junit, markdown, github-summary as format[=path],... (env: PROBE_REPORT)\n      --read-only    Refuse what writes, such as an HTTP POST or an UPDATE (env: PROBE_READ_ONLY)\n      --allow-host   Refuse connecting to hosts but these, as host[:port] or *.domain,... (env: PROBE_ALLOW_HOSTS)\n      --allow-action Run these actions under --read-only or --allow-host although they do not keep to them (env: PROBE_ALLOW_ACTIONS)\n"
 
 	tests := []struct {
 		name           string
@@ -290,7 +292,7 @@ func TestCmd_start(t *testing.T) {
 			}
 
 			// Check validFlags
-			expectedFlags := []string{"help", "h", "version", "timing", "verbose", "v", "mermaid", "output", "report"}
+			expectedFlags := []string{"help", "h", "version", "timing", "verbose", "v", "mermaid", "output", "report", "read-only", "allow-host", "allow-action"}
 			if len(c.validFlags) != len(expectedFlags) {
 				t.Errorf("start(%v) validFlags length = %d, want %d", tt.args, len(c.validFlags), len(expectedFlags))
 			}
@@ -795,5 +797,73 @@ func TestCmd_skill(t *testing.T) {
 
 	if _, err := os.Stat(filepath.Join(dir, "SKILL.md")); err != nil {
 		t.Errorf("install should have written SKILL.md: %v", err)
+	}
+}
+
+func TestCmd_guard(t *testing.T) {
+	tests := []struct {
+		name    string
+		args    []string
+		env     map[string]string
+		want    actionrpc.Guard
+		wantErr string
+	}{
+		{name: "no guard", args: []string{"w.yml"}},
+		{
+			name: "flags",
+			args: []string{"--read-only", "--allow-host", "api.example.com, *.internal", "--allow-action=shell", "w.yml"},
+			want: actionrpc.Guard{ReadOnly: true, AllowHosts: []string{"api.example.com", "*.internal"}, AllowActions: []string{"shell"}},
+		},
+		{
+			name: "environment variables",
+			args: []string{"w.yml"},
+			env:  map[string]string{"PROBE_READ_ONLY": "true", "PROBE_ALLOW_HOSTS": "localhost:8080", "PROBE_ALLOW_ACTIONS": "shell,ssh"},
+			want: actionrpc.Guard{ReadOnly: true, AllowHosts: []string{"localhost:8080"}, AllowActions: []string{"shell", "ssh"}},
+		},
+		{
+			name: "flags win over environment variables",
+			args: []string{"--allow-host", "a.example.com", "w.yml"},
+			env:  map[string]string{"PROBE_ALLOW_HOSTS": "b.example.com", "PROBE_READ_ONLY": "0"},
+			want: actionrpc.Guard{AllowHosts: []string{"a.example.com"}},
+		},
+		{name: "PROBE_READ_ONLY that is not a boolean", args: []string{"w.yml"}, env: map[string]string{"PROBE_READ_ONLY": "yes"}, wantErr: "PROBE_READ_ONLY must be true or false"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			for _, k := range []string{"PROBE_READ_ONLY", "PROBE_ALLOW_HOSTS", "PROBE_ALLOW_ACTIONS"} {
+				t.Setenv(k, tt.env[k])
+			}
+			c := newBufferCmd()
+			if err := c.parseArgs(tt.args); err != nil {
+				t.Fatal(err)
+			}
+			got, err := c.guard()
+			if tt.wantErr != "" {
+				if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+					t.Fatalf("err = %v, want %q", err, tt.wantErr)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			// The actions that keep to the guard are the built-in ones that do.
+			if !reflect.DeepEqual(got.Keeping, actions.Keeping()) {
+				t.Errorf("Keeping = %v, want %v", got.Keeping, actions.Keeping())
+			}
+			got.Keeping = nil
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("guard = %+v, want %+v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestCmd_guardFlagsNeedAnArgument(t *testing.T) {
+	for _, flag := range []string{"--allow-host", "--allow-action"} {
+		c := newBufferCmd()
+		if err := c.parseArgs([]string{"w.yml", flag}); err == nil || !strings.Contains(err.Error(), "flag needs an argument") {
+			t.Errorf("parseArgs(%s) = %v, want an error", flag, err)
+		}
 	}
 }

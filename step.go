@@ -141,6 +141,12 @@ func (st *Step) executeAction(name string, jCtx *JobContext) (map[string]any, er
 	}
 	st.attempt = 1
 
+	// An action that does not keep to the guard of the run is not run under
+	// it, unless the person running probe allowed it.
+	if !jCtx.Guard.Runs(st.Uses) {
+		return nil, actionrpc.Refuse("the action %s does not keep to the guard of the run (--read-only, --allow-host); let it run with --allow-action %s", st.Uses, st.Uses)
+	}
+
 	// If no retry configuration, execute once
 	if st.Retry == nil {
 		return st.executeSingleAction(runner, expW, jCtx, false)
@@ -184,7 +190,7 @@ func (st *Step) executeSingleAction(runner ActionRunner, expW map[string]any, jC
 	// The call is made up here: an attempt that timed out goes on in the
 	// background while the next one changes the step.
 	opts := RunOptions{Verbose: jCtx.Verbose, Quiet: quiet, Masker: masker, BaseDir: jCtx.baseDir}
-	call := actionrpc.Call{With: expW, State: jCtx.states.get(st.Uses), Step: st.stepInfo(jCtx)}
+	call := actionrpc.Call{With: expW, State: jCtx.states.get(st.Uses), Step: st.stepInfo(jCtx), Guard: jCtx.Guard}
 	go func() {
 		defer done()
 		ret, state, err := runAction(runner, st.Uses, call, opts)
@@ -311,8 +317,9 @@ func (st *Step) executeActionWithRetry(runner ActionRunner, expW map[string]any,
 
 		if err != nil {
 			// A step without a test is retried only once a contract has
-			// shown that something checks it.
-			if st.Test == "" && attempt == 1 {
+			// shown that something checks it. What the guard refused is
+			// refused again, so it is not retried.
+			if (st.Test == "" && attempt == 1) || actionrpc.IsRefused(err) {
 				return result, err
 			}
 			// Action execution failed, retry
@@ -372,10 +379,15 @@ func (st *Step) executeActionWithRetry(runner ActionRunner, expW map[string]any,
 // evaluated, in which case the action did not run.
 func (st *Step) handleActionError(err error, name string, jCtx *JobContext) {
 	kind := failureKindOf(err)
-	if kind == FailureTemplate {
+	switch kind {
+	case FailureTemplate:
 		st.err = err
 		jCtx.Printer.PrintError("Template evaluation failed: %v", err)
-	} else {
+	case FailureRefused:
+		// The reason is the guard's, which says it all.
+		st.err = err
+		jCtx.Printer.PrintError("%v", err)
+	default:
 		actionErr := NewActionError("step_execute", "action execution failed", err).
 			WithContext("step_name", name).
 			WithContext("action_type", st.Uses)
@@ -1138,9 +1150,12 @@ func pathHoldsCredential(path string) bool {
 	return false
 }
 
-// failureKindOf tells a template that could not be evaluated from an error
-// of the action itself.
+// failureKindOf tells a template that could not be evaluated, and what the
+// guard of the run refused, from an error of the action itself.
 func failureKindOf(err error) string {
+	if actionrpc.IsRefused(err) {
+		return FailureRefused
+	}
 	var tErr *expr.TemplateError
 	var fErr *expr.FieldError
 	if errors.As(err, &tErr) || errors.As(err, &fErr) {

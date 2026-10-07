@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"github.com/linyows/probe/actionrpc"
 	"maps"
 	"slices"
 	"strings"
@@ -70,7 +71,7 @@ func (w *Workflow) Start(c Config) error {
 	// Fetch external actions before any job starts, so that a bad reference
 	// fails the run up front and a download does not count against a step's
 	// timeout.
-	if err := w.resolveExternalActions(); err != nil {
+	if err := w.resolveExternalActions(c.Guard); err != nil {
 		return err
 	}
 
@@ -597,20 +598,21 @@ func (w *Workflow) newJobContext(c Config, vars map[string]any, scheduler *JobSc
 }
 
 // resolveExternalActions resolves every action the steps name outside Probe.
-func (w *Workflow) resolveExternalActions() error {
+func (w *Workflow) resolveExternalActions(guard actionrpc.Guard) error {
 	jobs := make([]*Job, len(w.Jobs))
 	for i := range w.Jobs {
 		jobs[i] = &w.Jobs[i]
 	}
-	return resolveExternalActions(jobs, w.basePath)
+	return resolveExternalActions(jobs, w.basePath, guard)
 }
 
 // resolveExternalActions resolves every action the steps of jobs name
-// outside Probe, with local ones relative to baseDir.
-func resolveExternalActions(jobs []*Job, baseDir string) error {
+// outside Probe, with local ones relative to baseDir. One that guard does
+// not let run is left alone, as its step is refused without it.
+func resolveExternalActions(jobs []*Job, baseDir string, guard actionrpc.Guard) error {
 	for _, job := range jobs {
 		for _, st := range job.Steps {
-			if !actionref.IsExternal(st.Uses) {
+			if !actionref.IsExternal(st.Uses) || !guard.Runs(st.Uses) {
 				continue
 			}
 			if _, err := actionref.Resolve(st.Uses, baseDir); err != nil {

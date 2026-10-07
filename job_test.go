@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/linyows/probe/actionrpc"
 	"github.com/linyows/probe/expr"
 )
 
@@ -680,5 +681,35 @@ func TestRunStandaloneTellsTheRun(t *testing.T) {
 				t.Errorf("RunID = %q, want a run of its own", got)
 			}
 		})
+	}
+}
+
+// TestRunStandaloneUnderAGuard checks that a job run on its own, as one the
+// embedded action runs, keeps to the guard WithGuard gives it, so that a
+// workflow cannot get round its guard by embedding a job.
+func TestRunStandaloneUnderAGuard(t *testing.T) {
+	guard := actionrpc.Guard{ReadOnly: true, Keeping: []string{"hello"}}
+	runner := NewMockActionRunner()
+	job := &Job{Name: "embedded", Steps: []*Step{
+		{Name: "keeps", Uses: "hello", Test: "true", actionRunner: runner},
+		{Name: "does not", Uses: "ssh", Test: "true", actionRunner: runner},
+		// An external action the guard refuses is not resolved, as its step
+		// is refused without it.
+		{Name: "external", Uses: "./no-such-action", Test: "true", actionRunner: runner},
+	}}
+	run := job.RunStandalone(map[string]any{}, newBufferPrinter(), "embedded", t.TempDir(), WithGuard(guard))
+
+	if run.Err != nil {
+		t.Fatalf("Err = %v, want none", run.Err)
+	}
+	if run.Success {
+		t.Error("Success = true, want the refused steps to fail the job")
+	}
+	calls := runner.Calls["hello"]
+	if len(calls) != 1 || !reflect.DeepEqual(calls[0].Guard, guard) {
+		t.Errorf("hello was called %v, want once under the guard", calls)
+	}
+	if n := len(runner.Calls["ssh"]) + len(runner.Calls["./no-such-action"]); n != 0 {
+		t.Errorf("the refused actions were run %d times, want none", n)
 	}
 }
