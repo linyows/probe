@@ -20,6 +20,17 @@ jobs:
       cmd: CGO_ENABLED=1 go build -ldflags="-s -w" -o probe ./cmd/probe/...
       timeout: 5m
     test: status == 0
+  - name: Check the examples without running them
+    uses: shell
+    with:
+      cmd: |
+        for f in examples/*.yml; do
+          case "$f" in examples/yaml-alias.yml|examples/yaml-shared.yml) continue ;; esac
+          ./probe check "$f" > /dev/null || { echo "$f"; ./probe check "$f"; exit 1; }
+        done
+        ./probe check examples/yaml-shared.yml,examples/yaml-alias.yml > /dev/null
+    test: res.code == 0
+    echo: "{{res.stdout}}"
   - name: Pull httpbin images
     uses: shell
     with:

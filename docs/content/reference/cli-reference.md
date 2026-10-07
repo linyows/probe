@@ -176,7 +176,7 @@ PROBE_REPORT=markdown probe workflow.yml
 
 ## Subcommands
 
-A subcommand replaces the run with something else: `gen` writes a starting workflow, `dag` prints the dependency graph a workflow describes, `coverage` tells how much of an OpenAPI document a run checked, `guide` prints this documentation, and `skill` sets up a coding agent to use Probe.
+A subcommand replaces the run with something else: `gen` writes a starting workflow, `dag` prints the dependency graph a workflow describes, `check` finds what is wrong or weak in a workflow without running it, `coverage` tells how much of an OpenAPI document a run checked, `guide` prints this documentation, and `skill` sets up a coding agent to use Probe.
 
 ### `gen`
 
@@ -268,6 +268,44 @@ This is useful for:
 - Debugging job dependency configurations
 - Generating documentation with rendered diagrams
 - Embedding in Markdown files for automatic rendering
+
+### `check`
+
+Find what is wrong or weak in a workflow without running it, so that a workflow written by hand or by a coding agent can be checked before it reaches the systems it tests. Several files read together, as a run reads them, are given as one comma-separated argument.
+
+**Usage:**
+```bash
+probe check workflow.yml
+probe check base.yml,staging.yml
+```
+
+**Output Example:**
+```
+workflow.yml:10: error: job 0 "Users", step 0 "Log in": unknown key "tset"; did you mean "test"?
+workflow.yml:14: error: job 0 "Users", step 1 "Read": unknown action "htp"; did you mean "http"?
+workflow.yml:18: error: job 0 "Users", step 1 "Read": with: outputs.login.tokn is not published: step "login" publishes token
+workflow.yml:39: warning: job 1 "Other", step 0 "Reads users": with: outputs.login.token may not be published yet: job "Other" does not need job "Users", whose step publishes it
+
+3 errors, 1 warning
+```
+
+It reports as an **error**:
+
+- a key a workflow, job, step, `retry` or `repeat` does not take, which a run ignores; a key that holds a YAML anchor for the files read after it is not one
+- what a run refuses to load, such as a missing `name` or a duplicate id
+- an action that is neither built in nor external, and an external action that cannot be parsed
+- a `needs` that names no job, and `needs` that go round
+- a step id a run refuses
+- an expression in `test`, `skipif` or `outputs`, or a template in `name`, `with`, `vars` or `echo`, that does not parse
+- an output read that no step publishes, that its step does not publish, or that is read before its step publishes it, such as by an earlier step of the job
+
+It reports as a **warning**:
+
+- an output read from a job that is not needed, directly or through others, by the job that reads it, so that it may not be published yet
+- a step that nothing checks: it has no `test`, and the action is not asked to check it against a contract, as `openapi` asks the http action
+- a `test` that reads nothing, such as `1 == 1`, which gives the same result whatever the step does
+
+It exits with status 2 when it finds an error, and with 0 when it finds only warnings or nothing.
 
 ### `coverage`
 
