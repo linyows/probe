@@ -15,8 +15,9 @@ import (
 
 // writeSpec writes an OpenAPI document of the users API served under /v1 of
 // base: GET /users/{id}, which takes a verbose flag in the query, POST /users,
-// which takes a name, GET /me, which takes a session cookie, and GET /admin,
-// which requires an API key.
+// which takes a name, GET /me, which takes a session cookie, GET /admin,
+// which requires an API key, and GET and POST /items, which declare their
+// responses by a range of codes and by default.
 func writeSpec(t *testing.T, base string) string {
 	t.Helper()
 	spec := `openapi: 3.0.3
@@ -40,6 +41,7 @@ paths:
                 properties:
                   id: {type: integer}
                   name: {type: string}
+                  password: {type: string, writeOnly: true}
   /users:
     post:
       requestBody:
@@ -50,6 +52,7 @@ paths:
               type: object
               required: [name]
               properties:
+                id: {type: integer, readOnly: true}
                 name: {type: string}
       responses:
         "201":
@@ -82,6 +85,27 @@ paths:
           content:
             application/json:
               schema: {type: object}
+  /items:
+    get:
+      responses:
+        "2XX":
+          description: an item
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id: {type: integer}
+    post:
+      responses:
+        default:
+          description: an error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error: {type: string}
 components:
   securitySchemes:
     apiKey: {type: apiKey, in: header, name: X-API-Key}
@@ -106,6 +130,10 @@ func usersServer(t *testing.T) *httptest.Server {
 			code, body = hp.StatusOK, `{"id":1,"name":"probe"}`
 		case "/v1/users/2":
 			code, body = hp.StatusOK, `{"id":"2"}`
+		case "/v1/users/4":
+			code, body = hp.StatusOK, `{"id":4,"name":"probe","password_hash":"x"}`
+		case "/v1/users/5":
+			code, body = hp.StatusOK, `{"id":5,"name":"probe","password":"x"}`
 		case "/v1/users/3":
 			code, body = hp.StatusInternalServerError, `{"error":"down"}`
 		case "/v1/users":
@@ -113,6 +141,11 @@ func usersServer(t *testing.T) *httptest.Server {
 			code, body = hp.StatusBadRequest, `{"error":"name is required"}`
 			if strings.Contains(string(b), `"name"`) {
 				code, body = hp.StatusCreated, `{"id":1}`
+			}
+		case "/v1/items":
+			code, body = hp.StatusOK, `{"id":1,"x":2}`
+			if r.Method == hp.MethodPost {
+				code, body = hp.StatusInternalServerError, `{"error":"down","trace":"at main.go:1"}`
 			}
 		case "/v1/me", "/v1/admin":
 			code, body = hp.StatusOK, `{}`
@@ -170,6 +203,46 @@ func TestRequestStepChecksAgainstOpenAPI(t *testing.T) {
 		{name: "a cookie the operation requires, missing", with: map[string]any{"get": "/me"}, want: []want{
 			{"request", "session"},
 		}},
+		{name: "a property the schema does not declare", with: map[string]any{"get": "/users/4"}},
+		{name: "a property the schema does not declare, strict", with: map[string]any{"get": "/users/4"},
+			openapi: map[string]any{"strict": true}, want: []want{
+				{"response", "'password_hash'"},
+			}},
+		{name: "a writeOnly property in the response", with: map[string]any{"get": "/users/5"}},
+		{name: "a writeOnly property in the response, strict", with: map[string]any{"get": "/users/5"},
+			openapi: map[string]any{"strict": true}, want: []want{
+				{"response", "'password' at '$.body.password' is writeOnly"},
+			}},
+		{name: "a request property the schema does not declare, strict",
+			with:    map[string]any{"post": "/users", "headers": json, "body": map[string]any{"name": "probe", "role": "admin"}},
+			openapi: map[string]any{"strict": true}, want: []want{
+				{"request", "'role'"},
+			}},
+		{name: "a readOnly property in the request, strict",
+			with:    map[string]any{"post": "/users", "headers": json, "body": map[string]any{"name": "probe", "id": 1}},
+			openapi: map[string]any{"strict": true}, want: []want{
+				{"request", "'id' at '$.body.id' is readOnly"},
+			}},
+		{name: "a query parameter the operation does not declare, strict", with: map[string]any{"get": "/users/1?debug=1"},
+			openapi: map[string]any{"strict": true}, want: []want{
+				{"request", "'debug'"},
+			}},
+		{name: "a response declared by a range of codes, strict", with: map[string]any{"get": "/items"},
+			openapi: map[string]any{"strict": true}, want: []want{
+				{"response", "'x'"},
+			}},
+		{name: "a response declared by default, strict", with: map[string]any{"post": "/items"},
+			openapi: map[string]any{"strict": true}, want: []want{
+				{"response", "'trace'"},
+			}},
+		{name: "headers and cookies the document does not declare are not strict",
+			with: map[string]any{
+				"get":          "/me",
+				"cookies":      map[string]any{"session": "s", "lb": "1"},
+				"headers":      map[string]any{"x-request-source": "probe"},
+				"trace_header": true,
+			},
+			openapi: map[string]any{"strict": true}},
 		{name: "a credential the operation requires", with: map[string]any{"get": "/admin", "headers": map[string]any{"x-api-key": "k"}}},
 		{name: "a credential the operation requires, missing", with: map[string]any{"get": "/admin"}, want: []want{
 			{"request", "X-API-Key"},
@@ -269,8 +342,9 @@ func TestRequestStepOpenAPIRejected(t *testing.T) {
 	}{
 		{name: "true", openapi: true, wantErr: "openapi must be a map with spec, or false"},
 		{name: "a path alone", openapi: "openapi.yml", wantErr: "openapi must be a map with spec, or false"},
-		{name: "an unknown key", openapi: map[string]any{"spec": broken, "strict": true}, wantErr: "openapi takes spec and request, not strict"},
+		{name: "an unknown key", openapi: map[string]any{"spec": broken, "headers": true}, wantErr: "openapi takes spec, request and strict, not headers"},
 		{name: "request not a boolean", openapi: map[string]any{"spec": broken, "request": "no"}, wantErr: "openapi.request must be true or false"},
+		{name: "strict not a boolean", openapi: map[string]any{"spec": broken, "strict": "yes"}, wantErr: "openapi.strict must be true or false"},
 		{name: "no spec", openapi: map[string]any{}, wantErr: "openapi.spec must be the path of an OpenAPI document"},
 		{name: "a missing file", openapi: map[string]any{"spec": filepath.Join(t.TempDir(), "none.yml")}, wantErr: "openapi.spec:"},
 		{name: "a document that cannot be parsed", openapi: map[string]any{"spec": broken}, wantErr: "openapi.spec: " + broken},
