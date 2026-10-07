@@ -155,7 +155,9 @@ func importName(file string, importPaths []string) (string, error) {
 		if err != nil {
 			continue
 		}
-		if rel, err := filepath.Rel(d, abs); err == nil && !strings.HasPrefix(rel, "..") {
+		// A path under the directory does not lead out of it by ..,
+		// though its first name may start with two dots.
+		if rel, err := filepath.Rel(d, abs); err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
 			return filepath.ToSlash(rel), nil
 		}
 	}
@@ -178,10 +180,14 @@ func (c *contract) method(service, method string) protoreflect.MethodDescriptor 
 }
 
 // checkRequest returns what in body, the JSON of the request, the request
-// message the .proto files declare does not take.
+// message the .proto files declare does not take. An empty body is an empty
+// message, which a message with a required field does not take.
 func (c *contract) checkRequest(spec protoreflect.MethodDescriptor, body string) []any {
-	if !c.request || body == "" {
+	if !c.request {
 		return nil
+	}
+	if body == "" {
+		body = "{}"
 	}
 	msg := dynamicpb.NewMessage(spec.Input())
 	if err := protojson.Unmarshal([]byte(body), msg); err != nil {

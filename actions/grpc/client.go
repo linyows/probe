@@ -224,6 +224,14 @@ func (r *Req) invokeMethod(ctx context.Context, conn *grpc.ClientConn, reflectio
 			return nil, fmt.Errorf("failed to unmarshal request JSON: %w", err)
 		}
 	}
+	// A message that cannot be encoded, such as one without a required
+	// field, cannot be sent either.
+	if _, err := proto.Marshal(requestMsg); err != nil {
+		if hasRequestViolation(violations) {
+			return &Res{Metadata: map[string]string{}, violations: violations}, nil
+		}
+		return nil, fmt.Errorf("failed to encode the request: %w", err)
+	}
 
 	// Create dynamic message for response
 	responseMsg := dynamicpb.NewMessage(methodDesc.Output())

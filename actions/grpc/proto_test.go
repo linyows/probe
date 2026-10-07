@@ -288,3 +288,53 @@ func TestRequestBodyNeitherDefinitionTakes(t *testing.T) {
 		}
 	}
 }
+
+func TestCheckRequestOfAnEmptyBody(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "m.proto")
+	content := "syntax = \"proto2\";\nmessage Req { required string id = 1; }\nmessage Res {}\nservice S { rpc Get(Req) returns (Res); }\n"
+	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	c, err := loadContract([]string{path}, []string{dir})
+	if err != nil {
+		t.Fatal(err)
+	}
+	c.request = true
+	spec := c.method("S", "Get")
+
+	// An empty body is an empty message, without the required field.
+	out := c.checkRequest(spec, "")
+	if len(out) != 1 || !strings.Contains(out[0].(map[string]any)["reason"].(string), "required field") {
+		t.Errorf("violations = %v, want the required field missing", out)
+	}
+	if out := c.checkRequest(spec, `{"id": "1"}`); len(out) != 0 {
+		t.Errorf("violations = %v, want none", out)
+	}
+}
+
+func TestImportName(t *testing.T) {
+	dir := t.TempDir()
+	tests := []struct {
+		file string
+		want string // empty when the file is under none of the import paths
+	}{
+		{filepath.Join(dir, "users.proto"), "users.proto"},
+		{filepath.Join(dir, "user", "v1", "user.proto"), "user/v1/user.proto"},
+		// A name that starts with two dots is under the directory.
+		{filepath.Join(dir, "..schemas", "users.proto"), "..schemas/users.proto"},
+		{filepath.Join(filepath.Dir(dir), "other.proto"), ""},
+	}
+	for _, tt := range tests {
+		got, err := importName(tt.file, []string{dir})
+		if tt.want == "" {
+			if err == nil {
+				t.Errorf("importName(%s) = %q, want an error", tt.file, got)
+			}
+			continue
+		}
+		if err != nil || got != tt.want {
+			t.Errorf("importName(%s) = %q, %v; want %q", tt.file, got, err, tt.want)
+		}
+	}
+}
