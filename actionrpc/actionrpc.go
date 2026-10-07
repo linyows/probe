@@ -55,6 +55,9 @@ type Call struct {
 	State map[string]any
 	// Step is the step the action runs for.
 	Step Step
+	// Guard is what the run allows the action to do. An action that keeps
+	// to it returns a Refused error for what it does not allow.
+	Guard Guard
 }
 
 // Step tells an action about the step it runs for.
@@ -142,7 +145,7 @@ func (m *Client) RunStep(call Call) (map[string]any, map[string]any, error) {
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to convert parameters to protobuf struct: %v", err)
 	}
-	req := &pb.RunRequest{With: withStruct, Step: stepToPB(call.Step)}
+	req := &pb.RunRequest{With: withStruct, Step: stepToPB(call.Step), Guard: guardToPB(call.Guard)}
 	if call.State != nil {
 		req.State, err = structpb.NewStruct(call.State)
 		if err != nil {
@@ -152,7 +155,7 @@ func (m *Client) RunStep(call Call) (map[string]any, map[string]any, error) {
 
 	runRes, err := m.client.Run(context.Background(), req)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, fromStatus(err)
 	}
 
 	// Convert protobuf.Struct back to map[string]any
@@ -202,7 +205,7 @@ func (m *Server) Run(ctx context.Context, req *pb.RunRequest) (*pb.RunResponse, 
 	var v, newState map[string]any
 	var err error
 	if sa, ok := m.Impl.(StepAction); ok {
-		call := Call{With: withMap, Step: stepFromPB(req.GetStep())}
+		call := Call{With: withMap, Step: stepFromPB(req.GetStep()), Guard: guardFromPB(req.GetGuard())}
 		if req.State != nil {
 			call.State = structToMap(req.State)
 		}
@@ -214,7 +217,7 @@ func (m *Server) Run(ctx context.Context, req *pb.RunRequest) (*pb.RunResponse, 
 		if m.log != nil {
 			m.log.Error("Action execution failed", "error", err)
 		}
-		return &pb.RunResponse{}, err
+		return &pb.RunResponse{}, toStatus(err)
 	}
 
 	// The result is logged as LogOutcome logs it, credentials hidden: the

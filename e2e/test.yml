@@ -476,6 +476,20 @@ jobs:
       cmd: ./probe examples/http-trace.yml
     test: res.code == 0
     echo: "{{res.stdout}}"
+  - name: guard-http.yml refuses a write under --read-only
+    uses: shell
+    with:
+      cmd: ./probe --read-only --allow-host localhost e2e/guard-http.yml
+    test: |
+      res.code == 2 &&
+      res.stdout contains "refused: POST http://localhost:8080/post may write"
+  - name: guard-http.yml refuses a host the run does not allow
+    uses: shell
+    with:
+      cmd: ./probe --allow-host api.example.com e2e/guard-http.yml
+    test: |
+      res.code == 2 &&
+      res.stdout contains "refused: the host localhost:8080 is not one the run allows"
   - name: http-openapi.yml
     uses: shell
     with:
@@ -636,6 +650,16 @@ jobs:
           ./probe examples/postgres.yml
     test: res.code == 0
     echo: "{{res.stdout}}"
+  - name: guard-db.yml keeps PostgreSQL read-only
+    uses: shell
+    with:
+      cmd: |
+        export DSN='postgres://probe:password@localhost:15432/postgres?sslmode=disable'
+        ./probe e2e/guard-db-setup.yml > /dev/null || exit 1
+        WRITE='WITH d AS (DELETE FROM probe_guard RETURNING *) SELECT count(*) FROM d' \
+          ./probe --read-only --allow-host localhost e2e/guard-db.yml
+    test: res.code == 0
+    echo: "{{res.stdout}}"
   - name: Stop PostgreSQL container
     uses: shell
     with:
@@ -686,6 +710,16 @@ jobs:
       cmd: |
         MYSQL_PORT=13306 MYSQL_PASS=password \
           ./probe examples/mysql.yml
+    test: res.code == 0
+    echo: "{{res.stdout}}"
+  - name: guard-db.yml keeps MySQL read-only
+    uses: shell
+    with:
+      cmd: |
+        export DSN='mysql://root:password@localhost:13306/mysql'
+        ./probe e2e/guard-db-setup.yml > /dev/null || exit 1
+        WRITE='EXPLAIN ANALYZE UPDATE probe_guard SET v = 2' \
+          ./probe --read-only --allow-host localhost e2e/guard-db.yml
     test: res.code == 0
     echo: "{{res.stdout}}"
   - name: Stop MySQL container

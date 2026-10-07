@@ -74,6 +74,7 @@ const (
 
 	FailureContractResponse = report.FailureContractResponse
 	FailureContractRequest  = report.FailureContractRequest
+	FailureRefused          = report.FailureRefused
 )
 
 // StepFailure describes a failed step without terminal formatting, so that

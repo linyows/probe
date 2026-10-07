@@ -2425,3 +2425,77 @@ func TestStep_executeActionWithRetry_UncheckedRunsOnce(t *testing.T) {
 		})
 	}
 }
+
+func TestStep_executeAction_Guard(t *testing.T) {
+	guard := actionrpc.Guard{ReadOnly: true, Keeping: []string{"http"}, AllowActions: []string{"shell"}}
+
+	tests := []struct {
+		name    string
+		uses    string
+		guard   actionrpc.Guard
+		refused bool
+	}{
+		{name: "an action that keeps to the guard", uses: "http", guard: guard},
+		{name: "an action allowed by the person running probe", uses: "shell", guard: guard},
+		{name: "an action that does not keep to the guard", uses: "ssh", guard: guard, refused: true},
+		{name: "an external action", uses: "./actions/mine", guard: guard, refused: true},
+		{name: "any action without a guard", uses: "ssh"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mock := NewMockActionRunner()
+			st := &Step{Uses: tt.uses, With: map[string]any{}, Expr: &expr.Expr{}, actionRunner: mock}
+			jCtx := &JobContext{Config: Config{Guard: tt.guard}, Printer: newBufferPrinter()}
+
+			_, err := st.executeAction("Step", jCtx)
+			if tt.refused {
+				if !actionrpc.IsRefused(err) || !strings.Contains(err.Error(), "--allow-action "+tt.uses) {
+					t.Fatalf("err = %v, want a refusal naming --allow-action %s", err, tt.uses)
+				}
+				if n := len(mock.Calls[tt.uses]); n != 0 {
+					t.Errorf("the action was run %d times, want none", n)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			calls := mock.Calls[tt.uses]
+			if len(calls) != 1 {
+				t.Fatalf("the action was run %d times, want once", len(calls))
+			}
+			if !reflect.DeepEqual(calls[0].Guard, tt.guard) {
+				t.Errorf("the action was told %+v, want %+v", calls[0].Guard, tt.guard)
+			}
+		})
+	}
+}
+
+func TestStep_executeActionWithRetry_Refused(t *testing.T) {
+	mock := NewMockActionRunner()
+	mock.SetError("http", actionrpc.Refuse("POST may write"))
+	st := &Step{
+		Uses:         "http",
+		With:         map[string]any{},
+		Test:         "res.code == 201",
+		Retry:        &StepRetry{MaxAttempts: 3, Interval: Interval{Duration: time.Millisecond}},
+		Expr:         &expr.Expr{},
+		actionRunner: mock,
+	}
+	jCtx := &JobContext{Config: Config{Guard: actionrpc.Guard{ReadOnly: true, Keeping: []string{"http"}}}, Printer: newBufferPrinter()}
+
+	_, err := st.executeAction("Step", jCtx)
+	if !actionrpc.IsRefused(err) {
+		t.Fatalf("err = %v, want a refusal", err)
+	}
+	// What the guard refused is refused again, so it is not retried.
+	if n := len(mock.Calls["http"]); n != 1 {
+		t.Errorf("attempts = %d, want 1", n)
+	}
+}
+
+func TestFailureKindOf_Refused(t *testing.T) {
+	if got := failureKindOf(fmt.Errorf("step: %w", actionrpc.Refuse("no"))); got != FailureRefused {
+		t.Errorf("failureKindOf = %q, want %q", got, FailureRefused)
+	}
+}

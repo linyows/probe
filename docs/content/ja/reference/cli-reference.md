@@ -161,6 +161,7 @@ PROBE_OUTPUT=stream probe workflow.yml
 | `action` | 接続の拒否など、アクションがエラーを返した | `<error>` |
 | `template` | ステップの`with`、`vars`、`name`のテンプレートを評価できず、アクションを実行しなかった | `<error>` |
 | `contract_response` | OpenAPIドキュメントなど、アクションが照合した契約にレスポンスが違反した | `<failure>` |
+| `refused` | `--read-only`など、実行のガードがステップの操作を拒否した | `<error>` |
 | `contract_request` | アクションが照合した契約にリクエストが違反した。OpenAPIドキュメントが許さないものをワークフローが送った | `<error>` |
 
 `repeat`付きのジョブのステップは、1回でも失敗すれば失敗として扱い、成功した回数と、最初に失敗した回の理由を記録します。アクションがレスポンスに`dump: false`を設定した場合は、端末と同じくレポートにもリクエストとレスポンスを含めません。
@@ -172,6 +173,57 @@ PROBE_OUTPUT=stream probe workflow.yml
 probe --report junit workflow.yml
 probe --report json=out/report.json,junit=out/junit.xml,markdown=out/summary.md workflow.yml
 PROBE_REPORT=markdown probe workflow.yml
+```
+
+### `--read-only`
+
+**型:** Boolean  
+**デフォルト:** false  
+**説明:** 書き込みになりうる操作を拒否します。コーディングエージェントが書いたワークフローなどを、変更してはならないシステムに対して実行するときに使います。
+
+`--read-only`、`--allow-host`、`--allow-action`の3つで、実行のガードを構成します。ガードはProbeを実行する人がコマンドラインか環境変数で指定するもので、ワークフローの側からは緩められません。ガードが許さない操作を求めるステップは、何も送る前に拒否され、種類`refused`で失敗します。終了ステータスは2です。`embedded`アクションで実行するジョブも同じガードの下で実行し、そのステップが拒否されれば、埋め込んだ側のステップも拒否されます。拒否されたステップは再試行しません。
+
+各アクションは、これから行う操作を判定できる範囲でガードを守ります。
+
+| アクション | `--read-only` | `--allow-host` |
+|---|---|---|
+| `http` | `GET`、`HEAD`、`OPTIONS`だけを送る | URLのホストと、各リダイレクト先のホスト。ポートのないURLは、スキームの既定のポートとして扱う |
+| `db` | `SELECT`、`SHOW`、`DESCRIBE`、`DESC`、`EXPLAIN`、`WITH`のいずれかで始まり、末尾以外にセミコロンを含まない1文だけを、接続時に文を実行させないDSNで、読み取り専用トランザクション（SQLiteでは問い合わせしかできない接続）で実行する。文が書き込みを隠していても、データベース自身が拒否する | ドライバが接続しうる各サーバー。PostgreSQLでは、lib/pqがDSNを解決した結果を使う。パラメータ、サービスファイル、`PGHOST`、`PGHOSTADDR`、`PGPORT`なども考慮し、ホストのリストはすべて確かめ、`hostaddr`があればそのアドレスを確かめる。ポートがなければドライバの既定のポートとして扱う。SQLiteのファイルはホストを持たない |
+| `embedded` | ジョブをガードの下で実行する | ジョブをガードの下で実行する |
+| `hello` | 拒否するものがない | 接続するものがない |
+
+それ以外のアクション、つまり組み込みの`shell`、`ssh`、`browser`、`grpc`、`smtp`、`imap`、`mail-latency`と、すべての外部アクションは、ガードを守らせることができません。そのため、`--allow-action`でアクションを指定しない限り、ガードの下ではそれらを使うステップを拒否します。
+
+`WITH x AS (DELETE ...) SELECT ...`のように、データベース自身が拒否した書き込みは、`refused`ではなくデータベースが報告するとおりに失敗します。ガードは、ワークフローが意図しないものへ書き込んだり接続したりするのを防ぐためのもので、サンドボックスではありません。
+
+`--read-only=false`で無効にできます。値は環境変数`PROBE_READ_ONLY`（`true`または`1`）でも指定でき、フラグを指定すれば常にフラグのほうが優先されます。
+
+**例:**
+```bash
+probe --read-only --allow-host api.staging.example.com workflow.yml
+```
+
+### `--allow-host`
+
+**型:** String  
+**値:** ホストのカンマ区切りのリスト。名前かアドレスで、`localhost:8080`のようにポートを付けるか、付けずに任意のポートを許すか、`*.example.com`で`example.com`の下の名前を指定します  
+**デフォルト:** なし（任意のホスト）  
+**説明:** 指定したホスト以外への接続を拒否します。名前は大文字と小文字を区別せずに比較します。どのアクションがこれを守るかは`--read-only`を参照してください。
+
+値は環境変数`PROBE_ALLOW_HOSTS`でも指定できます。フラグを指定すれば常にフラグのほうが優先されるため、`--allow-host=`は任意のホストを許します。
+
+### `--allow-action`
+
+**型:** String  
+**値:** アクション名のカンマ区切りのリスト。ステップが`uses`に書く名前です  
+**デフォルト:** なし  
+**説明:** ガードを守らないアクションでも、`--read-only`や`--allow-host`の下で実行します。Probeを実行する人が信頼する準備用の`shell`などに使います。指定したアクションは、ガードがない場合と同じように実行します。
+
+値は環境変数`PROBE_ALLOW_ACTIONS`でも指定できます。フラグを指定すれば常にフラグのほうが優先されるため、`--allow-action=`はどのアクションも許しません。
+
+**例:**
+```bash
+probe --read-only --allow-action shell workflow.yml
 ```
 
 ## サブコマンド
@@ -400,6 +452,16 @@ export PROBE_REPORT=junit=out/junit.xml
 probe workflow.yml
 ```
 
+### `PROBE_READ_ONLY`、`PROBE_ALLOW_HOSTS`、`PROBE_ALLOW_ACTIONS`
+
+**説明:** 実行のガードです。それぞれ`--read-only`、`--allow-host`、`--allow-action`と同じです。`PROBE_READ_ONLY`は、`true`か`1`で書き込みを拒否し、`false`、`0`、空では拒否しません。いずれもフラグのほうが優先されます。
+
+```bash
+export PROBE_READ_ONLY=true
+export PROBE_ALLOW_HOSTS=api.staging.example.com
+probe workflow.yml
+```
+
 ### `PROBE_MAX_REPEAT_COUNT`
 
 **型:** Integer  
@@ -525,7 +587,7 @@ WantedBy=multi-user.target
 |-----------|---------|-------------|
 | `0` | 成功 | すべてのジョブが完了し、すべてのテストが成功 |
 | `1` | テストの失敗 | `test`がfalseになった、評価できなかった、または真偽値にならなかった。あるいはステップに必要なテンプレートを評価できなかった、またはhttpアクションが照合したOpenAPIドキュメントにリクエストかレスポンスが違反した |
-| `2` | 設定の誤り | ワークフローやコマンドラインが誤っている。ファイルが無い、YAMLが不正、`needs`に未知のジョブ、不正なステップID、未知のフラグやレポート形式など。レポートファイルを書き出せなかった場合も`2` |
+| `2` | 設定の誤り | ワークフローやコマンドラインが誤っている。ファイルが無い、YAMLが不正、`needs`に未知のジョブ、不正なステップID、未知のフラグやレポート形式など。実行のガードがステップを拒否した場合と、レポートファイルを書き出せなかった場合も`2` |
 | `3` | アクションのエラー | 接続の拒否やタイムアウトなど、アクションがエラーを返したため、テストを確かめられなかった |
 
 1回の実行で複数の種類の失敗が起きた場合は、`2`、`3`、`1`の順で最初に当てはまるものを返します。接続先が落ちていると、それに対するテストも失敗することが多いため、`1`より`3`を優先します。

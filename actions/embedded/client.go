@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"github.com/linyows/probe/actionrpc"
 	"io/fs"
 	"maps"
 	"os"
@@ -44,6 +45,8 @@ type Callback struct {
 	after  func(result *Result)
 	// runID is the run the job is part of, or empty for a run of its own.
 	runID string
+	// guard is the guard of the run the job is part of.
+	guard actionrpc.Guard
 }
 
 func NewReq() *Req {
@@ -83,6 +86,9 @@ func (r *Req) Do() (*Result, error) {
 	if r.cb != nil && r.cb.runID != "" {
 		opts = append(opts, probe.WithRunID(r.cb.runID))
 	}
+	if r.cb != nil {
+		opts = append(opts, probe.WithGuard(r.cb.guard))
+	}
 	run := job.RunStandalone(r.Vars, printer, jobID, filepath.Dir(absPath), opts...)
 
 	result.RT = time.Since(start)
@@ -96,6 +102,11 @@ func (r *Req) Do() (*Result, error) {
 	}
 	if run.Err != nil {
 		errorMsg = run.Err.Error()
+	}
+	// A step the guard refused refuses the step that embeds the job, so
+	// that the run tells it as such, exits as it would, and does not retry.
+	if run.Refused != nil {
+		return result, run.Refused
 	}
 
 	result.Res = Res{
@@ -198,6 +209,14 @@ func WithBefore(f func(path string, vars map[string]any)) Option {
 func WithAfter(f func(result *Result)) Option {
 	return func(c *Callback) {
 		c.after = f
+	}
+}
+
+// WithGuard runs the job under the guard of the run of the step that
+// embeds it.
+func WithGuard(guard actionrpc.Guard) Option {
+	return func(c *Callback) {
+		c.guard = guard
 	}
 }
 

@@ -11,9 +11,10 @@ const (
 	// not be evaluated, or did not evaluate to a boolean; or a request or a
 	// response broke the contract an action checked it against.
 	ExitTestFailed = 1
-	// ExitConfigError means the workflow or the command line was wrong, or a
-	// report file could not be written, so the run could not do what it was
-	// asked to.
+	// ExitConfigError means the workflow or the command line was wrong, a
+	// step asked for what the guard of the run does not allow, or a report
+	// file could not be written, so the run could not do what it was asked
+	// to.
 	ExitConfigError = 2
 	// ExitActionError means an action returned an error, such as a refused
 	// connection or a timeout, so a test could not be checked at all.
@@ -50,7 +51,7 @@ func (rs *Result) exitCode(failed bool) int {
 	defer rs.failuresMu.Unlock()
 
 	switch {
-	case rs.failures[failureConfig]:
+	case rs.failures[failureConfig], rs.failures[FailureRefused]:
 		return ExitConfigError
 	case rs.failures[FailureAction]:
 		return ExitActionError

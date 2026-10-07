@@ -161,6 +161,7 @@ A step's status is `passed`, `failed`, `skipped`, or `untested` when it ran with
 | `action` | The action returned an error, such as a refused connection | `<error>` |
 | `template` | A template in the step's `with`, `vars` or `name` could not be evaluated, so the action did not run | `<error>` |
 | `contract_response` | The response broke the contract the action checked it against, such as an OpenAPI document | `<failure>` |
+| `refused` | The guard of the run, such as `--read-only`, refused what the step was to do | `<error>` |
 | `contract_request` | The request broke the contract the action checked it against: the workflow sent what an OpenAPI document does not allow | `<error>` |
 
 A step in a job with `repeat` fails when any iteration fails, and reports how many iterations passed and why the first failing one failed. When an action sets `dump: false` on its response, the request and response are left out of the report as they are left out of the terminal.
@@ -172,6 +173,57 @@ The value can also come from the `PROBE_REPORT` environment variable, and the fl
 probe --report junit workflow.yml
 probe --report json=out/report.json,junit=out/junit.xml,markdown=out/summary.md workflow.yml
 PROBE_REPORT=markdown probe workflow.yml
+```
+
+### `--read-only`
+
+**Type:** Boolean  
+**Default:** false  
+**Description:** Refuse what writes, so that a workflow, such as one a coding agent wrote, can be run against a system it must not change.
+
+`--read-only`, `--allow-host` and `--allow-action` make up the guard of a run. The guard is set on the command line, or by environment variables, by whoever runs Probe, and nothing in a workflow can loosen it. A step that asks for what the guard does not allow is refused before anything is sent, and fails with the kind `refused`, which exits with status 2. A job run by the `embedded` action runs under the same guard, and a step of it that is refused refuses the step that embeds it. A refused step is not retried.
+
+Each action keeps to the guard as far as it can tell what it is about to do:
+
+| Action | `--read-only` | `--allow-host` |
+|---|---|---|
+| `http` | Sends only `GET`, `HEAD` and `OPTIONS` | The host of the URL, and of each redirect; a URL without a port is taken at the port of its scheme |
+| `db` | Runs one statement that starts with `SELECT`, `SHOW`, `DESCRIBE`, `DESC`, `EXPLAIN` or `WITH` and holds no semicolon but at its end, over a DSN that runs no statement on connecting, in a read-only transaction, or on a SQLite connection that only queries, so that the database refuses a write the statement hides | Each server the driver may connect to: for PostgreSQL those lib/pq resolves the DSN to, with its parameters, a service file and `PGHOST`, `PGHOSTADDR`, `PGPORT` and the like, every host of a list, and the address of `hostaddr` when it is given; the driver's port when none is named; a SQLite file names no host |
+| `embedded` | Runs the job under the guard | Runs the job under the guard |
+| `hello` | Nothing to refuse | Nothing to reach |
+
+Any other action, the built-in `shell`, `ssh`, `browser`, `grpc`, `smtp`, `imap` and `mail-latency`, and every external action, cannot be told to keep to the guard, so a step using one is refused under it unless `--allow-action` names the action.
+
+A write that the database itself refuses, such as `WITH x AS (DELETE ...) SELECT ...`, fails as the database reports it rather than as `refused`. The guard keeps a workflow from writing to, or reaching, what it was not meant to; it is not a sandbox.
+
+`--read-only=false` turns it off. The value can also come from the `PROBE_READ_ONLY` environment variable, `true` or `1`, and the flag wins over it whenever it is given.
+
+**Example:**
+```bash
+probe --read-only --allow-host api.staging.example.com workflow.yml
+```
+
+### `--allow-host`
+
+**Type:** String  
+**Values:** a comma separated list of hosts: a name or an address, with a port, such as `localhost:8080`, or without one for any port, or `*.example.com` for the names under `example.com`  
+**Default:** none; any host  
+**Description:** Refuse connecting to any host but these. Names are compared without regard to case. See `--read-only` for which actions keep to it.
+
+The value can also come from the `PROBE_ALLOW_HOSTS` environment variable, and the flag wins over it whenever it is given, so that `--allow-host=` allows any host.
+
+### `--allow-action`
+
+**Type:** String  
+**Values:** a comma separated list of action names, as a step writes them in `uses`  
+**Default:** none  
+**Description:** Run these actions under `--read-only` or `--allow-host` although they do not keep to the guard, such as `shell` for a setup step the person running Probe trusts. They are run as they are without the guard.
+
+The value can also come from the `PROBE_ALLOW_ACTIONS` environment variable, and the flag wins over it whenever it is given, so that `--allow-action=` allows none.
+
+**Example:**
+```bash
+probe --read-only --allow-action shell workflow.yml
 ```
 
 ## Subcommands
@@ -400,6 +452,16 @@ export PROBE_REPORT=junit=out/junit.xml
 probe workflow.yml
 ```
 
+### `PROBE_READ_ONLY`, `PROBE_ALLOW_HOSTS`, `PROBE_ALLOW_ACTIONS`
+
+**Description:** The guard of the run, the same as `--read-only`, `--allow-host` and `--allow-action`. `PROBE_READ_ONLY` is `true` or `1` to refuse what writes, and `false`, `0` or empty not to. Each flag takes precedence over its variable.
+
+```bash
+export PROBE_READ_ONLY=true
+export PROBE_ALLOW_HOSTS=api.staging.example.com
+probe workflow.yml
+```
+
 ### `PROBE_MAX_REPEAT_COUNT`
 
 **Type:** Integer  
@@ -525,7 +587,7 @@ The exit code says not only whether a run failed but what has to be looked at, s
 |-----------|---------|-------------|
 | `0` | Success | Every job completed and every test passed |
 | `1` | Test failed | A `test` evaluated to false, could not be evaluated, or did not evaluate to a boolean, a template a step needed could not be evaluated, or a request or response broke the OpenAPI document the http action checked it against |
-| `2` | Configuration error | The workflow or the command line is wrong: a missing file, invalid YAML, an unknown `needs`, an invalid step ID, an unknown flag or report format. A report file that cannot be written also exits `2` |
+| `2` | Configuration error | The workflow or the command line is wrong: a missing file, invalid YAML, an unknown `needs`, an invalid step ID, an unknown flag or report format. A step the guard of the run refused, and a report file that cannot be written, also exit `2` |
 | `3` | Action error | An action returned an error, such as a refused connection or a timeout, so its test could not be checked |
 
 When a run has more than one kind of failure, the code is the first of `2`, `3`, `1` that applies. A target that is down usually makes the tests against it fail too, so `3` is reported over `1`.

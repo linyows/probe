@@ -5,12 +5,15 @@ import (
 	"database/sql"
 	"database/sql/driver"
 	"errors"
+	"fmt"
 	"io"
 	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/linyows/probe/actionrpc"
 )
 
 func TestParseParams(t *testing.T) {
@@ -513,5 +516,69 @@ func TestTimeoutErrorFromContext(t *testing.T) {
 	}
 	if got := timeoutError(context.Background(), driverErr, time.Second); got != driverErr {
 		t.Errorf("timeoutError() = %v, want the error unchanged before the deadline", got)
+	}
+}
+
+func TestExecuteQueryReadOnlySQLite(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "guard.db")
+	dsn := "file:" + path
+	for _, q := range []string{"CREATE TABLE t (v INTEGER)", "INSERT INTO t VALUES (1)"} {
+		if _, err := ExecuteQuery(map[string]any{"dsn": dsn, "query": q}); err != nil {
+			t.Fatalf("%s: %v", q, err)
+		}
+	}
+	readOnly := WithGuard(actionrpc.Guard{ReadOnly: true})
+
+	res, err := ExecuteQuery(map[string]any{"dsn": dsn, "query": "SELECT count(*) AS n FROM t"}, readOnly)
+	if err != nil {
+		t.Fatalf("a query that reads should run: %v", err)
+	}
+	if rows := res["res"].(map[string]any)["rows"].([]any); len(rows) != 1 {
+		t.Errorf("rows = %v, want one", rows)
+	}
+
+	// A statement that reads by its first word but writes is refused by
+	// the database itself, which answers with an error as it does any
+	// query it fails.
+	res, err = ExecuteQuery(map[string]any{"dsn": dsn, "query": "WITH x AS (SELECT 1) DELETE FROM t"}, readOnly)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got := res["res"].(map[string]any); got["code"] == 0 || !strings.Contains(fmt.Sprint(got["error"]), "readonly") {
+		t.Errorf("res = %v, want the database's refusal to write", got)
+	}
+
+	// A statement that writes is refused before the database is opened.
+	_, err = ExecuteQuery(map[string]any{"dsn": dsn, "query": "DELETE FROM t"}, readOnly)
+	if !actionrpc.IsRefused(err) {
+		t.Errorf("err = %v, want a refusal", err)
+	}
+
+	res, err = ExecuteQuery(map[string]any{"dsn": dsn, "query": "SELECT count(*) AS n FROM t"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	row := res["res"].(map[string]any)["rows"].([]any)[0].(map[string]any)
+	if n, _ := row["n"].(int64); n != 1 {
+		t.Errorf("rows left = %v, want 1: nothing should have been deleted", row["n"])
+	}
+}
+
+func TestExecuteQueryReadOnlySQLiteRefusesAPragmaOnConnecting(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "pragma.db")
+	if _, err := ExecuteQuery(map[string]any{"dsn": "file:" + path, "query": "CREATE TABLE t (v INTEGER)"}); err != nil {
+		t.Fatal(err)
+	}
+	_, err := ExecuteQuery(map[string]any{"dsn": "file:" + path + "?_pragma=user_version(7)", "query": "SELECT 1"}, WithGuard(actionrpc.Guard{ReadOnly: true}))
+	if !actionrpc.IsRefused(err) {
+		t.Fatalf("err = %v, want a refusal", err)
+	}
+	res, err := ExecuteQuery(map[string]any{"dsn": "file:" + path, "query": "SELECT user_version FROM pragma_user_version"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	row := res["res"].(map[string]any)["rows"].([]any)[0].(map[string]any)
+	if v, _ := row["user_version"].(int64); v != 0 {
+		t.Errorf("user_version = %v, want 0: the pragma should not have run", row["user_version"])
 	}
 }

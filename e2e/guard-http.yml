@@ -1,0 +1,20 @@
+name: HTTP under a guard
+vars:
+  url: "{{URL ?? 'http://localhost:8080'}}"
+
+jobs:
+- name: Reads and a write
+  defaults:
+    http:
+      url: "{{vars.url}}"
+  steps:
+  - name: A read is sent
+    uses: http
+    with:
+      get: /get
+    test: res.code == 200
+  - name: A write is refused
+    uses: http
+    with:
+      post: /post
+    test: res.code == 200

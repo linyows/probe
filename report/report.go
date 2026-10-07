@@ -125,6 +125,9 @@ const (
 	// The request broke the contract the action checked it against: the
 	// workflow sent what the contract does not allow.
 	FailureContractRequest = "contract_request"
+	// The guard of the run, such as --read-only, refused what the step was
+	// to do.
+	FailureRefused = "refused"
 )
 
 // Report is the result of a workflow run in a form meant for machines: the

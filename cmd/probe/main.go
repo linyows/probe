@@ -42,19 +42,25 @@ type Cmd struct {
 	DagMermaid     bool
 	Output         string
 	Report         string
-	validFlags     []string
-	ver            string
-	rev            string
-	outWriter      io.Writer
-	errWriter      io.Writer
-	mocking        bool
+	ReadOnly       bool
+	AllowHosts     string
+	AllowActions   string
+	// guardFlags are the guard's flags given, apart from their values, so
+	// that a flag given empty or false wins over its environment variable.
+	guardFlags map[string]bool
+	validFlags []string
+	ver        string
+	rev        string
+	outWriter  io.Writer
+	errWriter  io.Writer
+	mocking    bool
 }
 
 func newCmd() *Cmd {
 	info, ok := debug.ReadBuildInfo()
 	ver, rev := resolveVersion(version, commit, info, ok)
 	return &Cmd{
-		validFlags: []string{"help", "h", "version", "timing", "verbose", "v", "mermaid", "output", "report"},
+		validFlags: []string{"help", "h", "version", "timing", "verbose", "v", "mermaid", "output", "report", "read-only", "allow-host", "allow-action"},
 		ver:        ver,
 		rev:        rev,
 		outWriter:  os.Stdout,
@@ -126,6 +132,32 @@ func (c *Cmd) parseArgs(args []string) error {
 					return err
 				}
 				c.Output = flagValue
+			case "read-only":
+				// --read-only alone turns it on; --read-only=false turns it
+				// off over PROBE_READ_ONLY.
+				c.ReadOnly = true
+				if hasValue {
+					v, err := parseBool(flagValue)
+					if err != nil {
+						return fmt.Errorf("%s: %w", arg, err)
+					}
+					c.ReadOnly = v
+				}
+				c.markGuardFlag(flagName)
+			case "allow-host", "allow-action":
+				if !hasValue {
+					if i+1 >= len(args) || strings.HasPrefix(args[i+1], "-") {
+						return fmt.Errorf("flag needs an argument: %s", arg)
+					}
+					flagValue = args[i+1]
+					skipNext = true
+				}
+				if flagName == "allow-host" {
+					c.AllowHosts = flagValue
+				} else {
+					c.AllowActions = flagValue
+				}
+				c.markGuardFlag(flagName)
 			case "report":
 				// Accept both --report=junit and --report junit
 				if !hasValue {
@@ -237,13 +269,16 @@ func (c *Cmd) printOptions() {
 		{"-v", "--verbose", "Show verbose log"},
 		{"", "--output", "Report output: auto, spinner or stream (env: PROBE_OUTPUT)"},
 		{"", "--report", "Write reports: json, junit, markdown, github-summary as format[=path],... (env: PROBE_REPORT)"},
+		{"", "--read-only", "Refuse what writes, such as an HTTP POST or an UPDATE (env: PROBE_READ_ONLY)"},
+		{"", "--allow-host", "Refuse connecting to hosts but these, as host[:port] or *.domain,... (env: PROBE_ALLOW_HOSTS)"},
+		{"", "--allow-action", "Run these actions under --read-only or --allow-host although they do not keep to them (env: PROBE_ALLOW_ACTIONS)"},
 	}
 
 	for _, opt := range options {
 		if opt.short != "" {
-			_, _ = fmt.Fprintf(c.errWriter, "  %s, %-12s %s\n", opt.short, opt.long, opt.description)
+			_, _ = fmt.Fprintf(c.errWriter, "  %s, %-14s %s\n", opt.short, opt.long, opt.description)
 		} else {
-			_, _ = fmt.Fprintf(c.errWriter, "      %-12s %s\n", opt.long, opt.description)
+			_, _ = fmt.Fprintf(c.errWriter, "      %-14s %s\n", opt.long, opt.description)
 		}
 	}
 }
@@ -356,6 +391,13 @@ func (c *Cmd) runProbe() int {
 	}
 	p.Config.Reports = reports
 
+	guard, err := c.guard()
+	if err != nil {
+		_, _ = fmt.Fprintf(c.errWriter, "[ERROR] %v\n", err)
+		return probe.ExitConfigError
+	}
+	p.Config.Guard = guard
+
 	if err := p.Do(); err != nil {
 		_, _ = fmt.Fprintf(c.errWriter, "[ERROR] %v\n", err)
 		return probe.ExitConfigError
@@ -388,6 +430,65 @@ func (c *Cmd) runDag() int {
 	}
 	_, _ = fmt.Fprint(c.outWriter, graph)
 	return 0
+}
+
+func (c *Cmd) markGuardFlag(name string) {
+	if c.guardFlags == nil {
+		c.guardFlags = map[string]bool{}
+	}
+	c.guardFlags[name] = true
+}
+
+// parseBool reads the value of a boolean flag or environment variable:
+// true or 1, and false, 0 or empty.
+func parseBool(s string) (bool, error) {
+	switch strings.ToLower(strings.TrimSpace(s)) {
+	case "", "0", "false":
+		return false, nil
+	case "1", "true":
+		return true, nil
+	default:
+		return false, fmt.Errorf("must be true or false, not %q", s)
+	}
+}
+
+// guard returns the guard of the run from the flags, each of which wins over
+// its environment variable when it is given, even empty or false:
+// PROBE_READ_ONLY, PROBE_ALLOW_HOSTS and PROBE_ALLOW_ACTIONS.
+func (c *Cmd) guard() (actionrpc.Guard, error) {
+	readOnly := c.ReadOnly
+	if !c.guardFlags["read-only"] {
+		v, err := parseBool(os.Getenv("PROBE_READ_ONLY"))
+		if err != nil {
+			return actionrpc.Guard{}, fmt.Errorf("PROBE_READ_ONLY %w", err)
+		}
+		readOnly = v
+	}
+	hosts := c.AllowHosts
+	if !c.guardFlags["allow-host"] {
+		hosts = os.Getenv("PROBE_ALLOW_HOSTS")
+	}
+	allowed := c.AllowActions
+	if !c.guardFlags["allow-action"] {
+		allowed = os.Getenv("PROBE_ALLOW_ACTIONS")
+	}
+	return actionrpc.Guard{
+		ReadOnly:     readOnly,
+		AllowHosts:   splitList(hosts),
+		AllowActions: splitList(allowed),
+		Keeping:      actions.Keeping(),
+	}, nil
+}
+
+// splitList splits a comma-separated list, leaving out empty entries.
+func splitList(s string) []string {
+	var out []string
+	for item := range strings.SplitSeq(s, ",") {
+		if item = strings.TrimSpace(item); item != "" {
+			out = append(out, item)
+		}
+	}
+	return out
 }
 
 // runCheck prints what is wrong or weak in a workflow, without running it.

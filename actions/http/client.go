@@ -9,9 +9,11 @@ import (
 	"io"
 	"maps"
 	"mime"
+	"net"
 	hp "net/http"
 	"net/url"
 	"path"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -42,6 +44,9 @@ type Req struct {
 	// contract, when it is set, checks the response against an OpenAPI
 	// document.
 	contract *contract
+	// guard is what the run allows: Do refuses a request, or a redirect,
+	// it does not allow.
+	guard actionrpc.Guard
 }
 
 type Res struct {
@@ -158,6 +163,9 @@ func (r *Req) Do() (*Result, error) {
 	if err != nil {
 		return nil, err
 	}
+	if err := r.checkGuard(req); err != nil {
+		return nil, err
+	}
 
 	for k, v := range r.Header {
 		// Clean header value by removing newlines and other invalid characters
@@ -189,6 +197,16 @@ func (r *Req) Do() (*Result, error) {
 	}
 
 	cl := &hp.Client{Timeout: timeout, Jar: jar}
+	if r.guard.Active() {
+		// A redirect is a request of its own, which the guard allows or
+		// refuses as it does the first.
+		cl.CheckRedirect = func(next *hp.Request, via []*hp.Request) error {
+			if len(via) >= maxRedirects {
+				return fmt.Errorf("stopped after %d redirects", maxRedirects)
+			}
+			return r.checkGuard(next)
+		}
+	}
 	start := time.Now()
 	res, err := cl.Do(req)
 	result.RT = time.Since(start)
@@ -247,6 +265,31 @@ func (r *Req) Do() (*Result, error) {
 	}
 
 	return result, nil
+}
+
+// maxRedirects is how many redirects a request follows, as many as
+// net/http follows when it is not told otherwise.
+const maxRedirects = 10
+
+// readMethods are the methods allowed under a read-only guard.
+var readMethods = []string{hp.MethodGet, hp.MethodHead, hp.MethodOptions}
+
+// checkGuard returns a Refused error when the guard of the run does not
+// allow req: a method that may write under --read-only, or a host it does
+// not allow. A host without a port is taken at the port of its scheme.
+func (r *Req) checkGuard(req *hp.Request) error {
+	if r.guard.ReadOnly && !slices.Contains(readMethods, req.Method) {
+		return actionrpc.Refuse("%s %s may write, and the run is read-only; only GET, HEAD and OPTIONS are sent", req.Method, req.URL.Redacted())
+	}
+	host := req.URL.Host
+	if req.URL.Port() == "" {
+		port := "80"
+		if req.URL.Scheme == "https" {
+			port = "443"
+		}
+		host = net.JoinHostPort(req.URL.Hostname(), port)
+	}
+	return r.guard.CheckHost(host)
 }
 
 type Option func(*Callback)
@@ -518,6 +561,7 @@ func request(call actionrpc.Call, opts ...Option) (map[string]any, map[string]an
 	}
 	r.payload = payload
 	r.contract = contract
+	r.guard = call.Guard
 
 	var stored []storedCookie
 	if keepCookies {

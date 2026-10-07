@@ -3,6 +3,7 @@ package probe
 import (
 	"bytes"
 	"fmt"
+	"github.com/linyows/probe/actionrpc"
 	"io"
 	"os"
 	"path/filepath"
@@ -29,6 +30,10 @@ type Config struct {
 	Output OutputMode
 	// Reports lists the report files written once the run has finished.
 	Reports []report.Target
+	// Guard is what the run allows its actions to do, such as only reading,
+	// and only from some hosts. Each step's action is told it, and a step
+	// whose action does not keep to it is refused unless it is allowed.
+	Guard actionrpc.Guard
 }
 
 func New(path string, v bool) *Probe {

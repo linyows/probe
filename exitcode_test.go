@@ -26,6 +26,8 @@ func TestResult_exitCode(t *testing.T) {
 		{"action wins over assertion", true, []string{FailureAssertion, FailureAction}, ExitActionError},
 		{"config", true, []string{failureConfig}, ExitConfigError},
 		{"config wins over everything", true, []string{FailureAction, failureConfig, FailureAssertion}, ExitConfigError},
+		{"refused", true, []string{FailureRefused}, ExitConfigError},
+		{"refused wins over an action error", true, []string{FailureAction, FailureRefused}, ExitConfigError},
 	}
 
 	for _, tt := range tests {

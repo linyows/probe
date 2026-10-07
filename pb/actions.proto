@@ -12,6 +12,23 @@ message RunRequest {
     google.protobuf.Struct state = 3;
     // The step the action runs for.
     Step step = 4;
+    // What the run allows the action to do, which the action keeps to.
+    Guard guard = 5;
+}
+
+// Guard is what the run allows actions to do, set by whoever runs probe
+// rather than by the workflow. An action that keeps to it refuses what it
+// does not allow; an empty guard allows everything.
+message Guard {
+    // Whether only what reads is allowed, and nothing that writes.
+    bool read_only = 1;
+    // The hosts actions may connect to, such as api.example.com,
+    // localhost:8080 or *.internal; empty for any.
+    repeated string allow_hosts = 2;
+    // The actions run under the guard although they do not keep to it.
+    repeated string allow_actions = 3;
+    // The actions that keep to the guard themselves.
+    repeated string keeping = 4;
 }
 
 // Step tells an action about the step it runs for, for it to use as it sees
