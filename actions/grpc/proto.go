@@ -240,6 +240,9 @@ func (c *contract) checkRequest(spec protoreflect.MethodDescriptor, body string)
 // breaks the files under strict.
 func (c *contract) checkDefinition(spec, server protoreflect.MethodDescriptor) []any {
 	var out []any
+	if spec.IsStreamingClient() != server.IsStreamingClient() || spec.IsStreamingServer() != server.IsStreamingServer() {
+		out = append(out, violation("response", fmt.Sprintf("the server's definition of %s %s", spec.Name(), streamingKind(server)), fmt.Sprintf("the .proto files declare that it %s", streamingKind(spec)), ""))
+	}
 	pairs := []struct {
 		what         string
 		spec, server protoreflect.MessageDescriptor
@@ -302,6 +305,20 @@ func (c *contract) compareMessages(spec, server protoreflect.MessageDescriptor, 
 		}
 	}
 	return out
+}
+
+// streamingKind says which ways md streams.
+func streamingKind(md protoreflect.MethodDescriptor) string {
+	switch {
+	case md.IsStreamingClient() && md.IsStreamingServer():
+		return "streams both ways"
+	case md.IsStreamingClient():
+		return "streams its requests"
+	case md.IsStreamingServer():
+		return "streams its responses"
+	default:
+		return "streams neither way"
+	}
 }
 
 // fieldType is the type of a field as a .proto file writes it, such as

@@ -2,6 +2,7 @@ package grpc
 
 import (
 	"context"
+	"fmt"
 	"net"
 	"os"
 	"path/filepath"
@@ -559,5 +560,24 @@ func TestRequestOfAMethodOnlyTheFilesDeclare(t *testing.T) {
 	vs := res["violations"].([]any)
 	if len(vs) != 1 || !strings.Contains(vs[0].(map[string]any)["message"].(string), "the server's definition of UserService declares no method Ping") {
 		t.Errorf("violations = %v, want the method the server lacks", vs)
+	}
+}
+
+func TestCheckDefinitionOfHowAMethodStreams(t *testing.T) {
+	addr := startUserServer(t)
+	unary := strings.Replace(userProto(t),
+		"rpc WatchUsers(WatchUsersRequest) returns (stream User);",
+		"rpc WatchUsers(WatchUsersRequest) returns (User);", 1)
+	ret, err := Request(map[string]any{
+		"service": "UserService", "addr": addr, "method": "WatchUsers", "body": `{"count": 1}`,
+		"proto": protoOf(writeProto(t, unary), false),
+	})
+	if err != nil {
+		t.Fatalf("Request() error: %v", err)
+	}
+	res, _ := ret["res"].(map[string]any)
+	v, _ := res["violations"].([]any)
+	if len(v) == 0 || !strings.Contains(fmt.Sprint(v[0]), "streams its responses") {
+		t.Errorf("violations = %v, want the server's definition to stream its responses", v)
 	}
 }
