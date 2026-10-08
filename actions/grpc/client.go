@@ -202,7 +202,13 @@ func (r *Req) invokeMethod(ctx context.Context, conn *grpc.ClientConn, reflectio
 	// the files'; a lookup that went wrong, such as one whose reply cannot
 	// be read, stays an error, so that the server's definition is never
 	// left unchecked without a word.
-	serviceDesc, err := r.getServiceDescriptor(ctx, reflectionClient)
+	symbol := r.Service
+	if spec != nil {
+		// Reflection finds a service by its full name, which the files know
+		// when the step gives a short one.
+		symbol = string(spec.Parent().FullName())
+	}
+	serviceDesc, err := r.getServiceDescriptor(ctx, reflectionClient, symbol)
 	switch {
 	case err == nil:
 		server = serviceDesc.Methods().ByName(protoreflect.Name(r.Method))
@@ -304,13 +310,14 @@ func (r *Req) invokeMethod(ctx context.Context, conn *grpc.ClientConn, reflectio
 		res.matched = r.contract.matched(spec)
 	}
 	// Only a call that succeeded answers with a message to check.
+	var responseViolations []any
 	if err == nil && spec != nil {
-		res.violations = append(res.violations, r.contract.checkResponse(spec, raw)...)
+		responseViolations = r.contract.checkResponse(spec, raw)
+		res.violations = append(res.violations, responseViolations...)
 	}
-	// A reply the call's definition cannot read is an error, unless that
-	// definition is the files', whose check has just told it as a reply
-	// that breaks them.
-	if readErr != nil && methodDesc != spec {
+	// A reply the call's definition cannot read is an error, unless the
+	// files' check has just told it as a reply that breaks them.
+	if readErr != nil && len(responseViolations) == 0 {
 		return nil, fmt.Errorf("failed to read the response: %w", readErr)
 	}
 
@@ -438,7 +445,9 @@ var (
 	errNotListed = errors.New("the server's reflection does not list the service")
 )
 
-func (r *Req) getServiceDescriptor(ctx context.Context, client grpc_reflection_v1alpha.ServerReflectionClient) (re protoreflect.ServiceDescriptor, er error) {
+// getServiceDescriptor returns the server's definition of the service, as
+// its reflection tells it, looked up by symbol, the service's name.
+func (r *Req) getServiceDescriptor(ctx context.Context, client grpc_reflection_v1alpha.ServerReflectionClient, symbol string) (re protoreflect.ServiceDescriptor, er error) {
 	stream, err := client.ServerReflectionInfo(ctx)
 	if err != nil {
 		return nil, reflectionError("failed to create reflection stream", err)
@@ -454,10 +463,17 @@ func (r *Req) getServiceDescriptor(ctx context.Context, client grpc_reflection_v
 	//nolint:staticcheck // v1alpha reflection API is still widely used
 	err = stream.Send(&grpc_reflection_v1alpha.ServerReflectionRequest{
 		MessageRequest: &grpc_reflection_v1alpha.ServerReflectionRequest_FileContainingSymbol{
-			FileContainingSymbol: r.Service,
+			FileContainingSymbol: symbol,
 		},
 	})
 	if err != nil {
+		// A stream the server has ended fails a send with io.EOF, and tells
+		// why, such as that it serves no reflection, to the receive.
+		if errors.Is(err, io.EOF) {
+			if _, recvErr := stream.Recv(); recvErr != nil && !errors.Is(recvErr, io.EOF) {
+				err = recvErr
+			}
+		}
 		return nil, reflectionError("failed to send reflection request", err)
 	}
 
@@ -502,8 +518,39 @@ func (r *Req) getServiceDescriptor(ctx context.Context, client grpc_reflection_v
 		}
 		pending = append(pending, fd)
 	}
+	files, err := buildFiles(pending)
+	if err != nil {
+		return nil, err
+	}
+
+	var found protoreflect.ServiceDescriptor
+	files.RangeFiles(func(f protoreflect.FileDescriptor) bool {
+		services := f.Services()
+		for i := 0; i < services.Len(); i++ {
+			service := services.Get(i)
+			// Support both short name and full name
+			if string(service.Name()) == symbol || string(service.FullName()) == symbol {
+				found = service
+				return false
+			}
+		}
+		return true
+	})
+	if found == nil {
+		return nil, fmt.Errorf("%w: service %s not found", errNotListed, symbol)
+	}
+	return found, nil
+}
+
+// buildFiles builds the files of a reflection reply, each once the files
+// it imports are: from the reply when it holds them, or else, for the
+// well-known types, from those built into Probe.
+func buildFiles(pending []*descriptorpb.FileDescriptorProto) (*protoregistry.Files, error) {
 	files := new(protoregistry.Files)
-	resolver := filesResolver{files}
+	resolver := filesResolver{files: files, reply: map[string]bool{}}
+	for _, fd := range pending {
+		resolver.reply[fd.GetName()] = true
+	}
 	for len(pending) > 0 {
 		var rest []*descriptorpb.FileDescriptorProto
 		var lastErr error
@@ -523,24 +570,7 @@ func (r *Req) getServiceDescriptor(ctx context.Context, client grpc_reflection_v
 		}
 		pending = rest
 	}
-
-	var found protoreflect.ServiceDescriptor
-	files.RangeFiles(func(f protoreflect.FileDescriptor) bool {
-		services := f.Services()
-		for i := 0; i < services.Len(); i++ {
-			service := services.Get(i)
-			// Support both short name and full name
-			if string(service.Name()) == r.Service || string(service.FullName()) == r.Service {
-				found = service
-				return false
-			}
-		}
-		return true
-	})
-	if found == nil {
-		return nil, fmt.Errorf("%w: service %s not found", errNotListed, r.Service)
-	}
-	return found, nil
+	return files, nil
 }
 
 // reflectionError wraps err with what failed, marking a status that says
@@ -554,14 +584,21 @@ func reflectionError(what string, err error) error {
 
 // filesResolver finds a file, or a descriptor, among the files built from a
 // reflection reply, and then among those built into Probe, which hold the
-// well-known types.
+// well-known types. A file the reply holds is found only once it is built
+// from the reply, so that a file importing it is bound to the server's
+// version rather than to one built into Probe by the same name.
 type filesResolver struct {
 	files *protoregistry.Files
+	// reply are the paths of the files the reply holds.
+	reply map[string]bool
 }
 
 func (r filesResolver) FindFileByPath(path string) (protoreflect.FileDescriptor, error) {
 	if fd, err := r.files.FindFileByPath(path); err == nil {
 		return fd, nil
+	}
+	if r.reply[path] {
+		return nil, protoregistry.NotFound
 	}
 	return protoregistry.GlobalFiles.FindFileByPath(path)
 }
@@ -570,7 +607,11 @@ func (r filesResolver) FindDescriptorByName(name protoreflect.FullName) (protore
 	if d, err := r.files.FindDescriptorByName(name); err == nil {
 		return d, nil
 	}
-	return protoregistry.GlobalFiles.FindDescriptorByName(name)
+	d, err := protoregistry.GlobalFiles.FindDescriptorByName(name)
+	if err == nil && r.reply[d.ParentFile().Path()] {
+		return nil, protoregistry.NotFound
+	}
+	return d, err
 }
 
 type Option func(*Callback)
