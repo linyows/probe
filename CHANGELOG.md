@@ -4,9 +4,13 @@ Release notes for each version are generated from the commits by GoReleaser.
 This file records what those notes cannot carry well: changes that break code
 importing probe as a library.
 
-## Unreleased
+## v1.20.0 (2026-10-08)
 
 ### Breaking Changes
+
+This release breaks the Go API in a minor version, as v1.18.0 did, and
+raises the Go version a module importing probe needs. Workflow files are
+not affected.
 
 Probe needs Go 1.27, up from 1.26.6, because chromedp v0.19.1, which the
 browser action is built on, needs it. A module that imports probe has to be
