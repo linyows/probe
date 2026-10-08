@@ -5,6 +5,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -419,5 +420,33 @@ import "google/api/field_behavior.proto";
 				}
 			}
 		})
+	}
+}
+
+func TestRequestTellsWhatTheCallWasMatchedTo(t *testing.T) {
+	addr := startUserServer(t)
+	path := writeProto(t, userProto(t))
+	proto := map[string]any{"files": []any{path}, "import_paths": []any{filepath.Dir(path)}}
+
+	ret, err := Request(map[string]any{"addr": addr, "service": "UserService", "method": "GetUser", "body": `{"user_id": "123"}`, "proto": proto})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := ret["res"].(map[string]any)["contract"]
+	want := map[string]any{"spec": path, "operation": "UserService/GetUser"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("res.contract = %#v, want %#v", got, want)
+	}
+
+	// A method the files do not declare is matched to nothing.
+	spec := strings.Replace(userProto(t), "rpc GetUser(GetUserRequest) returns (GetUserResponse);", "", 1)
+	proto["files"] = []any{writeProto(t, spec)}
+	proto["import_paths"] = []any{filepath.Dir(proto["files"].([]any)[0].(string))}
+	ret, err = Request(map[string]any{"addr": addr, "service": "UserService", "method": "GetUser", "body": `{"user_id": "123"}`, "proto": proto})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c, ok := ret["res"].(map[string]any)["contract"]; ok {
+		t.Errorf("res.contract = %#v, want none", c)
 	}
 }

@@ -20,6 +20,10 @@ import (
 type Coverage struct {
 	Spec       string
 	Operations []OperationCoverage
+	// OperationsOnly is set for a contract that declares no responses, such
+	// as a .proto file, whose methods do not say which statuses they end
+	// with, so that its coverage is told by operations alone.
+	OperationsOnly bool
 }
 
 // OperationCoverage is one operation of a document, such as GET /users/{id}.
@@ -66,6 +70,41 @@ func NewCoverage(spec string, r *report.Report) (*Coverage, error) {
 		return nil, fmt.Errorf("failed to build OpenAPI model: %w", err)
 	}
 
+	var declared []Declared
+	if model.Model.Paths != nil && model.Model.Paths.PathItems != nil {
+		for path, item := range model.Model.Paths.PathItems.FromOldest() {
+			for method, op := range item.GetOperations().FromOldest() {
+				d := Declared{Operation: strings.ToUpper(method) + " " + path}
+				if op.Responses != nil {
+					if op.Responses.Codes != nil {
+						for code := range op.Responses.Codes.KeysFromOldest() {
+							d.Responses = append(d.Responses, code)
+						}
+					}
+					if op.Responses.Default != nil {
+						d.Responses = append(d.Responses, "default")
+					}
+				}
+				declared = append(declared, d)
+			}
+		}
+	}
+	return CountCoverage(spec, declared, r)
+}
+
+// Declared is an operation a contract declares, with the responses it
+// declares for it, in the order it declares them.
+type Declared struct {
+	Operation string
+	Responses []string
+}
+
+// CountCoverage counts the steps of r whose response was matched to each
+// operation and response declared in the contract spec names, such as an
+// OpenAPI document or a .proto file. A step counts for the contract when it
+// names the same path, as the step gave it. It is an error when no step of
+// r was checked against spec.
+func CountCoverage(spec string, declared []Declared, r *report.Report) (*Coverage, error) {
 	type key struct{ operation, response string }
 	steps := map[key]int{}
 	checked := map[string]bool{}
@@ -86,32 +125,19 @@ func NewCoverage(spec string, r *report.Report) (*Coverage, error) {
 		}
 	}
 	if len(checked) == 0 {
-		return nil, errors.New("no step of the report was checked against an OpenAPI document: give openapi to the http steps, and write the report with --report json")
+		return nil, errors.New("no step of the report was checked against a contract: give openapi to the http steps or proto to the grpc steps, and write the report with --report json")
 	}
 	if !matchesAny(spec, checked) {
 		return nil, fmt.Errorf("no step of the report was checked against %s; they were checked against %s", spec, strings.Join(sortedNames(checked), ", "))
 	}
 
 	cov := &Coverage{Spec: spec}
-	if model.Model.Paths == nil || model.Model.Paths.PathItems == nil {
-		return cov, nil
-	}
-	for path, item := range model.Model.Paths.PathItems.FromOldest() {
-		for method, op := range item.GetOperations().FromOldest() {
-			name := strings.ToUpper(method) + " " + path
-			oc := OperationCoverage{Operation: name, Steps: steps[key{name, ""}]}
-			if op.Responses != nil {
-				if op.Responses.Codes != nil {
-					for code := range op.Responses.Codes.KeysFromOldest() {
-						oc.Responses = append(oc.Responses, ResponseCoverage{Response: code, Steps: steps[key{name, code}]})
-					}
-				}
-				if op.Responses.Default != nil {
-					oc.Responses = append(oc.Responses, ResponseCoverage{Response: "default", Steps: steps[key{name, "default"}]})
-				}
-			}
-			cov.Operations = append(cov.Operations, oc)
+	for _, d := range declared {
+		oc := OperationCoverage{Operation: d.Operation, Steps: steps[key{d.Operation, ""}]}
+		for _, res := range d.Responses {
+			oc.Responses = append(oc.Responses, ResponseCoverage{Response: res, Steps: steps[key{d.Operation, res}]})
 		}
+		cov.Operations = append(cov.Operations, oc)
 	}
 	return cov, nil
 }
@@ -165,7 +191,9 @@ func (c *Coverage) Write(w io.Writer) error {
 	}
 	ops, checkedOps, ress, checkedRess := c.Counts()
 	fmt.Fprintf(&b, "\nOperations: %s\n", ratio(checkedOps, ops))
-	fmt.Fprintf(&b, "Responses:  %s\n", ratio(checkedRess, ress))
+	if !c.OperationsOnly {
+		fmt.Fprintf(&b, "Responses:  %s\n", ratio(checkedRess, ress))
+	}
 	_, err := io.WriteString(w, b.String())
 	return err
 }

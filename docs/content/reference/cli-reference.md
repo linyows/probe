@@ -361,12 +361,13 @@ It exits with status 2 when it finds an error, and with 0 when it finds only war
 
 ### `coverage`
 
-Tell which operations and responses of an OpenAPI document the steps of a run checked, from the report the run wrote with `--report json`. A step counts when the http action checked its response against the document with `openapi`, whether the step passed or not.
+Tell which operations and responses of an OpenAPI document, or which methods of a `.proto` file, the steps of a run checked, from the report the run wrote with `--report json`. A step counts when the http action checked its response against the document with `openapi`, or the grpc action checked its call against the file with `proto`, whether the step passed or not.
 
 **Usage:**
 ```bash
 probe --report json workflow.yml
 probe coverage openapi.yml probe-report.json
+probe coverage proto/users.proto probe-report.json
 ```
 
 **Output Example:**
@@ -385,7 +386,9 @@ Operations: 2 of 3 checked (66.7%)
 Responses:  2 of 4 checked (50.0%)
 ```
 
-Each operation the document declares is listed with the responses it declares, such as `200`, `2XX` or `default`, marked `✓` when a step's response was matched to it and `-` when none was. A step whose status code the operation does not declare counts for the operation alone. Steps count for the document given when they name it by the same path, written in another way such as `./openapi.yml` too; a report whose steps name none of them is an error that lists those they name. It exits with status 0 whatever the coverage, and with 2 when the document or the report cannot be read.
+Each operation the document declares is listed with the responses it declares, such as `200`, `2XX` or `default`, marked `✓` when a step's response was matched to it and `-` when none was. A step whose status code the operation does not declare counts for the operation alone. Steps count for the document given when they name it by the same path, written in another way such as `./openapi.yml` too; a report whose steps name none of them is an error that lists those they name. A file ending in `.proto` is taken for the grpc action's contract. It is read on its own, without its imports, and each method of each service it declares is listed, such as `users.v1.UserService/GetUser`. A `.proto` file declares no statuses its methods end with, so its coverage is told by methods alone, without the line for responses. Name the file as `proto.files` does.
+
+It exits with status 0 whatever the coverage, and with 2 when the document or the report cannot be read.
 
 ### `guide`
 

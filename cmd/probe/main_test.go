@@ -108,7 +108,7 @@ func TestCmd_usage(t *testing.T) {
 }
 
 func TestCmd_start(t *testing.T) {
-	help := " __  __  __  __  __\n|  ||  ||  ||  || _|\n|  ||  /| |||  /|  |\n| | |  \\| |||  \\| _|\n|_| |_\\_|__||__||__|\n\nProbe - A YAML-based workflow automation tool.\nhttps://github.com/linyows/probe (ver: dev, rev: unknown)\n\nUsage: probe [options] <workflow-file>\n       probe gen <openapi-file>\n       probe dag [--mermaid] <workflow-file>\n       probe check <workflow-file>\n       probe coverage <openapi-file> <report-file>\n       probe guide [topic]\n       probe skill [install [dir]]\n\nArguments:\n  workflow-file    Path to YAML workflow file(s). Multiple files can be\n                   specified with comma-separated paths (e.g., \"base.yml,override.yml\")\n                   to merge configurations.\n\nSubcommands:\n  gen <file>       Generate probe workflow YAML from OpenAPI specification\n  dag <file>       Show job dependency graph as ASCII art (default)\n                   Use --mermaid to output in Mermaid format\n  check <file>     Find what is wrong or weak in a workflow without running it\n  coverage <openapi-file> <report-file>\n                   Show which operations and responses of an OpenAPI document\n                   the steps of a run checked, from its --report json file\n  guide [topic]    Print a page of the documentation as Markdown\n                   Without a topic, list the topics\n  skill            Print the skill that teaches coding agents to use Probe\n                   install [dir] writes it to dir (.claude/skills/probe)\n\nOptions:\n  -h, --help         Show command usage\n      --version      Show version information\n      --timing       Show timing (start time, response time)\n  -v, --verbose      Show verbose log\n      --output       Report output: auto, spinner or stream (env: PROBE_OUTPUT)\n      --report       Write reports: json, junit, markdown, github-summary as format[=path],... (env: PROBE_REPORT)\n      --read-only    Refuse what writes, such as an HTTP POST or an UPDATE (env: PROBE_READ_ONLY)\n      --allow-host   Refuse connecting to hosts but these, as host[:port] or *.domain,... (env: PROBE_ALLOW_HOSTS)\n      --allow-action Run these actions under --read-only or --allow-host although they do not keep to them (env: PROBE_ALLOW_ACTIONS)\n"
+	help := " __  __  __  __  __\n|  ||  ||  ||  || _|\n|  ||  /| |||  /|  |\n| | |  \\| |||  \\| _|\n|_| |_\\_|__||__||__|\n\nProbe - A YAML-based workflow automation tool.\nhttps://github.com/linyows/probe (ver: dev, rev: unknown)\n\nUsage: probe [options] <workflow-file>\n       probe gen <openapi-file>\n       probe dag [--mermaid] <workflow-file>\n       probe check <workflow-file>\n       probe coverage <openapi-file|proto-file> <report-file>\n       probe guide [topic]\n       probe skill [install [dir]]\n\nArguments:\n  workflow-file    Path to YAML workflow file(s). Multiple files can be\n                   specified with comma-separated paths (e.g., \"base.yml,override.yml\")\n                   to merge configurations.\n\nSubcommands:\n  gen <file>       Generate probe workflow YAML from OpenAPI specification\n  dag <file>       Show job dependency graph as ASCII art (default)\n                   Use --mermaid to output in Mermaid format\n  check <file>     Find what is wrong or weak in a workflow without running it\n  coverage <openapi-file|proto-file> <report-file>\n                   Show which operations of an OpenAPI document, or methods of\n                   a .proto file, the steps of a run checked, from its\n                   --report json file\n  guide [topic]    Print a page of the documentation as Markdown\n                   Without a topic, list the topics\n  skill            Print the skill that teaches coding agents to use Probe\n                   install [dir] writes it to dir (.claude/skills/probe)\n\nOptions:\n  -h, --help         Show command usage\n      --version      Show version information\n      --timing       Show timing (start time, response time)\n  -v, --verbose      Show verbose log\n      --output       Report output: auto, spinner or stream (env: PROBE_OUTPUT)\n      --report       Write reports: json, junit, markdown, github-summary as format[=path],... (env: PROBE_REPORT)\n      --read-only    Refuse what writes, such as an HTTP POST or an UPDATE (env: PROBE_READ_ONLY)\n      --allow-host   Refuse connecting to hosts but these, as host[:port] or *.domain,... (env: PROBE_ALLOW_HOSTS)\n      --allow-action Run these actions under --read-only or --allow-host although they do not keep to them (env: PROBE_ALLOW_ACTIONS)\n"
 
 	tests := []struct {
 		name           string
@@ -413,8 +413,12 @@ paths:
 `), 0o600); err != nil {
 		t.Fatal(err)
 	}
+	proto := filepath.Join(dir, "users.proto")
+	if err := os.WriteFile(proto, []byte("syntax = \"proto3\";\npackage users.v1;\nimport \"not/at/hand.proto\";\nservice UserService {\n  rpc GetUser(Req) returns (Res);\n  rpc DeleteUser(Req) returns (Res);\n}\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
 	reportFile := filepath.Join(dir, "probe-report.json")
-	if err := os.WriteFile(reportFile, []byte(`{"jobs":[{"steps":[{"index":0,"contract":{"spec":"`+spec+`","operation":"GET /users","response":"200"}}]}]}`), 0o600); err != nil {
+	if err := os.WriteFile(reportFile, []byte(`{"jobs":[{"steps":[{"index":0,"contract":{"spec":"`+spec+`","operation":"GET /users","response":"200"}},{"index":1,"contract":{"spec":"`+proto+`","operation":"users.v1.UserService/GetUser"}}]}]}`), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
@@ -435,13 +439,19 @@ paths:
 			name:       "coverage without a report",
 			args:       []string{"probe", "coverage", spec},
 			expectCode: probe.ExitConfigError,
-			errContain: "an OpenAPI spec file and a report file are required",
+			errContain: "an OpenAPI spec file or a .proto file, and a report file, are required",
 		},
 		{
 			name:       "coverage with a report that cannot be read",
 			args:       []string{"probe", "coverage", spec, filepath.Join(dir, "none.json")},
 			expectCode: probe.ExitConfigError,
 			errContain: "failed to read report",
+		},
+		{
+			name:       "coverage of a .proto file",
+			args:       []string{"probe", "coverage", proto, reportFile},
+			expectCode: 0,
+			contains:   "Operations: 1 of 2 checked (50.0%)",
 		},
 		{
 			name:       "coverage with a document the report did not check",

@@ -13,6 +13,7 @@ import (
 	"github.com/linyows/probe"
 	"github.com/linyows/probe/actionrpc"
 	"github.com/linyows/probe/actions"
+	"github.com/linyows/probe/actions/grpc"
 	"github.com/linyows/probe/oas"
 	"github.com/linyows/probe/report"
 )
@@ -226,7 +227,7 @@ Usage: probe [options] <workflow-file>
        probe gen <openapi-file>
        probe dag [--mermaid] <workflow-file>
        probe check <workflow-file>
-       probe coverage <openapi-file> <report-file>
+       probe coverage <openapi-file|proto-file> <report-file>
        probe guide [topic]
        probe skill [install [dir]]
 
@@ -240,9 +241,10 @@ Subcommands:
   dag <file>       Show job dependency graph as ASCII art (default)
                    Use --mermaid to output in Mermaid format
   check <file>     Find what is wrong or weak in a workflow without running it
-  coverage <openapi-file> <report-file>
-                   Show which operations and responses of an OpenAPI document
-                   the steps of a run checked, from its --report json file
+  coverage <openapi-file|proto-file> <report-file>
+                   Show which operations of an OpenAPI document, or methods of
+                   a .proto file, the steps of a run checked, from its
+                   --report json file
   guide [topic]    Print a page of the documentation as Markdown
                    Without a topic, list the topics
   skill            Print the skill that teaches coding agents to use Probe
@@ -534,12 +536,13 @@ func plural(n int, word string) string {
 	return fmt.Sprintf("%d %ss", n, word)
 }
 
-// runCoverage prints which operations and responses of an OpenAPI document
-// the steps of a run checked, as its JSON report records them.
+// runCoverage prints which operations and responses of an OpenAPI
+// document, or methods of a .proto file, the steps of a run checked, as its
+// JSON report records them.
 func (c *Cmd) runCoverage() int {
 	if len(c.SubCommandArgs) != 2 {
-		_, _ = fmt.Fprintf(c.errWriter, "[ERROR] an OpenAPI spec file and a report file are required\n")
-		_, _ = fmt.Fprintf(c.errWriter, "Usage: probe coverage <openapi-file> <report-file>\n")
+		_, _ = fmt.Fprintf(c.errWriter, "[ERROR] an OpenAPI spec file or a .proto file, and a report file, are required\n")
+		_, _ = fmt.Fprintf(c.errWriter, "Usage: probe coverage <openapi-file|proto-file> <report-file>\n")
 		return probe.ExitConfigError
 	}
 
@@ -548,7 +551,13 @@ func (c *Cmd) runCoverage() int {
 		_, _ = fmt.Fprintf(c.errWriter, "[ERROR] %v\n", err)
 		return probe.ExitConfigError
 	}
-	cov, err := oas.NewCoverage(c.SubCommandArgs[0], r)
+	// A .proto file is the contract of the grpc action, and any other the
+	// OpenAPI document of the http action.
+	newCoverage := oas.NewCoverage
+	if strings.HasSuffix(c.SubCommandArgs[0], ".proto") {
+		newCoverage = grpc.NewCoverage
+	}
+	cov, err := newCoverage(c.SubCommandArgs[0], r)
 	if err != nil {
 		_, _ = fmt.Fprintf(c.errWriter, "[ERROR] %v\n", err)
 		return probe.ExitConfigError

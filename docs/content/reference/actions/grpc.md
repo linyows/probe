@@ -54,6 +54,7 @@ After the call, `res` holds the reply and the gRPC status.
 | `status` | Integer | `0` when the status is `OK`, otherwise `1` |
 | `req` | Object | The request as it was sent |
 | `res.violations` | Array | What the `.proto` files do not allow in the call, empty when they allow all of it. Present only when `proto` is given |
+| `res.contract` | Object | What the call was matched to in the `.proto` files: `spec`, the file that declares the service as `proto.files` names it, and `operation`, such as `users.v1.UserService/GetUser`. Present only when the files declare the method; [`probe coverage`](/reference/cli-reference#coverage) counts it |
 
 `res.status_code` is the canonical name of the status the call ended with: `OK`, `CANCELLED`, `UNKNOWN`, `INVALID_ARGUMENT`, `DEADLINE_EXCEEDED`, `NOT_FOUND`, `ALREADY_EXISTS`, `PERMISSION_DENIED`, `RESOURCE_EXHAUSTED`, `FAILED_PRECONDITION`, `ABORTED`, `OUT_OF_RANGE`, `UNIMPLEMENTED`, `INTERNAL`, `UNAVAILABLE`, `DATA_LOSS` or `UNAUTHENTICATED`. A status other than `OK` is the server's answer, so the step goes on to its test, which can expect it. Only a call that gets no status from the server ends the step with an error: one to a server that cannot be reached or whose reflection does not list the service, or one that runs out of `timeout` or loses its connection before the server answers.
 
