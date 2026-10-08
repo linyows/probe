@@ -7,6 +7,7 @@ import (
 
 	"github.com/hashicorp/go-hclog"
 	"github.com/linyows/probe/actionrpc"
+	"github.com/linyows/probe/mapping"
 )
 
 type Action struct {
@@ -67,4 +68,15 @@ func joinHeader(h hp.Header) map[string]any {
 		out[k] = strings.Join(v, ", ")
 	}
 	return out
+}
+
+// Params returns the keys the http action takes in with: those of Req,
+// the method shorthands, such as get and post, and those it reads apart
+// from Req.
+func Params() []string {
+	params := mapping.FieldTags(Req{})
+	for _, m := range httpMethods {
+		params = append(params, strings.ToLower(m))
+	}
+	return append(params, "basic_auth", "cookies", "form", "keep_cookies", "multipart", "openapi", "trace_header")
 }

@@ -6,6 +6,7 @@ import (
 
 	"github.com/hashicorp/go-hclog"
 	"github.com/linyows/probe/actionrpc"
+	"github.com/linyows/probe/mapping"
 )
 
 type Action struct {
@@ -37,4 +38,10 @@ func Serve() {
 	actionrpc.Serve(func(log hclog.Logger) actionrpc.Action {
 		return &Action{log: log}
 	})
+}
+
+// Params returns the keys the grpc action takes in with: those of Req, and
+// proto, which it reads apart from Req.
+func Params() []string {
+	return append(mapping.FieldTags(Req{}), "proto")
 }

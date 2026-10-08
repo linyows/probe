@@ -5,6 +5,7 @@ import (
 
 	"github.com/hashicorp/go-hclog"
 	"github.com/linyows/probe/actionrpc"
+	"github.com/linyows/probe/mapping"
 )
 
 type Action struct {
@@ -40,4 +41,9 @@ func Serve() {
 	actionrpc.Serve(func(log hclog.Logger) actionrpc.Action {
 		return &Action{log: log}
 	})
+}
+
+// Params returns the keys the ssh action takes in with.
+func Params() []string {
+	return mapping.FieldTags(Req{})
 }

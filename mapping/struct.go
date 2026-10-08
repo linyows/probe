@@ -288,6 +288,27 @@ func MapToStructByTags(params map[string]any, dest any) error {
 	return nil
 }
 
+// FieldTags returns the names the "map" tags of v's fields give, v being a
+// struct or a pointer to one: the keys MapToStructByTags fills it from, in
+// the order of the fields. A tag is taken as it is written, as
+// MapToStructByTags takes it, and a field without one has no key.
+func FieldTags(v any) []string {
+	t := reflect.TypeOf(v)
+	for t != nil && t.Kind() == reflect.Pointer {
+		t = t.Elem()
+	}
+	if t == nil || t.Kind() != reflect.Struct {
+		return nil
+	}
+	var names []string
+	for f := range t.Fields() {
+		if name := f.Tag.Get(tagMap); name != "" && f.IsExported() {
+			names = append(names, name)
+		}
+	}
+	return names
+}
+
 // StructToMapByTags converts a struct to a map[string]any using struct tags.
 // Fields are mapped using the "map" tag. Supports nested structs, []byte fields, and map[string]string fields.
 // This is the inverse operation of MapToStructByTags.

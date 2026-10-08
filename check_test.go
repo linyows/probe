@@ -506,3 +506,148 @@ func TestDistance(t *testing.T) {
 		}
 	}
 }
+
+func TestCheck_WithKeys(t *testing.T) {
+	opts := CheckOptions{
+		Actions: []string{"hello", "http", "shell"},
+		Params: map[string][]string{
+			"http":  {"url", "method", "headers", "body", "get", "post"},
+			"shell": {"cmd", "env"},
+		},
+	}
+	tests := []struct {
+		name     string
+		workflow string
+		want     []want
+	}{
+		{
+			name: "keys the actions take",
+			workflow: `name: ok
+jobs:
+- name: J
+  defaults:
+    http:
+      url: http://localhost
+  steps:
+  - uses: http
+    with:
+      post: /users
+      headers:
+        whatever-header: x
+      body: {any: thing}
+    test: res.code == 201
+  - uses: hello
+    with:
+      anything: goes
+    test: res.code == 0
+  - uses: ./actions/mine
+    with:
+      own: keys
+    test: res.code == 0
+  - uses: http
+    with:
+      get: /x
+      "{{ vars.key }}": templated
+    test: res.code == 200
+`,
+		},
+		{
+			name: "keys a step's action does not take",
+			workflow: `name: typos
+jobs:
+- name: J
+  steps:
+  - name: Create
+    uses: http
+    with:
+      url: http://localhost
+      post: /users
+      heders:
+        content-type: application/json
+      bdoy: {name: probe}
+    test: res.code == 201
+  - name: Run
+    uses: shell
+    with:
+      command: echo
+    test: res.code == 0
+`,
+			want: []want{
+				{SeverityError, 10, `with: unknown key "heders" for the http action; did you mean "headers"?`},
+				{SeverityError, 12, `with: unknown key "bdoy" for the http action; did you mean "body"?`},
+				{SeverityError, 17, `with: unknown key "command" for the shell action`},
+			},
+		},
+		{
+			name: "keys from a YAML alias or merge key",
+			workflow: `name: aliases
+shared:
+  params: &params
+    url: http://localhost
+    bdoy: {name: probe}
+jobs:
+- name: J
+  steps:
+  - name: Alias
+    uses: http
+    with: *params
+    test: res.code == 200
+  - name: Merge
+    uses: http
+    with:
+      <<: *params
+      post: /users
+    test: res.code == 201
+  - name: Unclosed
+    uses: http
+    with:
+      url: http://localhost
+      "bdoy{{": x
+    test: res.code == 200
+`,
+			want: []want{
+				// Told on the step's with, which the alias is written on.
+				{SeverityError, 11, `with: unknown key "bdoy" for the http action`},
+				{SeverityError, 15, `with: unknown key "bdoy" for the http action`},
+				{SeverityError, 23, `with: unknown key "bdoy{{" for the http action`},
+			},
+		},
+		{
+			name: "keys of defaults told once on their own line",
+			workflow: `name: defaults
+jobs:
+- name: J
+  defaults:
+    http:
+      url: http://localhost
+      heders:
+        accept: application/json
+    htp:
+      url: http://localhost
+  steps:
+  - uses: http
+    with:
+      get: /a
+    test: res.code == 200
+  - uses: http
+    with:
+      get: /b
+    test: res.code == 200
+`,
+			want: []want{
+				{SeverityError, 7, `defaults.http: unknown key "heders" for the http action; did you mean "headers"?`},
+				{SeverityError, 9, `defaults: no action is named "htp", so its defaults apply to no step; did you mean "http"?`},
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			path := writeWorkflow(t, t.TempDir(), "workflow.yml", tt.workflow)
+			findings, err := Check(path, opts)
+			if err != nil {
+				t.Fatal(err)
+			}
+			checkFindings(t, findings, tt.want)
+		})
+	}
+}

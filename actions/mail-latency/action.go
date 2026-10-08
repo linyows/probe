@@ -107,3 +107,8 @@ func Serve() {
 		return &Action{log: log}
 	})
 }
+
+// Params returns the keys the mail-latency action takes in with.
+func Params() []string {
+	return []string{"mail_dir", "output_dir"}
+}

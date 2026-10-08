@@ -8,6 +8,7 @@ import (
 
 	"github.com/hashicorp/go-hclog"
 	"github.com/linyows/probe/actionrpc"
+	"github.com/linyows/probe/mapping"
 )
 
 type Action struct {
@@ -60,4 +61,9 @@ func stopStartedOnSignal() {
 			_ = syscall.Kill(os.Getpid(), s)
 		}
 	}()
+}
+
+// Params returns the keys the shell action takes in with.
+func Params() []string {
+	return mapping.FieldTags(Req{})
 }
