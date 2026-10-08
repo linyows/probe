@@ -61,6 +61,10 @@ type CheckOptions struct {
 	// external ones it names by a path or a repository. When it is empty,
 	// the names are not checked.
 	Actions []string
+	// Params are the keys each action takes in with, by its name. The with
+	// of an action it does not name, which may take any key, is not
+	// checked.
+	Params map[string][]string
 }
 
 // Check reads the workflow at path, as a run reads it, and returns what is
@@ -108,6 +112,7 @@ func Check(path string, opts CheckOptions) ([]Finding, error) {
 	}
 	c.wf = &p.workflow
 	c.checkActions()
+	c.checkWith()
 	c.checkNeeds()
 	c.checkSteps()
 	c.checkExpressions()
@@ -342,6 +347,8 @@ func (c *checker) walkWorkflow(body ast.Node) {
 			jobWhere := named(fmt.Sprintf("job %d", i), job)
 			c.keys(job, jp, jobWhere, jobKeys, func(key string, value ast.Node) {
 				switch key {
+				case "defaults":
+					c.noteLines(jp+".defaults", value)
 				case "repeat":
 					c.keys(value, jp+".repeat", jobWhere, repeatKeys, nil)
 				case "steps":
@@ -463,6 +470,59 @@ func (c *checker) checkActions() {
 			}
 			c.add(SeverityError, c.line(path), c.stepWhere(i, j), "%s", msg)
 		}
+	}
+}
+
+// checkWith checks the keys of each step's with, and of each job's
+// defaults, against those the action takes. A key of a step's with that
+// came from its job's defaults is checked there, on the line it is
+// written on, and a key that holds a template, which names a key only when
+// it runs, is not checked.
+func (c *checker) checkWith() {
+	for i, job := range c.wf.Jobs {
+		jp := fmt.Sprintf("jobs[%d]", i)
+		if defaults, ok := job.Defaults.(map[string]any); ok {
+			for _, action := range slices.Sorted(maps.Keys(defaults)) {
+				path := jp + ".defaults." + action
+				if len(c.opts.Actions) > 0 && !slices.Contains(c.opts.Actions, action) && !actionref.IsExternal(action) {
+					msg := fmt.Sprintf("defaults: no action is named %q, so its defaults apply to no step", action)
+					if s := suggest(action, c.opts.Actions); s != "" {
+						msg += fmt.Sprintf("; did you mean %q?", s)
+					}
+					c.add(SeverityError, c.line(path), c.jobWhere(i), "%s", msg)
+					continue
+				}
+				with, _ := defaults[action].(map[string]any)
+				c.withKeys(action, with, path, c.jobWhere(i), "defaults."+action, func(string) bool { return true })
+			}
+		}
+		for j, st := range job.Steps {
+			sp := fmt.Sprintf("%s.steps[%d].with", jp, j)
+			own := func(key string) bool {
+				_, ok := c.lines[sp+"."+key]
+				return ok
+			}
+			c.withKeys(st.Uses, st.With, sp, c.stepWhere(i, j), "with", own)
+		}
+	}
+}
+
+// withKeys checks the keys of with, at path, against those action takes,
+// for each key own says belongs there.
+func (c *checker) withKeys(action string, with map[string]any, path, where, field string, own func(string) bool) {
+	params, ok := c.opts.Params[action]
+	if !ok {
+		return
+	}
+	for _, key := range slices.Sorted(maps.Keys(with)) {
+		if slices.Contains(params, key) || strings.Contains(key, "{{") || !own(key) {
+			continue
+		}
+		msg := fmt.Sprintf("%s: unknown key %q for the %s action", field, key, action)
+		if s := suggest(key, params); s != "" {
+			msg += fmt.Sprintf("; did you mean %q?", s)
+		}
+		c.add(SeverityError, c.line(path+"."+key), where, "%s", msg)
 	}
 }
 
