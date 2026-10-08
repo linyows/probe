@@ -290,3 +290,23 @@ func TestAssignStructErrors(t *testing.T) {
 		})
 	}
 }
+
+func TestFieldTags(t *testing.T) {
+	type req struct {
+		URL      string            `map:"url"`
+		Headers  map[string]string `map:"headers"`
+		Skipped  string            `map:"-"`
+		Untagged string
+		hidden   string `map:"hidden"`
+	}
+	want := []string{"url", "headers"}
+	for _, v := range []any{req{}, &req{}} {
+		if got := FieldTags(v); !reflect.DeepEqual(got, want) {
+			t.Errorf("FieldTags(%T) = %v, want %v", v, got, want)
+		}
+	}
+	if got := FieldTags("not a struct"); got != nil {
+		t.Errorf("FieldTags(string) = %v, want nil", got)
+	}
+	_ = req{}.hidden
+}
