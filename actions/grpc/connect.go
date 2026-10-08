@@ -134,6 +134,9 @@ func (r *Req) doConnect(ctx context.Context, timeout time.Duration) (*Result, er
 	if err != nil {
 		return nil, err
 	}
+	// The client makes this one call, so the connection it keeps for the
+	// next is closed rather than left open until it times out.
+	defer client.CloseIdleConnections()
 
 	if r.cb != nil && r.cb.before != nil {
 		r.cb.before(ctx, r.Service, r.Method)
@@ -229,7 +232,9 @@ func (r *Req) invokeConnect(ctx context.Context, client *http.Client, base, code
 	}
 	req.Header.Set("Content-Type", "application/"+codec)
 	req.Header.Set("Connect-Protocol-Version", connectProtocolVersion)
-	req.Header.Set("Connect-Timeout-Ms", strconv.FormatInt(timeout.Milliseconds(), 10))
+	if ms, ok := connectTimeout(timeout); ok {
+		req.Header.Set("Connect-Timeout-Ms", ms)
+	}
 
 	resp, err := client.Do(req)
 	if err != nil {
@@ -259,6 +264,12 @@ func (r *Req) invokeConnect(ctx context.Context, client *http.Client, base, code
 	}
 
 	if spec == nil {
+		// Without the files the body is not read, but a reply that is not
+		// JSON at all cannot be the message, as one the files cannot read
+		// is not.
+		if !json.Valid(data) {
+			return nil, errors.New("failed to read the response: body is not JSON")
+		}
 		res.Body = string(data)
 		return res, nil
 	}
@@ -287,6 +298,22 @@ func (r *Req) invokeConnect(ctx context.Context, client *http.Client, base, code
 		return nil, fmt.Errorf("failed to read the response: %w", readErr)
 	}
 	return res, nil
+}
+
+// connectTimeout returns timeout as the Connect-Timeout-Ms header writes
+// it: in whole milliseconds, at least 1 for a timeout shorter than one, and
+// in ten digits at most, beyond which no header is sent and the deadline is
+// kept on this side alone.
+func connectTimeout(timeout time.Duration) (string, bool) {
+	if timeout <= 0 {
+		return "", false
+	}
+	ms := max(timeout.Milliseconds(), 1)
+	v := strconv.FormatInt(ms, 10)
+	if len(v) > 10 {
+		return "", false
+	}
+	return v, true
 }
 
 // connectError returns the code and the message of resp when it is an

@@ -9,6 +9,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"connectrpc.com/connect"
 	"github.com/linyows/probe/actions/grpc/testserver/pb"
@@ -324,6 +325,66 @@ service PingService { rpc Watch(Ping) returns (stream Ping); }
 	})
 	if err == nil || !strings.Contains(err.Error(), "is a streaming method") {
 		t.Errorf("Request() error = %v, want one saying the method streams", err)
+	}
+}
+
+func TestConnectRequestClosesItsConnection(t *testing.T) {
+	closed := make(chan struct{}, 1)
+	srv := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte("{}"))
+	}))
+	srv.Config.ConnState = func(_ net.Conn, state http.ConnState) {
+		if state == http.StateClosed {
+			select {
+			case closed <- struct{}{}:
+			default:
+			}
+		}
+	}
+	srv.Start()
+	t.Cleanup(srv.Close)
+
+	if _, _, err := connectRequest(t, map[string]any{"addr": srv.URL}); err != nil {
+		t.Fatalf("Request() error: %v", err)
+	}
+	select {
+	case <-closed:
+	case <-time.After(2 * time.Second):
+		t.Error("the connection was left open after the call")
+	}
+}
+
+func TestConnectTimeout(t *testing.T) {
+	tests := []struct {
+		timeout time.Duration
+		want    string
+		ok      bool
+	}{
+		{timeout: 3 * time.Second, want: "3000", ok: true},
+		{timeout: 500 * time.Microsecond, want: "1", ok: true},
+		{timeout: 9999999999 * time.Millisecond, want: "9999999999", ok: true},
+		{timeout: 10000000000 * time.Millisecond, ok: false},
+		{timeout: 0, ok: false},
+	}
+	for _, tt := range tests {
+		got, ok := connectTimeout(tt.timeout)
+		if got != tt.want || ok != tt.ok {
+			t.Errorf("connectTimeout(%v) = %q, %v, want %q, %v", tt.timeout, got, ok, tt.want, tt.ok)
+		}
+	}
+}
+
+func TestConnectRequestOfAReplyThatIsNotJSON(t *testing.T) {
+	for _, body := range []string{"", "{"} {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(body))
+		}))
+		t.Cleanup(srv.Close)
+		if _, _, err := connectRequest(t, map[string]any{"addr": srv.URL}); err == nil || !strings.Contains(err.Error(), "body is not JSON") {
+			t.Errorf("body %q: Request() error = %v, want one saying it is not JSON", body, err)
+		}
 	}
 }
 
