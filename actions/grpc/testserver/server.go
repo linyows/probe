@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"fmt"
 	"net"
+	"net/http"
 	"strconv"
 	"sync"
 	"time"
@@ -20,10 +21,13 @@ import (
 // Server implements the UserService for testing
 type Server struct {
 	pb.UnimplementedUserServiceServer
-	users    map[string]*pb.User
-	nextID   int
-	mu       sync.RWMutex
-	server   *grpc.Server
+	users  map[string]*pb.User
+	nextID int
+	mu     sync.RWMutex
+	server *grpc.Server
+	// connect serves the service with the Connect protocol, when it is
+	// started.
+	connect  *http.Server
 	address  string
 	port     string
 	tls      bool
@@ -109,6 +113,9 @@ func (s *Server) Start() error {
 func (s *Server) Stop() {
 	if s.server != nil {
 		s.server.GracefulStop()
+	}
+	if s.connect != nil {
+		_ = s.connect.Close()
 	}
 }
 

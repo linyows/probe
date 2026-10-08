@@ -337,6 +337,18 @@ func (c *contract) checkResponse(spec protoreflect.MethodDescriptor, data []byte
 	return append(c.unread(msg, "$"), c.constraints("response", msg)...)
 }
 
+// checkResponseJSON is checkResponse for a response that came in as JSON, as
+// a Connect call with codec json answers: a value of another type than the
+// files declare breaks them, as a field they do not declare does under
+// strict.
+func (c *contract) checkResponseJSON(spec protoreflect.MethodDescriptor, data []byte) []any {
+	msg := dynamicpb.NewMessage(spec.Output())
+	if err := (protojson.UnmarshalOptions{DiscardUnknown: !c.strict}).Unmarshal(data, msg); err != nil {
+		return []any{violation("response", fmt.Sprintf("response body does not read as %s", spec.Output().FullName()), err.Error(), "")}
+	}
+	return c.constraints("response", msg)
+}
+
 // unread returns a violation for each field of msg, at any depth, that was
 // left unread: one whose encoding is not the one the .proto files declare
 // for its number, and under strict one whose number they do not declare.

@@ -4,6 +4,7 @@ description: Examples for using the grpc action with gRPC Server
 vars:
   addr: "{{GRPC_ADDR ?? 'localhost:50051'}}"
   service: "{{GRPC_SERVICE ?? 'UserService'}}"
+  connect_addr: "{{CONNECT_ADDR ?? 'http://localhost:50061'}}"
 
 jobs:
 - name: "gRPC requests to {{vars.addr}}"
@@ -84,3 +85,52 @@ jobs:
       res.status_code == "OK"
     echo: |
       Res: {{res.body}}
+
+# The same service called with the Connect protocol, over HTTP/1.1, as a
+# connect-web client in a browser calls it.
+- name: "Connect requests to {{vars.connect_addr}}"
+  defaults:
+    grpc:
+      protocol: connect
+      addr: "{{vars.connect_addr}}"
+      service: "{{vars.service}}"
+      timeout: 30s
+  steps:
+  - name: Get User as JSON, without .proto files
+    uses: grpc
+    with:
+      method: GetUser
+      body:
+        userId: "123"
+    test: res.status_code == "OK" && res.body.user.id == "123"
+
+  - name: Get User as JSON, checked against .proto files
+    uses: grpc
+    with:
+      method: GetUser
+      body:
+        user_id: "123"
+      proto:
+        files: [./actions/grpc/testserver/pb/user_service.proto]
+        import_paths: [./actions/grpc/testserver/pb]
+    test: res.status_code == "OK" && res.body.user.id == "123"
+
+  - name: Get User as protobuf
+    uses: grpc
+    with:
+      method: GetUser
+      codec: proto
+      body:
+        user_id: "123"
+      proto:
+        files: [./actions/grpc/testserver/pb/user_service.proto]
+        import_paths: [./actions/grpc/testserver/pb]
+    test: res.status_code == "OK" && res.body.user.id == "123"
+
+  - name: A user that does not exist
+    uses: grpc
+    with:
+      method: GetUser
+      body:
+        userId: "999"
+    test: res.status_code == "NOT_FOUND"

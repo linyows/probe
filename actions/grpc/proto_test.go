@@ -322,6 +322,41 @@ func TestCheckRequestOfAnEmptyBody(t *testing.T) {
 	}
 }
 
+func TestCheckResponseJSON(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "m.proto")
+	content := "syntax = \"proto3\";\nmessage Req {}\nmessage Res { int32 count = 1; }\nservice S { rpc Get(Req) returns (Res); }\n"
+	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	c, err := loadContract([]string{path}, []string{dir})
+	if err != nil {
+		t.Fatal(err)
+	}
+	spec := c.method("S", "Get")
+
+	tests := []struct {
+		name   string
+		body   string
+		strict bool
+		want   int
+	}{
+		{name: "a response the files take", body: `{"count": 3}`, want: 0},
+		{name: "a value of another type", body: `{"count": "three"}`, want: 1},
+		{name: "a field the files do not declare", body: `{"count": 3, "extra": true}`, want: 0},
+		{name: "a field the files do not declare, under strict", body: `{"count": 3, "extra": true}`, strict: true, want: 1},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c.strict = tt.strict
+			out := c.checkResponseJSON(spec, []byte(tt.body))
+			if len(out) != tt.want {
+				t.Errorf("violations = %v, want %d", out, tt.want)
+			}
+		})
+	}
+}
+
 func TestImportName(t *testing.T) {
 	dir := t.TempDir()
 	tests := []struct {

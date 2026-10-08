@@ -11,11 +11,12 @@ import (
 
 func main() {
 	var (
-		port     = flag.String("port", "50051", "Port to listen on")
-		tls      = flag.Bool("tls", false, "Enable TLS")
-		certFile = flag.String("cert", "", "Path to TLS certificate file")
-		keyFile  = flag.String("key", "", "Path to TLS private key file")
-		help     = flag.Bool("help", false, "Show help")
+		port        = flag.String("port", "50051", "Port to listen on")
+		tls         = flag.Bool("tls", false, "Enable TLS")
+		certFile    = flag.String("cert", "", "Path to TLS certificate file")
+		keyFile     = flag.String("key", "", "Path to TLS private key file")
+		connectPort = flag.String("connect-port", "", "Port to serve the Connect protocol on, over HTTP/1.1; none when empty")
+		help        = flag.Bool("help", false, "Show help")
 	)
 	flag.Parse()
 
@@ -53,6 +54,13 @@ func main() {
 	err := server.Start()
 	if err != nil {
 		log.Fatalf("Failed to start server: %v", err)
+	}
+
+	if *connectPort != "" {
+		if err := server.StartConnect(*connectPort); err != nil {
+			log.Fatalf("Failed to start the Connect server: %v", err)
+		}
+		fmt.Printf("Serving the Connect protocol on port %s...\n", *connectPort)
 	}
 
 	// Wait for interrupt signal
