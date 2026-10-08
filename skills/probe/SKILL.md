@@ -86,7 +86,7 @@ probe check workflow.yml              # find what is wrong or weak without runni
 probe dag workflow.yml                # check the job graph without running
 probe -v workflow.yml                 # also print every request and response
 probe --report json=probe.json,markdown=probe.md workflow.yml
-probe coverage openapi.yml probe.json # what of the OpenAPI document no step checked
+probe coverage openapi.yml probe.json # what of the OpenAPI document, or a .proto file, no step checked
 ```
 
 After writing or changing a workflow, run `probe check` before running it, and fix every error it reports: a key it calls unknown is one a run ignores without a word, such as a misspelled `test`. Each warning is a step that checks less than it seems to: give a step that nothing checks a `test`, and replace a `test` that reads nothing with one that reads `res`.
@@ -100,7 +100,7 @@ The exit code says what to look at:
 | `2` | The workflow or the command line is wrong, or the guard of the run refused a step | The `[ERROR]` line on stderr: YAML, an unknown `needs`, a step id, a flag; or a step that failed as `refused` |
 | `3` | An action returned an error, such as a refused connection or a timeout | Whether the target is reachable, and the action's parameters |
 
-When the http steps give `openapi`, run `probe coverage` after the workflow passes. An operation or a response marked `-` is one no step checked: add a step for it when it matters, such as an error response a client relies on.
+When the http steps give `openapi`, or the grpc steps `proto`, run `probe coverage` after the workflow passes. An operation or a response marked `-` is one no step checked: add a step for it when it matters, such as an error response a client relies on.
 
 ## Debug a failure
 

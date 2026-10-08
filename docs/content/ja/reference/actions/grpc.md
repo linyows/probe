@@ -55,6 +55,7 @@ steps:
 | `status` | Integer | ステータスが`OK`のとき`0`、それ以外は`1` |
 | `req` | Object | 送信したリクエスト |
 | `res.violations` | Array | 呼び出しのうち`.proto`ファイルが許さないもの。すべて許されていれば空です。`proto`を指定したときだけ入ります |
+| `res.contract` | Object | `.proto`ファイルで呼び出しを対応付けた先。`spec`（サービスを宣言するファイル。`proto.files`に書いたパス）と、`users.v1.UserService/GetUser`のような`operation`が入ります。ファイルがそのメソッドを宣言している場合だけ入ります。[`probe coverage`](/ja/reference/cli-reference#coverage)はこれを数えます |
 
 `res.status_code`は、呼び出しが終わったときのステータスの正式名です。`OK`、`CANCELLED`、`UNKNOWN`、`INVALID_ARGUMENT`、`DEADLINE_EXCEEDED`、`NOT_FOUND`、`ALREADY_EXISTS`、`PERMISSION_DENIED`、`RESOURCE_EXHAUSTED`、`FAILED_PRECONDITION`、`ABORTED`、`OUT_OF_RANGE`、`UNIMPLEMENTED`、`INTERNAL`、`UNAVAILABLE`、`DATA_LOSS`、`UNAUTHENTICATED`のいずれかになります。`OK`以外のステータスもサーバーの応答なので、ステップはそのままテストに進み、テストでそのステータスを期待できます。サーバーからステータスが得られなかった呼び出しだけが、エラーとしてステップを終わらせます。接続できないサーバーやリフレクションにサービスが載っていない場合と、サーバーが応答する前に`timeout`を過ぎたり接続が切れたりした場合です。
 
