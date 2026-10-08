@@ -94,7 +94,7 @@ func TestNewCoverage_Errors(t *testing.T) {
 			name:    "no step checked against a document",
 			spec:    spec,
 			report:  coverageReport(),
-			wantErr: "no step of the report was checked against an OpenAPI document",
+			wantErr: "no step of the report was checked against a contract",
 		},
 		{
 			name:    "steps checked against another document",
@@ -170,4 +170,35 @@ func TestReadReport(t *testing.T) {
 
 	_, err = ReadReport(filepath.Join(dir, "none.json"))
 	assert.ErrorContains(t, err, "failed to read report")
+}
+
+func TestCountCoverage(t *testing.T) {
+	r := coverageReport(
+		&report.Contract{Spec: "users.proto", Operation: "users.v1.UserService/GetUser"},
+		&report.Contract{Spec: "users.proto", Operation: "users.v1.UserService/GetUser"},
+	)
+	declared := []Declared{
+		{Operation: "users.v1.UserService/GetUser"},
+		{Operation: "users.v1.UserService/DeleteUser"},
+	}
+	cov, err := CountCoverage("./users.proto", declared, r)
+	require.NoError(t, err)
+	assert.Equal(t, []OperationCoverage{
+		{Operation: "users.v1.UserService/GetUser", Steps: 2},
+		{Operation: "users.v1.UserService/DeleteUser", Steps: 0},
+	}, cov.Operations)
+}
+
+func TestCoverage_WriteOperationsOnly(t *testing.T) {
+	cov := &Coverage{
+		Spec:           "users.proto",
+		OperationsOnly: true,
+		Operations: []OperationCoverage{
+			{Operation: "UserService/GetUser", Steps: 1},
+			{Operation: "UserService/DeleteUser"},
+		},
+	}
+	var buf bytes.Buffer
+	require.NoError(t, cov.Write(&buf))
+	assert.Equal(t, "Coverage of users.proto\n\n\u2713 UserService/GetUser (1 step)\n- UserService/DeleteUser\n\nOperations: 1 of 2 checked (50.0%)\n", buf.String())
 }
