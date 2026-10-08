@@ -1,6 +1,6 @@
 # gRPC Action
 
-The `grpc` action calls a gRPC method. The service definition is resolved through server reflection, so no `.proto` file is needed at run time.
+The `grpc` action calls a gRPC method. The service definition is resolved through server reflection, so no `.proto` file is needed at run time. A server without reflection, as many in production are, is called with the definition of the `.proto` files given in [`proto`](#checking-against-proto-files).
 
 ## Basic Syntax
 
@@ -56,7 +56,7 @@ After the call, `res` holds the reply and the gRPC status.
 | `res.violations` | Array | What the `.proto` files do not allow in the call, empty when they allow all of it. Present only when `proto` is given |
 | `res.contract` | Object | What the call was matched to in the `.proto` files: `spec`, the file that declares the service as `proto.files` names it, and `operation`, such as `users.v1.UserService/GetUser`. Present only when the files declare the method; [`probe coverage`](/reference/cli-reference#coverage) counts it |
 
-`res.status_code` is the canonical name of the status the call ended with: `OK`, `CANCELLED`, `UNKNOWN`, `INVALID_ARGUMENT`, `DEADLINE_EXCEEDED`, `NOT_FOUND`, `ALREADY_EXISTS`, `PERMISSION_DENIED`, `RESOURCE_EXHAUSTED`, `FAILED_PRECONDITION`, `ABORTED`, `OUT_OF_RANGE`, `UNIMPLEMENTED`, `INTERNAL`, `UNAVAILABLE`, `DATA_LOSS` or `UNAUTHENTICATED`. A status other than `OK` is the server's answer, so the step goes on to its test, which can expect it. Only a call that gets no status from the server ends the step with an error: one to a server that cannot be reached or whose reflection does not list the service, or one that runs out of `timeout` or loses its connection before the server answers.
+`res.status_code` is the canonical name of the status the call ended with: `OK`, `CANCELLED`, `UNKNOWN`, `INVALID_ARGUMENT`, `DEADLINE_EXCEEDED`, `NOT_FOUND`, `ALREADY_EXISTS`, `PERMISSION_DENIED`, `RESOURCE_EXHAUSTED`, `FAILED_PRECONDITION`, `ABORTED`, `OUT_OF_RANGE`, `UNIMPLEMENTED`, `INTERNAL`, `UNAVAILABLE`, `DATA_LOSS` or `UNAUTHENTICATED`. A status other than `OK` is the server's answer, so the step goes on to its test, which can expect it. Only a call that gets no status from the server ends the step with an error: one to a server that cannot be reached, or whose reflection does not list the service when no `.proto` files declare it, or one that runs out of `timeout` or loses its connection before the server answers.
 
 ## Usage Examples
 
@@ -80,7 +80,7 @@ steps:
 
 ## Checking Against .proto Files
 
-The call is made with the server's own definition, as its reflection tells it, which says nothing of whether the server keeps to the definition it was meant to. With `proto`, the call is also checked against `.proto` files, such as those in the repository the service is built from:
+The call is made with the server's own definition, as its reflection tells it, which says nothing of whether the server keeps to the definition it was meant to. With `proto`, the call is also checked against `.proto` files, such as those in the repository the service is built from, and a server without reflection, or one whose definition lacks the method, is called with the files' definition, as a client built from them would call it:
 
 ```yaml
 - name: Users
@@ -109,7 +109,9 @@ The step fails with the kind `contract_request` when the request body, as JSON, 
 - the server's request or response message, or a message in them at any depth, has another name than the files', lacks a field the files declare, or declares a field by the same number with another name, type or cardinality
 - a field of the response is not encoded as the files declare its number, such as a string where they declare an `int32`
 
-With `strict: true`, a field the server declares, or sends, that the files do not declare fails the step too. Without it such a field is let through, as protobuf lets a newer peer's fields through. A request body that the server's own definition cannot take either cannot be sent, so nothing is sent, and the step fails as `contract_request`, with `res.status_code` empty, rather than as an action error. `request: false` checks the server and its response alone, for a step that sends what the files do not allow on purpose. A response with a status other than `OK` has no message to check. Each violation is in `res.violations`, the terminal and the reports, with the field, such as `$.user.email`.
+With `strict: true`, a field the server declares, or sends, that the files do not declare fails the step too. Without it such a field is let through, as protobuf lets a newer peer's fields through. Called with the files' definition, the call is checked as far as the files go without the server's: the request, the response read again and the constraints below, but not the definitions compared. A method the server's reflection lists the service without fails the step as `contract_response`, and the server answers the call with `UNIMPLEMENTED`.
+
+A request body that the server's own definition cannot take either cannot be sent, so nothing is sent, and the step fails as `contract_request`, with `res.status_code` empty, rather than as an action error. `request: false` checks the server and its response alone, for a step that sends what the files do not allow on purpose. A response with a status other than `OK` has no message to check. Each violation is in `res.violations`, the terminal and the reports, with the field, such as `$.user.email`.
 
 ### Constraints the Files Annotate
 
