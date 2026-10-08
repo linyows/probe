@@ -38,13 +38,21 @@ func (userServer) GetUser(_ context.Context, req *pb.GetUserRequest) (*pb.GetUse
 
 func startUserServer(t *testing.T) string {
 	t.Helper()
+	return startUserServerWith(t, true)
+}
+
+// startUserServerWith starts the user server, with reflection or without.
+func startUserServerWith(t *testing.T, withReflection bool) string {
+	t.Helper()
 	lis, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
 	}
 	s := grpclib.NewServer()
 	pb.RegisterUserServiceServer(s, userServer{})
-	reflection.Register(s)
+	if withReflection {
+		reflection.Register(s)
+	}
 	go func() { _ = s.Serve(lis) }()
 	t.Cleanup(s.Stop)
 	return lis.Addr().String()
@@ -448,5 +456,73 @@ func TestRequestTellsWhatTheCallWasMatchedTo(t *testing.T) {
 	}
 	if c, ok := ret["res"].(map[string]any)["contract"]; ok {
 		t.Errorf("res.contract = %#v, want none", c)
+	}
+}
+
+// A server without reflection tells nothing of its definition, so that the
+// call is made with the .proto files', and checked against them as far as
+// they go without the server's.
+func TestRequestWithoutReflection(t *testing.T) {
+	addr := startUserServerWith(t, false)
+	call := func(spec string) (map[string]any, error) {
+		with := map[string]any{"addr": addr, "service": "UserService", "method": "GetUser", "body": `{"user_id": "123"}`}
+		if spec != "" {
+			path := writeProto(t, spec)
+			with["proto"] = map[string]any{"files": []any{path}, "import_paths": []any{filepath.Dir(path)}}
+		}
+		return Request(with)
+	}
+
+	ret, err := call(userProto(t))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	res := ret["res"].(map[string]any)
+	if res["status_code"] != "OK" || !strings.Contains(res["body"].(string), `"name":"Test User"`) {
+		t.Errorf("res = %v, want the user read with the .proto files", res)
+	}
+	if vs := res["violations"].([]any); len(vs) != 0 {
+		t.Errorf("violations = %v, want none", vs)
+	}
+	if res["contract"] == nil {
+		t.Error("res.contract is missing, want the method the call was matched to")
+	}
+
+	// The response is still read again by the files'.
+	ret, err = call(strings.Replace(userProto(t), "string email = 3;", "int32 email = 3;", 1))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	vs := ret["res"].(map[string]any)["violations"].([]any)
+	if len(vs) != 1 || !strings.Contains(vs[0].(map[string]any)["message"].(string), "field 3 of User is not encoded as int32 email") {
+		t.Errorf("violations = %v, want the field encoded otherwise", vs)
+	}
+
+	// Without .proto files nothing tells the definition.
+	if _, err := call(""); err == nil || !strings.Contains(err.Error(), "failed to get service descriptor") {
+		t.Errorf("err = %v, want the reflection's error", err)
+	}
+}
+
+// A method the .proto files declare but the server's definition lacks is
+// called with the files', and the server answers it is unimplemented.
+func TestRequestOfAMethodOnlyTheFilesDeclare(t *testing.T) {
+	addr := startUserServer(t)
+	spec := strings.Replace(userProto(t), "rpc GetUser(GetUserRequest) returns (GetUserResponse);", "rpc GetUser(GetUserRequest) returns (GetUserResponse);\n  rpc Ping(GetUserRequest) returns (GetUserResponse);", 1)
+	path := writeProto(t, spec)
+	ret, err := Request(map[string]any{
+		"addr": addr, "service": "UserService", "method": "Ping", "body": `{"user_id": "123"}`,
+		"proto": map[string]any{"files": []any{path}, "import_paths": []any{filepath.Dir(path)}},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	res := ret["res"].(map[string]any)
+	if res["status_code"] != "UNIMPLEMENTED" {
+		t.Errorf("status_code = %v, want UNIMPLEMENTED", res["status_code"])
+	}
+	vs := res["violations"].([]any)
+	if len(vs) != 1 || !strings.Contains(vs[0].(map[string]any)["message"].(string), "the server's definition of UserService declares no method Ping") {
+		t.Errorf("violations = %v, want the method the server lacks", vs)
 	}
 }
