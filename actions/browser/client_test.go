@@ -83,7 +83,7 @@ func TestRequest_Validation(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			// Create mock runner that will fail for unsupported actions
 			mockRunner := NewMockRunner()
-			mockRunner.SetRunFunc(func(ctx context.Context, actions ...chromedp.Action) error {
+			mockRunner.SetRunFunc(func(ctx context.Context, actions ...chromedp.Action[chromedp.Void]) error {
 				return fmt.Errorf("mock error")
 			})
 
@@ -423,7 +423,7 @@ func TestMockRunner(t *testing.T) {
 
 		// Test running with mock
 		ctx := context.Background()
-		actions := []chromedp.Action{
+		actions := []chromedp.Action[chromedp.Void]{
 			chromedp.Navigate("http://example.com"),
 			chromedp.WaitVisible("body"),
 		}
@@ -448,7 +448,7 @@ func TestMockRunner(t *testing.T) {
 		mock := NewMockRunner()
 		expectedErr := fmt.Errorf("custom error")
 
-		mock.SetRunFunc(func(ctx context.Context, actions ...chromedp.Action) error {
+		mock.SetRunFunc(func(ctx context.Context, actions ...chromedp.Action[chromedp.Void]) error {
 			return expectedErr
 		})
 
@@ -519,7 +519,7 @@ func TestReqWithMockRunner(t *testing.T) {
 		mock := NewMockRunner()
 		expectedErr := fmt.Errorf("browser error")
 
-		mock.SetRunFunc(func(ctx context.Context, actions ...chromedp.Action) error {
+		mock.SetRunFunc(func(ctx context.Context, actions ...chromedp.Action[chromedp.Void]) error {
 			return expectedErr
 		})
 
@@ -634,7 +634,7 @@ func TestReq_FailureEvidence(t *testing.T) {
 	req.EvidenceDir = dir
 	mock := NewMockRunner()
 	// The action waits out its deadline, as wait_visible on a missing node does.
-	mock.SetRunFunc(func(ctx context.Context, actions ...chromedp.Action) error {
+	mock.SetRunFunc(func(ctx context.Context, actions ...chromedp.Action[chromedp.Void]) error {
 		<-ctx.Done()
 		return ctx.Err()
 	})
@@ -964,4 +964,33 @@ func TestRequest_InvalidTimeoutIsAnError(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "invalid timeout") {
 		t.Errorf("error = %v, want the timeout refused before any browser starts", err)
 	}
+}
+
+func TestStore(t *testing.T) {
+	t.Run("keeps the value the action returns", func(t *testing.T) {
+		var got string
+		a := store(func(ctx context.Context, _ *chromedp.Target) (string, error) {
+			return "heading", nil
+		}, &got)
+		if _, err := a(context.Background(), nil); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got != "heading" {
+			t.Errorf("got %q, want %q", got, "heading")
+		}
+	})
+
+	t.Run("leaves the value alone when the action fails", func(t *testing.T) {
+		got := "before"
+		want := errors.New("no node")
+		a := store(func(ctx context.Context, _ *chromedp.Target) (string, error) {
+			return "partial", want
+		}, &got)
+		if _, err := a(context.Background(), nil); !errors.Is(err, want) {
+			t.Fatalf("got error %v, want %v", err, want)
+		}
+		if got != "before" {
+			t.Errorf("got %q, want %q", got, "before")
+		}
+	})
 }
