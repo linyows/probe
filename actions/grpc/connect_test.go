@@ -45,6 +45,7 @@ func startConnectServer(t *testing.T, prefix string) *connectUserServer {
 	mux.Handle(prefix+"/UserService/WatchUsers", http.StripPrefix(prefix, connect.NewServerStreamHandler("/UserService/WatchUsers",
 		func(ctx context.Context, req *connect.Request[pb.WatchUsersRequest], stream *connect.ServerStream[pb.User]) error {
 			s.calls.Add(1)
+			s.header.Store(req.Header().Clone())
 			stream.ResponseTrailer().Set("X-Trace", "t1")
 			return connectStatus(watchTestUsers(ctx, req.Msg, stream.Send))
 		})))

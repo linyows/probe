@@ -47,19 +47,22 @@ func writeEnvelope(w *bytes.Buffer, flags byte, data []byte) {
 }
 
 // readEnvelope reads one envelope from r: io.EOF when r ends before one.
+// The message is read as it comes rather than into a buffer of the length
+// the envelope gives, so that a length no message follows takes no memory.
 func readEnvelope(r io.Reader) (byte, []byte, error) {
 	var head [5]byte
 	if _, err := io.ReadFull(r, head[:]); err != nil {
 		return 0, nil, err
 	}
-	data := make([]byte, binary.BigEndian.Uint32(head[1:]))
-	if _, err := io.ReadFull(r, data); err != nil {
-		if errors.Is(err, io.EOF) {
+	size := int64(binary.BigEndian.Uint32(head[1:]))
+	var data bytes.Buffer
+	if n, err := io.CopyN(&data, r, size); n < size {
+		if err == nil || errors.Is(err, io.EOF) {
 			err = io.ErrUnexpectedEOF
 		}
 		return 0, nil, err
 	}
-	return head[0], data, nil
+	return head[0], data.Bytes(), nil
 }
 
 // invokeConnectStream makes a call to a method that streams its requests or
@@ -95,6 +98,7 @@ func (r *Req) invokeConnectStream(ctx context.Context, client *http.Client, url,
 	}
 	contentType := "application/connect+" + codec
 	req.Header.Set("Content-Type", contentType)
+	req.Header.Set("Connect-Protocol-Version", connectProtocolVersion)
 	if ms, ok := connectTimeout(timeout); ok {
 		req.Header.Set("Connect-Timeout-Ms", ms)
 	}
@@ -138,6 +142,11 @@ read:
 		flags, data, err := readEnvelope(resp.Body)
 		switch {
 		case errors.Is(err, io.EOF):
+			// A stream that ends with neither a message nor its end holds
+			// nothing to read, as a reply that cannot be read does not.
+			if len(raws) == 0 {
+				return nil, errors.New("failed to read the response: the stream ended without any message or its end message")
+			}
 			// The server answered, but ended the stream without its end.
 			res.StatusCode = statusCodeName(codes.Internal)
 			res.StatusMessage = "the stream ended without its end message"

@@ -269,34 +269,39 @@ func (r *Req) invokeMethod(ctx context.Context, conn *grpc.ClientConn, reflectio
 	if err := r.checkReadOnly(server, spec); err != nil {
 		return nil, err
 	}
-	clientStream, serverStream, err := streams(methodDesc)
-	if err != nil {
-		return nil, err
-	}
-	if r.MaxMessages > 0 && !serverStream {
-		return nil, fmt.Errorf("max_messages is for a method that streams its responses, which %s does not", methodDesc.FullName())
-	}
-	bodies, err := requestBodies(r.Body, clientStream)
-	if err != nil {
-		return nil, err
-	}
 
 	// The .proto files, when they are given, are checked against the
 	// request, the server's definition when it tells one, and then the
 	// response.
+	var definition []any
+	if r.contract != nil {
+		switch {
+		case spec == nil:
+			definition = append(definition, violation("response", fmt.Sprintf("the .proto files declare no method %s in %s", r.Method, r.Service), "", ""))
+		case server != nil:
+			definition = append(definition, r.contract.checkDefinition(spec, server)...)
+		case serviceDesc != nil:
+			definition = append(definition, violation("response", fmt.Sprintf("the server's definition of %s declares no method %s", serviceDesc.FullName(), r.Method), "the .proto files declare it", ""))
+		}
+	}
+
+	// The call is made as the server's definition streams. A step written
+	// for the files' definition may not fit it, which is then told as the
+	// definitions differing, without anything sent.
+	clientStream, serverStream, bodies, err := r.callShape(methodDesc)
+	if err != nil {
+		if len(definition) > 0 {
+			return &Res{Metadata: map[string]string{}, violations: definition}, nil
+		}
+		return nil, err
+	}
 	var violations []any
 	if r.contract != nil {
 		violations = []any{}
-		if spec == nil {
-			violations = append(violations, violation("response", fmt.Sprintf("the .proto files declare no method %s in %s", r.Method, r.Service), "", ""))
-		} else {
+		if spec != nil {
 			violations = append(violations, r.contract.checkRequests(spec, bodies, clientStream)...)
-			if server != nil {
-				violations = append(violations, r.contract.checkDefinition(spec, server)...)
-			} else if serviceDesc != nil {
-				violations = append(violations, violation("response", fmt.Sprintf("the server's definition of %s declares no method %s", serviceDesc.FullName(), r.Method), "the .proto files declare it", ""))
-			}
 		}
+		violations = append(violations, definition...)
 	}
 
 	msgs, err := buildRequests(methodDesc.Input(), bodies)

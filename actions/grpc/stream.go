@@ -30,6 +30,22 @@ func streams(md protoreflect.MethodDescriptor) (client, server bool, err error) 
 	return client, server, nil
 }
 
+// callShape returns how a call to md streams, and the JSON of each request
+// it sends, or an error when the step does not fit md: a list in body to a
+// method that takes one request, or max_messages to one that answers once.
+func (r *Req) callShape(md protoreflect.MethodDescriptor) (clientStream, serverStream bool, bodies []string, err error) {
+	if clientStream, serverStream, err = streams(md); err != nil {
+		return false, false, nil, err
+	}
+	if r.MaxMessages > 0 && !serverStream {
+		return false, false, nil, fmt.Errorf("max_messages is for a method that streams its responses, which %s does not", md.FullName())
+	}
+	if bodies, err = requestBodies(r.Body, clientStream); err != nil {
+		return false, false, nil, err
+	}
+	return clientStream, serverStream, bodies, nil
+}
+
 // requestBodies returns the JSON of each message body sends. A method that
 // streams its requests takes a list, each item of which is one message, or
 // one object as the only one; any other method takes one object, and an

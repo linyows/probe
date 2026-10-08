@@ -2,8 +2,11 @@ package grpc
 
 import (
 	"bytes"
+	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -96,5 +99,49 @@ func TestConnectStreamOfABrokenAnswer(t *testing.T) {
 				t.Errorf("complete = %v, want %v", res["complete"], tt.wantComplete)
 			}
 		})
+	}
+}
+
+func TestReadEnvelopeOfALengthNoMessageFollows(t *testing.T) {
+	// The length says 4 GiB, but three bytes follow, which is all the
+	// memory the read may take.
+	r := bytes.NewReader([]byte{0, 0xff, 0xff, 0xff, 0xff, 'a', 'b', 'c'})
+	var before, after runtime.MemStats
+	runtime.ReadMemStats(&before)
+	_, _, err := readEnvelope(r)
+	runtime.ReadMemStats(&after)
+	if !errors.Is(err, io.ErrUnexpectedEOF) {
+		t.Errorf("readEnvelope() error = %v, want io.ErrUnexpectedEOF", err)
+	}
+	if allocated := after.TotalAlloc - before.TotalAlloc; allocated > 1<<20 {
+		t.Errorf("readEnvelope() allocated %d bytes for three", allocated)
+	}
+}
+
+func TestConnectStreamOfAnEmptyAnswer(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/connect+json")
+	}))
+	t.Cleanup(srv.Close)
+	_, _, err := streamCall(t, map[string]any{
+		"protocol": "connect", "addr": srv.URL, "method": "WatchUsers", "body": `{"count": 1}`,
+		"proto": protoOf(writeProto(t, userProto(t)), false),
+	})
+	if err == nil || !strings.Contains(err.Error(), "without any message or its end message") {
+		t.Errorf("Request() error = %v, want one saying the stream held nothing", err)
+	}
+}
+
+func TestConnectStreamSendsTheProtocolVersion(t *testing.T) {
+	s := startConnectServer(t, "")
+	if _, _, err := streamCall(t, map[string]any{
+		"protocol": "connect", "addr": s.url, "method": "WatchUsers", "body": `{"count": 1}`,
+		"proto": protoOf(writeProto(t, userProto(t)), false),
+	}); err != nil {
+		t.Fatalf("Request() error: %v", err)
+	}
+	h, _ := s.header.Load().(http.Header)
+	if h.Get("Connect-Protocol-Version") != "1" {
+		t.Errorf("Connect-Protocol-Version = %q, want 1", h.Get("Connect-Protocol-Version"))
 	}
 }
