@@ -15,37 +15,51 @@ import (
 // can check, such as a Unix socket.
 var hostlessSchemes = []string{"unix:", "unix-abstract:", "vsock:", "ipv4:", "ipv6:", "xds:", "google-c2p:"}
 
-// grpcHost returns the host and port a gRPC call to addr connects to, as
+// grpcHosts returns the hosts and ports a gRPC call to addr connects to, as
 // grpc-go reads the target: host:port, or dns:/// or passthrough:/// before
-// it, with the port 443 when none is given. It returns false for a target
-// that names no host, such as a Unix socket.
-func grpcHost(addr string) (string, bool) {
+// it, with the port 443 when none is given, and for dns://server/ the DNS
+// server it asks, at port 53 when none is given. It returns false for a
+// target that names no host, such as a Unix socket.
+func grpcHosts(addr string) ([]string, bool) {
 	lower := strings.ToLower(addr)
 	for _, s := range hostlessSchemes {
 		if strings.HasPrefix(lower, s) {
-			return "", false
+			return nil, false
 		}
 	}
 	endpoint := addr
+	var dnsServer string
 	if strings.Contains(addr, "://") {
 		u, err := url.Parse(addr)
 		if err != nil {
-			return "", false
+			return nil, false
 		}
 		switch strings.ToLower(u.Scheme) {
-		case "dns", "passthrough":
+		case "dns":
+			dnsServer = u.Host
+			endpoint = strings.TrimPrefix(u.Path, "/")
+		case "passthrough":
 			endpoint = strings.TrimPrefix(u.Path, "/")
 		default:
-			return "", false
+			return nil, false
 		}
 	}
 	if endpoint == "" {
-		return "", false
+		return nil, false
 	}
-	if _, _, err := net.SplitHostPort(endpoint); err == nil {
-		return endpoint, true
+	hosts := []string{withPort(endpoint, "443")}
+	if dnsServer != "" {
+		hosts = append(hosts, withPort(dnsServer, "53"))
 	}
-	return net.JoinHostPort(strings.Trim(endpoint, "[]"), "443"), true
+	return hosts, true
+}
+
+// withPort returns hostport with port when it names none.
+func withPort(hostport, port string) string {
+	if _, _, err := net.SplitHostPort(hostport); err == nil {
+		return hostport
+	}
+	return net.JoinHostPort(strings.Trim(hostport, "[]"), port)
 }
 
 // checkGRPCHost returns a Refused error when the guard of the run does not
@@ -54,11 +68,16 @@ func (r *Req) checkGRPCHost() error {
 	if len(r.guard.AllowHosts) == 0 {
 		return nil
 	}
-	host, ok := grpcHost(r.Addr)
+	hosts, ok := grpcHosts(r.Addr)
 	if !ok {
 		return actionrpc.Refuse("the addr %s names no host the run can check against the hosts it allows", r.Addr)
 	}
-	return r.guard.CheckHost(host)
+	for _, host := range hosts {
+		if err := r.guard.CheckHost(host); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // checkConnectHost returns a Refused error when the guard of the run does

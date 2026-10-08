@@ -190,7 +190,7 @@ PROBE_REPORT=markdown probe workflow.yml
 | `http` | `GET`、`HEAD`、`OPTIONS`だけを送る | URLのホストと、各リダイレクト先のホスト。ポートのないURLは、スキームの既定のポートとして扱う |
 | `db` | `SELECT`、`SHOW`、`DESCRIBE`、`DESC`、`EXPLAIN`、`WITH`のいずれかで始まり、末尾以外にセミコロンを含まない1文だけを、接続時に文を実行させないDSNで、読み取り専用トランザクション（SQLiteでは問い合わせしかできない接続）で実行する。文が書き込みを隠していても、データベース自身が拒否する | ドライバが接続しうる各サーバー。ドライバ自身によるDSNの解釈を使う。MySQLでは、go-sql-driverが接続するアドレス。PostgreSQLでは、lib/pqがDSNを解決した結果を使う。パラメータ、サービスファイル、`PGHOST`、`PGHOSTADDR`、`PGPORT`なども考慮し、ホストのリストはすべて確かめ、`hostaddr`があればそのアドレスを確かめる。ポートがなければドライバの既定のポートとして扱う。SQLiteのファイルはホストを持たない |
 | `embedded` | ジョブをガードの下で実行する | ジョブをガードの下で実行する |
-| `grpc` | 手元にあるメソッドの定義（サーバーのリフレクションと`proto`の`.proto`ファイル）がすべて`idempotency_level = NO_SIDE_EFFECTS`と宣言しているメソッドだけを呼び出す。`proto`のないConnectの呼び出しには定義がないため拒否する | `addr`のホストとポート。ポートがなければ443として扱う。`protocol: connect`ではURLのホストを、ポートがなければスキームの既定のポートとして扱う。Unixソケットのようにホストのない宛先は拒否する |
+| `grpc` | 手元にあるメソッドの定義（サーバーのリフレクションと`proto`の`.proto`ファイル）がすべて`idempotency_level = NO_SIDE_EFFECTS`と宣言しているメソッドだけを呼び出す。`proto`のないConnectの呼び出しには定義がないため拒否する | `addr`のホストとポート。ポートがなければ443として扱う。`dns://server/`のDNSサーバーも確かめ、ポートがなければ53として扱う。`protocol: connect`ではURLのホストを、ポートがなければスキームの既定のポートとして扱う。Unixソケットのようにホストのない宛先は拒否する |
 | `hello` | 拒否するものがない | 接続するものがない |
 
 それ以外のアクション、つまり組み込みの`shell`、`ssh`、`browser`、`smtp`、`imap`、`mail-latency`と、すべての外部アクションは、ガードを守らせることができません。そのため、`--allow-action`でアクションを指定しない限り、ガードの下ではそれらを使うステップを拒否します。

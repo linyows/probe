@@ -1,6 +1,7 @@
 package grpc
 
 import (
+	"slices"
 	"strings"
 	"testing"
 
@@ -24,27 +25,28 @@ func guardedRequest(guard actionrpc.Guard, with map[string]any) (map[string]any,
 	return RequestStep(actionrpc.Call{With: data, Guard: guard})
 }
 
-func TestGRPCHost(t *testing.T) {
+func TestGRPCHosts(t *testing.T) {
 	tests := []struct {
 		addr string
-		want string
+		want []string
 		ok   bool
 	}{
-		{addr: "localhost:50051", want: "localhost:50051", ok: true},
-		{addr: "api.example.com", want: "api.example.com:443", ok: true},
-		{addr: "dns:///api.example.com:8443", want: "api.example.com:8443", ok: true},
-		{addr: "dns://8.8.8.8/api.example.com", want: "api.example.com:443", ok: true},
-		{addr: "passthrough:///10.0.0.1:50051", want: "10.0.0.1:50051", ok: true},
-		{addr: "[::1]:50051", want: "[::1]:50051", ok: true},
+		{addr: "localhost:50051", want: []string{"localhost:50051"}, ok: true},
+		{addr: "api.example.com", want: []string{"api.example.com:443"}, ok: true},
+		{addr: "dns:///api.example.com:8443", want: []string{"api.example.com:8443"}, ok: true},
+		{addr: "dns://8.8.8.8/api.example.com", want: []string{"api.example.com:443", "8.8.8.8:53"}, ok: true},
+		{addr: "dns://ns.example.com:5353/api.example.com:8443", want: []string{"api.example.com:8443", "ns.example.com:5353"}, ok: true},
+		{addr: "passthrough:///10.0.0.1:50051", want: []string{"10.0.0.1:50051"}, ok: true},
+		{addr: "[::1]:50051", want: []string{"[::1]:50051"}, ok: true},
 		{addr: "unix:///tmp/grpc.sock", ok: false},
 		{addr: "unix:grpc.sock", ok: false},
 		{addr: "xds:///users", ok: false},
 		{addr: "dns:///", ok: false},
 	}
 	for _, tt := range tests {
-		got, ok := grpcHost(tt.addr)
-		if got != tt.want || ok != tt.ok {
-			t.Errorf("grpcHost(%q) = %q, %v, want %q, %v", tt.addr, got, ok, tt.want, tt.ok)
+		got, ok := grpcHosts(tt.addr)
+		if !slices.Equal(got, tt.want) || ok != tt.ok {
+			t.Errorf("grpcHosts(%q) = %q, %v, want %q, %v", tt.addr, got, ok, tt.want, tt.ok)
 		}
 	}
 }
@@ -61,6 +63,7 @@ func TestRequestUnderAllowHost(t *testing.T) {
 	}{
 		{name: "gRPC to a host allowed", with: map[string]any{"addr": addr}, allow: []string{addr}},
 		{name: "gRPC to another host", with: map[string]any{"addr": addr}, allow: []string{"api.example.com"}, wantRefused: "is not one the run allows"},
+		{name: "gRPC through a DNS server not allowed", with: map[string]any{"addr": "dns://8.8.8.8/" + addr}, allow: []string{addr}, wantRefused: "8.8.8.8:53"},
 		{name: "gRPC to a Unix socket", with: map[string]any{"addr": "unix:///tmp/probe.sock"}, allow: []string{"localhost"}, wantRefused: "names no host"},
 		{name: "Connect to a host allowed", with: map[string]any{"protocol": "connect", "addr": s.url, "body": `{"userId": "123"}`}, allow: []string{strings.TrimPrefix(s.url, "http://")}},
 		{name: "Connect to another host", with: map[string]any{"protocol": "connect", "addr": s.url}, allow: []string{"api.example.com"}, wantRefused: "is not one the run allows"},

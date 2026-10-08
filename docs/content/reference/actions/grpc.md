@@ -170,7 +170,7 @@ Streaming methods cannot be called with `protocol: connect`: one the `.proto` fi
 
 The grpc action keeps to the [guard](/reference/cli-reference#--read-only) of a run, and refuses a call it does not allow before anything is sent, failing the step with the kind `refused`.
 
-- `--allow-host` is checked against the host and port of `addr`, with port 443 when none is named, as grpc-go takes it. `dns:///` and `passthrough:///` before it are read through; a target that names no host, such as `unix:///tmp/grpc.sock`, is refused. With `protocol: connect`, the host of the URL is checked, at the port of its scheme when it names none.
+- `--allow-host` is checked against the host and port of `addr`, with port 443 when none is named, as grpc-go takes it. `dns:///` and `passthrough:///` before it are read through, and the DNS server of `dns://server/` is checked too, at port 53 when none is named; a target that names no host, such as `unix:///tmp/grpc.sock`, is refused. With `protocol: connect`, the host of the URL is checked, at the port of its scheme when it names none.
 - Under `--read-only`, a method is called only when every definition of it at hand declares it free of side effects with `option idempotency_level = NO_SIDE_EFFECTS;`: the server's, as its reflection tells it, and the `.proto` files', when `proto` is given. The reflection lookup reads, and is made. A Connect call has no reflection, so it needs `proto`, and one without is refused.
 
 ```protobuf
