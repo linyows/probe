@@ -563,7 +563,7 @@ Probe uses gRPC to communicate with actions, providing:
 
 ### Action Lifecycle
 
-1. **Resolution**: Probe resolves every external action before the first job starts; a built-in one needs no resolving
+1. **Resolution**: Probe resolves every external action the guard of the run lets run before the first job starts; a step whose action the guard does not let run is refused without resolving it, and a built-in one needs no resolving
 2. **Per-Step Start**: An action is started when a step uses it
 3. **Process Isolation**: Each action runs in its own process
 4. **Cleanup**: The process is stopped as soon as the step has its result, so no action is kept running between steps

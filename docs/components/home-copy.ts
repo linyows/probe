@@ -146,7 +146,7 @@ export const homeCopy: Record<Locale, HomeCopy> = {
       body: 'When an agent writes the code and the tests, something has to check both. Probe teaches the agent how to use the version it runs, finds mistakes in a workflow before it runs, judges responses by your spec rather than by the agent\'s own test, and refuses writes, and connections to hosts you did not allow, before they are sent.',
       workflowLabel: 'agent-workflow.yml',
       reportLabel: '$ probe check agent-workflow.yml',
-      checkNote: 'probe check reads a workflow without running it. A typo in a key, in with or in an output name would be ignored by a run and pass for the wrong reason; here each one is an error with its line, and a step that nothing checks is a warning.',
+      checkNote: 'probe check reads a workflow without running it. A run ignores a key it does not know, in a step or in with, so the step can pass for the wrong reason, and finds a wrong output name only when the step reaches it. Here each one is an error with its line before anything is sent, and a step that nothing checks is a warning.',
       items: [
         {
           name: 'skill',
@@ -280,7 +280,7 @@ export const homeCopy: Record<Locale, HomeCopy> = {
       body: 'エージェントがコードとテストを書くなら、その両方を確かめる仕組みが要ります。Probeは動いているバージョンの使い方をエージェントに教え、Workflowの誤りを実行前に見つけ、レスポンスの正しさをエージェント自身のtestではなく仕様で判定し、書き込みや許可していないホストへの接続を送信前に拒否します。',
       workflowLabel: 'agent-workflow.yml',
       reportLabel: '$ probe check agent-workflow.yml',
-      checkNote: 'probe checkはWorkflowを実行せずに読みます。キーやwithの綴り、outputsの名前を間違えても、実行時には無視されて別の理由で通ってしまいます。ここではそれぞれが行番号つきのエラーになり、何も確かめていないStepは警告になります。',
+      checkNote: 'probe checkはWorkflowを実行せずに読みます。Stepやwithのキーの綴りを間違えると、実行時には無視されて別の理由で通ってしまうことがあります。outputsの名前の誤りは、実行してそのStepに来るまでわかりません。ここではどれも何かを送る前に行番号つきのエラーになり、何も確かめていないStepは警告になります。',
       items: [
         {
           name: 'skill',
