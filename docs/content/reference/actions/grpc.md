@@ -110,5 +110,23 @@ The step fails with the kind `contract_request` when the request body, as JSON, 
 
 With `strict: true`, a field the server declares, or sends, that the files do not declare fails the step too. Without it such a field is let through, as protobuf lets a newer peer's fields through. A request body that the server's own definition cannot take either cannot be sent, so nothing is sent, and the step fails as `contract_request`, with `res.status_code` empty, rather than as an action error. `request: false` checks the server and its response alone, for a step that sends what the files do not allow on purpose. A response with a status other than `OK` has no message to check. Each violation is in `res.violations`, the terminal and the reports, with the field, such as `$.user.email`.
 
-proto3 declares no required fields and no ranges, so the files say what shape the messages have rather than which values they may hold.
+### Constraints the Files Annotate
+
+proto3 declares no required fields and no ranges, so the shape is all the files say unless they annotate their fields. Two kinds of annotation are checked when the files use them:
+
+- [protovalidate](https://protovalidate.com) rules, `[(buf.validate.field)...]` and the message and oneof rules, are checked on the request and the response, and a field that breaks one fails the step with the rule, such as `string.email`, and the field.
+- `google.api.field_behavior`, as [AIP-203](https://google.aip.dev/203) has it: a request that lacks a field that is `REQUIRED`, at any depth of the messages it holds, fails the step as `contract_request`, and a response that holds a field that is `INPUT_ONLY` fails it as `contract_response`, as a field a response must never carry.
+
+```protobuf
+syntax = "proto3";
+import "buf/validate/validate.proto";
+import "google/api/field_behavior.proto";
+
+message CreateUserRequest {
+  string email = 1 [(buf.validate.field).string.email = true, (google.api.field_behavior) = REQUIRED];
+  string password = 2 [(google.api.field_behavior) = INPUT_ONLY];
+}
+```
+
+`buf/validate/validate.proto` and `google/api/field_behavior.proto` are built into Probe, so the files can import them without having them in an import path; a copy in one is not read.
 

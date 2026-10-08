@@ -338,3 +338,86 @@ func TestImportName(t *testing.T) {
 		}
 	}
 }
+
+func TestRequestChecksConstraints(t *testing.T) {
+	addr := startUserServer(t)
+	imports := `syntax = "proto3";
+import "buf/validate/validate.proto";
+import "google/api/field_behavior.proto";
+`
+	annotate := func(replacements ...string) string {
+		spec := strings.Replace(userProto(t), `syntax = "proto3";`, imports, 1)
+		for i := 0; i+1 < len(replacements); i += 2 {
+			if !strings.Contains(spec, replacements[i]) {
+				t.Fatalf("%q is not in the .proto file", replacements[i])
+			}
+			spec = strings.Replace(spec, replacements[i], replacements[i+1], 1)
+		}
+		return spec
+	}
+
+	type want struct {
+		in, text, field string
+	}
+	tests := []struct {
+		name  string
+		proto string
+		body  string
+		want  []want
+	}{
+		{
+			name:  "constraints the call keeps to",
+			proto: annotate("string email = 3;", `string email = 3 [(buf.validate.field).string.email = true];`, "string user_id = 1;", `string user_id = 1 [(google.api.field_behavior) = REQUIRED];`),
+		},
+		{
+			name:  "a rule the request breaks",
+			proto: annotate("string user_id = 1;", `string user_id = 1 [(buf.validate.field).string.len = 5];`),
+			want:  []want{{"request", "request body breaks the rule string.len of buf.validate", "$.user_id"}},
+		},
+		{
+			name:  "a rule the response breaks",
+			proto: annotate("string name = 2;", `string name = 2 [(buf.validate.field).string.min_len = 50];`),
+			want:  []want{{"response", "response body breaks the rule string.min_len of buf.validate", "$.user.name"}},
+		},
+		{
+			name:  "a REQUIRED field the request lacks",
+			proto: annotate("bool include_profile = 2;", `bool include_profile = 2 [(google.api.field_behavior) = REQUIRED];`),
+			body:  `{"user_id": "123"}`,
+			want:  []want{{"request", "request body lacks the field include_profile, which is REQUIRED", "$.include_profile"}},
+		},
+		{
+			name:  "an INPUT_ONLY field the response holds",
+			proto: annotate("string email = 3;", `string email = 3 [(google.api.field_behavior) = INPUT_ONLY];`),
+			want:  []want{{"response", "response body holds the field email, which is INPUT_ONLY", "$.user.email"}},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			path := writeProto(t, tt.proto)
+			body := tt.body
+			if body == "" {
+				body = `{"user_id": "123", "include_profile": true}`
+			}
+			ret, err := Request(map[string]any{
+				"addr":    addr,
+				"service": "UserService",
+				"method":  "GetUser",
+				"body":    body,
+				"proto":   map[string]any{"files": []any{path}, "import_paths": []any{filepath.Dir(path)}},
+			})
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			got := ret["res"].(map[string]any)["violations"].([]any)
+			if len(got) != len(tt.want) {
+				t.Fatalf("violations = %#v, want %d", got, len(tt.want))
+			}
+			for i, w := range tt.want {
+				v := got[i].(map[string]any)
+				if v["in"] != w.in || !strings.Contains(v["message"].(string), w.text) || v["field"] != w.field {
+					t.Errorf("violations[%d] = %#v, want %s saying %q at %s", i, v, w.in, w.text, w.field)
+				}
+			}
+		})
+	}
+}
