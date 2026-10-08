@@ -301,6 +301,10 @@ func TestConnectRequestRejected(t *testing.T) {
 		{name: "a body that is not JSON", with: map[string]any{"body": "{", "addr": "localhost:1"}, wantErr: "body is not JSON"},
 		{name: "an addr of another scheme", with: map[string]any{"addr": "ftp://example.com"}, wantErr: "must be an http or https URL"},
 		{name: "an http addr with tls", with: map[string]any{"addr": "http://example.com", "tls": true}, wantErr: "is http, but tls is true"},
+		{name: "a host and port with a query", with: map[string]any{"addr": "localhost:8080/rpc?token=x"}, wantErr: "must not have a query or a fragment"},
+		{name: "a host and port with a fragment", with: map[string]any{"addr": "localhost:8080/rpc#x"}, wantErr: "must not have a query or a fragment"},
+		{name: "a URL with an empty query", with: map[string]any{"addr": "http://localhost:8080/rpc?"}, wantErr: "must not have a query or a fragment"},
+		{name: "a URL without a host", with: map[string]any{"addr": "http:///rpc"}, wantErr: "names no host"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -398,6 +402,7 @@ func TestConnectBase(t *testing.T) {
 		{addr: "api.example.com", tls: true, want: "https://api.example.com"},
 		{addr: "https://api.example.com/rpc/", want: "https://api.example.com/rpc"},
 		{addr: "http://localhost:8080", want: "http://localhost:8080"},
+		{addr: "localhost:8080/rpc/", want: "http://localhost:8080/rpc"},
 	}
 	for _, tt := range tests {
 		r := &Req{Addr: tt.addr, TLS: tt.tls}

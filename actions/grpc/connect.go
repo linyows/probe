@@ -70,14 +70,17 @@ func httpToCode(status int) codes.Code {
 // connectBase returns the URL the calls go under: addr when it is a URL, or
 // addr as a host and port, over https when tls is set and http otherwise.
 func (r *Req) connectBase() (string, error) {
-	if !strings.Contains(r.Addr, "://") {
+	addr := r.Addr
+	if !strings.Contains(addr, "://") {
+		// A host and port is checked as the URL it stands for, so that one
+		// with a query or a fragment cannot take in the procedure's path.
 		scheme := "http"
 		if r.TLS {
 			scheme = "https"
 		}
-		return scheme + "://" + strings.TrimSuffix(r.Addr, "/"), nil
+		addr = scheme + "://" + addr
 	}
-	u, err := url.Parse(r.Addr)
+	u, err := url.Parse(addr)
 	if err != nil {
 		return "", fmt.Errorf("invalid addr %q: %w", r.Addr, err)
 	}
@@ -90,7 +93,10 @@ func (r *Req) connectBase() (string, error) {
 	default:
 		return "", fmt.Errorf("addr %s must be an http or https URL for protocol connect", r.Addr)
 	}
-	if u.RawQuery != "" || u.Fragment != "" {
+	if u.Host == "" {
+		return "", fmt.Errorf("addr %s names no host", r.Addr)
+	}
+	if u.RawQuery != "" || u.Fragment != "" || u.ForceQuery {
 		return "", fmt.Errorf("addr %s must not have a query or a fragment", r.Addr)
 	}
 	return strings.TrimSuffix(u.String(), "/"), nil
