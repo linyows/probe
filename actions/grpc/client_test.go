@@ -2,8 +2,11 @@ package grpc
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
+	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -15,6 +18,12 @@ import (
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/reflection"
+	v1alphareflectiongrpc "google.golang.org/grpc/reflection/grpc_reflection_v1alpha"
+	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/reflect/protoreflect"
+	"google.golang.org/protobuf/reflect/protoregistry"
+	"google.golang.org/protobuf/types/dynamicpb"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 func TestConvertMetadataToMap(t *testing.T) {
@@ -419,5 +428,144 @@ func TestRequestInvalidTimeout(t *testing.T) {
 	})
 	if err == nil || !strings.Contains(err.Error(), "invalid timeout") {
 		t.Fatalf("Request() error = %v, want an invalid timeout error", err)
+	}
+}
+
+// clockProto declares a service whose response imports a well-known type,
+// so that its reflection reply holds more than one file.
+const clockProto = `syntax = "proto3";
+package clock.v1;
+import "google/protobuf/timestamp.proto";
+message NowRequest { string zone = 1; }
+message NowResponse {
+  google.protobuf.Timestamp at = 1;
+  string zone = 2;
+}
+service Clock { rpc Now(NowRequest) returns (NowResponse); }
+`
+
+// startClockServer serves clockProto, built at run time, with reflection
+// that tells its definition, and returns its address and the path of the
+// .proto file.
+func startClockServer(t *testing.T) (string, string) {
+	t.Helper()
+	dir := t.TempDir()
+	path := filepath.Join(dir, "clock.proto")
+	if err := os.WriteFile(path, []byte(clockProto), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	c, err := loadContract([]string{path}, []string{dir})
+	if err != nil {
+		t.Fatal(err)
+	}
+	fd := c.files[0]
+	files := new(protoregistry.Files)
+	for _, f := range []protoreflect.FileDescriptor{timestamppb.File_google_protobuf_timestamp_proto, fd} {
+		if err := files.RegisterFile(f); err != nil {
+			t.Fatal(err)
+		}
+	}
+	method := fd.Services().Get(0).Methods().Get(0)
+
+	lis, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := grpclib.NewServer()
+	s.RegisterService(&grpclib.ServiceDesc{
+		ServiceName: "clock.v1.Clock",
+		HandlerType: (*any)(nil),
+		Methods: []grpclib.MethodDesc{{
+			MethodName: "Now",
+			Handler: func(_ any, _ context.Context, dec func(any) error, _ grpclib.UnaryServerInterceptor) (any, error) {
+				in := dynamicpb.NewMessage(method.Input())
+				if err := dec(in); err != nil {
+					return nil, err
+				}
+				out := dynamicpb.NewMessage(method.Output())
+				fields := method.Output().Fields()
+				out.Set(fields.ByName("zone"), in.Get(method.Input().Fields().ByName("zone")))
+				at := out.Mutable(fields.ByName("at")).Message()
+				at.Set(at.Descriptor().Fields().ByName("seconds"), protoreflect.ValueOfInt64(1760000000))
+				return out, nil
+			},
+		}},
+	}, struct{}{})
+	v1alphareflectiongrpc.RegisterServerReflectionServer(s, reflection.NewServer(reflection.ServerOptions{Services: s, DescriptorResolver: files}))
+	go func() { _ = s.Serve(lis) }()
+	t.Cleanup(s.Stop)
+	return lis.Addr().String(), path
+}
+
+// A service whose definition imports another file is built from the whole
+// reflection reply, so that it can be called through reflection, and its
+// definition checked against the .proto files.
+func TestRequestThroughReflectionWithImports(t *testing.T) {
+	addr, _ := startClockServer(t)
+
+	ret, err := Request(map[string]any{"addr": addr, "service": "clock.v1.Clock", "method": "Now", "body": `{"zone": "Asia/Tokyo"}`})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if body := ret["res"].(map[string]any)["body"].(string); !strings.Contains(body, `"zone":"Asia/Tokyo"`) || !strings.Contains(body, `"at":"2025-10-09T`) {
+		t.Errorf("body = %s, want the zone and the time", body)
+	}
+
+	// The server's definition is compared with the files', which it could
+	// not be when it was left unbuilt.
+	spec := strings.Replace(clockProto, "string zone = 2;", "int32 zone = 2;", 1)
+	specPath := filepath.Join(t.TempDir(), "clock.proto")
+	if err := os.WriteFile(specPath, []byte(spec), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	ret, err = Request(map[string]any{
+		"addr": addr, "service": "clock.v1.Clock", "method": "Now", "body": `{"zone": "Asia/Tokyo"}`,
+		"proto": map[string]any{"files": []any{specPath}, "import_paths": []any{filepath.Dir(specPath)}},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	vs := ret["res"].(map[string]any)["violations"].([]any)
+	found := false
+	for _, v := range vs {
+		if strings.Contains(v.(map[string]any)["message"].(string), "the server's clock.v1.NowResponse declares string zone = 2") {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("violations = %v, want the server's definition compared", vs)
+	}
+}
+
+// A reply the files' definition cannot read at all, made with it as the
+// server tells no definition of its own, breaks the files rather than
+// failing the call.
+func TestRequestWithoutReflectionOfAReplyTheFilesCannotRead(t *testing.T) {
+	addr := startUserServerWith(t, false)
+	spec := strings.Replace(userProto(t), "string email = 3;", "Profile email = 3;", 1)
+	path := writeProto(t, spec)
+	ret, err := Request(map[string]any{
+		"addr": addr, "service": "UserService", "method": "GetUser", "body": `{"user_id": "123"}`,
+		"proto": map[string]any{"files": []any{path}, "import_paths": []any{filepath.Dir(path)}},
+	})
+	if err != nil {
+		t.Fatalf("err = %v, want the reply told as one that breaks the files", err)
+	}
+	res := ret["res"].(map[string]any)
+	if res["status_code"] != "OK" {
+		t.Errorf("status_code = %v, want OK: the server answered", res["status_code"])
+	}
+	vs := res["violations"].([]any)
+	if len(vs) != 1 || !strings.Contains(vs[0].(map[string]any)["message"].(string), "response body does not read as GetUserResponse") {
+		t.Errorf("violations = %v, want the reply that cannot be read", vs)
+	}
+}
+
+func TestReflectionError(t *testing.T) {
+	if err := reflectionError("x", status.Error(codes.Unimplemented, "no reflection")); !errors.Is(err, errNoReflection) {
+		t.Errorf("an UNIMPLEMENTED reflection = %v, want it marked as none", err)
+	}
+	if err := reflectionError("x", status.Error(codes.Unavailable, "down")); errors.Is(err, errNoReflection) {
+		t.Errorf("an UNAVAILABLE server = %v, want it not marked", err)
 	}
 }

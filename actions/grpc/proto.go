@@ -323,16 +323,13 @@ func fieldType(f protoreflect.FieldDescriptor) string {
 	return t
 }
 
-// checkResponse returns what in the response the message the .proto files
-// declare does not take. The response, read by the server's definition, is
-// read again by the files': a field whose number the files declare but
-// whose encoding is not theirs is left unread, and breaks them, as a field
-// the files do not declare does under strict.
-func (c *contract) checkResponse(spec protoreflect.MethodDescriptor, response proto.Message) []any {
-	data, err := proto.Marshal(response)
-	if err != nil {
-		return nil
-	}
+// checkResponse returns what in the response, data as it came in, the
+// message the .proto files declare does not take. It is read by the files'
+// definition: a field whose number the files declare but whose encoding is
+// not theirs is left unread, and breaks them, as a field the files do not
+// declare does under strict, and a reply that cannot be read at all breaks
+// them too.
+func (c *contract) checkResponse(spec protoreflect.MethodDescriptor, data []byte) []any {
 	msg := dynamicpb.NewMessage(spec.Output())
 	if err := proto.Unmarshal(data, msg); err != nil {
 		return []any{violation("response", fmt.Sprintf("response body does not read as %s", spec.Output().FullName()), err.Error(), "")}
