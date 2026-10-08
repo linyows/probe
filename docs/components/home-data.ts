@@ -9,7 +9,7 @@
 
 export type ReportLine = {
   text: string
-  tone?: 'title' | 'job' | 'pass' | 'idle' | 'echo' | 'total'
+  tone?: 'title' | 'job' | 'pass' | 'idle' | 'echo' | 'total' | 'error' | 'warning'
 }
 
 export const heroWorkflow = `name: Sign-up Flow
@@ -142,6 +142,17 @@ jobs:
         authorization: "Bearer {{outputs.auth.token}}"
     test: res.code == 200`
 
+/**
+ * The lines of sharedWorkflow that run the job file and hand data across,
+ * written with their indent, as the workflow's own vars are not one of them.
+ */
+export const sharedMarks = [
+  '    uses: embedded',
+  '      path: ./login-job.yml',
+  '      vars:',
+  '      token: res.outputs.token',
+]
+
 export const sharedJob = `name: Log in
 
 defaults:
@@ -162,6 +173,48 @@ steps:
   test: res.code == 200
   outputs:
     token: res.body.access_token`
+
+/*
+ * The pair below is the literal output of `probe check agent-workflow.yml`
+ * on the workflow beside it, with the mistakes a coding agent tends to make
+ * left in on purpose. Keep them in step: change one and run check again.
+ */
+
+export const agentWorkflow = `name: Profile
+
+jobs:
+- name: Profile
+  defaults:
+    http:
+      url: https://api.example.com
+  steps:
+  - name: Log in
+    id: login
+    uses: http
+    with:
+      post: /login
+      bdoy:
+        username: ada
+    test: res.code == 200
+    outputs:
+      token: res.body.token
+
+  - name: Read profile
+    uses: http
+    with:
+      get: /me
+      headers:
+        authorization: "Bearer {{outputs.login.tokn}}"
+    tset: res.code == 200`
+
+export const agentCheck: ReportLine[] = [
+  { text: 'agent-workflow.yml:14: error: job 0 "Profile", step 0 "Log in": with: unknown key "bdoy" for the http action; did you mean "body"?', tone: 'error' },
+  { text: 'agent-workflow.yml:20: warning: job 0 "Profile", step 1 "Read profile": nothing checks this step: it has no test', tone: 'warning' },
+  { text: 'agent-workflow.yml:25: error: job 0 "Profile", step 1 "Read profile": with: outputs.login.tokn is not published: step "login" publishes token', tone: 'error' },
+  { text: 'agent-workflow.yml:26: error: job 0 "Profile", step 1 "Read profile": unknown key "tset"; did you mean "test"?', tone: 'error' },
+  { text: '' },
+  { text: '3 errors, 1 warning', tone: 'total' },
+]
 
 export const installCommand = 'go install github.com/linyows/probe/cmd/probe@latest'
 

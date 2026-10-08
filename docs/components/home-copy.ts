@@ -2,6 +2,8 @@ export type Locale = 'en' | 'ja'
 
 type Part = { name: string; description: string; code: string }
 
+type Feature = Part & { label: string }
+
 export type HomeCopy = {
   headline: string[]
   lede: string
@@ -46,6 +48,15 @@ export type HomeCopy = {
     link: { label: string; href: string }
   }
   parts: { heading: string; body: string; items: Part[] }
+  agents: {
+    heading: string
+    body: string
+    workflowLabel: string
+    reportLabel: string
+    checkNote: string
+    items: Feature[]
+    link: { label: string; href: string }
+  }
   install: { heading: string; body: string; sourceLabel: string; docsLink: string; docsHref: string }
   copy: { idle: string; done: string }
 }
@@ -63,7 +74,7 @@ export const homeCopy: Record<Locale, HomeCopy> = {
     heroReportLabel: '$ probe signup-flow.yml',
     channels: {
       heading: 'Supported actions',
-      body: 'A step names an action in uses, and Probe starts that action as its own process and talks to it over gRPC. The built-in actions go through exactly the same handshake an out-of-tree plugin does, so none of them is a special case. What Probe cannot reach yet, you can add.',
+      body: 'A step names an action in uses, and Probe starts that action as its own process and talks to it over gRPC. The built-in actions go through exactly the same handshake an action you write does, so none of them is a special case. What Probe cannot reach yet, you can add.',
       chart: {
         title: 'Probe talks to every action over gRPC, whether it is built in or your own.',
         runner: 'probe',
@@ -130,6 +141,52 @@ export const homeCopy: Record<Locale, HomeCopy> = {
         },
       ],
     },
+    agents: {
+      heading: 'Built for coding agents',
+      body: 'When an agent writes the code and the tests, something has to check both. Probe teaches the agent how to use the version it runs, finds mistakes in a workflow before it runs, judges responses by your spec rather than by the agent\'s own test, and refuses writes, and connections to hosts you did not allow, before they are sent.',
+      workflowLabel: 'agent-workflow.yml',
+      reportLabel: '$ probe check agent-workflow.yml',
+      checkNote: 'probe check reads a workflow without running it. A typo in a key, in with or in an output name would be ignored by a run and pass for the wrong reason; here each one is an error with its line, and a step that nothing checks is a warning.',
+      items: [
+        {
+          name: 'skill',
+          label: 'shell',
+          description: 'Install a skill that teaches the agent to write, run and debug workflows. It reads probe guide, the reference built into the binary, so what it writes fits the version it runs.',
+          code: 'probe skill install\nprobe guide http',
+        },
+        {
+          name: 'openapi',
+          label: 'yaml',
+          description: 'Check each request and response against your OpenAPI document. The spec decides what is right, not the test the agent wrote, so a wrong test cannot agree with a wrong response.',
+          code: 'uses: http\nwith:\n  get: /users/1\n  openapi:\n    spec: ./openapi.yml',
+        },
+        {
+          name: 'proto',
+          label: 'yaml',
+          description: 'The same for gRPC, from your .proto files, with the rules of buf.validate and google.api.field_behavior.',
+          code: 'uses: grpc\nwith:\n  method: GetUser\n  proto:\n    files: [./proto/user/v1/user.proto]',
+        },
+        {
+          name: 'coverage',
+          label: 'shell',
+          description: 'Tell which operations, responses and methods the run checked, and which ones no step reached yet.',
+          code: 'probe --report json workflow.yml\nprobe coverage openapi.yml \\\n  probe-report.json',
+        },
+        {
+          name: '--read-only',
+          label: 'shell',
+          description: 'Run what the agent wrote without letting it write: anything but reads, and any host not listed, is refused before it is sent.',
+          code: 'probe --read-only \\\n  --allow-host api.staging.example.com \\\n  workflow.yml',
+        },
+        {
+          name: 'exit code',
+          label: 'shell',
+          description: 'The exit code says what to look at: a failed test or broken contract, the workflow itself, or a target that did not answer.',
+          code: 'probe workflow.yml\necho $?  # 1 test, 2 workflow, 3 action',
+        },
+      ],
+      link: { label: 'Read the CLI reference', href: '/reference/cli-reference' },
+    },
     install: {
       heading: 'Install',
       body: 'Probe is a single Go binary with no runtime dependencies.',
@@ -151,13 +208,13 @@ export const homeCopy: Record<Locale, HomeCopy> = {
     heroReportLabel: '$ probe signup-flow.yml',
     channels: {
       heading: 'サポートしているアクション',
-      body: 'Stepのusesにアクション名を書くと、Probeはそのアクションを別プロセスとして起動し、gRPC越しにやり取りします。ビルトインのアクションも、外部のプラグインとまったく同じ手順で接続されます。特別扱いされているものは1つもないので、必要なアクションが無ければ自分で追加できます。',
+      body: 'Stepのusesにアクション名を書くと、Probeはそのアクションを別プロセスとして起動し、gRPC越しにやり取りします。ビルトインのアクションも、自作のアクションとまったく同じ手順で接続されます。特別扱いされているものは1つもないので、必要なアクションが無ければ自分で追加できます。',
       chart: {
-        title: 'Probeはビルトインのアクションも自作のプラグインも、同じgRPCでつないでいる。',
+        title: 'Probeはビルトインのアクションも自作のアクションも、同じgRPCでつないでいる。',
         runner: 'probe',
         runnerNote: 'ワークフロー実行',
         builtInLabel: 'ビルトイン',
-        externalLabel: '自作のプラグイン',
+        externalLabel: '自作のアクション',
         externalNames: ['graphql', 'jmap'],
         transport: 'gRPC',
       },
@@ -217,6 +274,52 @@ export const homeCopy: Record<Locale, HomeCopy> = {
           code: 'wait: 5s',
         },
       ],
+    },
+    agents: {
+      heading: 'コーディングエージェントのために',
+      body: 'エージェントがコードとテストを書くなら、その両方を確かめる仕組みが要ります。Probeは動いているバージョンの使い方をエージェントに教え、Workflowの誤りを実行前に見つけ、レスポンスの正しさをエージェント自身のtestではなく仕様で判定し、書き込みや許可していないホストへの接続を送信前に拒否します。',
+      workflowLabel: 'agent-workflow.yml',
+      reportLabel: '$ probe check agent-workflow.yml',
+      checkNote: 'probe checkはWorkflowを実行せずに読みます。キーやwithの綴り、outputsの名前を間違えても、実行時には無視されて別の理由で通ってしまいます。ここではそれぞれが行番号つきのエラーになり、何も確かめていないStepは警告になります。',
+      items: [
+        {
+          name: 'skill',
+          label: 'shell',
+          description: 'Workflowの書き方、実行、失敗の読み方を教えるスキルを入れます。エージェントはバイナリに組み込まれたリファレンスをprobe guideで読むので、動いているバージョンに合ったYAMLを書きます。',
+          code: 'probe skill install\nprobe guide http',
+        },
+        {
+          name: 'openapi',
+          label: 'yaml',
+          description: 'リクエストとレスポンスをOpenAPIのドキュメントと照合します。正しさを決めるのはエージェントが書いたtestではなく仕様なので、間違ったtestが間違ったレスポンスを通すことはありません。',
+          code: 'uses: http\nwith:\n  get: /users/1\n  openapi:\n    spec: ./openapi.yml',
+        },
+        {
+          name: 'proto',
+          label: 'yaml',
+          description: 'gRPCでも同じく.protoファイルと照合します。buf.validateのルールとgoogle.api.field_behaviorも確かめます。',
+          code: 'uses: grpc\nwith:\n  method: GetUser\n  proto:\n    files: [./proto/user/v1/user.proto]',
+        },
+        {
+          name: 'coverage',
+          label: 'shell',
+          description: '実行したStepが仕様のどのオペレーション、レスポンス、メソッドを確かめたか、まだどれが残っているかを示します。',
+          code: 'probe --report json workflow.yml\nprobe coverage openapi.yml \\\n  probe-report.json',
+        },
+        {
+          name: '--read-only',
+          label: 'shell',
+          description: 'エージェントが書いたWorkflowを、書き込ませずに走らせます。読み取り以外の操作と、許可していないホストへの接続は、送る前に拒否します。',
+          code: 'probe --read-only \\\n  --allow-host api.staging.example.com \\\n  workflow.yml',
+        },
+        {
+          name: 'exit code',
+          label: 'shell',
+          description: '終了コードで何を調べればよいかがわかります。testや仕様の違反か、Workflow自体の誤りか、相手が応答しなかったかを区別します。',
+          code: 'probe workflow.yml\necho $?  # 1 test, 2 workflow, 3 action',
+        },
+      ],
+      link: { label: 'CLIリファレンスを読む', href: '/ja/reference/cli-reference' },
     },
     install: {
       heading: 'インストール',
