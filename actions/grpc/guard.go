@@ -114,15 +114,21 @@ func (r *Req) checkReadOnly(server, spec protoreflect.MethodDescriptor) error {
 		return actionrpc.Refuse("the run is read-only, and no definition of %s/%s tells that it does not write; give proto.files that declare it idempotency_level = NO_SIDE_EFFECTS", r.Service, r.Method)
 	}
 	for _, d := range []struct {
-		whose string
+		where string
 		md    protoreflect.MethodDescriptor
-	}{{"the server's definition declares", server}, {"the .proto files declare", spec}} {
+	}{{"the server's definition", server}, {"the .proto files", spec}} {
 		if d.md == nil {
 			continue
 		}
-		if level := idempotencyLevel(d.md); level != descriptorpb.MethodOptions_NO_SIDE_EFFECTS {
-			return actionrpc.Refuse("the run is read-only, and %s may write: %s it idempotency_level %s, not NO_SIDE_EFFECTS", d.md.FullName(), d.whose, level)
+		level := idempotencyLevel(d.md)
+		if level == descriptorpb.MethodOptions_NO_SIDE_EFFECTS {
+			continue
 		}
+		name := level.String()
+		if level == descriptorpb.MethodOptions_IDEMPOTENCY_UNKNOWN {
+			name = "unset"
+		}
+		return actionrpc.Refuse("the run is read-only, and %s may write: its idempotency_level in %s is %s, not NO_SIDE_EFFECTS", d.md.FullName(), d.where, name)
 	}
 	return nil
 }

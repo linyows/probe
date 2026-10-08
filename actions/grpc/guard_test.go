@@ -103,12 +103,12 @@ func TestRequestUnderReadOnly(t *testing.T) {
 		{
 			name:        "gRPC to a method nothing declares free of side effects",
 			with:        map[string]any{"addr": withReflection},
-			wantRefused: "the server's definition declares it idempotency_level IDEMPOTENCY_UNKNOWN",
+			wantRefused: "its idempotency_level in the server's definition is unset, not NO_SIDE_EFFECTS",
 		},
 		{
 			name:        "gRPC to a method the files declare free of side effects, but not the server",
 			with:        map[string]any{"addr": withReflection, "proto": readOnly},
-			wantRefused: "the server's definition declares it",
+			wantRefused: "in the server's definition is unset",
 		},
 		{
 			name: "gRPC without reflection to a method the files declare free of side effects",
@@ -117,7 +117,12 @@ func TestRequestUnderReadOnly(t *testing.T) {
 		{
 			name:        "gRPC without reflection to a method the files do not declare free of side effects",
 			with:        map[string]any{"addr": withoutReflection, "proto": plain},
-			wantRefused: "the .proto files declare it",
+			wantRefused: "its idempotency_level in the .proto files is unset",
+		},
+		{
+			name:        "gRPC to a method the files declare idempotent, which may write",
+			with:        map[string]any{"addr": withoutReflection, "proto": protoOf(writeProto(t, strings.Replace(readOnlyGetUser(t), "NO_SIDE_EFFECTS", "IDEMPOTENT", 1)), false)},
+			wantRefused: "its idempotency_level in the .proto files is IDEMPOTENT, not NO_SIDE_EFFECTS",
 		},
 		{
 			name:        "Connect without .proto files",
@@ -131,7 +136,7 @@ func TestRequestUnderReadOnly(t *testing.T) {
 		{
 			name:        "Connect to a method the files do not declare free of side effects",
 			with:        map[string]any{"protocol": "connect", "addr": s.url, "proto": plain},
-			wantRefused: "the .proto files declare it",
+			wantRefused: "its idempotency_level in the .proto files is unset",
 		},
 	}
 	for _, tt := range tests {
