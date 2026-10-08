@@ -5,15 +5,19 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 
+	"buf.build/go/protovalidate"
 	"github.com/bufbuild/protocompile"
 	"github.com/bufbuild/protocompile/linker"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/encoding/protowire"
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/reflect/protodesc"
 	"google.golang.org/protobuf/reflect/protoreflect"
+	"google.golang.org/protobuf/reflect/protoregistry"
 	"google.golang.org/protobuf/types/dynamicpb"
 )
 
@@ -27,6 +31,9 @@ type contract struct {
 	// strict is whether a field the .proto files do not declare breaks
 	// them.
 	strict bool
+	// validator checks the rules the files annotate fields with by
+	// buf.validate.
+	validator protovalidate.Validator
 }
 
 // takeProto removes proto from the parameters and returns the contract it
@@ -133,14 +140,25 @@ func loadContract(files, importPaths []string) (*contract, error) {
 		}
 		names = append(names, name)
 	}
-	compiler := protocompile.Compiler{
-		Resolver: protocompile.WithStandardImports(&protocompile.SourceResolver{ImportPaths: importPaths}),
-	}
+	sources := &protocompile.SourceResolver{ImportPaths: importPaths}
+	resolver := protocompile.ResolverFunc(func(path string) (protocompile.SearchResult, error) {
+		if slices.Contains(annotationFiles, path) {
+			if fd, err := protoregistry.GlobalFiles.FindFileByPath(path); err == nil {
+				return protocompile.SearchResult{Proto: protodesc.ToFileDescriptorProto(fd)}, nil
+			}
+		}
+		return sources.FindFileByPath(path)
+	})
+	compiler := protocompile.Compiler{Resolver: protocompile.WithStandardImports(resolver)}
 	compiled, err := compiler.Compile(context.Background(), names...)
 	if err != nil {
 		return nil, fmt.Errorf("proto.files: %w", err)
 	}
-	return &contract{files: compiled}, nil
+	validator, err := protovalidate.New()
+	if err != nil {
+		return nil, fmt.Errorf("proto.files: %w", err)
+	}
+	return &contract{files: compiled, validator: validator}, nil
 }
 
 // importName returns the name file is imported by: its path under the
@@ -193,7 +211,7 @@ func (c *contract) checkRequest(spec protoreflect.MethodDescriptor, body string)
 	if err := protojson.Unmarshal([]byte(body), msg); err != nil {
 		return []any{violation("request", fmt.Sprintf("request body does not keep to %s", spec.Input().FullName()), err.Error(), "")}
 	}
-	return nil
+	return c.constraints("request", msg)
 }
 
 // checkDefinition returns where the server's definition of the method, as
@@ -300,7 +318,7 @@ func (c *contract) checkResponse(spec protoreflect.MethodDescriptor, response pr
 	if err := proto.Unmarshal(data, msg); err != nil {
 		return []any{violation("response", fmt.Sprintf("response body does not read as %s", spec.Output().FullName()), err.Error(), "")}
 	}
-	return c.unread(msg, "$")
+	return append(c.unread(msg, "$"), c.constraints("response", msg)...)
 }
 
 // unread returns a violation for each field of msg, at any depth, that was
