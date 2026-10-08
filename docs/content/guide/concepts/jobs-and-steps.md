@@ -770,7 +770,7 @@ steps:
 
 Now that you understand jobs and steps in detail, explore:
 
-1. **[Actions](/guide/concepts/actions)** - Learn about the action system and available plugins
+1. **[Actions](/guide/concepts/actions)** - Learn about the action system and available actions
 2. **[Expressions and Templates](/guide/concepts/expressions-and-templates)** - Master dynamic configuration and testing
 3. **[Data Flow](/guide/concepts/data-flow)** - Understand how data moves through workflows
 

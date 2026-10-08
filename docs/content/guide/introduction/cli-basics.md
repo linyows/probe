@@ -63,7 +63,7 @@ Verbose mode shows:
 - Detailed HTTP request/response information
 - Step execution timing
 - Variable resolution details
-- Plugin communication logs
+- Log records from actions
 
 **Example verbose output:**
 ```

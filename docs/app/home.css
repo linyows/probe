@@ -205,7 +205,7 @@
   color: var(--lp-blue);
 }
 
-/* The file you write and what came back, cropped to the report's height. */
+/* Two panels side by side, the longer listing cropped to the other's height. */
 .lp-pair {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -217,11 +217,6 @@
 .lp-pair__source .lp-source {
   max-height: 22rem;
   overflow: auto;
-}
-
-/* Two listings of unequal length: let each keep its own height. */
-.lp-pair--top {
-  align-items: start;
 }
 
 @media (min-width: 60rem) {
@@ -323,6 +318,18 @@
   font-weight: 700;
 }
 
+/* A line the section points at: tinted, with a bar in the gutter and the text in blue. */
+.lp-source__line--mark,
+.lp-source__line--mark:nth-child(even) {
+  background-color: color-mix(in srgb, var(--lp-blue) 14%, transparent);
+  box-shadow: inset 3px 0 0 var(--lp-accent);
+}
+
+.lp-source__line--mark .lp-source__code {
+  color: var(--lp-blue);
+  font-weight: 700;
+}
+
 /* Job graph -------------------------------------------------------------- */
 
 .lp-flow {
@@ -417,6 +424,14 @@
 
 .lp-report__line--total {
   color: #e8f6ff;
+}
+
+.lp-report__line--error {
+  color: #ff9b9b;
+}
+
+.lp-report__line--warning {
+  color: #f4cf7c;
 }
 
 .lp-report--animate .lp-report__line {
@@ -565,6 +580,23 @@
 
 .lp-part__code {
   margin-top: 1rem;
+}
+
+/* Agents ----------------------------------------------------------------- */
+
+/* The lines of probe check are long, so they wrap under their own start. */
+.lp-report--wrap .lp-report__line {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  padding-left: 2ch;
+  text-indent: -2ch;
+}
+
+.lp-agents__note {
+  max-width: var(--lp-measure);
+  margin: 1.25rem 0 0;
+  color: var(--lp-muted);
+  font-size: 0.9375rem;
 }
 
 /* Install ---------------------------------------------------------------- */

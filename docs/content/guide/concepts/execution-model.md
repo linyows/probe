@@ -732,18 +732,18 @@ jobs:
 
 ## Resource Management
 
-Each action runs as a plugin process, so a run has resources to start, reuse and release.
+Each action runs in a process of its own, so a run has processes to start and stop.
 
-### Plugin Lifecycle Management
+### Action Lifecycle Management
 
-Probe manages action plugins throughout workflow execution:
+Probe starts an action for each step that uses it:
 
 ```yaml
 jobs:
-- id: plugin-intensive-workflow
-  name: Plugin Intensive Workflow
+- id: multi-action-workflow
+  name: Multi Action Workflow
   steps:
-    # HTTP plugin loaded for this step
+    # The http action is started for this step
     - name: API Test
       uses: http
       with:
@@ -751,7 +751,7 @@ jobs:
         url: "{{vars.API_URL}}/test"
       test: res.code == 200
 
-    # SMTP plugin loaded for this step
+    # The smtp action is started for this step
     - name: Send Notification
       uses: smtp
       with:
@@ -768,7 +768,7 @@ jobs:
       with:
         message: "Debug checkpoint reached"
 
-    # HTTP plugin reused (already loaded)
+    # The http action is started again, in a new process
     - name: Follow-up API Test
       uses: http
       with:
@@ -777,10 +777,10 @@ jobs:
       test: res.code == 200
 ```
 
-Plugin lifecycle:
-1. Plugin loaded when first action is encountered
-2. Plugin reused for subsequent actions of same type
-3. Plugin cleaned up after job completion
+Action lifecycle:
+1. A process is started for the action when a step uses it
+2. The step runs in it, and the process is stopped once the step has its result
+3. A later step that uses the same action starts a new process; what the action keeps in the job, such as the cookies of `keep_cookies`, is handed to it by Probe
 
 ### Memory and Performance Optimization
 

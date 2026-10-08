@@ -5,19 +5,30 @@ import { PluginChart } from './plugin-chart'
 import { SourcePanel } from './source-panel'
 import { StructureChart } from './structure-chart'
 import {
+  agentCheck,
+  agentWorkflow,
   heroReport,
   heroWorkflow,
   installCommand,
   sharedJob,
+  sharedMarks,
   sharedWorkflow,
   sourceCommands,
   type ReportLine,
 } from './home-data'
 import { homeCopy, type Locale } from './home-copy'
 
-function Report({ lines, animate = false }: { lines: ReportLine[]; animate?: boolean }) {
+function Report({
+  lines,
+  animate = false,
+  wrap = false,
+}: {
+  lines: ReportLine[]
+  animate?: boolean
+  wrap?: boolean
+}) {
   return (
-    <pre className={`lp-report${animate ? ' lp-report--animate' : ''}`}>
+    <pre className={`lp-report${animate ? ' lp-report--animate' : ''}${wrap ? ' lp-report--wrap' : ''}`}>
       {lines.map((line, i) => (
         <span
           key={i}
@@ -125,8 +136,14 @@ export function Home({ locale }: { locale: Locale }) {
           <h2 className="lp-section__heading">{t.shared.heading}</h2>
           <p className="lp-section__body">{t.shared.body}</p>
         </div>
-        <div className="lp-pair lp-pair--top">
-          <SourcePanel label={t.shared.workflowLabel} code={sharedWorkflow} />
+        {/* The workflow is the longer listing, so it scrolls to the height of the job. */}
+        <div className="lp-pair">
+          <SourcePanel
+            label={t.shared.workflowLabel}
+            code={sharedWorkflow}
+            className="lp-pair__source"
+            marks={sharedMarks}
+          />
           <SourcePanel label={t.shared.jobLabel} code={sharedJob} />
         </div>
 
@@ -149,6 +166,39 @@ export function Home({ locale }: { locale: Locale }) {
             </article>
           ))}
         </div>
+      </section>
+
+      <section className="lp-section">
+        <div className="lp-section__head">
+          <h2 className="lp-section__heading">{t.agents.heading}</h2>
+          <p className="lp-section__body">{t.agents.body}</p>
+        </div>
+        {/* The workflow is the longer, so it scrolls to the height of the report. */}
+        <div className="lp-pair">
+          <SourcePanel
+            label={t.agents.workflowLabel}
+            code={agentWorkflow}
+            className="lp-pair__source"
+          />
+          <figure className="lp-panel lp-panel--readout">
+            <figcaption className="lp-panel__label">{t.agents.reportLabel}</figcaption>
+            <Report lines={agentCheck} wrap />
+          </figure>
+        </div>
+        <p className="lp-agents__note">{t.agents.checkNote}</p>
+        <div className="lp-parts">
+          {t.agents.items.map(item => (
+            <article key={item.name} className="lp-part">
+              <h3 className="lp-part__name">{item.name}</h3>
+              <p className="lp-part__description">{item.description}</p>
+              <SourcePanel label={item.label} code={item.code} className="lp-part__code" />
+            </article>
+          ))}
+        </div>
+
+        <Link className="lp-button lp-button--solid lp-section__link" href={t.agents.link.href}>
+          {t.agents.link.label}
+        </Link>
       </section>
 
       <section className="lp-section lp-section--install">

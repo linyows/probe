@@ -30,15 +30,21 @@ function withFieldsInBold(line: string): ReactNode {
   )
 }
 
-/** A listing in a framed window, with a gutter of line numbers. */
+/**
+ * A listing in a framed window, with a gutter of line numbers. A line that is
+ * one of marks, indent and all, is set in colour, to point at
+ * what the section around it is about.
+ */
 export function SourcePanel({
   label,
   code,
   className = '',
+  marks = [],
 }: {
   label: string
   code: string
   className?: string
+  marks?: string[]
 }) {
   return (
     <figure className={`lp-panel lp-panel--paper ${className}`.trim()}>
@@ -48,7 +54,10 @@ export function SourcePanel({
             banding below reaches the end of a line that scrolls. */}
         <span className="lp-source__lines">
           {code.trimEnd().split('\n').map((line, i) => (
-            <span key={i} className="lp-source__line">
+            <span
+              key={i}
+              className={`lp-source__line${marks.includes(line) ? ' lp-source__line--mark' : ''}`}
+            >
               <span className="lp-source__number">{i + 1}</span>
               <span className="lp-source__code">{withFieldsInBold(line) || ' '}</span>
             </span>

@@ -9,7 +9,7 @@ Probe uses environment variables for:
 - **Runtime Configuration** - Control logging, timeouts, and behavior
 - **Authentication** - API keys, tokens, and credentials
 - **Integration** - CI/CD systems, monitoring tools
-- **Customization** - Plugin directories, default configurations
+- **Customization** - Limits and default configurations
 
 Environment variables can be set at the system level, in CI/CD pipelines, or defined within workflow files using the `env` section.
 

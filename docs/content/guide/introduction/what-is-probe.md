@@ -29,7 +29,7 @@ Create workflows easily with YAML-based configuration, no programming knowledge 
 Developed in Go as a single binary, runs without dependencies.
 
 ### Extensible
-Plugin-based architecture allows easy addition of custom actions.
+Custom actions can be added without changing Probe itself.
 
 ### Concurrent Execution
 Efficiently processes workflows by running multiple jobs in parallel.
@@ -153,7 +153,7 @@ Perform database operations.
 
 ### Custom Actions
 
-When built-in actions don't meet your requirements, you can develop custom actions as **plugins**. They can be implemented in Go and seamlessly integrate into Probe's architecture.
+When built-in actions don't meet your requirements, you can develop **custom actions**. They can be implemented in Go, as external actions or built into your own build of Probe.
 
 ## Let's Get Started
 

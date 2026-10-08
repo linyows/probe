@@ -96,10 +96,14 @@ export async function DocsLayout({
       }
       footer={
         <Footer>
-          Copyright © 2025-present{' '}
-          <a href="https://tomohisaoda.com/projects" target="_blank" rel="noreferrer">
-            linyows
-          </a>
+          {/* Footer lays out its children with flex, which drops the space
+              between them, so the text and the link sit in one span. */}
+          <span>
+            Copyright © 2025-present{' '}
+            <a href="https://tomohisaoda.com/projects" target="_blank" rel="noreferrer">
+              linyows
+            </a>
+          </span>
         </Footer>
       }
     >
