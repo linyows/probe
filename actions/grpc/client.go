@@ -185,30 +185,48 @@ func (r *Req) Do() (re *Result, er error) {
 }
 
 func (r *Req) invokeMethod(ctx context.Context, conn *grpc.ClientConn, reflectionClient grpc_reflection_v1alpha.ServerReflectionClient, answer *answerHandler) (*Res, error) {
-	// Get service descriptor using reflection
-	serviceDesc, err := r.getServiceDescriptor(ctx, reflectionClient)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get service descriptor: %w", err)
+	// The method the .proto files declare, when they are given.
+	var spec protoreflect.MethodDescriptor
+	if r.contract != nil {
+		spec = r.contract.method(r.Service, r.Method)
 	}
 
-	// Find method descriptor
-	methodDesc := serviceDesc.Methods().ByName(protoreflect.Name(r.Method))
+	// The server's own definition of the method, as its reflection tells
+	// it, which the call is made with. A server without reflection tells
+	// nothing, nor does one whose definition lacks the method; the call is
+	// then made with the .proto files' definition, as a client built from
+	// them would make it.
+	var server protoreflect.MethodDescriptor
+	serviceDesc, err := r.getServiceDescriptor(ctx, reflectionClient)
+	switch {
+	case err == nil:
+		server = serviceDesc.Methods().ByName(protoreflect.Name(r.Method))
+		if server == nil && spec == nil {
+			return nil, fmt.Errorf("method %s not found in service %s", r.Method, r.Service)
+		}
+	case spec == nil:
+		return nil, fmt.Errorf("failed to get service descriptor: %w", err)
+	}
+	methodDesc := server
 	if methodDesc == nil {
-		return nil, fmt.Errorf("method %s not found in service %s", r.Method, r.Service)
+		methodDesc = spec
 	}
 
 	// The .proto files, when they are given, are checked against the
-	// request, the server's definition and then the response.
+	// request, the server's definition when it tells one, and then the
+	// response.
 	var violations []any
-	var spec protoreflect.MethodDescriptor
 	if r.contract != nil {
 		violations = []any{}
-		spec = r.contract.method(r.Service, r.Method)
 		if spec == nil {
 			violations = append(violations, violation("response", fmt.Sprintf("the .proto files declare no method %s in %s", r.Method, r.Service), "", ""))
 		} else {
 			violations = append(violations, r.contract.checkRequest(spec, r.Body)...)
-			violations = append(violations, r.contract.checkDefinition(spec, methodDesc)...)
+			if server != nil {
+				violations = append(violations, r.contract.checkDefinition(spec, server)...)
+			} else if serviceDesc != nil {
+				violations = append(violations, violation("response", fmt.Sprintf("the server's definition of %s declares no method %s", serviceDesc.FullName(), r.Method), "the .proto files declare it", ""))
+			}
 		}
 	}
 
@@ -240,7 +258,7 @@ func (r *Req) invokeMethod(ctx context.Context, conn *grpc.ClientConn, reflectio
 	responseMsg := dynamicpb.NewMessage(methodDesc.Output())
 
 	// Invoke the method
-	fullMethodName := fmt.Sprintf("/%s/%s", serviceDesc.FullName(), methodDesc.Name())
+	fullMethodName := fmt.Sprintf("/%s/%s", methodDesc.Parent().FullName(), methodDesc.Name())
 	var header, trailer metadata.MD
 	err = conn.Invoke(answer.mark(ctx), fullMethodName, requestMsg, responseMsg, grpc.Header(&header), grpc.Trailer(&trailer))
 
