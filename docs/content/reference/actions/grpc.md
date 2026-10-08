@@ -165,3 +165,18 @@ With `protocol: connect`, the method is called with the [Connect protocol](https
 `res` has the fields a gRPC call gives. A Connect error, such as `{"code": "not_found", "message": "..."}` with HTTP status 404, gives `res.status_code` `NOT_FOUND` and its message, as the Connect codes are the gRPC ones. An answer that holds no Connect error is still the server's answer, and its code is the one the protocol implies, as connect-go reads it: from the HTTP status, such as `UNAVAILABLE` for a proxy's 502 page, with the status line as the message, or `UNKNOWN` or `INTERNAL` for a 200 whose content type is not the codec's. `res.metadata` holds the response headers; those the server sent after the message, under `Trailer-`, are named without it and win over a header of the same name. Only a call that gets no answer, such as one to a server that cannot be reached or that runs out of `timeout`, is an action error. Redirects are not followed.
 
 Streaming methods cannot be called with `protocol: connect`: one the `.proto` files declare as streaming fails the step as an action error before anything is sent, and without the files the server answers the call with an error.
+
+## Under a Guard
+
+The grpc action keeps to the [guard](/reference/cli-reference#--read-only) of a run, and refuses a call it does not allow before anything is sent, failing the step with the kind `refused`.
+
+- `--allow-host` is checked against the host and port of `addr`, with port 443 when none is named, as grpc-go takes it. `dns:///` and `passthrough:///` before it are read through, and the DNS server of `dns://server/` is checked too, at port 53 when none is named; a target that names no host, such as `unix:///tmp/grpc.sock`, is refused. With `protocol: connect`, the host of the URL is checked, at the port of its scheme when it names none.
+- Under `--read-only`, a method is called only when every definition of it at hand declares it free of side effects with `option idempotency_level = NO_SIDE_EFFECTS;`: the server's, as its reflection tells it, and the `.proto` files', when `proto` is given. The reflection lookup reads, and is made. A Connect call has no reflection, so it needs `proto`, and one without is refused.
+
+```protobuf
+service UserService {
+  rpc GetUser(GetUserRequest) returns (GetUserResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+}
+```

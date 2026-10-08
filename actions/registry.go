@@ -39,9 +39,9 @@ var builtin = map[string]func(){
 }
 
 // keeping are the built-in actions that keep to the guard of a run
-// themselves: http and db refuse what it does not allow, embedded runs its
-// job under it, and hello reaches nothing.
-var keeping = []string{"db", "embedded", "hello", "http"}
+// themselves: http, db and grpc refuse what it does not allow, embedded runs
+// its job under it, and hello reaches nothing.
+var keeping = []string{"db", "embedded", "grpc", "hello", "http"}
 
 // Keeping returns the names of the built-in actions that keep to the guard
 // of a run, such as --read-only, in alphabetical order. Any other action is
