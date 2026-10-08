@@ -36,7 +36,7 @@ type BrowserRunner interface {
 	// context of the first Run, so the browser is started on a context
 	// without the actions' deadline and outlives a timed-out action.
 	Start(ctx context.Context) error
-	Run(ctx context.Context, actions ...chromedp.Action) error
+	Run(ctx context.Context, actions ...chromedp.Action[chromedp.Void]) error
 }
 
 // ChromeDPRunner implements BrowserRunner using the actual ChromeDP
@@ -44,25 +44,25 @@ type ChromeDPRunner struct{}
 
 // Start launches the browser by running no actions on ctx.
 func (r *ChromeDPRunner) Start(ctx context.Context) error {
-	return chromedp.Run(ctx)
+	return chromedp.Do(ctx)
 }
 
 // Run executes actions using ChromeDP
-func (r *ChromeDPRunner) Run(ctx context.Context, actions ...chromedp.Action) error {
-	return chromedp.Run(ctx, actions...)
+func (r *ChromeDPRunner) Run(ctx context.Context, actions ...chromedp.Action[chromedp.Void]) error {
+	return chromedp.Do(ctx, actions...)
 }
 
 // MockRunner implements BrowserRunner for testing
 type MockRunner struct {
-	RunFunc     func(ctx context.Context, actions ...chromedp.Action) error
-	CallHistory [][]chromedp.Action
+	RunFunc     func(ctx context.Context, actions ...chromedp.Action[chromedp.Void]) error
+	CallHistory [][]chromedp.Action[chromedp.Void]
 	mu          sync.Mutex
 }
 
 // NewMockRunner creates a new mock browser runner
 func NewMockRunner() *MockRunner {
 	return &MockRunner{
-		CallHistory: make([][]chromedp.Action, 0),
+		CallHistory: make([][]chromedp.Action[chromedp.Void], 0),
 	}
 }
 
@@ -73,7 +73,7 @@ func (m *MockRunner) Start(ctx context.Context) error {
 }
 
 // Run records the call and optionally executes a custom function
-func (m *MockRunner) Run(ctx context.Context, actions ...chromedp.Action) error {
+func (m *MockRunner) Run(ctx context.Context, actions ...chromedp.Action[chromedp.Void]) error {
 	m.mu.Lock()
 	m.CallHistory = append(m.CallHistory, actions)
 	m.mu.Unlock()
@@ -92,7 +92,7 @@ func (m *MockRunner) GetCallCount() int {
 }
 
 // GetLastCall returns the actions from the most recent Run call
-func (m *MockRunner) GetLastCall() []chromedp.Action {
+func (m *MockRunner) GetLastCall() []chromedp.Action[chromedp.Void] {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if len(m.CallHistory) == 0 {
@@ -102,16 +102,16 @@ func (m *MockRunner) GetLastCall() []chromedp.Action {
 }
 
 // GetAllCalls returns all recorded Run calls
-func (m *MockRunner) GetAllCalls() [][]chromedp.Action {
+func (m *MockRunner) GetAllCalls() [][]chromedp.Action[chromedp.Void] {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	result := make([][]chromedp.Action, len(m.CallHistory))
+	result := make([][]chromedp.Action[chromedp.Void], len(m.CallHistory))
 	copy(result, m.CallHistory)
 	return result
 }
 
 // SetRunFunc sets a custom function to execute when Run is called
-func (m *MockRunner) SetRunFunc(fn func(ctx context.Context, actions ...chromedp.Action) error) {
+func (m *MockRunner) SetRunFunc(fn func(ctx context.Context, actions ...chromedp.Action[chromedp.Void]) error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.RunFunc = fn
@@ -302,22 +302,36 @@ func fullScreenshotQuality(q int) int {
 	return q
 }
 
-func (req *Req) buildActionTasks() (chromedp.Tasks, error) {
-	tasks := chromedp.Tasks{}
+// store returns an action that runs a and keeps the value it returns in
+// dst, so that actions returning values run in one sequence with the others
+// and their values are read once the sequence has run.
+func store[T any](a chromedp.Action[T], dst *T) chromedp.Action[chromedp.Void] {
+	return func(ctx context.Context, t *chromedp.Target) (chromedp.Void, error) {
+		v, err := a(ctx, t)
+		if err != nil {
+			return chromedp.Void{}, err
+		}
+		*dst = v
+		return chromedp.Void{}, nil
+	}
+}
+
+func (req *Req) buildActionTasks() ([]chromedp.Action[chromedp.Void], error) {
+	tasks := []chromedp.Action[chromedp.Void]{}
 
 	for _, action := range req.Actions {
 		switch action.Name {
 		case "navigate":
 			tasks = append(tasks, chromedp.Navigate(action.URL))
 		case "wait_visible":
-			tasks = append(tasks, chromedp.WaitVisible(action.Selector, chromedp.ByQuery))
+			tasks = append(tasks, chromedp.WaitVisible(chromedp.CSS(action.Selector)))
 		case "text":
 			var text string
-			tasks = append(tasks, chromedp.Text(action.Selector, &text, chromedp.ByQuery))
+			tasks = append(tasks, store(chromedp.Text(chromedp.CSS(action.Selector)), &text))
 			action.reText = &text
 		case "value":
 			var text string
-			tasks = append(tasks, chromedp.Value(action.Selector, &text))
+			tasks = append(tasks, store(chromedp.Value(action.Selector), &text))
 			action.reText = &text
 		case "click":
 			tasks = append(tasks, chromedp.Click(action.Selector, chromedp.NodeVisible))
@@ -326,20 +340,20 @@ func (req *Req) buildActionTasks() (chromedp.Tasks, error) {
 			tasks = append(tasks, chromedp.SendKeys(action.Selector, action.Value, chromedp.NodeVisible))
 		case "full_screenshot":
 			var buf []byte
-			tasks = append(tasks, chromedp.FullScreenshot(&buf, fullScreenshotQuality(action.Quality)))
+			tasks = append(tasks, store(chromedp.FullScreenshot(fullScreenshotQuality(action.Quality)), &buf))
 			action.reBuf = &buf
 		case "capture_screenshot":
 			var buf []byte
-			tasks = append(tasks, chromedp.CaptureScreenshot(&buf))
+			tasks = append(tasks, store(chromedp.CaptureScreenshot(), &buf))
 			action.reBuf = &buf
 		case "screenshot":
 			var buf []byte
-			tasks = append(tasks, chromedp.Screenshot(action.Selector, &buf, chromedp.NodeVisible))
+			tasks = append(tasks, store(chromedp.Screenshot(action.Selector, chromedp.NodeVisible), &buf))
 			action.reBuf = &buf
 		case "wait_ready":
 			tasks = append(tasks, chromedp.WaitReady("body"))
 		case "wait_not_visible":
-			tasks = append(tasks, chromedp.WaitNotVisible(action.Selector, chromedp.ByQuery))
+			tasks = append(tasks, chromedp.WaitNotVisible(chromedp.CSS(action.Selector)))
 		case "submit":
 			tasks = append(tasks, chromedp.Submit(action.Selector, chromedp.NodeVisible))
 		case "select":
@@ -348,23 +362,22 @@ func (req *Req) buildActionTasks() (chromedp.Tasks, error) {
 			tasks = append(tasks, chromedp.ScrollIntoView(action.Selector, chromedp.NodeVisible))
 		case "get_attribute":
 			if len(action.Attribute) > 0 {
-				var value string
-				var ok bool
-				tasks = append(tasks, chromedp.AttributeValue(action.Selector, action.Attribute[0], &value, &ok, chromedp.NodeVisible))
-				action.reText = &value
+				var attr chromedp.AttributeResult
+				tasks = append(tasks, store(chromedp.AttributeValue(action.Selector, action.Attribute[0], chromedp.NodeVisible), &attr))
+				action.reText = &attr.Value
 			} else {
 				return nil, fmt.Errorf("attribute parameter is required for get_attribute action")
 			}
 		case "wait_text":
-			tasks = append(tasks, chromedp.WaitVisible(action.Selector, chromedp.ByQuery))
+			tasks = append(tasks, chromedp.WaitVisible(chromedp.CSS(action.Selector)))
 			var text string
-			tasks = append(tasks, chromedp.Text(action.Selector, &text, chromedp.ByQuery))
+			tasks = append(tasks, store(chromedp.Text(chromedp.CSS(action.Selector)), &text))
 			action.reText = &text
 		case "hover":
 			// The script runs in the page's global scope, so it is wrapped
 			// in a function: a top-level const would clash with the next
 			// hover or right_click on the same page.
-			tasks = append(tasks, chromedp.EvaluateAsDevTools(fmt.Sprintf(`(() => {
+			tasks = append(tasks, chromedp.EvaluateAsDevTools[chromedp.Void](fmt.Sprintf(`(() => {
 				const el = document.querySelector(%s);
 				if (el) {
 					const event = new MouseEvent('mouseover', {
@@ -374,19 +387,19 @@ func (req *Req) buildActionTasks() (chromedp.Tasks, error) {
 					});
 					el.dispatchEvent(event);
 				}
-			})()`, jsString(action.Selector)), nil))
+			})()`, jsString(action.Selector))))
 		case "focus":
 			tasks = append(tasks, chromedp.Focus(action.Selector, chromedp.NodeVisible))
 		case "get_html":
 			var html string
-			tasks = append(tasks, chromedp.OuterHTML(action.Selector, &html, chromedp.NodeVisible))
+			tasks = append(tasks, store(chromedp.OuterHTML(action.Selector, chromedp.NodeVisible), &html))
 			action.reText = &html
 		case "wait_enabled":
 			tasks = append(tasks, chromedp.WaitEnabled(action.Selector, chromedp.NodeVisible))
 		case "double_click":
 			tasks = append(tasks, chromedp.DoubleClick(action.Selector, chromedp.NodeVisible))
 		case "right_click":
-			tasks = append(tasks, chromedp.EvaluateAsDevTools(fmt.Sprintf(`(() => {
+			tasks = append(tasks, chromedp.EvaluateAsDevTools[chromedp.Void](fmt.Sprintf(`(() => {
 				const el = document.querySelector(%s);
 				if (el) {
 					const event = new MouseEvent('contextmenu', {
@@ -397,7 +410,7 @@ func (req *Req) buildActionTasks() (chromedp.Tasks, error) {
 					});
 					el.dispatchEvent(event);
 				}
-			})()`, jsString(action.Selector)), nil))
+			})()`, jsString(action.Selector))))
 		default:
 			return nil, fmt.Errorf("unsupported action type: %s", action.Name)
 		}
@@ -548,10 +561,10 @@ func (req *Req) captureWithRunner(ctx context.Context) ([]byte, string, string, 
 	var screenshot []byte
 	var html, url string
 	err := req.browserRunner.Run(ctx,
-		chromedp.Location(&url),
-		chromedp.Evaluate(`document.documentElement.outerHTML`, &html),
+		store(chromedp.Location(), &url),
+		store(chromedp.Evaluate[string](`document.documentElement.outerHTML`), &html),
 		// FullScreenshot returns PNG only at quality 100, and JPEG otherwise.
-		chromedp.FullScreenshot(&screenshot, 100),
+		store(chromedp.FullScreenshot(100), &screenshot),
 	)
 	return screenshot, html, url, err
 }

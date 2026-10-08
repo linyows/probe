@@ -4,6 +4,27 @@ Release notes for each version are generated from the commits by GoReleaser.
 This file records what those notes cannot carry well: changes that break code
 importing probe as a library.
 
+## Unreleased
+
+### Breaking Changes
+
+Probe needs Go 1.27, up from 1.26.6, because chromedp v0.19.1, which the
+browser action is built on, needs it. A module that imports probe has to be
+built with Go 1.27 or later.
+
+chromedp turned its actions into the generic type `chromedp.Action[T]`, and
+an action that returns no value is a `chromedp.Action[chromedp.Void]`. The
+runner of the browser action takes those, so an implementation of
+`browser.BrowserRunner`, and code that reads the actions `browser.MockRunner`
+recorded, has to be updated.
+
+| Before | After |
+|---|---|
+| `BrowserRunner.Run(ctx context.Context, actions ...chromedp.Action) error` | `BrowserRunner.Run(ctx context.Context, actions ...chromedp.Action[chromedp.Void]) error` |
+| `MockRunner.RunFunc`, `SetRunFunc`: `func(context.Context, ...chromedp.Action) error` | `func(context.Context, ...chromedp.Action[chromedp.Void]) error` |
+| `MockRunner.CallHistory`, `GetAllCalls`: `[][]chromedp.Action` | `[][]chromedp.Action[chromedp.Void]` |
+| `MockRunner.GetLastCall`: `[]chromedp.Action` | `[]chromedp.Action[chromedp.Void]` |
+
 ## v1.19.0 (2026-10-06)
 
 ### Breaking Changes
