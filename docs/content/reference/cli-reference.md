@@ -346,6 +346,7 @@ It reports as an **error**:
 - a key a workflow, job, step, `retry` or `repeat` does not take, which a run ignores; a key that holds a YAML anchor for the files read after it is not one
 - what a run refuses to load, such as a missing `name` or a duplicate id
 - an action that is neither built in nor external, and an external action that cannot be parsed
+- a key of a step's `with`, or of a job's `defaults`, that the built-in action does not take, which it ignores, such as `bdoy` for `body`; and `defaults` for a name no action has, which apply to no step. Only the keys directly under them are checked, not those of a map such as `headers`; a key that holds a template, an external action and `hello`, which takes any key, are not
 - a `needs` that names no job, and `needs` that go round
 - a step id a run refuses
 - an expression in `test`, `skipif` or `outputs`, or a template in `name`, `with`, `vars` or `echo`, that does not parse

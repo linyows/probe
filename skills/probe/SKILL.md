@@ -89,7 +89,7 @@ probe --report json=probe.json,markdown=probe.md workflow.yml
 probe coverage openapi.yml probe.json # what of the OpenAPI document, or a .proto file, no step checked
 ```
 
-After writing or changing a workflow, run `probe check` before running it, and fix every error it reports: a key it calls unknown is one a run ignores without a word, such as a misspelled `test`. Each warning is a step that checks less than it seems to: give a step that nothing checks a `test`, and replace a `test` that reads nothing with one that reads `res`.
+After writing or changing a workflow, run `probe check` before running it, and fix every error it reports: a key it calls unknown is one a run ignores without a word, such as a misspelled `test`, or `bdoy` for an action's `body`. Each warning is a step that checks less than it seems to: give a step that nothing checks a `test`, and replace a `test` that reads nothing with one that reads `res`.
 
 The exit code says what to look at:
 
