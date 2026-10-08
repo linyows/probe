@@ -54,7 +54,7 @@ jobs:
       with:
         go-version-file: go.mod
     - name: Run probe
-      uses: mozership/probe-action@58e59821ea0c348da201080736ddcdb2b3cd3313 # v1.2.1
+      uses: mozership/probe-action@b3f365eba72bd5ab6f4cf003717a388752281f6c # v1.2.2
       with:
         path: e2e/test.yml
         options: ${{ github.event.inputs.options }}
