@@ -547,7 +547,7 @@ jobs:
     uses: shell
     with:
       background: true
-      cmd: go run actions/grpc/testserver/*.go
+      cmd: go run actions/grpc/testserver/*.go -connect-port=50061
     test: status == -1
     outputs:
       grpc_pid: res.pid

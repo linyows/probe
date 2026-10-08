@@ -32,6 +32,10 @@ import (
 )
 
 type Req struct {
+	// Protocol is how the call is made: grpc, the default, or connect, the
+	// Connect protocol over HTTP, which reaches a server through an HTTP/1.1
+	// proxy too.
+	Protocol string            `map:"protocol"`
 	Addr     string            `map:"addr" validate:"required"`
 	Service  string            `map:"service" validate:"required"`
 	Method   string            `map:"method" validate:"required"`
@@ -43,7 +47,10 @@ type Req struct {
 	KeyFile  string            `map:"key_file"`
 	CAFile   string            `map:"ca_file"`
 	Metadata map[string]string `map:"metadata"`
-	cb       *Callback
+	// Codec is how a Connect call encodes its messages: json, the default,
+	// or proto. A gRPC call takes none.
+	Codec string `map:"codec"`
+	cb    *Callback
 	// contract, when it is set, checks the call against .proto files.
 	contract *contract
 }
@@ -96,43 +103,28 @@ func (r *Req) Do() (re *Result, er error) {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
+	switch r.Protocol {
+	case "", "grpc":
+		if r.Codec != "" {
+			return nil, fmt.Errorf("codec is for protocol connect; a gRPC call is encoded as protobuf")
+		}
+	case "connect":
+		return r.doConnect(ctx, timeout)
+	default:
+		return nil, fmt.Errorf("unknown protocol %q: use grpc or connect", r.Protocol)
+	}
+
 	// Setup connection credentials
 	var creds credentials.TransportCredentials
 	if !r.TLS {
 		// Plain text connection
 		creds = insecure.NewCredentials()
 	} else {
-		if r.Insecure {
-			// TLS without certificate verification (for development)
-			creds = credentials.NewTLS(&tls.Config{InsecureSkipVerify: true})
-		} else {
-			// Normal TLS connection
-			tlsConfig := &tls.Config{}
-
-			// Custom CA certificate
-			if r.CAFile != "" {
-				caCert, err := os.ReadFile(r.CAFile)
-				if err != nil {
-					return nil, fmt.Errorf("failed to read CA file: %w", err)
-				}
-				caCertPool := x509.NewCertPool()
-				if !caCertPool.AppendCertsFromPEM(caCert) {
-					return nil, errors.New("failed to parse CA certificate")
-				}
-				tlsConfig.RootCAs = caCertPool
-			}
-
-			// Client certificate for mTLS
-			if r.CertFile != "" && r.KeyFile != "" {
-				cert, err := tls.LoadX509KeyPair(r.CertFile, r.KeyFile)
-				if err != nil {
-					return nil, fmt.Errorf("failed to load client certificate: %w", err)
-				}
-				tlsConfig.Certificates = []tls.Certificate{cert}
-			}
-
-			creds = credentials.NewTLS(tlsConfig)
+		tlsConfig, err := r.tlsConfig()
+		if err != nil {
+			return nil, err
 		}
+		creds = credentials.NewTLS(tlsConfig)
 	}
 
 	// Establish connection
@@ -183,6 +175,39 @@ func (r *Req) Do() (re *Result, er error) {
 	}
 
 	return result, nil
+}
+
+// tlsConfig returns the TLS configuration tls, insecure, ca_file, cert_file
+// and key_file ask for.
+func (r *Req) tlsConfig() (*tls.Config, error) {
+	if r.Insecure {
+		// TLS without certificate verification (for development)
+		return &tls.Config{InsecureSkipVerify: true}, nil
+	}
+	tlsConfig := &tls.Config{}
+
+	// Custom CA certificate
+	if r.CAFile != "" {
+		caCert, err := os.ReadFile(r.CAFile)
+		if err != nil {
+			return nil, fmt.Errorf("failed to read CA file: %w", err)
+		}
+		caCertPool := x509.NewCertPool()
+		if !caCertPool.AppendCertsFromPEM(caCert) {
+			return nil, errors.New("failed to parse CA certificate")
+		}
+		tlsConfig.RootCAs = caCertPool
+	}
+
+	// Client certificate for mTLS
+	if r.CertFile != "" && r.KeyFile != "" {
+		cert, err := tls.LoadX509KeyPair(r.CertFile, r.KeyFile)
+		if err != nil {
+			return nil, fmt.Errorf("failed to load client certificate: %w", err)
+		}
+		tlsConfig.Certificates = []tls.Certificate{cert}
+	}
+	return tlsConfig, nil
 }
 
 func (r *Req) invokeMethod(ctx context.Context, conn *grpc.ClientConn, reflectionClient grpc_reflection_v1alpha.ServerReflectionClient, answer *answerHandler) (*Res, error) {

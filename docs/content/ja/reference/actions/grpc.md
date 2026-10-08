@@ -1,6 +1,6 @@
 # gRPCアクション
 
-`grpc`アクションはgRPCのメソッドを呼び出します。サービス定義はサーバーリフレクションで解決するため、実行時に`.proto`ファイルは必要ありません。本番環境に多い、リフレクションのないサーバーは、[`proto`](#protoファイルによる検証)に指定した`.proto`ファイルの定義を使って呼び出します。
+`grpc`アクションはgRPCのメソッドを呼び出します。サービス定義はサーバーリフレクションで解決するため、実行時に`.proto`ファイルは必要ありません。本番環境に多い、リフレクションのないサーバーは、[`proto`](#protoファイルによる検証)に指定した`.proto`ファイルの定義を使って呼び出します。`protocol: connect`を指定すると、HTTPの[Connectプロトコル](#connectプロトコル)で呼び出します。
 
 ## 基本的な構文
 
@@ -26,7 +26,8 @@ steps:
 
 | パラメータ | 型 | 必須 | デフォルト | 説明 |
 |---|---|---|---|---|
-| `addr` | String | 必須 | - | gRPCサーバーのホストとポート |
+| `protocol` | String | 任意 | `grpc` | `grpc`、または[Connectプロトコル](#connectプロトコル)で呼び出す`connect` |
+| `addr` | String | 必須 | - | gRPCサーバーのホストとポート。`protocol: connect`ではサービスを提供しているURL |
 | `service` | String | 必須 | - | 完全修飾のサービス名 |
 | `method` | String | 必須 | - | メソッド名 |
 | `body` | StringまたはObject | 任意 | `""` | リクエストメッセージ（JSON）。オブジェクトはJSONにシリアライズされます |
@@ -37,6 +38,7 @@ steps:
 | `cert_file` | String | 任意 | - | mTLS用のクライアント証明書 |
 | `key_file` | String | 任意 | - | mTLS用のクライアント鍵 |
 | `ca_file` | String | 任意 | - | サーバー検証に使うCA証明書 |
+| `codec` | String | 任意 | `json` | Connectの呼び出しのエンコード。`json`か`proto`。`protocol: connect`のときだけ |
 | `proto` | Objectまたは`false` | 任意 | - | `files`に挙げた`.proto`ファイルと呼び出しを照合し、違反があればステップを失敗させます。`false`はジョブの`defaults`が求める照合を外します。[.protoファイルによる検証](#protoファイルによる検証)を参照 |
 
 ## レスポンスオブジェクト
@@ -159,6 +161,37 @@ message CreateUserRequest {
 ```
 
 `buf/validate/validate.proto`と`google/api/field_behavior.proto`はProbeに組み込まれているため、インポートパスに置かなくてもファイルからインポートできます。インポートパスにあるコピーは読みません。
+
+## Connectプロトコル
+
+`protocol: connect`を指定すると、gRPCではなく[Connectプロトコル](https://connectrpc.com/docs/protocol)でメソッドを呼び出します。ConnectプロトコルはHTTPのPOSTなので、HTTP/1.1のプロキシやロードバランサーも通ります。ブラウザの[connect-web](https://connectrpc.com/docs/web/getting-started)クライアントが送る呼び出しと同じ経路です。connect-goやconnect-esで作ったサーバーが応答します。
+
+```yaml
+- name: Get a user
+  uses: grpc
+  with:
+    protocol: connect
+    addr: https://api.example.com/rpc
+    service: users.v1.UserService
+    method: GetUser
+    body:
+      id: "123"
+    metadata:
+      authorization: "Bearer {{vars.token}}"
+  test: res.status_code == "OK" && res.body.user.name != ""
+```
+
+`addr`にはサービスを提供しているURLを、マウントしているパスがあればそれも含めて書きます。スキームのないホストとポートは`http`として扱い、`tls: true`なら`https`にします。呼び出し先は`<addr>/<service>/<method>`です。`metadata`はヘッダーとして送り、`timeout`は`Connect-Timeout-Ms`でサーバーにも伝えます。TLSのパラメータは、`https`のURLに対してgRPCの呼び出しと同じように効きます。
+
+`codec`はメッセージのエンコードで、`json`（デフォルト）か`proto`です。HTTP/1.1の接続では運べないストリームが要るため、リフレクションは使いません。
+
+- `codec: json`で`proto`がない場合、`body`は書いたとおりに送り、`res.body`はサーバーが返したJSONです。このとき`service`は`users.v1.UserService`のような完全な名前で書き、本文のフィールド名はサーバーが読む名前（connect-goなら`userId`のようなlowerCamelCase）にします。
+- `proto`がある場合、リクエストはファイルの定義から組み立てます。そのため短いサービス名やsnake_caseのフィールド名もgRPCの呼び出しと同じように使え、`res.body`もgRPCの呼び出しと同じ形になります。ファイルとの照合は上で説明したとおりですが、比べるサーバーの定義はありません。`codec: json`では、レスポンスにファイルの宣言と型の違う値があると`contract_response`でステップが失敗し、`strict`のもとではファイルにないフィールドも同じく失敗します。
+- `codec: proto`には`proto`が必要です。リクエストのエンコードとレスポンスの読み取りにその定義を使います。
+
+`res`のフィールドはgRPCの呼び出しと同じです。HTTPステータス404で返る`{"code": "not_found", "message": "..."}`のようなConnectのエラーは、`res.status_code`が`NOT_FOUND`になり、メッセージも入ります。ConnectのコードはgRPCのコードと同じだからです。Connectのエラーを含まない応答もサーバーの応答として扱い、コードはconnect-goと同じくプロトコルの決まりに従って決めます。HTTPステータスから決める場合（プロキシの502のページなら`UNAVAILABLE`）はステータス行をメッセージにし、200でもcodecと違うContent-Typeなら`UNKNOWN`か`INTERNAL`にします。`res.metadata`はレスポンスヘッダーです。サーバーがメッセージの後に`Trailer-`を付けて送ったものは、それを外した名前で入り、同じ名前のヘッダーより優先されます。アクションのエラーになるのは、到達できないサーバーへの呼び出しや`timeout`を過ぎた呼び出しのように、応答が得られなかったときだけです。リダイレクトはたどりません。
+
+ストリーミングのメソッドは`protocol: connect`では呼び出せません。`.proto`ファイルがストリーミングと宣言しているメソッドは、何も送らずにアクションのエラーになります。ファイルがない場合は、サーバーがエラーで応答します。
 
 ## 関連項目
 

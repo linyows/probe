@@ -1,6 +1,6 @@
 # gRPC Action
 
-The `grpc` action calls a gRPC method. The service definition is resolved through server reflection, so no `.proto` file is needed at run time. A server without reflection, as many in production are, is called with the definition of the `.proto` files given in [`proto`](#checking-against-proto-files).
+The `grpc` action calls a gRPC method. The service definition is resolved through server reflection, so no `.proto` file is needed at run time. A server without reflection, as many in production are, is called with the definition of the `.proto` files given in [`proto`](#checking-against-proto-files). With `protocol: connect`, the method is called with the [Connect protocol](#connect-protocol) over HTTP instead.
 
 ## Basic Syntax
 
@@ -25,7 +25,8 @@ The fields below describe the call. All of them accept template expressions.
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
-| `addr` | String | Yes | - | Host and port of the gRPC server |
+| `protocol` | String | No | `grpc` | `grpc`, or `connect` for the [Connect protocol](#connect-protocol) |
+| `addr` | String | Yes | - | Host and port of the gRPC server. With `protocol: connect`, the URL the service is served under |
 | `service` | String | Yes | - | Fully qualified service name |
 | `method` | String | Yes | - | Method name |
 | `body` | String or Object | No | `""` | Request message as JSON. An object is serialized as JSON |
@@ -36,6 +37,7 @@ The fields below describe the call. All of them accept template expressions.
 | `cert_file` | String | No | - | Client certificate for mutual TLS |
 | `key_file` | String | No | - | Client key for mutual TLS |
 | `ca_file` | String | No | - | CA certificate used to verify the server |
+| `codec` | String | No | `json` | How a Connect call encodes its messages: `json` or `proto`. Only with `protocol: connect` |
 | `proto` | Object or `false` | No | - | Check the call against the `.proto` files listed in `files`, and fail the step when it breaks them. `false` leaves out a check the job's `defaults` ask for. See [Checking Against .proto Files](#checking-against-proto-files) |
 
 ## Response Object
@@ -133,3 +135,33 @@ message CreateUserRequest {
 
 `buf/validate/validate.proto` and `google/api/field_behavior.proto` are built into Probe, so the files can import them without having them in an import path; a copy in one is not read.
 
+## Connect Protocol
+
+With `protocol: connect`, the method is called with the [Connect protocol](https://connectrpc.com/docs/protocol) rather than gRPC: a POST over HTTP, which an HTTP/1.1 proxy or load balancer passes, as it passes the calls a [connect-web](https://connectrpc.com/docs/web/getting-started) client in a browser makes. Servers built with connect-go or connect-es answer it.
+
+```yaml
+- name: Get a user
+  uses: grpc
+  with:
+    protocol: connect
+    addr: https://api.example.com/rpc
+    service: users.v1.UserService
+    method: GetUser
+    body:
+      id: "123"
+    metadata:
+      authorization: "Bearer {{vars.token}}"
+  test: res.status_code == "OK" && res.body.user.name != ""
+```
+
+`addr` is the URL the service is served under, with the path it is mounted at, if any; a host and port without a scheme is taken as `http`, or `https` with `tls: true`. The call goes to `<addr>/<service>/<method>`. `metadata` is sent as headers, and `timeout` is told to the server as `Connect-Timeout-Ms` too. The TLS parameters apply to an `https` URL as they do to a gRPC call.
+
+`codec` is how the messages are encoded: `json`, the default, or `proto`. Reflection is not used, as it needs a stream an HTTP/1.1 connection cannot carry:
+
+- With `codec: json` and no `proto`, `body` is sent as it is written, and `res.body` is the JSON the server answered. `service` must then be the full name, such as `users.v1.UserService`, and the body's field names are those the server reads, lowerCamelCase such as `userId` with connect-go.
+- With `proto`, the request is built from the files' definition, so a short service name and snake_case field names work as they do for a gRPC call, and `res.body` has the form a gRPC call gives. The call is checked against the files as described above, except that there is no server definition to compare them with. With `codec: json`, a value in the response of another type than the files declare fails the step as `contract_response`, as a field they do not declare does under `strict`.
+- `codec: proto` needs `proto`, whose definition encodes the request and reads the response.
+
+`res` has the fields a gRPC call gives. A Connect error, such as `{"code": "not_found", "message": "..."}` with HTTP status 404, gives `res.status_code` `NOT_FOUND` and its message, as the Connect codes are the gRPC ones. An answer that holds no Connect error is still the server's answer, and its code is the one the protocol implies, as connect-go reads it: from the HTTP status, such as `UNAVAILABLE` for a proxy's 502 page, with the status line as the message, or `UNKNOWN` or `INTERNAL` for a 200 whose content type is not the codec's. `res.metadata` holds the response headers; those the server sent after the message, under `Trailer-`, are named without it and win over a header of the same name. Only a call that gets no answer, such as one to a server that cannot be reached or that runs out of `timeout`, is an action error. Redirects are not followed.
+
+Streaming methods cannot be called with `protocol: connect`: one the `.proto` files declare as streaming fails the step as an action error before anything is sent, and without the files the server answers the call with an error.
