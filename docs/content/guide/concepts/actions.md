@@ -1,24 +1,24 @@
 # Actions
 
-Actions are the core execution units in Probe that perform actual work. They are implemented as plugins, making Probe extensible and modular. This guide explores the action system, built-in actions, and how to work with the plugin architecture.
+Actions are the core execution units in Probe that perform actual work. Each one runs in a process of its own, which makes Probe extensible and modular. This guide explores the action system, built-in actions, and how Probe runs an action.
 
 ## Action System Overview
 
-The action system in Probe is built on a plugin architecture that provides:
+The action system in Probe provides:
 
-- **Modularity**: Each action is a separate plugin
+- **Modularity**: Each action stands on its own, behind the same gRPC interface
 - **Extensibility**: Custom actions can be added easily
 - **Isolation**: Actions run in separate processes for stability
 - **Standardization**: All actions follow the same interface
 
 ### Action Execution Flow
 
-1. **Plugin Discovery**: Probe identifies available action plugins
-2. **Plugin Initialization**: The action plugin is started in a separate process
-3. **Communication**: Probe communicates with plugins via gRPC
-4. **Execution**: The plugin executes the requested action
+1. **Resolution**: Probe finds the action a step names, a built-in one or an external action resolved before the first job starts
+2. **Start**: The action is started in a process of its own
+3. **Communication**: Probe communicates with the action via gRPC
+4. **Execution**: The action does the work of the step
 5. **Response**: Results are returned to Probe for processing
-6. **Cleanup**: Plugin processes are terminated after use
+6. **Cleanup**: The action's process is stopped once the step has its result
 
 ## Built-in Actions
 
@@ -277,7 +277,7 @@ The shell action implements multiple security layers:
 
 ### Hello Action
 
-The `hello` action is primarily used for testing and demonstrations. It provides a simple way to verify plugin functionality.
+The `hello` action is primarily used for testing and demonstrations. It provides a simple way to verify that Probe can start and call an action.
 
 ```yaml
 - name: Test Hello Action
@@ -548,39 +548,37 @@ jobs:
         {{outputs.vars.environment == "production" ? "IMMEDIATE ACTION REQUIRED" : "Please investigate when convenient"}}
 ```
 
-## Plugin Architecture Deep Dive
+## Action Architecture Deep Dive
 
-Every action is a plugin. How Probe talks to one, when it starts and stops, and how the built-in ones are managed are described below.
+Every action runs in a process of its own. How Probe talks to an action, when it starts and stops, and how the built-in ones are run are described below.
 
-### Plugin Communication
+### Communication with Actions
 
-Probe uses gRPC for plugin communication, providing:
+Probe uses gRPC to communicate with actions, providing:
 
 - **Type Safety**: Strong typing with Protocol Buffers
 - **Performance**: Efficient binary serialization
-- **Cross-Language**: Plugins can be written in any language supporting gRPC
+- **Cross-Language**: Actions can be written in any language supporting gRPC
 - **Reliability**: Built-in error handling and timeouts
 
-### Plugin Lifecycle
+### Action Lifecycle
 
-1. **Discovery**: Probe discovers available plugins at startup
-2. **On-Demand Loading**: Plugins are loaded only when needed
-3. **Process Isolation**: Each plugin runs in its own process
-4. **Resource Management**: Plugin processes are cleaned up after use
-5. **Error Isolation**: Plugin failures don't crash Probe
+1. **Resolution**: Probe resolves every external action before the first job starts; a built-in one needs no resolving
+2. **Per-Step Start**: An action is started when a step uses it
+3. **Process Isolation**: Each action runs in its own process
+4. **Cleanup**: The process is stopped as soon as the step has its result, so no action is kept running between steps
+5. **Error Isolation**: An action that fails or exits fails its step, not Probe
 
-### Built-in Plugin Management
+### Built-in Action Management
 
-Probe manages built-in plugins automatically:
+The built-in actions are part of the Probe binary. Probe runs each one by starting its own executable again as `<executable> builtin-actions <name>`:
 
 ```bash
-# Built-in plugins are embedded in the Probe binary
-probe workflow.yml  # Automatically loads required plugins
+probe workflow.yml  # Starts the built-in actions its steps use
 
 # No separate installation needed for built-in actions:
-# - http
-# - hello  
-# - smtp
+# http, db, shell, ssh, grpc, smtp, imap, browser,
+# mail-latency, embedded, hello
 ```
 
 ## Action Best Practices
@@ -943,4 +941,4 @@ Now that you understand the action system, explore:
 2. **[Data Flow](/guide/concepts/data-flow)** - Understand how data moves between actions
 3. **[How-tos](/guide/how-tos/api-testing)** - See practical action usage patterns
 
-Actions are the workhorses of Probe. Master the built-in actions and understand the plugin architecture to build powerful, extensible automation workflows.
+Actions are the workhorses of Probe. Master the built-in actions and understand how Probe runs them to build powerful, extensible automation workflows.

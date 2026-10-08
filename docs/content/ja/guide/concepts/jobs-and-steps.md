@@ -766,7 +766,7 @@ steps:
 
 ジョブとステップを詳しく理解したら、以下を探索してください：
 
-1. **[アクション](/ja/guide/concepts/actions)** - アクションシステムと利用可能なプラグインについて学ぶ
+1. **[アクション](/ja/guide/concepts/actions)** - アクションシステムと利用可能なアクションについて学ぶ
 2. **[式とテンプレート](/ja/guide/concepts/expressions-and-templates)** - 動的設定とテストをマスターする
 3. **[データフロー](/ja/guide/concepts/data-flow)** - ワークフローを通してデータがどう移動するかを理解する
 

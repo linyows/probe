@@ -75,7 +75,7 @@ steps:
 - **`smtp`**: Send email notifications and alerts
 - **`hello`**: Simple greeting action (mainly for testing)
 
-Actions are implemented as plugins, so you can extend Probe with custom actions.
+Actions run as separate processes behind a common interface, so you can extend Probe with custom actions.
 
 ## Workflow Execution Model
 

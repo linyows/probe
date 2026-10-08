@@ -24,7 +24,7 @@
   </a>
 </p>
 
-It is a single Go binary with no runtime to install, so the same file runs on your machine, in CI, and from a cron entry. The exit status reflects the result, and a file written as a test becomes a monitor by adding `repeat`. Probe uses plugin-based actions to execute workflows, making it highly flexible and extensible. Documentation: [probe.linyo.ws](https://probe.linyo.ws/)
+It is a single Go binary with no runtime to install, so the same file runs on your machine, in CI, and from a cron entry. The exit status reflects the result, and a file written as a test becomes a monitor by adding `repeat`. Each action runs in a process of its own, so Probe can be extended with actions of your own. Documentation: [probe.linyo.ws](https://probe.linyo.ws/)
 
 ![Architecture](/misc/probe-architecture.svg)
 
@@ -38,7 +38,7 @@ Similar software is usually one of two things: a test runner, or a prober that m
 - **The same file is a test and a monitor.** Add `repeat` to a job and it runs on an interval, reporting `3/3 success (100.0%)`. There is no second, rewritten copy of the workflow for monitoring.
 - **Jobs are a graph, not a list.** `needs` declares only the order that matters, and everything else runs in parallel. `probe dag` prints that graph as ASCII or Mermaid. Scenario runners walk a file from top to bottom.
 - **It behaves the same everywhere.** One Go binary, nothing to install alongside it and no service to keep running, so your terminal, a CI step and a cron entry all do the same thing.
-- **Actions are plugins.** Each one is a separate process behind [go-plugin](https://github.com/hashicorp/go-plugin), so a protocol Probe does not cover yet can be added without forking the binary.
+- **Actions are separate processes.** Each one runs behind [go-plugin](https://github.com/hashicorp/go-plugin), so a protocol Probe does not cover yet can be added without forking the binary.
 
 Beyond that, a workflow has `outputs` to pass data between steps and jobs, `test` to assert on any response, `retry`, `skipif`, `iteration`, `wait` and `timeout`, `defaults` for settings shared across steps, and merging of several YAML files on one command line.
 

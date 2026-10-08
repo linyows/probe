@@ -732,18 +732,18 @@ jobs:
 
 ## リソース管理
 
-各アクションはプラグインのプロセスとして動きます。そのため実行中には、起動、再利用、解放の対象となるリソースが存在します。
+各アクションは独自のプロセスとして動きます。そのため実行中には、起動と終了の対象となるプロセスが存在します。
 
-### プラグインライフサイクル管理
+### アクションのライフサイクル管理
 
-Probeはワークフロー実行を通してアクションプラグインを管理します：
+Probeは、アクションを使うStepごとにそのアクションを起動します：
 
 ```yaml
 jobs:
-- id: plugin-intensive-workflow
-  name: Plugin Intensive Workflow
+- id: multi-action-workflow
+  name: Multi Action Workflow
   steps:
-    # このステップのために HTTP プラグインが読み込まれる
+    # このステップのために http アクションが起動される
     - name: API Test
       uses: http
       with:
@@ -751,7 +751,7 @@ jobs:
         url: "{{vars.API_URL}}/test"
       test: res.code == 200
 
-    # このステップのために SMTP プラグインが読み込まれる
+    # このステップのために smtp アクションが起動される
     - name: Send Notification
       uses: smtp
       with:
@@ -768,7 +768,7 @@ jobs:
       with:
         message: "Debug checkpoint reached"
 
-    # HTTP プラグインが再利用される（すでに読み込み済み）
+    # http アクションが新しいプロセスで再び起動される
     - name: Follow-up API Test
       uses: http
       with:
@@ -777,10 +777,10 @@ jobs:
       test: res.code == 200
 ```
 
-プラグインライフサイクル:
-1. 最初のアクションが遭遇したときにプラグインが読み込まれる
-2. 同じタイプの後続アクションでプラグインが再利用される
-3. ジョブ完了後にプラグインがクリーンアップされる
+アクションのライフサイクル:
+1. Stepがアクションを使うときに、そのアクションのプロセスが起動される
+2. Stepはそのプロセスで実行され、結果を受け取るとプロセスは終了される
+3. 後のStepが同じアクションを使うと新しいプロセスが起動される。`keep_cookies`のクッキーのようにアクションがJob内で保持するものは、Probeが引き渡す
 
 ### メモリとパフォーマンス最適化
 

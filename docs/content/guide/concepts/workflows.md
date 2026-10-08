@@ -734,7 +734,7 @@ steps:
 Now that you understand workflow design and patterns, explore:
 
 1. **[Jobs and Steps](/guide/concepts/jobs-and-steps)** - Deep dive into job and step mechanics
-2. **[Actions](/guide/concepts/actions)** - Learn about the action system and plugins
+2. **[Actions](/guide/concepts/actions)** - Learn about the action system and the available actions
 3. **[Expressions and Templates](/guide/concepts/expressions-and-templates)** - Master dynamic configuration
 
 Workflows are the foundation of Probe automation. With solid workflow design skills, you can build maintainable, efficient, and reliable automation processes.
