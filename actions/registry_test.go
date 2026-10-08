@@ -1,7 +1,11 @@
 package actions
 
 import (
+	"os"
+	"path/filepath"
+	"regexp"
 	"slices"
+	"strings"
 	"testing"
 )
 
@@ -22,5 +26,66 @@ func TestKeepingIsACopy(t *testing.T) {
 	k[0] = "shell"
 	if slices.Contains(Keeping(), "shell") {
 		t.Error("changing what Keeping returns should not change the actions that keep to the guard")
+	}
+}
+
+func TestParams(t *testing.T) {
+	for _, name := range Names() {
+		params, ok := Params(name)
+		if name == "hello" {
+			if ok {
+				t.Errorf("hello takes any key, want no params, got %v", params)
+			}
+			continue
+		}
+		if !ok || len(params) == 0 {
+			t.Errorf("Params(%s) = %v, %v; want the keys it takes", name, params, ok)
+		}
+	}
+	if _, ok := Params("no-such-action"); ok {
+		t.Error("an action that is not built in should have no params")
+	}
+	http, _ := Params("http")
+	for _, key := range []string{"url", "headers", "body", "get", "post", "form", "multipart", "openapi", "trace_header"} {
+		if !slices.Contains(http, key) {
+			t.Errorf("http params %v lack %s", http, key)
+		}
+	}
+	if len(AllParams()) != len(Names())-1 {
+		t.Errorf("AllParams() = %d actions, want all but hello", len(AllParams()))
+	}
+}
+
+// TestParamsCoverTheDocs checks that each key the reference page of an
+// action lists in its parameters is one Params gives, so that probe check
+// does not refuse a key the action takes. Keys of a map nested in with,
+// which the pages list too, are left out.
+func TestParamsCoverTheDocs(t *testing.T) {
+	nested := map[string][]string{
+		// multipart's fields
+		"http": {"file", "content", "filename", "content_type"},
+		// the fields of commands
+		"imap": {"name", "mailbox", "oldmailbox", "reference", "criteria", "sequence", "dataitem", "value"},
+	}
+	row := regexp.MustCompile("(?m)^\\| `([a-z_]+)`")
+	for name, keys := range AllParams() {
+		data, err := os.ReadFile(filepath.Join("..", "docs", "content", "reference", "actions", name+".md"))
+		if err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		page := string(data)
+		i := strings.Index(page, "## Parameters")
+		if i < 0 {
+			continue
+		}
+		section := page[i:]
+		if j := strings.Index(section[len("## Parameters"):], "\n## "); j >= 0 {
+			section = section[:len("## Parameters")+j]
+		}
+		for _, m := range row.FindAllStringSubmatch(section, -1) {
+			if !slices.Contains(keys, m[1]) && !slices.Contains(nested[name], m[1]) {
+				t.Errorf("the %s page lists %s, which Params does not give", name, m[1])
+			}
+		}
 	}
 }

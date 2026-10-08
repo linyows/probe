@@ -50,6 +50,41 @@ func Keeping() []string {
 	return append([]string(nil), keeping...)
 }
 
+// params are the keys each built-in action takes in with. hello, which
+// takes any, is left out.
+var params = map[string]func() []string{
+	"browser":      browser.Params,
+	"db":           db.Params,
+	"embedded":     embedded.Params,
+	"grpc":         grpc.Params,
+	"http":         http.Params,
+	"imap":         imap.Params,
+	"mail-latency": maillatency.Params,
+	"shell":        shell.Params,
+	"smtp":         smtp.Params,
+	"ssh":          ssh.Params,
+}
+
+// Params returns the keys the built-in action name takes in with, and false
+// for an action that takes any key, or that is not built in.
+func Params(name string) ([]string, bool) {
+	f, ok := params[name]
+	if !ok {
+		return nil, false
+	}
+	return f(), true
+}
+
+// AllParams returns the keys each built-in action takes in with, by its
+// name, leaving out those that take any key.
+func AllParams() map[string][]string {
+	out := make(map[string][]string, len(params))
+	for name, f := range params {
+		out[name] = f()
+	}
+	return out
+}
+
 // Lookup returns the serve function of a built-in action.
 func Lookup(name string) (func(), bool) {
 	serve, ok := builtin[name]
