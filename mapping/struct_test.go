@@ -295,11 +295,12 @@ func TestFieldTags(t *testing.T) {
 	type req struct {
 		URL      string            `map:"url"`
 		Headers  map[string]string `map:"headers"`
-		Skipped  string            `map:"-"`
+		Option   string            `map:"value,omitempty"`
 		Untagged string
 		hidden   string `map:"hidden"`
 	}
-	want := []string{"url", "headers"}
+	// A tag is taken as written, as MapToStructByTags takes it.
+	want := []string{"url", "headers", "value,omitempty"}
 	for _, v := range []any{req{}, &req{}} {
 		if got := FieldTags(v); !reflect.DeepEqual(got, want) {
 			t.Errorf("FieldTags(%T) = %v, want %v", v, got, want)

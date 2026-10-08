@@ -579,6 +579,40 @@ jobs:
 			},
 		},
 		{
+			name: "keys from a YAML alias or merge key",
+			workflow: `name: aliases
+shared:
+  params: &params
+    url: http://localhost
+    bdoy: {name: probe}
+jobs:
+- name: J
+  steps:
+  - name: Alias
+    uses: http
+    with: *params
+    test: res.code == 200
+  - name: Merge
+    uses: http
+    with:
+      <<: *params
+      post: /users
+    test: res.code == 201
+  - name: Unclosed
+    uses: http
+    with:
+      url: http://localhost
+      "bdoy{{": x
+    test: res.code == 200
+`,
+			want: []want{
+				// Told on the step's with, which the alias is written on.
+				{SeverityError, 11, `with: unknown key "bdoy" for the http action`},
+				{SeverityError, 15, `with: unknown key "bdoy" for the http action`},
+				{SeverityError, 23, `with: unknown key "bdoy{{" for the http action`},
+			},
+		},
+		{
 			name: "keys of defaults told once on their own line",
 			workflow: `name: defaults
 jobs:

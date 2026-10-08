@@ -496,11 +496,19 @@ func (c *checker) checkWith() {
 				c.withKeys(action, with, path, c.jobWhere(i), "defaults."+action, func(string) bool { return true })
 			}
 		}
+		defaults, _ := job.Defaults.(map[string]any)
 		for j, st := range job.Steps {
 			sp := fmt.Sprintf("%s.steps[%d].with", jp, j)
+			// A key the step's with lacks comes from its job's defaults,
+			// where it is checked. A key the step writes, by itself or by a
+			// YAML alias or merge key, is checked here.
+			inherited, _ := defaults[st.Uses].(map[string]any)
 			own := func(key string) bool {
-				_, ok := c.lines[sp+"."+key]
-				return ok
+				if _, written := c.lines[sp+"."+key]; written {
+					return true
+				}
+				_, fromDefaults := inherited[key]
+				return !fromDefaults
 			}
 			c.withKeys(st.Uses, st.With, sp, c.stepWhere(i, j), "with", own)
 		}
@@ -515,7 +523,9 @@ func (c *checker) withKeys(action string, with map[string]any, path, where, fiel
 		return
 	}
 	for _, key := range slices.Sorted(maps.Keys(with)) {
-		if slices.Contains(params, key) || strings.Contains(key, "{{") || !own(key) {
+		// A key that holds a template names its key only when it runs. One
+		// that holds an opener left unclosed is text, which is sent as it is.
+		if slices.Contains(params, key) || len(expr.TemplateExprs(key)) > 0 || !own(key) {
 			continue
 		}
 		msg := fmt.Sprintf("%s: unknown key %q for the %s action", field, key, action)

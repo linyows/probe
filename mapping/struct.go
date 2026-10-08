@@ -290,8 +290,8 @@ func MapToStructByTags(params map[string]any, dest any) error {
 
 // FieldTags returns the names the "map" tags of v's fields give, v being a
 // struct or a pointer to one: the keys MapToStructByTags fills it from, in
-// the order of the fields. A field without a tag, or one tagged "-", has no
-// key.
+// the order of the fields. A tag is taken as it is written, as
+// MapToStructByTags takes it, and a field without one has no key.
 func FieldTags(v any) []string {
 	t := reflect.TypeOf(v)
 	for t != nil && t.Kind() == reflect.Pointer {
@@ -302,8 +302,7 @@ func FieldTags(v any) []string {
 	}
 	var names []string
 	for f := range t.Fields() {
-		name, _, _ := strings.Cut(f.Tag.Get(tagMap), ",")
-		if name != "" && name != "-" && f.IsExported() {
+		if name := f.Tag.Get(tagMap); name != "" && f.IsExported() {
 			names = append(names, name)
 		}
 	}
