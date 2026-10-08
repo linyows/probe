@@ -13,6 +13,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/linyows/probe/actionrpc"
 	"github.com/linyows/probe/mapping"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -53,6 +54,10 @@ type Req struct {
 	cb    *Callback
 	// contract, when it is set, checks the call against .proto files.
 	contract *contract
+	// guard is what the run allows: a call to a host it does not allow, or
+	// under --read-only one to a method that may write, is refused before
+	// anything is sent.
+	guard actionrpc.Guard
 }
 
 type Res struct {
@@ -125,6 +130,10 @@ func (r *Req) Do() (re *Result, er error) {
 			return nil, err
 		}
 		creds = credentials.NewTLS(tlsConfig)
+	}
+
+	if err := r.checkGRPCHost(); err != nil {
+		return nil, err
 	}
 
 	// Establish connection
@@ -246,6 +255,9 @@ func (r *Req) invokeMethod(ctx context.Context, conn *grpc.ClientConn, reflectio
 	methodDesc := server
 	if methodDesc == nil {
 		methodDesc = spec
+	}
+	if err := r.checkReadOnly(server, spec); err != nil {
+		return nil, err
 	}
 
 	// The .proto files, when they are given, are checked against the
@@ -647,9 +659,14 @@ type Callback struct {
 }
 
 func Request(data map[string]any, opts ...Option) (map[string]any, error) {
+	return RequestStep(actionrpc.Call{With: data}, opts...)
+}
+
+// RequestStep is Request for a step, made under the guard of the run.
+func RequestStep(call actionrpc.Call, opts ...Option) (map[string]any, error) {
 	// Create a copy to avoid modifying the original data
 	m := make(map[string]any)
-	maps.Copy(m, data)
+	maps.Copy(m, call.With)
 
 	// Handle body conversion for structured data
 	if bodyData, bodyExists := m["body"]; bodyExists {
@@ -671,6 +688,7 @@ func Request(data map[string]any, opts ...Option) (map[string]any, error) {
 	// Create new request
 	r := NewReq()
 	r.contract = contract
+	r.guard = call.Guard
 
 	cb := &Callback{}
 	for _, opt := range opts {

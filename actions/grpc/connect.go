@@ -136,6 +136,9 @@ func (r *Req) doConnect(ctx context.Context, timeout time.Duration) (*Result, er
 	if err != nil {
 		return nil, err
 	}
+	if err := r.checkConnectHost(base); err != nil {
+		return nil, err
+	}
 	client, err := r.connectClient(base)
 	if err != nil {
 		return nil, err
@@ -181,6 +184,9 @@ func (r *Req) invokeConnect(ctx context.Context, client *http.Client, base, code
 		} else {
 			violations = append(violations, r.contract.checkRequest(spec, r.Body)...)
 		}
+	}
+	if err := r.checkReadOnly(nil, spec); err != nil {
+		return nil, err
 	}
 	if spec != nil && (spec.IsStreamingClient() || spec.IsStreamingServer()) {
 		return nil, fmt.Errorf("%s is a streaming method, which protocol connect does not call", spec.FullName())

@@ -193,6 +193,21 @@ message CreateUserRequest {
 
 ストリーミングのメソッドは`protocol: connect`では呼び出せません。`.proto`ファイルがストリーミングと宣言しているメソッドは、何も送らずにアクションのエラーになります。ファイルがない場合は、サーバーがエラーで応答します。
 
+## ガードの下での実行
+
+grpcアクションは実行の[ガード](/ja/reference/cli-reference#--read-only)を守ります。ガードが許さない呼び出しは何も送らずに拒否し、種類`refused`でステップを失敗させます。
+
+- `--allow-host`では、`addr`のホストとポートを確かめます。ポートがなければ、grpc-goと同じく443として扱います。前に付いた`dns:///`と`passthrough:///`は外して読みます。`unix:///tmp/grpc.sock`のようにホストのない宛先は拒否します。`protocol: connect`ではURLのホストを確かめ、ポートがなければスキームの既定のポートとして扱います。
+- `--read-only`では、手元にあるメソッドの定義がすべて`option idempotency_level = NO_SIDE_EFFECTS;`で副作用がないと宣言しているときだけ呼び出します。手元の定義とは、リフレクションで得たサーバーの定義と、`proto`があればその`.proto`ファイルの定義です。リフレクションでの問い合わせは読み取りなので行います。Connectの呼び出しにはリフレクションがないため`proto`が必要で、ない場合は拒否します。
+
+```protobuf
+service UserService {
+  rpc GetUser(GetUserRequest) returns (GetUserResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+}
+```
+
 ## 関連項目
 
 - **[変数](/ja/reference/actions/variables)** - ステップで使える変数

@@ -14,9 +14,18 @@ type Action struct {
 }
 
 func (a *Action) Run(with map[string]any) (map[string]any, error) {
+	ret, _, err := a.RunStep(actionrpc.Call{With: with})
+	return ret, err
+}
+
+// RunStep makes the call for a step, under the guard of the run, which
+// refuses a host it does not allow and, under --read-only, a method its
+// definitions do not declare free of side effects.
+func (a *Action) RunStep(call actionrpc.Call) (map[string]any, map[string]any, error) {
+	with := call.With
 	// Validate that required parameters are provided
 	if len(with) == 0 {
-		return map[string]any{}, errors.New("grpc action requires parameters in 'with' section. Please specify request details like addr, service, method")
+		return map[string]any{}, nil, errors.New("grpc action requires parameters in 'with' section. Please specify request details like addr, service, method")
 	}
 
 	actionrpc.LogParams(a.log, "received grpc request parameters", with)
@@ -27,11 +36,11 @@ func (a *Action) Run(with map[string]any) (map[string]any, error) {
 	after := WithAfter(func(res *Res) {
 		a.log.Debug("grpc response received", "status", res.StatusCode)
 	})
-	ret, err := Request(with, before, after)
+	ret, err := RequestStep(call, before, after)
 
 	actionrpc.LogOutcome(a.log, "grpc request", ret, err)
 
-	return ret, err
+	return ret, nil, err
 }
 
 func Serve() {
