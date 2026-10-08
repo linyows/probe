@@ -55,6 +55,9 @@ type Res struct {
 	// violations are what the .proto files do not allow in the call; nil
 	// when there is no contract.
 	violations []any
+	// matched is what the call was matched to in the .proto files; nil
+	// when there is no contract or they declare no such method.
+	matched map[string]any
 }
 
 type Result struct {
@@ -267,6 +270,9 @@ func (r *Req) invokeMethod(ctx context.Context, conn *grpc.ClientConn, reflectio
 		StatusMessage: "",
 		Metadata:      metadataMap,
 		violations:    violations,
+	}
+	if spec != nil {
+		res.matched = r.contract.matched(spec)
 	}
 	// Only a call that succeeded answers with a message to check.
 	if err == nil && spec != nil {
@@ -508,10 +514,14 @@ func Request(data map[string]any, opts ...Option) (map[string]any, error) {
 		return map[string]any{}, err
 	}
 
-	// The violations are in res, where the runner looks for them.
-	if ret.Res.violations != nil {
-		if res, ok := mapRet["res"].(map[string]any); ok {
+	// The violations, and what the call was matched to, are in res, where
+	// the runner looks for them.
+	if res, ok := mapRet["res"].(map[string]any); ok {
+		if ret.Res.violations != nil {
 			res["violations"] = ret.Res.violations
+		}
+		if ret.Res.matched != nil {
+			res["contract"] = ret.Res.matched
 		}
 	}
 

@@ -26,6 +26,9 @@ import (
 // call is made with.
 type contract struct {
 	files linker.Files
+	// paths are the files given, as proto.files writes them, by the name
+	// each is compiled under.
+	paths map[string]string
 	// request is whether the request is checked as well as the response.
 	request bool
 	// strict is whether a field the .proto files do not declare breaks
@@ -133,12 +136,14 @@ func loadContract(files, importPaths []string) (*contract, error) {
 		importPaths = []string{"."}
 	}
 	names := make([]string, 0, len(files))
+	paths := map[string]string{}
 	for _, f := range files {
 		name, err := importName(f, importPaths)
 		if err != nil {
 			return nil, err
 		}
 		names = append(names, name)
+		paths[name] = f
 	}
 	sources := &protocompile.SourceResolver{ImportPaths: importPaths}
 	resolver := protocompile.ResolverFunc(func(path string) (protocompile.SearchResult, error) {
@@ -158,7 +163,7 @@ func loadContract(files, importPaths []string) (*contract, error) {
 	if err != nil {
 		return nil, fmt.Errorf("proto.files: %w", err)
 	}
-	return &contract{files: compiled, validator: validator}, nil
+	return &contract{files: compiled, paths: paths, validator: validator}, nil
 }
 
 // importName returns the name file is imported by: its path under the
@@ -195,6 +200,20 @@ func (c *contract) method(service, method string) protoreflect.MethodDescriptor 
 		}
 	}
 	return nil
+}
+
+// matched returns what the call was matched to in the .proto files, which
+// a report of their coverage counts: the file that declares the service, as
+// proto.files gives it, and the method, such as users.v1.UserService/GetUser.
+func (c *contract) matched(m protoreflect.MethodDescriptor) map[string]any {
+	file := m.ParentFile().Path()
+	if p, ok := c.paths[file]; ok {
+		file = p
+	}
+	return map[string]any{
+		"spec":      file,
+		"operation": string(m.Parent().FullName()) + "/" + string(m.Name()),
+	}
 }
 
 // checkRequest returns what in body, the JSON of the request, the request
