@@ -3,7 +3,7 @@ module github.com/linyows/probe
 go 1.26.6
 
 require (
-	buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go v1.36.12-20260825204119-511051f7f437.1
+	buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go v1.36.12-20260825204119-511051f7f437.2
 	buf.build/go/protovalidate v1.4.0
 	github.com/briandowns/spinner v1.23.2
 	github.com/bufbuild/protocompile v0.14.1
@@ -12,8 +12,8 @@ require (
 	github.com/emersion/go-message v0.18.2
 	github.com/expr-lang/expr v1.17.8
 	github.com/fatih/color v1.19.0
-	github.com/go-playground/validator/v10 v10.30.3
-	github.com/go-sql-driver/mysql v1.10.0
+	github.com/go-playground/validator/v10 v10.30.5
+	github.com/go-sql-driver/mysql v1.10.1
 	github.com/goccy/go-yaml v1.19.2
 	github.com/hashicorp/go-hclog v1.6.3
 	github.com/hashicorp/go-plugin v1.8.0
@@ -29,7 +29,7 @@ require (
 	golang.org/x/sys v0.48.0
 	google.golang.org/genproto/googleapis/api v0.0.0-20260819154853-08b0e4226688
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260819154853-08b0e4226688
-	google.golang.org/grpc v1.83.2
+	google.golang.org/grpc v1.84.0
 	google.golang.org/protobuf v1.36.12
 	gopkg.in/go-playground/validator.v9 v9.31.0
 	modernc.org/sqlite v1.60.1
@@ -47,7 +47,7 @@ require (
 	github.com/chromedp/sysutil v1.1.0 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/emersion/go-sasl v0.0.0-20241020182733-b788ff22d5a6 // indirect
-	github.com/gabriel-vasile/mimetype v1.4.13 // indirect
+	github.com/gabriel-vasile/mimetype v1.4.15 // indirect
 	github.com/go-json-experiment/json v0.0.0-20260214004413-d219187c3433 // indirect
 	github.com/go-openapi/jsonpointer v1.0.2 // indirect
 	github.com/go-playground/locales v0.14.1 // indirect
@@ -58,7 +58,7 @@ require (
 	github.com/golang/protobuf v1.5.4 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/hashicorp/yamux v0.1.2 // indirect
-	github.com/leodido/go-urn v1.4.0 // indirect
+	github.com/leodido/go-urn v1.5.0 // indirect
 	github.com/mattn/go-colorable v0.1.14 // indirect
 	github.com/ncruces/go-strftime v1.0.0 // indirect
 	github.com/oklog/run v1.1.0 // indirect
