@@ -581,6 +581,13 @@ jobs:
       cmd: ./probe examples/grpc.yml
     test: res.code == 0
     echo: "{{res.stdout}}"
+  - name: grpc-contract-failure.yml fails a response that breaks its .proto files
+    uses: shell
+    with:
+      cmd: ./probe e2e/grpc-contract-failure.yml
+    test: |
+      res.code == 1 &&
+      res.stdout contains "is not encoded as int32 email"
   - name: Stop GRPC server
     uses: shell
     with: # Use Process Group ID

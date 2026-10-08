@@ -42,7 +42,7 @@ func checkFindings(t *testing.T, findings []Finding, wants []want) {
 	}
 }
 
-var checkActions = CheckOptions{Actions: []string{"embedded", "hello", "http", "shell"}}
+var checkActions = CheckOptions{Actions: []string{"embedded", "grpc", "hello", "http", "shell"}}
 
 func TestCheck(t *testing.T) {
 	tests := []struct {
@@ -392,6 +392,20 @@ jobs:
     with:
       get: /health
       openapi: false
+  - name: Proto
+    uses: grpc
+    with:
+      addr: localhost:50051
+      service: UserService
+      method: GetUser
+      proto:
+        files: [./users.proto]
+  - name: A proto that is not the grpc action's
+    uses: shell
+    with:
+      cmd: echo
+      proto:
+        files: [./users.proto]
   - name: Always
     uses: hello
     test: 1 == 1
@@ -402,8 +416,9 @@ jobs:
 			want: []want{
 				{SeverityWarning, 5, "nothing checks this step: it has no test"},
 				{SeverityWarning, 13, "nothing checks this step: it has no test"},
-				{SeverityWarning, 20, "test reads nothing from the step"},
-				{SeverityWarning, 23, "test reads nothing from the step"},
+				{SeverityWarning, 26, "nothing checks this step: it has no test"},
+				{SeverityWarning, 34, "test reads nothing from the step"},
+				{SeverityWarning, 37, "test reads nothing from the step"},
 			},
 		},
 	}

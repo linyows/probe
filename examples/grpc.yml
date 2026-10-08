@@ -15,6 +15,11 @@ jobs:
       timeout: 30s
       metadata:
         user-agent: probe-grpc/1.0
+      # every request and response is checked against the .proto files,
+      # rather than against the server's own reflection
+      proto:
+        files: [./actions/grpc/testserver/pb/user_service.proto]
+        import_paths: [./actions/grpc/testserver/pb]
   steps:
   - name: Get User
     id: get_user

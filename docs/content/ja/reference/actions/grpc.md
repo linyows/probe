@@ -37,6 +37,7 @@ steps:
 | `cert_file` | String | 任意 | - | mTLS用のクライアント証明書 |
 | `key_file` | String | 任意 | - | mTLS用のクライアント鍵 |
 | `ca_file` | String | 任意 | - | サーバー検証に使うCA証明書 |
+| `proto` | Objectまたは`false` | 任意 | - | `files`に挙げた`.proto`ファイルと呼び出しを照合し、違反があればステップを失敗させます。`false`はジョブの`defaults`が求める照合を外します。[.protoファイルによる検証](#protoファイルによる検証)を参照 |
 
 ## レスポンスオブジェクト
 
@@ -53,6 +54,7 @@ steps:
 | `rt.sec` | Float | ラウンドトリップ時間（秒） |
 | `status` | Integer | ステータスが`OK`のとき`0`、それ以外は`1` |
 | `req` | Object | 送信したリクエスト |
+| `res.violations` | Array | 呼び出しのうち`.proto`ファイルが許さないもの。すべて許されていれば空です。`proto`を指定したときだけ入ります |
 
 `res.status_code`は、呼び出しが終わったときのステータスの正式名です。`OK`、`CANCELLED`、`UNKNOWN`、`INVALID_ARGUMENT`、`DEADLINE_EXCEEDED`、`NOT_FOUND`、`ALREADY_EXISTS`、`PERMISSION_DENIED`、`RESOURCE_EXHAUSTED`、`FAILED_PRECONDITION`、`ABORTED`、`OUT_OF_RANGE`、`UNIMPLEMENTED`、`INTERNAL`、`UNAVAILABLE`、`DATA_LOSS`、`UNAUTHENTICATED`のいずれかになります。`OK`以外のステータスもサーバーの応答なので、ステップはそのままテストに進み、テストでそのステータスを期待できます。サーバーからステータスが得られなかった呼び出しだけが、エラーとしてステップを終わらせます。接続できないサーバーやリフレクションにサービスが載っていない場合と、サーバーが応答する前に`timeout`を過ぎたり接続が切れたりした場合です。
 
@@ -101,6 +103,41 @@ steps:
         {"id": "does-not-exist"}
     test: res.status_code == "NOT_FOUND"
 ```
+
+## .protoファイルによる検証
+
+呼び出しは、サーバーがリフレクションで示す自身の定義を使って行います。そのため、サーバーが本来守るべき定義を守っているかどうかは分かりません。`proto`を指定すると、サービスを生成したリポジトリにある`.proto`ファイルなどとも呼び出しを照合します。
+
+```yaml
+- name: Users
+  defaults:
+    grpc:
+      addr: "{{vars.grpc_addr}}"
+      service: user.v1.UserService
+      proto:
+        files: [./proto/user/v1/user.proto]
+        import_paths: [./proto]
+  steps:
+    - name: Get a user
+      uses: grpc
+      with:
+        method: GetUser
+        body:
+          id: "123"
+      test: res.status_code == "OK" && res.body.user.name != ""
+```
+
+`files`は、`protoc`と同じく`import_paths`を使ってコンパイルします。`import_paths`を指定しなければ、Probeを実行したディレクトリを使います。各ファイルは、それを含む最初のインポートパスからのパスで名前が付き、インポートするときもその名前で指定します。ファイルは呼び出しの前にコンパイルするため、コンパイルできないファイルを指定したステップは、何も呼び出さずにアクションのエラーとして失敗します。
+
+リクエストのボディ（JSON）がファイルのリクエストメッセージとして解釈できない場合、ステップは種類`contract_request`で失敗します。次の場合は種類`contract_response`で失敗します。
+
+- サービスにそのメソッドをファイルが宣言していない
+- サーバーのリクエストまたはレスポンスのメッセージ（入れ子のメッセージも含む）が、ファイルと名前が違う、ファイルが宣言するフィールドを持たない、または同じ番号のフィールドを別の名前、型、単数か複数かで宣言している
+- レスポンスのフィールドが、ファイルがその番号に宣言するとおりにエンコードされていない（ファイルは`int32`と宣言しているのに文字列が届いた場合など）
+
+`strict: true`を指定すると、ファイルが宣言していないフィールドをサーバーが宣言したり送ったりした場合も失敗します。指定しなければ、protobufが新しい相手のフィールドを通すのと同じく、そのフィールドを通します。サーバー自身の定義でも解釈できないリクエストのボディは送れないため、何も送らず、アクションのエラーではなく`contract_request`としてステップを失敗させます。このとき`res.status_code`は空です。`request: false`はサーバーとそのレスポンスだけを照合します。ファイルが許さないものをわざと送るステップに使います。`OK`以外のステータスの応答には照合するメッセージがありません。違反はそれぞれ`res.violations`、端末、レポートに、`$.user.email`のようなフィールドとともに入ります。
+
+proto3には必須のフィールドも値の範囲もないため、ファイルが示すのは、メッセージがどんな値を持てるかではなく、どんな形をしているかです。
 
 ## 関連項目
 

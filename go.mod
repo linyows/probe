@@ -4,6 +4,7 @@ go 1.26.6
 
 require (
 	github.com/briandowns/spinner v1.23.2
+	github.com/bufbuild/protocompile v0.14.1
 	github.com/chromedp/chromedp v0.15.1
 	github.com/emersion/go-imap/v2 v2.0.0-beta.8
 	github.com/emersion/go-message v0.18.2
