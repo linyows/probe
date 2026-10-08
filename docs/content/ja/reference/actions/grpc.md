@@ -137,7 +137,25 @@ steps:
 
 `strict: true`を指定すると、ファイルが宣言していないフィールドをサーバーが宣言したり送ったりした場合も失敗します。指定しなければ、protobufが新しい相手のフィールドを通すのと同じく、そのフィールドを通します。サーバー自身の定義でも解釈できないリクエストのボディは送れないため、何も送らず、アクションのエラーではなく`contract_request`としてステップを失敗させます。このとき`res.status_code`は空です。`request: false`はサーバーとそのレスポンスだけを照合します。ファイルが許さないものをわざと送るステップに使います。`OK`以外のステータスの応答には照合するメッセージがありません。違反はそれぞれ`res.violations`、端末、レポートに、`$.user.email`のようなフィールドとともに入ります。
 
-proto3には必須のフィールドも値の範囲もないため、ファイルが示すのは、メッセージがどんな値を持てるかではなく、どんな形をしているかです。
+### ファイルが注釈する制約
+
+proto3には必須のフィールドも値の範囲もないため、ファイルがフィールドに注釈を付けていなければ、ファイルが示すのはメッセージの形だけです。ファイルが次の2種類の注釈を使っていれば、それも照合します。
+
+- [protovalidate](https://protovalidate.com)のルール（`[(buf.validate.field)...]`と、メッセージやoneofのルール）は、リクエストとレスポンスの両方で照合します。ルールに違反したフィールドがあれば、`string.email`のようなルールとフィールドを示してステップを失敗させます。
+- `google.api.field_behavior`は[AIP-203](https://google.aip.dev/203)のとおりに照合します。リクエストが`REQUIRED`のフィールドを持たなければ（リクエストが持つ入れ子のメッセージも含む）、`contract_request`で失敗します。レスポンスが`INPUT_ONLY`のフィールドを持っていれば、レスポンスが決して含めてはならないフィールドとして、`contract_response`で失敗します。
+
+```protobuf
+syntax = "proto3";
+import "buf/validate/validate.proto";
+import "google/api/field_behavior.proto";
+
+message CreateUserRequest {
+  string email = 1 [(buf.validate.field).string.email = true, (google.api.field_behavior) = REQUIRED];
+  string password = 2 [(google.api.field_behavior) = INPUT_ONLY];
+}
+```
+
+`buf/validate/validate.proto`と`google/api/field_behavior.proto`はProbeに組み込まれているため、インポートパスに置かなくてもファイルからインポートできます。インポートパスにあるコピーは読みません。
 
 ## 関連項目
 
