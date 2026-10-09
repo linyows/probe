@@ -943,7 +943,7 @@ type Call struct {
     With  map[string]any // ステップのwithパラメータ
     State map[string]any // アクションがジョブに残した状態
     Step  Step           // 実行するステップ
-    Guard Guard          // 実行がアクションに許すこと
+    Guard Guard          // 実行がアクションに許可すること
 }
 
 type Step struct {
@@ -960,7 +960,7 @@ type Step struct {
 
 Probeは、こうしたアクションに実行するステップを常に伝えます。それをどう使うかはアクション次第です。`RunID`は、1回の実行のすべてのステップで同じで、embeddedアクションで実行するジョブでも同じです。
 
-`Guard`は、`--read-only`、`--allow-host`、`--allow-action`で指定する実行のガードです。アクションは、許されない操作に対して`actionrpc.Refuse(...)`を返すことでガードを守ります。そのステップは種類`refused`で失敗します。何が許されるかは`Guard.ReadOnly`、`Guard.AllowsHost`、`Guard.CheckHost`で分かります。外部アクションは、守るガードの種類を`action.yml`の`guard`で申告します。申告していない種類のガードの下では、`--allow-action`で指定しない限り拒否されます。詳しくは[ガード](/ja/guide/concepts/guard)を参照してください。
+`Guard`は、`--read-only`、`--allow-host`、`--allow-action`で指定する実行のガードです。アクションは、許可されない操作に対して`actionrpc.Refuse(...)`を返すことでガードを守ります。そのステップは種類`refused`で失敗します。何が許可されているかは`Guard.ReadOnly`、`Guard.AllowsHost`、`Guard.CheckHost`で分かります。外部アクションは、守るガードの種類を`action.yml`の`guard`で申告します。申告していない種類のガードの下では、`--allow-action`で指定しない限り拒否されます。詳しくは[ガード](/ja/guide/concepts/guard)を参照してください。
 
 `State`には、そのアクションがジョブに残した状態が入ります。残していなければnilです。Probeは`newState`を読まずに保持し、同じジョブでそのアクションを使う次のステップに渡します。状態は結果と同じく、文字列をキーとするマップ、リスト、単純な値で表します。そう表せない状態は、ステップをアクションエラーで失敗させます。`newState`がnilの場合は、状態をそのまま保ちます。ステップがアクションエラーで失敗した場合やタイムアウトした場合も同様です。状態はジョブごと、アクションごとに分けて保持し、繰り返すジョブの各回と、embeddedアクションで実行するジョブは、状態を持たない状態から始まります。状態は出力に表示しないので、認証情報を入れても構いません。
 
