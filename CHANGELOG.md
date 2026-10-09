@@ -4,9 +4,12 @@ Release notes for each version are generated from the commits by GoReleaser.
 This file records what those notes cannot carry well: changes that break code
 importing probe as a library.
 
-## Unreleased
+## v1.22.0 (2026-10-09)
 
 ### Breaking Changes
+
+This release breaks, in a minor version, a workflow that uses the built-in
+`browser` or `mail-latency` action, and code that imports their packages.
 
 The built-in `browser` action is removed. It is now the external action
 `github.com/mozership/probe-browser`, which a step names by repository and
