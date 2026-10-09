@@ -42,6 +42,25 @@ func startConnectServer(t *testing.T, prefix string) *connectUserServer {
 		})
 	mux := http.NewServeMux()
 	mux.Handle(prefix+path, http.StripPrefix(prefix, handler))
+	mux.Handle(prefix+"/UserService/WatchUsers", http.StripPrefix(prefix, connect.NewServerStreamHandler("/UserService/WatchUsers",
+		func(ctx context.Context, req *connect.Request[pb.WatchUsersRequest], stream *connect.ServerStream[pb.User]) error {
+			s.calls.Add(1)
+			s.header.Store(req.Header().Clone())
+			stream.ResponseTrailer().Set("X-Trace", "t1")
+			return connectStatus(watchTestUsers(ctx, req.Msg, stream.Send))
+		})))
+	mux.Handle(prefix+"/UserService/ImportUsers", http.StripPrefix(prefix, connect.NewClientStreamHandler("/UserService/ImportUsers",
+		func(ctx context.Context, stream *connect.ClientStream[pb.User]) (*connect.Response[pb.ImportUsersResponse], error) {
+			s.calls.Add(1)
+			n := 0
+			for stream.Receive() {
+				n++
+			}
+			if err := stream.Err(); err != nil {
+				return nil, err
+			}
+			return connect.NewResponse(&pb.ImportUsersResponse{Imported: int32(n)}), nil
+		})))
 	srv := httptest.NewServer(mux)
 	t.Cleanup(srv.Close)
 	s.url = srv.URL + prefix
@@ -316,19 +335,19 @@ func TestConnectRequestRejected(t *testing.T) {
 	}
 }
 
-func TestConnectRequestOfAStreamingMethod(t *testing.T) {
+func TestConnectRequestOfAMethodThatStreamsBothWays(t *testing.T) {
 	spec := writeProto(t, `syntax = "proto3";
 message Ping { string id = 1; }
-service PingService { rpc Watch(Ping) returns (stream Ping); }
+service PingService { rpc Chat(stream Ping) returns (stream Ping); }
 `)
 	_, _, err := connectRequest(t, map[string]any{
 		"addr":    "localhost:1",
 		"service": "PingService",
-		"method":  "Watch",
+		"method":  "Chat",
 		"proto":   protoOf(spec, false),
 	})
-	if err == nil || !strings.Contains(err.Error(), "is a streaming method") {
-		t.Errorf("Request() error = %v, want one saying the method streams", err)
+	if err == nil || !strings.Contains(err.Error(), "streams both ways") {
+		t.Errorf("Request() error = %v, want one saying the method streams both ways", err)
 	}
 }
 

@@ -51,7 +51,10 @@ type Req struct {
 	// Codec is how a Connect call encodes its messages: json, the default,
 	// or proto. A gRPC call takes none.
 	Codec string `map:"codec"`
-	cb    *Callback
+	// MaxMessages, when it is above 0, is how many responses of a stream
+	// are read before the call is left.
+	MaxMessages int `map:"max_messages"`
+	cb          *Callback
 	// contract, when it is set, checks the call against .proto files.
 	contract *contract
 	// guard is what the run allows: a call to a host it does not allow, or
@@ -71,6 +74,13 @@ type Res struct {
 	// matched is what the call was matched to in the .proto files; nil
 	// when there is no contract or they declare no such method.
 	matched map[string]any
+	// messages are the responses of a stream, each as an object; nil for a
+	// call whose responses do not stream.
+	messages []any
+	// complete is whether the server ended the stream of responses, rather
+	// than the call leaving it; nil for a call whose responses do not
+	// stream.
+	complete *bool
 }
 
 type Result struct {
@@ -263,44 +273,52 @@ func (r *Req) invokeMethod(ctx context.Context, conn *grpc.ClientConn, reflectio
 	// The .proto files, when they are given, are checked against the
 	// request, the server's definition when it tells one, and then the
 	// response.
-	var violations []any
+	var definition []any
 	if r.contract != nil {
-		violations = []any{}
-		if spec == nil {
-			violations = append(violations, violation("response", fmt.Sprintf("the .proto files declare no method %s in %s", r.Method, r.Service), "", ""))
-		} else {
-			violations = append(violations, r.contract.checkRequest(spec, r.Body)...)
-			if server != nil {
-				violations = append(violations, r.contract.checkDefinition(spec, server)...)
-			} else if serviceDesc != nil {
-				violations = append(violations, violation("response", fmt.Sprintf("the server's definition of %s declares no method %s", serviceDesc.FullName(), r.Method), "the .proto files declare it", ""))
-			}
+		switch {
+		case spec == nil:
+			definition = append(definition, violation("response", fmt.Sprintf("the .proto files declare no method %s in %s", r.Method, r.Service), "", ""))
+		case server != nil:
+			definition = append(definition, r.contract.checkDefinition(spec, server)...)
+		case serviceDesc != nil:
+			definition = append(definition, violation("response", fmt.Sprintf("the server's definition of %s declares no method %s", serviceDesc.FullName(), r.Method), "the .proto files declare it", ""))
 		}
 	}
 
-	// Create dynamic message for request
-	requestMsg := dynamicpb.NewMessage(methodDesc.Input())
-	if r.Body != "" {
-		if err := protojson.Unmarshal([]byte(r.Body), requestMsg); err != nil {
-			// A body the .proto files refuse as well is the workflow's
-			// mistake, which fails the step as a request that breaks its
-			// contract rather than as an action that could not run. The
-			// call cannot be made with it, so nothing is sent, and no status
-			// comes back.
-			if hasRequestViolation(violations) {
-				return &Res{Metadata: map[string]string{}, violations: violations}, nil
-			}
-			return nil, fmt.Errorf("failed to unmarshal request JSON: %w", err)
+	// The call is made as the server's definition streams. A step written
+	// for the files' definition may not fit it, which is then told as the
+	// definitions differing, without anything sent.
+	clientStream, serverStream, bodies, err := r.callShape(methodDesc)
+	if err != nil {
+		if len(definition) > 0 {
+			return &Res{Metadata: map[string]string{}, violations: definition}, nil
 		}
+		return nil, err
 	}
-	// A message that cannot be encoded, such as one without a required
-	// field, cannot be sent either.
-	if _, err := proto.Marshal(requestMsg); err != nil {
+	var violations []any
+	if r.contract != nil {
+		violations = []any{}
+		if spec != nil {
+			violations = append(violations, r.contract.checkRequests(spec, bodies, clientStream)...)
+		}
+		violations = append(violations, definition...)
+	}
+
+	msgs, err := buildRequests(methodDesc.Input(), bodies)
+	if err != nil {
+		// A body the .proto files refuse as well is the workflow's mistake,
+		// which fails the step as a request that breaks its contract rather
+		// than as an action that could not run. The call cannot be made with
+		// it, so nothing is sent, and no status comes back.
 		if hasRequestViolation(violations) {
 			return &Res{Metadata: map[string]string{}, violations: violations}, nil
 		}
-		return nil, fmt.Errorf("failed to encode the request: %w", err)
+		return nil, err
 	}
+	if clientStream || serverStream {
+		return r.invokeStream(ctx, conn, answer, methodDesc, spec, msgs, violations, clientStream, serverStream)
+	}
+	requestMsg := msgs[0]
 
 	// Invoke the method. The reply is received as the bytes it came in, and
 	// read apart from the call, so that one the definition the call is made
@@ -668,11 +686,12 @@ func RequestStep(call actionrpc.Call, opts ...Option) (map[string]any, error) {
 	m := make(map[string]any)
 	maps.Copy(m, call.With)
 
-	// Handle body conversion for structured data
+	// Handle body conversion for structured data: an object, or a list of
+	// the messages a stream of requests sends.
 	if bodyData, bodyExists := m["body"]; bodyExists {
-		if bodyMap, isMap := bodyData.(map[string]any); isMap {
-			// Convert body map to JSON string
-			if jsonBytes, err := json.Marshal(bodyMap); err == nil {
+		switch bodyData.(type) {
+		case map[string]any, []any:
+			if jsonBytes, err := json.Marshal(bodyData); err == nil {
 				m["body"] = string(jsonBytes)
 			}
 		}
@@ -718,6 +737,12 @@ func RequestStep(call actionrpc.Call, opts ...Option) (map[string]any, error) {
 		}
 		if ret.Res.matched != nil {
 			res["contract"] = ret.Res.matched
+		}
+		if ret.Res.messages != nil {
+			res["messages"] = ret.Res.messages
+		}
+		if ret.Res.complete != nil {
+			res["complete"] = *ret.Res.complete
 		}
 	}
 

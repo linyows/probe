@@ -18,7 +18,6 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
-	"google.golang.org/protobuf/types/dynamicpb"
 )
 
 // The headers of the Connect protocol a unary call uses.
@@ -175,21 +174,39 @@ func (r *Req) invokeConnect(ctx context.Context, client *http.Client, base, code
 	// are given; without them, a JSON body is sent as it is written, under
 	// the service's full name, which the step then has to give.
 	var spec protoreflect.MethodDescriptor
-	var violations []any
 	if r.contract != nil {
 		spec = r.contract.method(r.Service, r.Method)
-		violations = []any{}
-		if spec == nil {
-			violations = append(violations, violation("response", fmt.Sprintf("the .proto files declare no method %s in %s", r.Method, r.Service), "", ""))
-		} else {
-			violations = append(violations, r.contract.checkRequest(spec, r.Body)...)
-		}
 	}
 	if err := r.checkReadOnly(nil, spec); err != nil {
 		return nil, err
 	}
-	if spec != nil && (spec.IsStreamingClient() || spec.IsStreamingServer()) {
-		return nil, fmt.Errorf("%s is a streaming method, which protocol connect does not call", spec.FullName())
+	// Only the files tell whether the method streams, which a call without
+	// them is taken not to.
+	var clientStream, serverStream bool
+	bodies := []string{r.Body}
+	if spec != nil {
+		var err error
+		if clientStream, serverStream, err = streams(spec); err != nil {
+			return nil, err
+		}
+		if bodies, err = requestBodies(r.Body, clientStream); err != nil {
+			return nil, err
+		}
+	} else if strings.HasPrefix(strings.TrimSpace(r.Body), "[") {
+		return nil, errors.New("body is a list, which only a method that streams its requests takes, and the .proto files of proto have to tell that it does")
+	}
+	if r.MaxMessages > 0 && !serverStream {
+		return nil, errors.New("max_messages is for a method that streams its responses, which the .proto files of proto have to tell")
+	}
+
+	var violations []any
+	if r.contract != nil {
+		violations = []any{}
+		if spec == nil {
+			violations = append(violations, violation("response", fmt.Sprintf("the .proto files declare no method %s in %s", r.Method, r.Service), "", ""))
+		} else {
+			violations = append(violations, r.contract.checkRequests(spec, bodies, clientStream)...)
+		}
 	}
 	if codec == "proto" && spec == nil {
 		if r.contract == nil {
@@ -202,27 +219,24 @@ func (r *Req) invokeConnect(ctx context.Context, client *http.Client, base, code
 	var body []byte
 	if spec != nil {
 		service = string(spec.Parent().FullName())
-		msg := dynamicpb.NewMessage(spec.Input())
-		if r.Body != "" {
-			if err := protojson.Unmarshal([]byte(r.Body), msg); err != nil {
-				// A body the .proto files refuse fails the step as a request
-				// that breaks its contract, and is not sent.
-				if hasRequestViolation(violations) {
-					return &Res{Metadata: map[string]string{}, violations: violations}, nil
-				}
-				return nil, fmt.Errorf("failed to unmarshal request JSON: %w", err)
-			}
-		}
-		var err error
-		if codec == "proto" {
-			body, err = proto.Marshal(msg)
-		} else {
-			body, err = protojson.Marshal(msg)
-		}
+		msgs, err := buildRequests(spec.Input(), bodies)
 		if err != nil {
+			// A body the .proto files refuse fails the step as a request
+			// that breaks its contract, and is not sent.
 			if hasRequestViolation(violations) {
 				return &Res{Metadata: map[string]string{}, violations: violations}, nil
 			}
+			return nil, err
+		}
+		if clientStream || serverStream {
+			return r.invokeConnectStream(ctx, client, base+"/"+service+"/"+r.Method, codec, timeout, spec, msgs, violations, serverStream)
+		}
+		if codec == "proto" {
+			body, err = proto.Marshal(msgs[0])
+		} else {
+			body, err = protojson.Marshal(msgs[0])
+		}
+		if err != nil {
 			return nil, fmt.Errorf("failed to encode the request: %w", err)
 		}
 	} else {
@@ -285,29 +299,8 @@ func (r *Req) invokeConnect(ctx context.Context, client *http.Client, base, code
 		res.Body = string(data)
 		return res, nil
 	}
-	msg := dynamicpb.NewMessage(spec.Output())
-	var readErr error
-	if codec == "proto" {
-		readErr = proto.Unmarshal(data, msg)
-	} else {
-		readErr = protojson.UnmarshalOptions{DiscardUnknown: true}.Unmarshal(data, msg)
-	}
-	if readErr == nil {
-		if out, err := protojson.Marshal(msg); err == nil {
-			res.Body = string(out)
-		}
-	}
-	var responseViolations []any
-	if codec == "proto" {
-		responseViolations = r.contract.checkResponse(spec, data)
-	} else {
-		responseViolations = r.contract.checkResponseJSON(spec, data)
-	}
-	res.violations = append(res.violations, responseViolations...)
-	// A reply the files cannot read is an error, unless their check has just
-	// told it as a reply that breaks them.
-	if readErr != nil && len(responseViolations) == 0 {
-		return nil, fmt.Errorf("failed to read the response: %w", readErr)
+	if err := r.readResponses(res, spec.Output(), spec, [][]byte{data}, codec, false, true); err != nil {
+		return nil, err
 	}
 	return res, nil
 }

@@ -588,7 +588,7 @@ jobs:
     test: |
       res.code == 0 &&
       res.stdout contains "- UserService/DeleteUser" &&
-      res.stdout contains "Operations: 4 of 5 checked (80.0%)"
+      res.stdout contains "Operations: 6 of 7 checked (85.7%)"
     echo: "{{res.stdout}}"
   - name: grpc-contract-failure.yml fails a response that breaks its .proto files
     uses: shell

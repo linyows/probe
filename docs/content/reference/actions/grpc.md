@@ -29,7 +29,7 @@ The fields below describe the call. All of them accept template expressions.
 | `addr` | String | Yes | - | Host and port of the gRPC server. With `protocol: connect`, the URL the service is served under |
 | `service` | String | Yes | - | Fully qualified service name |
 | `method` | String | Yes | - | Method name |
-| `body` | String or Object | No | `""` | Request message as JSON. An object is serialized as JSON |
+| `body` | String, Object or List | No | `""` | Request message as JSON. An object is serialized as JSON. A list is the messages of a stream of requests; see [Streaming Methods](#streaming-methods) |
 | `metadata` | Object | No | `{}` | Request metadata (the gRPC equivalent of headers) |
 | `timeout` | String | No | `30s` | Time limit for the call, including connecting and the reflection lookup. A Go duration such as `"10s"`; any other value is an error |
 | `tls` | Boolean | No | `false` | Use TLS |
@@ -38,6 +38,7 @@ The fields below describe the call. All of them accept template expressions.
 | `key_file` | String | No | - | Client key for mutual TLS |
 | `ca_file` | String | No | - | CA certificate used to verify the server |
 | `codec` | String | No | `json` | How a Connect call encodes its messages: `json` or `proto`. Only with `protocol: connect` |
+| `max_messages` | Integer | No | - | Leave a stream of responses once this many have come. See [Streaming Methods](#streaming-methods) |
 | `proto` | Object or `false` | No | - | Check the call against the `.proto` files listed in `files`, and fail the step when it breaks them. `false` leaves out a check the job's `defaults` ask for. See [Checking Against .proto Files](#checking-against-proto-files) |
 
 ## Response Object
@@ -56,6 +57,8 @@ After the call, `res` holds the reply and the gRPC status.
 | `status` | Integer | `0` when the status is `OK`, otherwise `1` |
 | `req` | Object | The request as it was sent |
 | `res.violations` | Array | What the `.proto` files do not allow in the call, empty when they allow all of it. Present only when `proto` is given |
+| `res.messages` | Array | Every response of a method that streams its responses, each an object as `res.body` is. Present only for such a method |
+| `res.complete` | Boolean | Whether the server ended the stream of responses, rather than the call leaving it. Present only for a method that streams its responses |
 | `res.contract` | Object | What the call was matched to in the `.proto` files: `spec`, the file that declares the service as `proto.files` names it, and `operation`, such as `users.v1.UserService/GetUser`. Present only when the files declare the method; [`probe coverage`](/reference/cli-reference#coverage) counts it |
 
 `res.status_code` is the canonical name of the status the call ended with: `OK`, `CANCELLED`, `UNKNOWN`, `INVALID_ARGUMENT`, `DEADLINE_EXCEEDED`, `NOT_FOUND`, `ALREADY_EXISTS`, `PERMISSION_DENIED`, `RESOURCE_EXHAUSTED`, `FAILED_PRECONDITION`, `ABORTED`, `OUT_OF_RANGE`, `UNIMPLEMENTED`, `INTERNAL`, `UNAVAILABLE`, `DATA_LOSS` or `UNAUTHENTICATED`. A status other than `OK` is the server's answer, so the step goes on to its test, which can expect it. Only a call that gets no status from the server ends the step with an error: one to a server that cannot be reached, or whose reflection does not list the service when no `.proto` files declare it, or one that runs out of `timeout` or loses its connection before the server answers.
@@ -164,7 +167,39 @@ With `protocol: connect`, the method is called with the [Connect protocol](https
 
 `res` has the fields a gRPC call gives. A Connect error, such as `{"code": "not_found", "message": "..."}` with HTTP status 404, gives `res.status_code` `NOT_FOUND` and its message, as the Connect codes are the gRPC ones. An answer that holds no Connect error is still the server's answer, and its code is the one the protocol implies, as connect-go reads it: from the HTTP status, such as `UNAVAILABLE` for a proxy's 502 page, with the status line as the message, or `UNKNOWN` or `INTERNAL` for a 200 whose content type is not the codec's. `res.metadata` holds the response headers; those the server sent after the message, under `Trailer-`, are named without it and win over a header of the same name. Only a call that gets no answer, such as one to a server that cannot be reached or that runs out of `timeout`, is an action error. Redirects are not followed.
 
-Streaming methods cannot be called with `protocol: connect`: one the `.proto` files declare as streaming fails the step as an action error before anything is sent, and without the files the server answers the call with an error.
+A streaming method is called with `protocol: connect` when `proto` declares it, as [Streaming Methods](#streaming-methods) describes, over HTTP/1.1 too; one that streams both ways is not called.
+
+## Streaming Methods
+
+A method that streams its responses or its requests is called as one that does not, with the same parameters, by gRPC or by `protocol: connect`. The call sends every request, closes its side, and then reads the responses.
+
+```yaml
+- name: Watch users
+  uses: grpc
+  with:
+    method: WatchUsers
+    body:
+      filter: active
+    max_messages: 3
+  test: res.status_code == "" && len(res.messages) == 3 && !res.complete
+
+- name: Import users
+  uses: grpc
+  with:
+    method: ImportUsers
+    body:
+      - name: Ada
+      - name: Grace
+  test: res.status_code == "OK" && res.body.imported == 2
+```
+
+- A method that streams its requests takes a list in `body`, each item of which is one message of the stream, in order; one object is the only message, and `[]` sends none. A list to any other method is an error.
+- A method that streams its responses has every message in `res.messages`, in the order they came, and the last in `res.body`. `res.complete` is `true` when the server ended the stream, with the status it ended with in `res.status_code`.
+- `max_messages` leaves the call once that many responses have come, for a stream that does not end by itself. The server has then told no status, so `res.status_code` is empty and `res.complete` is `false`. It is an error with a method that does not stream its responses.
+- A stream that breaks off after some responses came, such as one `timeout` cuts, gives those responses, the status it broke with, such as `DEADLINE_EXCEEDED`, and `res.complete` `false`. With no response at all it is an action error, as a call that gets no answer is. The server is told `timeout` too, and may end the stream itself when it runs out, with `DEADLINE_EXCEEDED` and `res.complete` `true`.
+- A method that streams both ways is not called, and fails the step as an action error before anything is sent.
+
+What streams is told by the definition the call is made with: the server's reflection, or the `.proto` files of `proto`. A Connect call has no reflection, so it calls a streaming method only with `proto`; without it, a list `body` and `max_messages` are errors, and the method is called as one that does not stream, which the server refuses. With `proto`, each message of a stream is checked against the files, and a violation names the message by its index, such as `$[1].user.email`; a server whose definition streams another way than the files declare fails the step as `contract_response`.
 
 ## Under a Guard
 

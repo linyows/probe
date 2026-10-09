@@ -2,6 +2,7 @@ package grpc
 
 import (
 	"context"
+	"fmt"
 	"net"
 	"os"
 	"path/filepath"
@@ -559,5 +560,70 @@ func TestRequestOfAMethodOnlyTheFilesDeclare(t *testing.T) {
 	vs := res["violations"].([]any)
 	if len(vs) != 1 || !strings.Contains(vs[0].(map[string]any)["message"].(string), "the server's definition of UserService declares no method Ping") {
 		t.Errorf("violations = %v, want the method the server lacks", vs)
+	}
+}
+
+func TestCheckDefinitionOfHowAMethodStreams(t *testing.T) {
+	addr := startUserServer(t)
+	unary := strings.Replace(userProto(t),
+		"rpc WatchUsers(WatchUsersRequest) returns (stream User);",
+		"rpc WatchUsers(WatchUsersRequest) returns (User);", 1)
+	ret, err := Request(map[string]any{
+		"service": "UserService", "addr": addr, "method": "WatchUsers", "body": `{"count": 1}`,
+		"proto": protoOf(writeProto(t, unary), false),
+	})
+	if err != nil {
+		t.Fatalf("Request() error: %v", err)
+	}
+	res, _ := ret["res"].(map[string]any)
+	v, _ := res["violations"].([]any)
+	if len(v) == 0 || !strings.Contains(fmt.Sprint(v[0]), "streams its responses") {
+		t.Errorf("violations = %v, want the server's definition to stream its responses", v)
+	}
+}
+
+func TestCheckDefinitionOfAStepWrittenForTheFiles(t *testing.T) {
+	addr := startUserServer(t)
+	tests := []struct {
+		name string
+		from string
+		to   string
+		with map[string]any
+	}{
+		{
+			name: "max_messages to a method the files declare streaming its responses",
+			from: "rpc GetUser(GetUserRequest) returns (GetUserResponse);",
+			to:   "rpc GetUser(GetUserRequest) returns (stream GetUserResponse);",
+			with: map[string]any{"body": `{"user_id": "123"}`, "max_messages": 2},
+		},
+		{
+			name: "a list to a method the files declare streaming its requests",
+			from: "rpc GetUser(GetUserRequest) returns (GetUserResponse);",
+			to:   "rpc GetUser(stream GetUserRequest) returns (GetUserResponse);",
+			with: map[string]any{"body": []any{map[string]any{"user_id": "123"}}},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			data := map[string]any{
+				"service": "UserService", "addr": addr, "method": "GetUser",
+				"proto": protoOf(writeProto(t, strings.Replace(userProto(t), tt.from, tt.to, 1)), false),
+			}
+			for k, v := range tt.with {
+				data[k] = v
+			}
+			ret, err := Request(data)
+			if err != nil {
+				t.Fatalf("Request() error: %v, want the definitions told to differ", err)
+			}
+			res, _ := ret["res"].(map[string]any)
+			v, _ := res["violations"].([]any)
+			if len(v) == 0 || !strings.Contains(fmt.Sprint(v[0]), "streams neither way") {
+				t.Errorf("violations = %v, want the server's definition to stream neither way", v)
+			}
+			if res["status_code"] != "" {
+				t.Errorf("status_code = %v, want none, as nothing was sent", res["status_code"])
+			}
+		})
 	}
 }

@@ -86,6 +86,34 @@ jobs:
     echo: |
       Res: {{res.body}}
 
+  - name: Watch Users
+    uses: grpc
+    with:
+      method: WatchUsers
+      body:
+        count: 3
+    test: res.status_code == "OK" && len(res.messages) == 3 && res.complete
+
+  - name: Watch Users up to max_messages
+    uses: grpc
+    with:
+      method: WatchUsers
+      # 0 streams users until the call is left
+      body:
+        count: 0
+      max_messages: 2
+    test: len(res.messages) == 2 && !res.complete
+
+  - name: Import Users
+    uses: grpc
+    with:
+      method: ImportUsers
+      # each item of the list is one message of the stream
+      body:
+        - name: Ada
+        - name: Grace
+    test: res.status_code == "OK" && res.body.imported == 2
+
 # The same service called with the Connect protocol, over HTTP/1.1, as a
 # connect-web client in a browser calls it.
 - name: "Connect requests to {{vars.connect_addr}}"
@@ -134,3 +162,26 @@ jobs:
       body:
         userId: "999"
     test: res.status_code == "NOT_FOUND"
+
+  - name: Watch Users over HTTP/1.1
+    uses: grpc
+    with:
+      method: WatchUsers
+      body:
+        count: 3
+      proto:
+        files: [./actions/grpc/testserver/pb/user_service.proto]
+        import_paths: [./actions/grpc/testserver/pb]
+    test: res.status_code == "OK" && len(res.messages) == 3 && res.complete
+
+  - name: Import Users over HTTP/1.1
+    uses: grpc
+    with:
+      method: ImportUsers
+      body:
+        - name: Ada
+        - name: Grace
+      proto:
+        files: [./actions/grpc/testserver/pb/user_service.proto]
+        import_paths: [./actions/grpc/testserver/pb]
+    test: res.status_code == "OK" && res.body.imported == 2

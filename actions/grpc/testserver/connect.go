@@ -8,6 +8,7 @@ import (
 	"net/http"
 
 	"connectrpc.com/connect"
+	"github.com/linyows/probe/actions/grpc/testserver/pb"
 	"google.golang.org/grpc/status"
 )
 
@@ -34,6 +35,21 @@ func (s *Server) StartConnect(port string) error {
 	unary(mux, "/UserService/UpdateUser", s.UpdateUser)
 	unary(mux, "/UserService/ListUsers", s.ListUsers)
 	unary(mux, "/UserService/DeleteUser", s.DeleteUser)
+	mux.Handle("/UserService/WatchUsers", connect.NewServerStreamHandler("/UserService/WatchUsers",
+		func(ctx context.Context, req *connect.Request[pb.WatchUsersRequest], stream *connect.ServerStream[pb.User]) error {
+			return watchUsers(ctx, req.Msg, stream.Send)
+		}))
+	mux.Handle("/UserService/ImportUsers", connect.NewClientStreamHandler("/UserService/ImportUsers",
+		func(ctx context.Context, stream *connect.ClientStream[pb.User]) (*connect.Response[pb.ImportUsersResponse], error) {
+			n := 0
+			for stream.Receive() {
+				n++
+			}
+			if err := stream.Err(); err != nil {
+				return nil, err
+			}
+			return connect.NewResponse(&pb.ImportUsersResponse{Imported: int32(n)}), nil
+		}))
 
 	lis, err := net.Listen("tcp", ":"+port)
 	if err != nil {
