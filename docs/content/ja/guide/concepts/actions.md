@@ -791,7 +791,7 @@ Probeはアクションとの通信にgRPCを使用し、以下を提供しま�
 probe workflow.yml  # Stepが使う組み込みアクションを起動します
 
 # 組み込みアクションに別途インストールは不要:
-# http, db, shell, ssh, grpc, smtp, imap, browser,
+# http, db, shell, ssh, grpc, smtp, imap,
 # mail-latency, embedded, hello
 ```
 
@@ -994,6 +994,7 @@ Probeとあわせて公開している外部アクションです。それぞれ
 
 | アクション | 内容 | 最新 |
 |---|---|---|
+| [browser](/ja/reference/actions/browser) | chromedpを通して実際のChromeを操作します。ページを開き、内容を読み、入力し、スクリーンショットを撮ります。Probe v1.21.0までは組み込みアクションでした | v0.1.0 |
 | [graphql](/ja/reference/actions/graphql) | GraphQLのクエリをHTTPで送り、レスポンスの`data`と`errors`を分けて返します | v0.2.0 |
 | [jmap](/ja/reference/actions/jmap) | [JMAP](https://jmap.io/)のメソッドを呼びます。セッションを取得し、各呼び出しのアカウントを補い、HTTP 200で返るメソッドのエラーを`res.errors`にまとめます | v0.2.0 |
 

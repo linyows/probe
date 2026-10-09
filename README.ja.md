@@ -33,7 +33,7 @@
 
 類似のソフトウェアは、テストを実行するものか、監視のために繰り返し確認するもののどちらかであることがほとんどです。扱えるプロトコルも1つに限られる場合が多くあります。Probeはその両方を、Webシステムが実際に使っているプロトコルの範囲で扱います。
 
-- **1つのファイルでシステム全体を対象にできる**: HTTP、gRPC、MySQL、PostgreSQL、SQLite、SMTP、IMAP、SSH、シェル、実際のブラウザが組み込みです。エンドポイントを呼び、書き込まれた行を問い合わせ、送信されたメールを読むところまでを、3つのツールをつなぎ合わせずに1回の実行で行えます。
+- **1つのファイルでシステム全体を対象にできる**: HTTP、gRPC、MySQL、PostgreSQL、SQLite、SMTP、IMAP、SSH、シェルが組み込みで、実際のブラウザは外部アクションで操作できます。エンドポイントを呼び、書き込まれた行を問い合わせ、送信されたメールを読むところまでを、3つのツールをつなぎ合わせずに1回の実行で行えます。
 - **共通処理を別のファイルに置ける**: シナリオの多くはログインから始まり、2つ目以降のシナリオでも同じ手順を書くことになります。その手順を、接続先を`defaults`に書いたジョブファイルに置けば、どのワークフローからも`uses: embedded`で実行できます。呼び出し側は認証情報を`vars`で渡し、トークンを`outputs`から受け取ります。ジョブのステップは、レポートでも呼び出し元のステップの下に入れ子で表示されます。
 - **同じファイルがテストにも監視にもなる**: ジョブに`repeat`を加えると一定の間隔で繰り返し、`3/3 success (100.0%)`のように結果を報告します。監視用に書き直した2つ目のワークフローは要りません。
 - **ジョブは一覧ではなくグラフ**: `needs`で宣言するのは順序が必要な箇所だけで、残りは並行して実行されます。そのグラフは`probe dag`でASCIIまたはMermaidとして出力できます。シナリオを実行するツールはファイルを上から下へ順にたどります。
@@ -98,10 +98,17 @@ Total workflow time: 0.02s ✓ All jobs succeeded
 | [`mail-latency`](https://probe.linyo.ws/ja/reference/actions/mail-latency) | 受信したメールからの配送遅延の計測 |
 | [`ssh`](https://probe.linyo.ws/ja/reference/actions/ssh) | リモートホストでのコマンド実行 |
 | [`shell`](https://probe.linyo.ws/ja/reference/actions/shell) | Probeを実行しているマシンでのコマンド実行 |
-| [`browser`](https://probe.linyo.ws/ja/reference/actions/browser) | 実際のブラウザの操作 |
 | [`grpc`](https://probe.linyo.ws/ja/reference/actions/grpc) | gRPCの呼び出し |
 | [`embedded`](https://probe.linyo.ws/ja/reference/actions/embedded) | ステップから別のジョブファイルを実行 |
 | [`hello`](https://probe.linyo.ws/ja/reference/actions/hello) | レポートへの出力 |
+
+次の外部アクションは、それぞれ独立したリポジトリにあり、ステップからコミットで固定して使います。
+
+| アクション | 用途 |
+|---|---|
+| [browser](https://probe.linyo.ws/ja/reference/actions/browser) | 実際のブラウザの操作 |
+| [graphql](https://probe.linyo.ws/ja/reference/actions/graphql) | HTTPでのGraphQLのクエリ |
+| [jmap](https://probe.linyo.ws/ja/reference/actions/jmap) | JMAPのメソッドの呼び出し |
 
 ドキュメント
 ------------

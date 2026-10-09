@@ -8,7 +8,6 @@ hold for all of them are at the end of this page.
 
 - **[http](/reference/actions/http)** - Make HTTP/HTTPS requests and validate responses
 - **[db](/reference/actions/db)** - Execute database queries on MySQL, PostgreSQL, and SQLite
-- **[browser](/reference/actions/browser)** - Automate web browsers using ChromeDP
 - **[shell](/reference/actions/shell)** - Execute shell commands and scripts securely
 - **[ssh](/reference/actions/ssh)** - Run commands on a remote host over SSH
 - **[smtp](/reference/actions/smtp)** - Send email notifications and alerts
@@ -22,6 +21,7 @@ hold for all of them are at the end of this page.
 
 These are published alongside Probe, each in a repository of its own. A step names one by repository and commit, and Probe downloads it the first time a workflow uses it. See [External Actions](/guide/concepts/actions#external-actions).
 
+- **[browser](/reference/actions/browser)** - Drive a real Chrome with chromedp
 - **[graphql](/reference/actions/graphql)** - Send a GraphQL query over HTTP
 - **[jmap](/reference/actions/jmap)** - Call JMAP methods
 

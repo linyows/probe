@@ -8,7 +8,6 @@ require (
 	connectrpc.com/connect v1.21.0
 	github.com/briandowns/spinner v1.23.2
 	github.com/bufbuild/protocompile v0.14.1
-	github.com/chromedp/chromedp v0.19.1
 	github.com/emersion/go-imap/v2 v2.0.0-beta.8
 	github.com/emersion/go-message v0.18.2
 	github.com/expr-lang/expr v1.17.8
@@ -44,7 +43,6 @@ require (
 	github.com/bahlo/generic-list-go v0.2.0 // indirect
 	github.com/basgys/goxml2json v1.1.1-0.20231018121955-e66ee54ceaad // indirect
 	github.com/buger/jsonparser v1.1.2 // indirect
-	github.com/chromedp/cdproto v0.157.4 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/emersion/go-sasl v0.0.0-20241020182733-b788ff22d5a6 // indirect
 	github.com/gabriel-vasile/mimetype v1.4.15 // indirect

@@ -12,7 +12,6 @@ import (
 
 	"github.com/linyows/probe/actionrpc"
 
-	"github.com/linyows/probe/actions/browser"
 	"github.com/linyows/probe/actions/db"
 	"github.com/linyows/probe/actions/embedded"
 	"github.com/linyows/probe/actions/grpc"
@@ -28,7 +27,6 @@ import (
 // builtin maps an action name to the function that serves it. Each value
 // blocks until the workflow runner closes the plugin connection.
 var builtin = map[string]func(){
-	"browser":      browser.Serve,
 	"db":           db.Serve,
 	"embedded":     embedded.Serve,
 	"grpc":         grpc.Serve,
@@ -80,7 +78,6 @@ func Keeping() []string {
 // params are the keys each built-in action takes in with. hello, which
 // takes any, is left out.
 var params = map[string]func() []string{
-	"browser":      browser.Params,
 	"db":           db.Params,
 	"embedded":     embedded.Params,
 	"grpc":         grpc.Params,

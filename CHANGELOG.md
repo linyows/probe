@@ -4,6 +4,24 @@ Release notes for each version are generated from the commits by GoReleaser.
 This file records what those notes cannot carry well: changes that break code
 importing probe as a library.
 
+## Unreleased
+
+### Breaking Changes
+
+The built-in `browser` action is removed. It is now the external action
+`github.com/mozership/probe-browser`, which a step names by repository and
+commit, as `uses: github.com/mozership/probe-browser@<commit SHA>`, in place
+of `uses: browser`. Its `with` and its result are the same.
+
+Its package moved with it, with no alias left:
+
+| Before | After |
+|---|---|
+| `github.com/linyows/probe/actions/browser` | `github.com/mozership/probe-browser/browser` |
+
+`actions.Names`, `actions.Params` and `actions.AllParams` no longer list
+`browser`, and probe no longer depends on chromedp.
+
 ## v1.21.0 (2026-10-09)
 
 ### Breaking Changes

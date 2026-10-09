@@ -33,7 +33,7 @@ Features
 
 Similar software is usually one of two things: a test runner, or a prober that monitors. Most of them speak one protocol. Probe is both, across the protocols a web system is actually made of.
 
-- **One file reaches the whole system.** HTTP, gRPC, MySQL, PostgreSQL, SQLite, SMTP, IMAP, SSH, shell and a real browser are built in. A single run can call an endpoint, query the row it wrote, and read the mail it sent, with no glue between three tools.
+- **One file reaches the whole system.** HTTP, gRPC, MySQL, PostgreSQL, SQLite, SMTP, IMAP, SSH and shell are built in, and an external action drives a real browser. A single run can call an endpoint, query the row it wrote, and read the mail it sent, with no glue between three tools.
 - **Shared steps live in their own file.** A scenario usually starts by logging in, and every scenario after the first repeats it. Put those steps in a job file with its endpoint in `defaults`, and any workflow runs it with `uses: embedded`, passing the credentials as `vars` and reading the token back from `outputs`. The job's steps appear nested under the step that called it.
 - **The same file is a test and a monitor.** Add `repeat` to a job and it runs on an interval, reporting `3/3 success (100.0%)`. There is no second, rewritten copy of the workflow for monitoring.
 - **Jobs are a graph, not a list.** `needs` declares only the order that matters, and everything else runs in parallel. `probe dag` prints that graph as ASCII or Mermaid. Scenario runners walk a file from top to bottom.
@@ -98,10 +98,17 @@ Built-in Actions
 | [`mail-latency`](https://probe.linyo.ws/reference/actions/mail-latency) | Measuring delivery latency from received messages |
 | [`ssh`](https://probe.linyo.ws/reference/actions/ssh) | Commands on a remote host |
 | [`shell`](https://probe.linyo.ws/reference/actions/shell) | Commands on the machine running Probe |
-| [`browser`](https://probe.linyo.ws/reference/actions/browser) | Driving a real browser |
 | [`grpc`](https://probe.linyo.ws/reference/actions/grpc) | gRPC calls |
 | [`embedded`](https://probe.linyo.ws/reference/actions/embedded) | Running another job file from a step |
 | [`hello`](https://probe.linyo.ws/reference/actions/hello) | Printing a report line |
+
+These are external actions, each in a repository of its own, which a step pins by commit:
+
+| Action | Use it for |
+|---|---|
+| [browser](https://probe.linyo.ws/reference/actions/browser) | Driving a real browser |
+| [graphql](https://probe.linyo.ws/reference/actions/graphql) | GraphQL queries over HTTP |
+| [jmap](https://probe.linyo.ws/reference/actions/jmap) | JMAP methods |
 
 Documentation
 -------------

@@ -131,6 +131,7 @@ REST APIの呼び出し、ウェブサイトの監視、APIテストなどに使
 - タイムアウト設定による実行時間の制御
 
 ### Browser Action
+外部アクションとして[mozership/probe-browser](https://github.com/mozership/probe-browser)で公開しています。v1.21.0までは組み込みアクションでした。[Browser](/ja/reference/actions/browser)を参照してください。
 Chrome DevTools Protocolを使ってChromeを操作することができます。
 - ページの読み込み、要素のクリック、テキスト入力等の自動化
 - スクリーンショットの撮影機能

@@ -4,7 +4,6 @@ export default {
   '-- builtin': { type: 'separator', title: 'Built-in' },
   http: 'HTTP',
   db: 'DB',
-  browser: 'BROWSER',
   shell: 'SHELL',
   ssh: 'SSH',
   smtp: 'SMTP',
@@ -14,6 +13,7 @@ export default {
   embedded: 'EMBEDDED',
   hello: 'HELLO',
   '-- external': { type: 'separator', title: 'External' },
+  browser: 'BROWSER',
   graphql: 'GRAPHQL',
   jmap: 'JMAP',
 } satisfies MetaRecord
