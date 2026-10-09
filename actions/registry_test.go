@@ -45,7 +45,7 @@ func TestKeeps(t *testing.T) {
 		}
 	}
 	// The actions that cannot tell what they are about to do keep to none.
-	for _, name := range []string{"imap", "mail-latency", "shell", "smtp", "ssh"} {
+	for _, name := range []string{"imap", "shell", "smtp", "ssh"} {
 		if _, ok := Keeps()[name]; ok {
 			t.Errorf("%s should keep to no guard", name)
 		}

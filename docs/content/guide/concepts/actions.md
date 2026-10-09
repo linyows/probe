@@ -578,7 +578,7 @@ probe workflow.yml  # Starts the built-in actions its steps use
 
 # No separate installation needed for built-in actions:
 # http, db, shell, ssh, grpc, smtp, imap,
-# mail-latency, embedded, hello
+# embedded, hello
 ```
 
 ## Action Best Practices
@@ -783,6 +783,7 @@ These external actions are published alongside Probe, each in a repository of it
 | [browser](/reference/actions/browser) | Drives a real Chrome through chromedp: opens pages, reads and types into them, and takes screenshots. It was built into Probe up to v1.21.0 | v0.1.0 |
 | [graphql](/reference/actions/graphql) | Sends a GraphQL query over HTTP, and returns the `data` and `errors` of the response apart | v0.2.0 |
 | [jmap](/reference/actions/jmap) | Calls [JMAP](https://jmap.io/) methods: fetches the session, fills in the account of each call, and gathers the method errors, which come with HTTP 200, in `res.errors` | v0.2.0 |
+| [mail-latency](/reference/actions/mail-latency) | Reads messages from a Maildir, computes the delivery latency of each one from its `Received` headers, and writes a CSV. It was built into Probe up to v1.21.0 | v0.1.0 |
 
 #### action.yml
 

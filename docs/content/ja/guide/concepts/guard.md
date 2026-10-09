@@ -61,7 +61,7 @@ Probeは、アクションの申告をそのまま信じます。あるガード
 | `grpc` | 手元にあるメソッドの定義（サーバーのリフレクションと`proto`の`.proto`ファイル）がすべて`idempotency_level = NO_SIDE_EFFECTS`と宣言しているメソッドだけを呼び出す。`proto`のないConnectの呼び出しには定義がないため拒否する | `addr`のホストとポート。ポートがなければ443として扱う。`dns://server/`のDNSサーバーも確かめ、ポートがなければ53として扱う。`protocol: connect`ではURLのホストを、ポートがなければスキームの既定のポートとして扱う。Unixソケットのようにホストのない宛先は拒否する |
 | `hello` | 拒否するものがない | 接続するものがない |
 
-組み込みの`shell`、`ssh`、`smtp`、`imap`、`mail-latency`は、コマンドやスクリプトが何をするかを判定できないため、ガードを申告していません。ページが何をするかを判定できない外部の[browser](/ja/reference/actions/browser)アクションも、同じく申告していません。これらを使うステップは、`--allow-action`で指定しない限り、ガードの下では拒否されます。指定した場合は、ガードがないときと同じように実行します。
+組み込みの`shell`、`ssh`、`smtp`、`imap`は、コマンドやスクリプトが何をするかを判定できないため、ガードを申告していません。ページが何をするかを判定できない外部の[browser](/ja/reference/actions/browser)アクションも、同じく申告していません。これらを使うステップは、`--allow-action`で指定しない限り、ガードの下では拒否されます。指定した場合は、ガードがないときと同じように実行します。
 
 ```bash
 probe --read-only --allow-action shell workflow.yml

@@ -18,7 +18,6 @@ import (
 	"github.com/linyows/probe/actions/hello"
 	"github.com/linyows/probe/actions/http"
 	"github.com/linyows/probe/actions/imap"
-	maillatency "github.com/linyows/probe/actions/mail-latency"
 	"github.com/linyows/probe/actions/shell"
 	"github.com/linyows/probe/actions/smtp"
 	"github.com/linyows/probe/actions/ssh"
@@ -27,16 +26,15 @@ import (
 // builtin maps an action name to the function that serves it. Each value
 // blocks until the workflow runner closes the plugin connection.
 var builtin = map[string]func(){
-	"db":           db.Serve,
-	"embedded":     embedded.Serve,
-	"grpc":         grpc.Serve,
-	"hello":        hello.Serve,
-	"http":         http.Serve,
-	"imap":         imap.Serve,
-	"mail-latency": maillatency.Serve,
-	"shell":        shell.Serve,
-	"smtp":         smtp.Serve,
-	"ssh":          ssh.Serve,
+	"db":       db.Serve,
+	"embedded": embedded.Serve,
+	"grpc":     grpc.Serve,
+	"hello":    hello.Serve,
+	"http":     http.Serve,
+	"imap":     imap.Serve,
+	"shell":    shell.Serve,
+	"smtp":     smtp.Serve,
+	"ssh":      ssh.Serve,
 }
 
 // keeps are the kinds of guard each built-in action declares it keeps to,
@@ -78,15 +76,14 @@ func Keeping() []string {
 // params are the keys each built-in action takes in with. hello, which
 // takes any, is left out.
 var params = map[string]func() []string{
-	"db":           db.Params,
-	"embedded":     embedded.Params,
-	"grpc":         grpc.Params,
-	"http":         http.Params,
-	"imap":         imap.Params,
-	"mail-latency": maillatency.Params,
-	"shell":        shell.Params,
-	"smtp":         smtp.Params,
-	"ssh":          ssh.Params,
+	"db":       db.Params,
+	"embedded": embedded.Params,
+	"grpc":     grpc.Params,
+	"http":     http.Params,
+	"imap":     imap.Params,
+	"shell":    shell.Params,
+	"smtp":     smtp.Params,
+	"ssh":      ssh.Params,
 }
 
 // Params returns the keys the built-in action name takes in with, and false
