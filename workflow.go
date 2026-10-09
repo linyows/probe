@@ -624,9 +624,11 @@ func resolveExternalActions(jobs []*Job, baseDir string, guard actionrpc.Guard) 
 				return guard, NewConfigurationError("resolve_action", "failed to resolve an external action", err).
 					WithContext("uses", st.Uses)
 			}
-			if len(m.Guard) > 0 {
-				guard = guard.WithKeeps(st.Uses, m.Guard)
-			}
+			// What this action.yml declares replaces any declaration the guard
+			// came with, even when it declares nothing: a job of the embedded
+			// action is given the guard of the step that embeds it, and its
+			// ./foo may be another action than the one that declared.
+			guard = guard.WithKeeps(st.Uses, m.Guard)
 			if !guard.Runs(st.Uses) {
 				continue
 			}

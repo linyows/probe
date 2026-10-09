@@ -720,9 +720,11 @@ func TestRunStandaloneUnderAGuard(t *testing.T) {
 	if run.Success {
 		t.Error("Success = true, want the refused steps to fail the job")
 	}
+	// The guard the steps run under holds what each external action of the
+	// job declares, nothing for ./silent.
 	calls := runner.Calls["hello"]
-	if len(calls) != 1 || !reflect.DeepEqual(calls[0].Guard, guard) {
-		t.Errorf("hello was called %v, want once under the guard", calls)
+	if want := guard.WithKeeps("./silent", nil); len(calls) != 1 || !reflect.DeepEqual(calls[0].Guard, want) {
+		t.Errorf("hello was called %v, want once under %+v", calls, want)
 	}
 	if n := len(runner.Calls["ssh"]) + len(runner.Calls["./silent"]); n != 0 {
 		t.Errorf("the refused actions were run %d times, want none", n)
@@ -762,6 +764,34 @@ func TestRunStandaloneTakesTheActionAtItsWord(t *testing.T) {
 	want := guard.WithKeeps("./declared", []string{actionrpc.KindReadOnly})
 	if len(calls) != 1 || !reflect.DeepEqual(calls[0].Guard, want) {
 		t.Errorf("./declared was called %v, want once under %+v", calls, want)
+	}
+}
+
+// TestRunStandaloneReplacesAnInheritedDeclaration checks that a job run on
+// its own does not take a declaration the guard it was given holds for the
+// same uses: its ./silent is read from its own directory, and declares
+// nothing, whatever ./silent declared where the guard came from.
+func TestRunStandaloneReplacesAnInheritedDeclaration(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, "silent"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "silent", "action.yml"), []byte("name: silent\nruns:\n  using: binary\n  path: missing\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	guard := actionrpc.Guard{ReadOnly: true, Keeps: map[string][]string{"./silent": {actionrpc.KindReadOnly}}}
+	runner := NewMockActionRunner()
+	job := &Job{Name: "embedded", Steps: []*Step{{Name: "silent", Uses: "./silent", Test: "true", actionRunner: runner}}}
+	run := job.RunStandalone(map[string]any{}, newBufferPrinter(), "embedded", dir, WithGuard(guard))
+
+	if run.Err != nil {
+		t.Fatalf("Err = %v, want none", run.Err)
+	}
+	if n := len(runner.Calls["./silent"]); n != 0 {
+		t.Errorf("./silent was run %d times, want it refused", n)
+	}
+	if run.Refused == nil || !strings.Contains(run.Refused.Reason, "the action ./silent does not keep to --read-only") {
+		t.Errorf("Refused = %+v, want the refusal of ./silent", run.Refused)
 	}
 }
 

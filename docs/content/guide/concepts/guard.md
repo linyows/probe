@@ -47,7 +47,7 @@ Probe reads `action.yml` before the first job starts, for every external action 
 
 ## Trusting a Declaration
 
-Probe takes an action at its word: it cannot tell whether an action that declares a kind of guard keeps to it. The guard therefore holds as far as the actions a workflow uses keep their word, and a workflow can name an external action that declares a guard it does not keep. Before running a workflow under a guard, look at the external actions it uses, which are pinned by commit, so that the action that runs is the one that was looked at.
+Probe takes an action at its word: it cannot tell whether an action that declares a kind of guard keeps to it. The guard therefore holds as far as the actions a workflow uses keep their word, and a workflow can name an external action that declares a guard it does not keep. Before running a workflow under a guard, look at the external actions it uses. A remote one is pinned by commit, so the action that runs is the one that was looked at. A local one, named by a path, is not pinned: it runs the files at that path, so look at those files, and at who can change them.
 
 The guard is not a sandbox. It keeps a workflow from writing to, or reaching, what it was not meant to, as far as each action can tell what it is about to do. A write the database refuses, such as `WITH x AS (DELETE ...) SELECT ...`, fails as the database reports it rather than as `refused`. To bound what a run can reach whatever its actions do, run Probe where the network allows only that, such as in a container under a network policy.
 
