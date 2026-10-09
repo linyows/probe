@@ -2,7 +2,7 @@
 
 The GraphQL action sends a GraphQL query or mutation over HTTP and returns the `data` and `errors` of the response apart.
 
-It is an [external action](/guide/concepts/actions#external-actions), published in [mozership/probe-graphql](https://github.com/mozership/probe-graphql). Probe downloads it the first time a workflow uses it, and runs the executable whose SHA-256 the `action.yml` at the pinned commit names. It needs Probe v1.17.0 or later.
+It is an [external action](/guide/concepts/actions#external-actions), published in [mozership/probe-graphql](https://github.com/mozership/probe-graphql). Probe downloads it the first time a workflow uses it, and runs the executable whose SHA-256 the `action.yml` at the pinned commit names. It needs Probe v1.17.0 or later, and v1.21.0 or later to run it under a guard and to have `probe check` check its `with`.
 
 ## Basic Syntax
 
@@ -11,7 +11,7 @@ A step pins the action by a full commit SHA. The notes of each [release](https:/
 ```yaml
 steps:
   - name: Look up Japan
-    uses: github.com/mozership/probe-graphql@ad456d1eefd30a63d14b49c730e5239c4749b34b # v0.1.1
+    uses: github.com/mozership/probe-graphql@41e4ffa222db58c63c7169117c919e6d252bdbf9 # v0.2.0
     with:
       url: https://countries.trevorblades.com/graphql
       query: |
@@ -33,6 +33,8 @@ steps:
 | `operation_name` | String | No | - | The operation to run when the document has more than one |
 | `headers` | Object | No | - | Request headers, such as `Authorization`. They override the defaults below |
 | `timeout` | Duration | No | `30s` | Time limit for the request, as `10s` or a number of seconds. `0` removes it |
+
+A key of `with` that is not one of these fails the step before anything is sent. Its `action.yml` declares them as `params`, so `probe check` reports such a key with its line.
 
 The request is a `POST` with a JSON body, sent with `Content-Type: application/json`, `Accept: application/graphql-response+json, application/json` and `User-Agent: probe-graphql/<version>`.
 
@@ -56,14 +58,21 @@ Any response the server sends is a result, so a test can assert on a GraphQL err
 ```yaml
 steps:
   - name: An unknown field is reported in res.errors
-    uses: github.com/mozership/probe-graphql@ad456d1eefd30a63d14b49c730e5239c4749b34b # v0.1.1
+    uses: github.com/mozership/probe-graphql@41e4ffa222db58c63c7169117c919e6d252bdbf9 # v0.2.0
     with:
       url: https://countries.trevorblades.com/graphql
       query: '{ country(code: "JP") { nope } }'
     test: status == 1 && len(res.errors) > 0
 ```
 
-The action does not keep to `--read-only` or `--allow-host`, and its `action.yml` declares no `guard`. Under either, a step that uses it is refused unless `--allow-action` names it. See [Guard](/guide/concepts/guard).
+## Under a Guard
+
+The action keeps to the guard of the run, and its `action.yml` declares `guard: [read-only, allow-host]`, so Probe runs it under either without `--allow-action`. A step it refuses fails with the kind `refused` before anything is sent.
+
+- Under `--read-only`, only a query is sent. The operation to run, the one `operation_name` names or the only one in the document, is read with a GraphQL parser, and a mutation or a subscription is refused. So is a document that does not parse, one with several operations and no `operation_name`, and an `operation_name` the document does not have.
+- Under `--allow-host`, the host of `url`, and of each redirect, must be one the run allows. A URL without a port is taken at the port of its scheme.
+
+See [Guard](/guide/concepts/guard).
 
 ## See Also
 

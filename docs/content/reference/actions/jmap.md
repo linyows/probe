@@ -2,7 +2,7 @@
 
 The JMAP action calls [JMAP](https://jmap.io/) methods ([RFC 8620](https://www.rfc-editor.org/rfc/rfc8620), [RFC 8621](https://www.rfc-editor.org/rfc/rfc8621)). It fetches the session, fills in the account of each call, sends the calls in one request, and returns the responses by call id, with the method errors gathered in one list.
 
-It is an [external action](/guide/concepts/actions#external-actions), published in [mozership/probe-jmap](https://github.com/mozership/probe-jmap). Probe downloads it the first time a workflow uses it, and runs the executable whose SHA-256 the `action.yml` at the pinned commit names. It needs Probe v1.20.0 or later.
+It is an [external action](/guide/concepts/actions#external-actions), published in [mozership/probe-jmap](https://github.com/mozership/probe-jmap). Probe downloads it the first time a workflow uses it, and runs the executable whose SHA-256 the `action.yml` at the pinned commit names. It needs Probe v1.21.0 or later, which reads the guard and the params its `action.yml` declares.
 
 ## Basic Syntax
 
@@ -11,7 +11,7 @@ A step pins the action by a full commit SHA. The notes of each [release](https:/
 ```yaml
 steps:
   - name: Read the latest message
-    uses: github.com/mozership/probe-jmap@295701f5263fffd64161a34dd377722ccad3923a # v0.1.0
+    uses: github.com/mozership/probe-jmap@52000030f1bd839677830d1ab07a024183f581b7 # v0.2.0
     with:
       url: https://jmap.example.com
       basic_auth:
@@ -74,6 +74,8 @@ A back-reference, an argument whose name starts with `#`, may leave out `name`: 
 
 A method of any other type needs `using`. When `using` is given, it is sent as written.
 
+A key of `with` that is not one of the parameters above fails the step before anything is sent. Its `action.yml` declares the parameters as `params`, so `probe check` reports such a key with its line.
+
 ## Response Object
 
 | Property | Type | Description |
@@ -113,7 +115,7 @@ Any response the server sends is a result, so a test can assert on a method erro
 ```yaml
 steps:
   - name: Send a message to bob
-    uses: github.com/mozership/probe-jmap@295701f5263fffd64161a34dd377722ccad3923a # v0.1.0
+    uses: github.com/mozership/probe-jmap@52000030f1bd839677830d1ab07a024183f581b7 # v0.2.0
     with:
       url: "{{vars.url}}"
       basic_auth: {username: "{{vars.alice}}", password: "{{vars.alice_pass}}"}
@@ -140,7 +142,7 @@ steps:
     test: status == 0 && res.results.submit.created.sub.id != nil
 
   - name: Wait for it in bob's mailbox
-    uses: github.com/mozership/probe-jmap@295701f5263fffd64161a34dd377722ccad3923a # v0.1.0
+    uses: github.com/mozership/probe-jmap@52000030f1bd839677830d1ab07a024183f581b7 # v0.2.0
     with:
       url: "{{vars.url}}"
       basic_auth: {username: "{{vars.bob}}", password: "{{vars.bob_pass}}"}
@@ -165,7 +167,7 @@ steps:
 ```yaml
 steps:
   - name: A record that cannot be created
-    uses: github.com/mozership/probe-jmap@295701f5263fffd64161a34dd377722ccad3923a # v0.1.0
+    uses: github.com/mozership/probe-jmap@52000030f1bd839677830d1ab07a024183f581b7 # v0.2.0
     with:
       url: "{{vars.url}}"
       basic_auth: {username: "{{vars.user}}", password: "{{vars.pass}}"}
@@ -183,7 +185,7 @@ steps:
 
 ## Guard
 
-Under `--read-only`, a step whose calls include a method other than `/get`, `/query`, `/changes`, `/queryChanges`, `/lookup` and `/echo` is refused before anything is sent. A host that `--allow-host` does not allow is refused, for the session, the API URL and any redirect. The `action.yml` of v0.1.0 does not declare `guard`, so Probe refuses a step that uses it under a guard unless `--allow-action` names it; the action is then told the guard, and keeps to it as above. See [Guard](/guide/concepts/guard).
+Under `--read-only`, a step whose calls include a method other than `/get`, `/query`, `/changes`, `/queryChanges`, `/lookup` and `/echo` is refused before anything is sent. A host that `--allow-host` does not allow is refused, for the session, the API URL and any redirect. Its `action.yml` declares `guard: [read-only, allow-host]`, so Probe runs it under either without `--allow-action`. See [Guard](/guide/concepts/guard).
 
 ## See Also
 

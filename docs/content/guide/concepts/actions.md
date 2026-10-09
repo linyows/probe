@@ -780,8 +780,8 @@ These external actions are published alongside Probe, each in a repository of it
 
 | Action | What it does | Latest |
 |---|---|---|
-| [graphql](/reference/actions/graphql) | Sends a GraphQL query over HTTP, and returns the `data` and `errors` of the response apart | v0.1.1 |
-| [jmap](/reference/actions/jmap) | Calls [JMAP](https://jmap.io/) methods: fetches the session, fills in the account of each call, and gathers the method errors, which come with HTTP 200, in `res.errors` | v0.1.0 |
+| [graphql](/reference/actions/graphql) | Sends a GraphQL query over HTTP, and returns the `data` and `errors` of the response apart | v0.2.0 |
+| [jmap](/reference/actions/jmap) | Calls [JMAP](https://jmap.io/) methods: fetches the session, fills in the account of each call, and gathers the method errors, which come with HTTP 200, in `res.errors` | v0.2.0 |
 
 #### action.yml
 
@@ -790,9 +790,11 @@ The action's directory holds an `action.yml` that says which executable serves i
 ```yaml
 name: graphql
 description: Send a GraphQL query over HTTP
+guard: [read-only, allow-host]
+params: [url, query, variables, operation_name, headers, timeout]
 runs:
   using: binary
-  url: https://github.com/mozership/probe-graphql/releases/download/v0.1.1/probe-graphql_{os}_{arch}
+  url: https://github.com/mozership/probe-graphql/releases/download/v0.2.0/probe-graphql_{os}_{arch}
   checksums:
     darwin_amd64: <SHA-256 of probe-graphql_darwin_amd64>
     darwin_arm64: <SHA-256 of probe-graphql_darwin_arm64>

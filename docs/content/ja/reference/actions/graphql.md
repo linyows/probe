@@ -2,7 +2,7 @@
 
 GraphQLアクションは、GraphQLのクエリやミューテーションをHTTPで送り、レスポンスの`data`と`errors`を分けて返します。
 
-[外部アクション](/ja/guide/concepts/actions#外部アクション)として[mozership/probe-graphql](https://github.com/mozership/probe-graphql)で公開しています。ワークフローが初めて使うときにProbeがダウンロードし、固定したコミットの`action.yml`が示すSHA-256と一致する実行ファイルだけを実行します。Probe v1.17.0以降が必要です。
+[外部アクション](/ja/guide/concepts/actions#外部アクション)として[mozership/probe-graphql](https://github.com/mozership/probe-graphql)で公開しています。ワークフローが初めて使うときにProbeがダウンロードし、固定したコミットの`action.yml`が示すSHA-256と一致する実行ファイルだけを実行します。Probe v1.17.0以降が必要です。ガードの下で実行するには、また`probe check`で`with`を検査するには、v1.21.0以降が必要です。
 
 ## 基本的な構文
 
@@ -11,7 +11,7 @@ GraphQLアクションは、GraphQLのクエリやミューテーションをHTT
 ```yaml
 steps:
   - name: Look up Japan
-    uses: github.com/mozership/probe-graphql@ad456d1eefd30a63d14b49c730e5239c4749b34b # v0.1.1
+    uses: github.com/mozership/probe-graphql@41e4ffa222db58c63c7169117c919e6d252bdbf9 # v0.2.0
     with:
       url: https://countries.trevorblades.com/graphql
       query: |
@@ -33,6 +33,8 @@ steps:
 | `operation_name` | String | いいえ | - | ドキュメントに複数の操作があるときに実行する操作 |
 | `headers` | Object | いいえ | - | `Authorization`などのリクエストヘッダー。下記の既定値を上書きします |
 | `timeout` | Duration | いいえ | `30s` | リクエストの制限時間。`10s`のような形式か秒数で指定します。`0`を指定すると制限しません |
+
+これら以外のキーを`with`に書くと、何も送る前にステップが失敗します。`action.yml`はこれらを`params`として申告しているため、`probe check`がそのキーを行番号とともに報告します。
 
 リクエストはJSONのボディを持つ`POST`で、`Content-Type: application/json`、`Accept: application/graphql-response+json, application/json`、`User-Agent: probe-graphql/<version>`を付けて送ります。
 
@@ -56,14 +58,21 @@ steps:
 ```yaml
 steps:
   - name: An unknown field is reported in res.errors
-    uses: github.com/mozership/probe-graphql@ad456d1eefd30a63d14b49c730e5239c4749b34b # v0.1.1
+    uses: github.com/mozership/probe-graphql@41e4ffa222db58c63c7169117c919e6d252bdbf9 # v0.2.0
     with:
       url: https://countries.trevorblades.com/graphql
       query: '{ country(code: "JP") { nope } }'
     test: status == 1 && len(res.errors) > 0
 ```
 
-このアクションは`--read-only`と`--allow-host`を守らず、`action.yml`でも`guard`を申告していません。どちらかを指定した実行では、`--allow-action`でこのアクションを指定しない限り、このアクションを使うステップを拒否します。[ガード](/ja/guide/concepts/guard)を参照してください。
+## ガードの下での動作
+
+このアクションは実行のガードを守り、`action.yml`で`guard: [read-only, allow-host]`を申告しています。そのため、どちらのガードの下でも`--allow-action`なしで実行します。拒否したステップは、何も送る前に種類`refused`で失敗します。
+
+- `--read-only`の下では、クエリだけを送ります。実行する操作（`operation_name`が指すもの、または文書の中の唯一の操作）をGraphQLのパーサーで読み、ミューテーションとサブスクリプションは拒否します。文書を解析できない場合、操作が複数あるのに`operation_name`がない場合、`operation_name`が指す操作が文書にない場合も拒否します。
+- `--allow-host`の下では、`url`のホストと、各リダイレクト先のホストが、実行が許可するものでなければなりません。ポートのないURLは、スキームの既定のポートとして扱います。
+
+[ガード](/ja/guide/concepts/guard)を参照してください。
 
 ## 関連項目
 

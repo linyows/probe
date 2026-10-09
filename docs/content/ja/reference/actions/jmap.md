@@ -2,7 +2,7 @@
 
 JMAPアクションは、[JMAP](https://jmap.io/)（[RFC 8620](https://www.rfc-editor.org/rfc/rfc8620)、[RFC 8621](https://www.rfc-editor.org/rfc/rfc8621)）のメソッドを呼びます。セッションを取得し、各呼び出しのアカウントを補い、呼び出しを1回のリクエストで送ります。レスポンスは呼び出しのidごとに返し、メソッドのエラーは1つのリストにまとめます。
 
-[外部アクション](/ja/guide/concepts/actions#外部アクション)として[mozership/probe-jmap](https://github.com/mozership/probe-jmap)で公開しています。ワークフローが初めて使うときにProbeがダウンロードし、固定したコミットの`action.yml`が示すSHA-256と一致する実行ファイルだけを実行します。Probe v1.20.0以降が必要です。
+[外部アクション](/ja/guide/concepts/actions#外部アクション)として[mozership/probe-jmap](https://github.com/mozership/probe-jmap)で公開しています。ワークフローが初めて使うときにProbeがダウンロードし、固定したコミットの`action.yml`が示すSHA-256と一致する実行ファイルだけを実行します。Probe v1.21.0以降が必要です。このバージョンから、`action.yml`が申告するガードとパラメータを読みます。
 
 ## 基本的な構文
 
@@ -11,7 +11,7 @@ JMAPアクションは、[JMAP](https://jmap.io/)（[RFC 8620](https://www.rfc-e
 ```yaml
 steps:
   - name: Read the latest message
-    uses: github.com/mozership/probe-jmap@295701f5263fffd64161a34dd377722ccad3923a # v0.1.0
+    uses: github.com/mozership/probe-jmap@52000030f1bd839677830d1ab07a024183f581b7 # v0.2.0
     with:
       url: https://jmap.example.com
       basic_auth:
@@ -74,6 +74,8 @@ steps:
 
 これ以外の型のメソッドには`using`が必要です。`using`を指定したときは、書いたとおりに送ります。
 
+上記のパラメータ以外のキーを`with`に書くと、何も送る前にステップが失敗します。`action.yml`はパラメータを`params`として申告しているため、`probe check`がそのキーを行番号とともに報告します。
+
 ## レスポンスオブジェクト
 
 | プロパティ | 型 | 説明 |
@@ -113,7 +115,7 @@ JMAPのサーバーは、実行できなかったメソッドにもHTTP 200で�
 ```yaml
 steps:
   - name: Send a message to bob
-    uses: github.com/mozership/probe-jmap@295701f5263fffd64161a34dd377722ccad3923a # v0.1.0
+    uses: github.com/mozership/probe-jmap@52000030f1bd839677830d1ab07a024183f581b7 # v0.2.0
     with:
       url: "{{vars.url}}"
       basic_auth: {username: "{{vars.alice}}", password: "{{vars.alice_pass}}"}
@@ -140,7 +142,7 @@ steps:
     test: status == 0 && res.results.submit.created.sub.id != nil
 
   - name: Wait for it in bob's mailbox
-    uses: github.com/mozership/probe-jmap@295701f5263fffd64161a34dd377722ccad3923a # v0.1.0
+    uses: github.com/mozership/probe-jmap@52000030f1bd839677830d1ab07a024183f581b7 # v0.2.0
     with:
       url: "{{vars.url}}"
       basic_auth: {username: "{{vars.bob}}", password: "{{vars.bob_pass}}"}
@@ -165,7 +167,7 @@ steps:
 ```yaml
 steps:
   - name: A record that cannot be created
-    uses: github.com/mozership/probe-jmap@295701f5263fffd64161a34dd377722ccad3923a # v0.1.0
+    uses: github.com/mozership/probe-jmap@52000030f1bd839677830d1ab07a024183f581b7 # v0.2.0
     with:
       url: "{{vars.url}}"
       basic_auth: {username: "{{vars.user}}", password: "{{vars.pass}}"}
@@ -183,7 +185,7 @@ steps:
 
 ## ガード
 
-`--read-only`を指定した実行では、`/get`、`/query`、`/changes`、`/queryChanges`、`/lookup`、`/echo`以外のメソッドを含むステップを、何も送る前に拒否します。`--allow-host`が許可しないホストは、セッション、APIのURL、リダイレクト先のいずれでも拒否します。v0.1.0の`action.yml`は`guard`を申告していません。そのため、ガードの下では、`--allow-action`で指定しない限りこのアクションを使うステップを拒否します。指定した場合はアクションにガードが伝わり、アクションは上記のとおりにガードを守ります。[ガード](/ja/guide/concepts/guard)を参照してください。
+`--read-only`を指定した実行では、`/get`、`/query`、`/changes`、`/queryChanges`、`/lookup`、`/echo`以外のメソッドを含むステップを、何も送る前に拒否します。`--allow-host`が許可しないホストは、セッション、APIのURL、リダイレクト先のいずれでも拒否します。`action.yml`は`guard: [read-only, allow-host]`を申告しているため、どちらのガードの下でも`--allow-action`なしで実行します。[ガード](/ja/guide/concepts/guard)を参照してください。
 
 ## 関連項目
 

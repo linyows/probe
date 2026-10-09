@@ -7,12 +7,12 @@ description: |
 jobs:
 - name: External action
   defaults:
-    github.com/mozership/probe-graphql@ad456d1eefd30a63d14b49c730e5239c4749b34b:
+    github.com/mozership/probe-graphql@41e4ffa222db58c63c7169117c919e6d252bdbf9:
       url: http://127.0.0.1:8091/
   steps:
   - name: The step's parameters reach the action
     id: echo
-    uses: github.com/mozership/probe-graphql@ad456d1eefd30a63d14b49c730e5239c4749b34b # v0.1.1
+    uses: github.com/mozership/probe-graphql@41e4ffa222db58c63c7169117c919e6d252bdbf9 # v0.2.0
     with:
       query: "{ ping }"
       variables:
@@ -27,7 +27,7 @@ jobs:
     outputs:
       code: res.data.request.variables.code
   - name: Its outputs reach later steps
-    uses: github.com/mozership/probe-graphql@ad456d1eefd30a63d14b49c730e5239c4749b34b # v0.1.1
+    uses: github.com/mozership/probe-graphql@41e4ffa222db58c63c7169117c919e6d252bdbf9 # v0.2.0
     with:
       query: "{ ping }"
       variables:
