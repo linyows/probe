@@ -64,7 +64,7 @@ export type HomeCopy = {
 export const homeCopy: Record<Locale, HomeCopy> = {
   en: {
     headline: ['Complex scenarios, as one workflow.'],
-    lede: 'Probe runs workflows defined in YAML. The definition looks like GitHub Actions, and the actions come built in: HTTP, DB, Shell, SSH, gRPC, SMTP, IMAP, Browser. The result of an action can be checked, so the same file serves for testing and monitoring too.',
+    lede: 'Probe runs workflows defined in YAML. The definition looks like GitHub Actions, and the actions come built in: HTTP, DB, Shell, SSH, gRPC, SMTP, IMAP. The result of an action can be checked, so the same file serves for testing and monitoring too.',
     primaryCta: { label: 'Install Probe', href: '/guide/introduction/installation' },
     secondaryCta: { label: 'Read the quickstart', href: '/guide/introduction/quickstart' },
     heroWorkflowLabel: 'signup-flow.yml',
@@ -198,7 +198,7 @@ export const homeCopy: Record<Locale, HomeCopy> = {
   },
   ja: {
     headline: ['複雑なシナリオを', 'ひとつのWorkflowに'],
-    lede: 'ProbeはYAMLに定義したWorkflowを実行するソフトウェアです。GitHub ActionsのようなYAML定義と、HTTP、DB、Shell、SSH、gRPC、SMTP、IMAP、Browserといった多くのアクションがビルトインされています。アクションの結果を検証できるので、テストや監視といった目的にも使えます。',
+    lede: 'ProbeはYAMLに定義したWorkflowを実行するソフトウェアです。GitHub ActionsのようなYAML定義と、HTTP、DB、Shell、SSH、gRPC、SMTP、IMAPといった多くのアクションがビルトインされています。アクションの結果を検証できるので、テストや監視といった目的にも使えます。',
     primaryCta: { label: 'Probeをインストール', href: '/ja/guide/introduction/installation' },
     secondaryCta: { label: 'クイックスタートを読む', href: '/ja/guide/introduction/quickstart' },
     heroWorkflowLabel: 'signup-flow.yml',

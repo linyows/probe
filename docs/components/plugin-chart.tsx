@@ -11,7 +11,6 @@
 const BUILT_IN = [
   'http',
   'db',
-  'browser',
   'shell',
   'ssh',
   'smtp',

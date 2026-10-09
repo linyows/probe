@@ -1,6 +1,10 @@
 # Browser Action
 
-The `browser` action drives a real Chrome through [chromedp](https://github.com/chromedp/chromedp): it opens pages, reads and types into them, waits for elements, and takes screenshots. Chrome or Chromium has to be installed where Probe runs.
+The browser action drives a real Chrome through [chromedp](https://github.com/chromedp/chromedp): it opens pages, reads and types into them, waits for elements, and takes screenshots. Chrome or Chromium has to be installed where Probe runs.
+
+It is an [external action](/guide/concepts/actions#external-actions), published in [mozership/probe-browser](https://github.com/mozership/probe-browser); it was built into Probe up to v1.21.0. Probe downloads it the first time a workflow uses it, and runs the executable whose SHA-256 the `action.yml` at the pinned commit names. It needs Probe v1.21.0 or later. The notes of each [release](https://github.com/mozership/probe-browser/releases) start with the `uses` line to copy.
+
+The action cannot tell what a page will do, so it keeps to no [guard](/guide/concepts/guard): under `--read-only` or `--allow-host`, a step that uses it is refused unless `--allow-action` names it.
 
 ## Basic Syntax
 
@@ -9,7 +13,7 @@ A browser step lists what to do under `actions`, in order. Every step starts a f
 ```yaml
 steps:
   - name: Read the heading
-    uses: browser
+    uses: github.com/mozership/probe-browser@42dda412d5d183c091f8baf071237cc090f16052 # v0.1.0
     with:
       actions:
         - name: navigate
@@ -136,7 +140,7 @@ jobs:
 - name: Sign in
   steps:
   - name: Log in and reach the dashboard
-    uses: browser
+    uses: github.com/mozership/probe-browser@42dda412d5d183c091f8baf071237cc090f16052 # v0.1.0
     with:
       timeout: 30s
       actions:
@@ -164,7 +168,7 @@ Give each reading action an `id` so the results do not replace each other.
 
 ```yaml
   - name: Product page
-    uses: browser
+    uses: github.com/mozership/probe-browser@42dda412d5d183c091f8baf071237cc090f16052 # v0.1.0
     with:
       actions:
         - name: navigate
@@ -193,7 +197,7 @@ The path of the saved image is in `res.filepaths`, ready to print or pass on.
 
 ```yaml
   - name: Checkout page
-    uses: browser
+    uses: github.com/mozership/probe-browser@42dda412d5d183c091f8baf071237cc090f16052 # v0.1.0
     with:
       window_w: 1280
       window_h: 800
@@ -224,7 +228,7 @@ The files go to the system's temporary directory unless `evidence_dir` names ano
 
 ```yaml
 - name: Checkout page
-  uses: browser
+  uses: github.com/mozership/probe-browser@42dda412d5d183c091f8baf071237cc090f16052 # v0.1.0
   with:
     evidence_dir: out/browser
     actions:

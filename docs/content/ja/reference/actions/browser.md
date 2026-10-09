@@ -1,6 +1,10 @@
 # Browserアクション
 
-`browser`アクションは[chromedp](https://github.com/chromedp/chromedp)を通して実際のChromeを操作します。ページを開き、内容を読み、入力し、要素を待ち、スクリーンショットを撮ります。Probeを実行する環境にChromeかChromiumが必要です。
+Browserアクションは[chromedp](https://github.com/chromedp/chromedp)を通して実際のChromeを操作します。ページを開き、内容を読み、入力し、要素を待ち、スクリーンショットを撮ります。Probeを実行する環境にChromeかChromiumが必要です。
+
+[外部アクション](/ja/guide/concepts/actions#外部アクション)として[mozership/probe-browser](https://github.com/mozership/probe-browser)で公開しています。Probe v1.21.0までは組み込みアクションでした。ワークフローが初めて使うときにProbeがダウンロードし、固定したコミットの`action.yml`が示すSHA-256と一致する実行ファイルだけを実行します。Probe v1.21.0以降が必要です。各[リリース](https://github.com/mozership/probe-browser/releases)のノートの先頭に、コピーして使う`uses`の行があります。
+
+このアクションはページが何をするかを判定できないため、[ガード](/ja/guide/concepts/guard)を守りません。`--read-only`や`--allow-host`の下では、`--allow-action`で指定しない限り、このアクションを使うステップを拒否します。
 
 ## 基本的な構文
 
@@ -9,7 +13,7 @@ browserステップでは、行う操作を`actions`に順番に並べます。�
 ```yaml
 steps:
   - name: Read the heading
-    uses: browser
+    uses: github.com/mozership/probe-browser@42dda412d5d183c091f8baf071237cc090f16052 # v0.1.0
     with:
       actions:
         - name: navigate
@@ -136,7 +140,7 @@ jobs:
 - name: Sign in
   steps:
   - name: Log in and reach the dashboard
-    uses: browser
+    uses: github.com/mozership/probe-browser@42dda412d5d183c091f8baf071237cc090f16052 # v0.1.0
     with:
       timeout: 30s
       actions:
@@ -164,7 +168,7 @@ jobs:
 
 ```yaml
   - name: Product page
-    uses: browser
+    uses: github.com/mozership/probe-browser@42dda412d5d183c091f8baf071237cc090f16052 # v0.1.0
     with:
       actions:
         - name: navigate
@@ -193,7 +197,7 @@ jobs:
 
 ```yaml
   - name: Checkout page
-    uses: browser
+    uses: github.com/mozership/probe-browser@42dda412d5d183c091f8baf071237cc090f16052 # v0.1.0
     with:
       window_w: 1280
       window_h: 800
@@ -224,7 +228,7 @@ action error in step_execute: action execution failed (caused by: ... context de
 
 ```yaml
 - name: Checkout page
-  uses: browser
+  uses: github.com/mozership/probe-browser@42dda412d5d183c091f8baf071237cc090f16052 # v0.1.0
   with:
     evidence_dir: out/browser
     actions:

@@ -122,6 +122,7 @@ Enables integration with external software through shell command execution.
 - Control execution time with timeout settings
 
 ### Browser Action
+An external action, published in [mozership/probe-browser](https://github.com/mozership/probe-browser); it was built in up to v1.21.0. See [Browser](/reference/actions/browser).
 Control Chrome using Chrome DevTools Protocol.
 - Automate page loading, element clicking, text input, etc.
 - Screenshot capture functionality
