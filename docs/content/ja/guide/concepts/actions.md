@@ -994,7 +994,7 @@ Probeとあわせて公開している外部アクションです。それぞれ
 
 | アクション | 内容 | 最新 |
 |---|---|---|
-| [graphql](/ja/reference/actions/graphql) | GraphQLのクエリをHTTPで送り、レスポンスの`data`と`errors`を分けて返します | v0.1.0 |
+| [graphql](/ja/reference/actions/graphql) | GraphQLのクエリをHTTPで送り、レスポンスの`data`と`errors`を分けて返します | v0.1.1 |
 | [jmap](/ja/reference/actions/jmap) | [JMAP](https://jmap.io/)のメソッドを呼びます。セッションを取得し、各呼び出しのアカウントを補い、HTTP 200で返るメソッドのエラーを`res.errors`にまとめます | v0.1.0 |
 
 #### action.yml
@@ -1006,7 +1006,7 @@ name: graphql
 description: Send a GraphQL query over HTTP
 runs:
   using: binary
-  url: https://github.com/mozership/probe-graphql/releases/download/v0.1.0/probe-graphql_{os}_{arch}
+  url: https://github.com/mozership/probe-graphql/releases/download/v0.1.1/probe-graphql_{os}_{arch}
   checksums:
     darwin_amd64: <probe-graphql_darwin_amd64のSHA-256>
     darwin_arm64: <probe-graphql_darwin_arm64のSHA-256>
