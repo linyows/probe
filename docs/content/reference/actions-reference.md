@@ -13,7 +13,6 @@ hold for all of them are at the end of this page.
 - **[smtp](/reference/actions/smtp)** - Send email notifications and alerts
 - **[imap](/reference/actions/imap)** - Connect to IMAP servers and manage email operations
 - **[grpc](/reference/actions/grpc)** - Call gRPC services by reflection
-- **[mail-latency](/reference/actions/mail-latency)** - Measure delivery latency from a Maildir
 - **[embedded](/reference/actions/embedded)** - Run another workflow as a step
 - **[hello](/reference/actions/hello)** - Simple test action for development and debugging
 
@@ -24,6 +23,7 @@ These are published alongside Probe, each in a repository of its own. A step nam
 - **[browser](/reference/actions/browser)** - Drive a real Chrome with chromedp
 - **[graphql](/reference/actions/graphql)** - Send a GraphQL query over HTTP
 - **[jmap](/reference/actions/jmap)** - Call JMAP methods
+- **[mail-latency](/reference/actions/mail-latency)** - Measure delivery latency from a Maildir
 
 ## Action Error Handling
 

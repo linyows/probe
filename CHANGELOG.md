@@ -13,14 +13,22 @@ The built-in `browser` action is removed. It is now the external action
 commit, as `uses: github.com/mozership/probe-browser@<commit SHA>`, in place
 of `uses: browser`. Its `with` and its result are the same.
 
-Its package moved with it, with no alias left:
+The built-in `mail-latency` action is removed in the same way. It is now
+`github.com/mozership/probe-mail-latency`, named as
+`uses: github.com/mozership/probe-mail-latency@<commit SHA>` in place of
+`uses: mail-latency`, with the same `with` and result. Its `action.yml`
+declares `guard: [allow-host]`, so it now runs under `--allow-host` without
+`--allow-action`.
+
+Their packages moved with them, with no alias left:
 
 | Before | After |
 |---|---|
 | `github.com/linyows/probe/actions/browser` | `github.com/mozership/probe-browser/browser` |
+| `github.com/linyows/probe/actions/mail-latency` (package `maillatency`) | `github.com/mozership/probe-mail-latency/maillatency` |
 
 `actions.Names`, `actions.Params` and `actions.AllParams` no longer list
-`browser`, and probe no longer depends on chromedp.
+`browser` or `mail-latency`, and probe no longer depends on chromedp.
 
 ## v1.21.0 (2026-10-09)
 

@@ -2,6 +2,10 @@
 
 `mail-latency`アクションはMaildir形式のディレクトリからメールを読み、`Received`ヘッダーから配送にかかった時間を求めてCSVファイルに書き出します。
 
+[外部アクション](/ja/guide/concepts/actions#外部アクション)として[mozership/probe-mail-latency](https://github.com/mozership/probe-mail-latency)で公開しています。Probe v1.21.0までは組み込みアクションでした。ワークフローが初めて使うときにProbeがダウンロードし、固定したコミットの`action.yml`が示すSHA-256と一致する実行ファイルだけを実行します。Probe v1.21.0以降が必要です。各[リリース](https://github.com/mozership/probe-mail-latency/releases)のノートの先頭に、コピーして使う`uses`の行があります。
+
+このアクションはどのホストにも接続しないため、`action.yml`で`guard: [allow-host]`を申告しています。そのため、`--allow-host`の下でも`--allow-action`なしで実行します。`output_dir`にCSVを書くため`read-only`は申告しておらず、`--read-only`の下では、`--allow-action`で指定しない限りこのアクションを使うステップを拒否します。[ガード](/ja/guide/concepts/guard)を参照してください。
+
 ## 基本的な構文
 
 このアクションはディレクトリ内のメールを読み、計測結果をCSVとして書き出します。
@@ -9,7 +13,7 @@
 ```yaml
 steps:
   - name: Measure delivery latency
-    uses: mail-latency
+    uses: github.com/mozership/probe-mail-latency@2340503ddb7081e1a7e4cc7e4391ac6e5937574d # v0.1.0
     with:
       mail_dir: "/var/mail/probe/new"
       output_dir: "./reports"
@@ -72,7 +76,7 @@ jobs:
 
       - name: Measure
         id: latency
-        uses: mail-latency
+        uses: github.com/mozership/probe-mail-latency@2340503ddb7081e1a7e4cc7e4391ac6e5937574d # v0.1.0
         wait: 30s
         with:
           mail_dir: "{{vars.maildir}}/new"

@@ -95,7 +95,6 @@ Total workflow time: 0.02s ✓ All jobs succeeded
 | [`db`](https://probe.linyo.ws/ja/reference/actions/db) | MySQL、PostgreSQL、SQLiteへのクエリ |
 | [`smtp`](https://probe.linyo.ws/ja/reference/actions/smtp) | メールの送信 |
 | [`imap`](https://probe.linyo.ws/ja/reference/actions/imap) | メールボックスの読み取り |
-| [`mail-latency`](https://probe.linyo.ws/ja/reference/actions/mail-latency) | 受信したメールからの配送遅延の計測 |
 | [`ssh`](https://probe.linyo.ws/ja/reference/actions/ssh) | リモートホストでのコマンド実行 |
 | [`shell`](https://probe.linyo.ws/ja/reference/actions/shell) | Probeを実行しているマシンでのコマンド実行 |
 | [`grpc`](https://probe.linyo.ws/ja/reference/actions/grpc) | gRPCの呼び出し |
@@ -109,6 +108,7 @@ Total workflow time: 0.02s ✓ All jobs succeeded
 | [browser](https://probe.linyo.ws/ja/reference/actions/browser) | 実際のブラウザの操作 |
 | [graphql](https://probe.linyo.ws/ja/reference/actions/graphql) | HTTPでのGraphQLのクエリ |
 | [jmap](https://probe.linyo.ws/ja/reference/actions/jmap) | JMAPのメソッドの呼び出し |
+| [mail-latency](https://probe.linyo.ws/ja/reference/actions/mail-latency) | 受信したメールからの配送遅延の計測 |
 
 ドキュメント
 ------------

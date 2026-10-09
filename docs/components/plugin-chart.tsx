@@ -3,8 +3,8 @@
  * (the go-plugin handshake and gRPC server) and each action's own `main.go`,
  * which calls `plugin.Serve` exactly as an out-of-tree plugin would.
  *
- * `hello` and `mail-latency` are built in too but left out here: the demo
- * action and the one-purpose measuring action say little about the protocol.
+ * `hello` is built in too but left out here: the demo action says little
+ * about the protocol.
  * The link under the diagram goes to the full list.
  */
 

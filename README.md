@@ -95,7 +95,6 @@ Built-in Actions
 | [`db`](https://probe.linyo.ws/reference/actions/db) | Queries against MySQL, PostgreSQL and SQLite |
 | [`smtp`](https://probe.linyo.ws/reference/actions/smtp) | Delivering mail |
 | [`imap`](https://probe.linyo.ws/reference/actions/imap) | Reading a mailbox |
-| [`mail-latency`](https://probe.linyo.ws/reference/actions/mail-latency) | Measuring delivery latency from received messages |
 | [`ssh`](https://probe.linyo.ws/reference/actions/ssh) | Commands on a remote host |
 | [`shell`](https://probe.linyo.ws/reference/actions/shell) | Commands on the machine running Probe |
 | [`grpc`](https://probe.linyo.ws/reference/actions/grpc) | gRPC calls |
@@ -109,6 +108,7 @@ These are external actions, each in a repository of its own, which a step pins b
 | [browser](https://probe.linyo.ws/reference/actions/browser) | Driving a real browser |
 | [graphql](https://probe.linyo.ws/reference/actions/graphql) | GraphQL queries over HTTP |
 | [jmap](https://probe.linyo.ws/reference/actions/jmap) | JMAP methods |
+| [mail-latency](https://probe.linyo.ws/reference/actions/mail-latency) | Measuring delivery latency from received messages |
 
 Documentation
 -------------
