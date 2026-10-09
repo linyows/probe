@@ -3,6 +3,8 @@ package probe
 import (
 	"bytes"
 	"fmt"
+	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -688,16 +690,29 @@ func TestRunStandaloneTellsTheRun(t *testing.T) {
 // embedded action runs, keeps to the guard WithGuard gives it, so that a
 // workflow cannot get round its guard by embedding a job.
 func TestRunStandaloneUnderAGuard(t *testing.T) {
-	guard := actionrpc.Guard{ReadOnly: true, Keeping: []string{"hello"}}
+	guard := actionrpc.Guard{ReadOnly: true, Keeps: map[string][]string{"hello": {actionrpc.KindReadOnly, actionrpc.KindAllowHost}}}
+	dir := t.TempDir()
+	// Two local actions: one whose action.yml says it keeps to read-only,
+	// and one that says nothing. Neither executable exists, so fetching one
+	// would fail the job.
+	for name, guardLine := range map[string]string{"declared": "guard: [read-only]\n", "silent": ""} {
+		if err := os.MkdirAll(filepath.Join(dir, name), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		manifest := "name: " + name + "\n" + guardLine + "runs:\n  using: binary\n  path: missing\n"
+		if err := os.WriteFile(filepath.Join(dir, name, "action.yml"), []byte(manifest), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
 	runner := NewMockActionRunner()
 	job := &Job{Name: "embedded", Steps: []*Step{
 		{Name: "keeps", Uses: "hello", Test: "true", actionRunner: runner},
 		{Name: "does not", Uses: "ssh", Test: "true", actionRunner: runner},
-		// An external action the guard refuses is not resolved, as its step
-		// is refused without it.
-		{Name: "external", Uses: "./no-such-action", Test: "true", actionRunner: runner},
+		// An external action that declares no guard is refused without its
+		// executable being fetched.
+		{Name: "silent", Uses: "./silent", Test: "true", actionRunner: runner},
 	}}
-	run := job.RunStandalone(map[string]any{}, newBufferPrinter(), "embedded", t.TempDir(), WithGuard(guard))
+	run := job.RunStandalone(map[string]any{}, newBufferPrinter(), "embedded", dir, WithGuard(guard))
 
 	if run.Err != nil {
 		t.Fatalf("Err = %v, want none", run.Err)
@@ -705,17 +720,78 @@ func TestRunStandaloneUnderAGuard(t *testing.T) {
 	if run.Success {
 		t.Error("Success = true, want the refused steps to fail the job")
 	}
+	// The guard the steps run under holds what each external action of the
+	// job declares, nothing for ./silent.
 	calls := runner.Calls["hello"]
-	if len(calls) != 1 || !reflect.DeepEqual(calls[0].Guard, guard) {
-		t.Errorf("hello was called %v, want once under the guard", calls)
+	if want := guard.WithKeeps("./silent", nil); len(calls) != 1 || !reflect.DeepEqual(calls[0].Guard, want) {
+		t.Errorf("hello was called %v, want once under %+v", calls, want)
 	}
-	if n := len(runner.Calls["ssh"]) + len(runner.Calls["./no-such-action"]); n != 0 {
+	if n := len(runner.Calls["ssh"]) + len(runner.Calls["./silent"]); n != 0 {
 		t.Errorf("the refused actions were run %d times, want none", n)
 	}
 	// The first refusal is told, so that the step that embeds the job is
 	// refused as well.
-	if run.Refused == nil || !strings.Contains(run.Refused.Reason, `step 1 "does not" of the embedded job: the action ssh does not keep to the guard`) {
+	if run.Refused == nil || !strings.Contains(run.Refused.Reason, `step 1 "does not" of the embedded job: the action ssh does not keep to --read-only`) {
 		t.Errorf("Refused = %+v, want the refusal of the ssh step", run.Refused)
+	}
+}
+
+// TestRunStandaloneTakesTheActionAtItsWord checks that an external action
+// whose action.yml declares the kinds of guard the run is under runs under
+// it, and is told the guard with what it declared.
+func TestRunStandaloneTakesTheActionAtItsWord(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, "declared"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	exe := filepath.Join(dir, "declared", "probe-declared")
+	if err := os.WriteFile(exe, []byte("#!/bin/sh\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	manifest := "name: declared\nguard: [read-only]\nruns:\n  using: binary\n  path: probe-declared\n"
+	if err := os.WriteFile(filepath.Join(dir, "declared", "action.yml"), []byte(manifest), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	guard := actionrpc.Guard{ReadOnly: true}
+	runner := NewMockActionRunner()
+	job := &Job{Name: "embedded", Steps: []*Step{{Name: "declared", Uses: "./declared", Test: "true", actionRunner: runner}}}
+	run := job.RunStandalone(map[string]any{}, newBufferPrinter(), "embedded", dir, WithGuard(guard))
+
+	if run.Err != nil || !run.Success {
+		t.Fatalf("Err = %v, Success = %v; want the declared action to run", run.Err, run.Success)
+	}
+	calls := runner.Calls["./declared"]
+	want := guard.WithKeeps("./declared", []string{actionrpc.KindReadOnly})
+	if len(calls) != 1 || !reflect.DeepEqual(calls[0].Guard, want) {
+		t.Errorf("./declared was called %v, want once under %+v", calls, want)
+	}
+}
+
+// TestRunStandaloneReplacesAnInheritedDeclaration checks that a job run on
+// its own does not take a declaration the guard it was given holds for the
+// same uses: its ./silent is read from its own directory, and declares
+// nothing, whatever ./silent declared where the guard came from.
+func TestRunStandaloneReplacesAnInheritedDeclaration(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, "silent"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "silent", "action.yml"), []byte("name: silent\nruns:\n  using: binary\n  path: missing\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	guard := actionrpc.Guard{ReadOnly: true, Keeps: map[string][]string{"./silent": {actionrpc.KindReadOnly}}}
+	runner := NewMockActionRunner()
+	job := &Job{Name: "embedded", Steps: []*Step{{Name: "silent", Uses: "./silent", Test: "true", actionRunner: runner}}}
+	run := job.RunStandalone(map[string]any{}, newBufferPrinter(), "embedded", dir, WithGuard(guard))
+
+	if run.Err != nil {
+		t.Fatalf("Err = %v, want none", run.Err)
+	}
+	if n := len(runner.Calls["./silent"]); n != 0 {
+		t.Errorf("./silent was run %d times, want it refused", n)
+	}
+	if run.Refused == nil || !strings.Contains(run.Refused.Reason, "the action ./silent does not keep to --read-only") {
+		t.Errorf("Refused = %+v, want the refusal of ./silent", run.Refused)
 	}
 }
 

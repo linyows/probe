@@ -69,6 +69,13 @@ func Serve() {
 	})
 }
 
+// Keeps returns the kinds of guard the db action keeps to: it runs only a
+// statement that reads under read-only, and connects only to a host the
+// guard allows.
+func Keeps() []string {
+	return []string{actionrpc.KindReadOnly, actionrpc.KindAllowHost}
+}
+
 // Params returns the keys the db action takes in with.
 func Params() []string {
 	return mapping.FieldTags(Req{})

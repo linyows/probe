@@ -2427,7 +2427,7 @@ func TestStep_executeActionWithRetry_UncheckedRunsOnce(t *testing.T) {
 }
 
 func TestStep_executeAction_Guard(t *testing.T) {
-	guard := actionrpc.Guard{ReadOnly: true, Keeping: []string{"http"}, AllowActions: []string{"shell"}}
+	guard := actionrpc.Guard{ReadOnly: true, Keeps: map[string][]string{"http": {actionrpc.KindReadOnly, actionrpc.KindAllowHost}}, AllowActions: []string{"shell"}}
 
 	tests := []struct {
 		name    string
@@ -2482,7 +2482,7 @@ func TestStep_executeActionWithRetry_Refused(t *testing.T) {
 		Expr:         &expr.Expr{},
 		actionRunner: mock,
 	}
-	jCtx := &JobContext{Config: Config{Guard: actionrpc.Guard{ReadOnly: true, Keeping: []string{"http"}}}, Printer: newBufferPrinter()}
+	jCtx := &JobContext{Config: Config{Guard: actionrpc.Guard{ReadOnly: true, Keeps: map[string][]string{"http": {actionrpc.KindReadOnly}}}}, Printer: newBufferPrinter()}
 
 	_, err := st.executeAction("Step", jCtx)
 	if !actionrpc.IsRefused(err) {

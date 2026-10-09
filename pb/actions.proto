@@ -27,8 +27,16 @@ message Guard {
     repeated string allow_hosts = 2;
     // The actions run under the guard although they do not keep to it.
     repeated string allow_actions = 3;
-    // The actions that keep to the guard themselves.
-    repeated string keeping = 4;
+    reserved 4;
+    reserved "keeping";
+    // The kinds of guard each action keeps to itself, such as read-only and
+    // allow-host, keyed by the action as a step's uses names it.
+    map<string, GuardKinds> keeps = 5;
+}
+
+// GuardKinds are the kinds of guard an action keeps to.
+message GuardKinds {
+    repeated string kinds = 1;
 }
 
 // Step tells an action about the step it runs for, for it to use as it sees

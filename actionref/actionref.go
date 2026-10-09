@@ -115,6 +115,15 @@ type Manifest struct {
 	Name        string `yaml:"name"`
 	Description string `yaml:"description"`
 	Runs        Runs   `yaml:"runs"`
+	// Guard are the kinds of guard the action keeps to itself, such as
+	// read-only and allow-host. Probe takes the action at its word and runs
+	// it under a guard of those kinds; a kind Probe does not know is left
+	// alone, so the action is refused under a guard it does not name.
+	Guard []string `yaml:"guard"`
+	// Params are the keys the action takes in with, for probe check to
+	// check a step's with against. Nil, when action.yml does not say, takes
+	// any key.
+	Params []string `yaml:"params"`
 }
 
 // Runs says how an action is run.
@@ -187,6 +196,10 @@ type resolution struct {
 	once sync.Once
 	exe  *Executable
 	err  error
+
+	manifestOnce sync.Once
+	manifest     *Manifest
+	manifestErr  error
 }
 
 var defaultResolver = &Resolver{}
@@ -196,13 +209,67 @@ func Resolve(uses, baseDir string) (*Executable, error) {
 	return defaultResolver.Resolve(uses, baseDir)
 }
 
+// ReadManifest reads the action.yml of uses with the Resolver shared by the
+// whole process, which Resolve then uses for the same action.
+func ReadManifest(uses, baseDir string) (*Manifest, error) {
+	return defaultResolver.Manifest(uses, baseDir)
+}
+
 // Resolve returns the executable of the external action uses names. A local
 // action's path is taken relative to baseDir, or to the working directory
 // when baseDir is empty.
 func (r *Resolver) Resolve(uses, baseDir string) (*Executable, error) {
-	ref, err := Parse(uses)
+	res, ref, key, err := r.entry(uses, baseDir)
 	if err != nil {
 		return nil, err
+	}
+	res.once.Do(func() {
+		var m *Manifest
+		if m, res.err = r.Manifest(uses, baseDir); res.err != nil {
+			r.forget(key, res)
+			return
+		}
+		if ref.Local != "" {
+			res.exe, res.err = r.localExecutable(ref.Local, m)
+		} else {
+			res.exe, res.err = r.download(m)
+		}
+		if res.err != nil {
+			res.err = fmt.Errorf("action %s: %w", uses, res.err)
+			r.forget(key, res)
+		}
+	})
+	return res.exe, res.err
+}
+
+// Manifest returns the action.yml of the external action uses names, without
+// fetching its executable, so that what it declares can be read before it is
+// run. A remote one is read at the pinned commit.
+func (r *Resolver) Manifest(uses, baseDir string) (*Manifest, error) {
+	res, ref, key, err := r.entry(uses, baseDir)
+	if err != nil {
+		return nil, err
+	}
+	res.manifestOnce.Do(func() {
+		if ref.Local != "" {
+			res.manifest, res.manifestErr = readLocalManifest(ref.Local)
+		} else {
+			res.manifest, res.manifestErr = r.fetchManifest(ref)
+		}
+		if res.manifestErr != nil {
+			res.manifestErr = fmt.Errorf("action %s: %w", uses, res.manifestErr)
+			r.forget(key, res)
+		}
+	})
+	return res.manifest, res.manifestErr
+}
+
+// entry returns what is remembered of uses, with its reference, a local path
+// made absolute against baseDir, and the key it is remembered by.
+func (r *Resolver) entry(uses, baseDir string) (*resolution, Ref, string, error) {
+	ref, err := Parse(uses)
+	if err != nil {
+		return nil, Ref{}, "", err
 	}
 
 	key := uses
@@ -212,13 +279,14 @@ func (r *Resolver) Resolve(uses, baseDir string) (*Executable, error) {
 			dir = filepath.Join(baseDir, dir)
 		}
 		if dir, err = filepath.Abs(dir); err != nil {
-			return nil, err
+			return nil, Ref{}, "", err
 		}
 		ref.Local = dir
 		key = dir
 	}
 
 	r.mu.Lock()
+	defer r.mu.Unlock()
 	if r.memo == nil {
 		r.memo = map[string]*resolution{}
 	}
@@ -227,29 +295,20 @@ func (r *Resolver) Resolve(uses, baseDir string) (*Executable, error) {
 		res = &resolution{}
 		r.memo[key] = res
 	}
-	r.mu.Unlock()
-
-	res.once.Do(func() {
-		if ref.Local != "" {
-			res.exe, res.err = r.resolveLocal(ref.Local)
-		} else {
-			res.exe, res.err = r.resolveRemote(ref)
-		}
-		if res.err != nil {
-			res.err = fmt.Errorf("action %s: %w", uses, res.err)
-			// A failure is not remembered, so that a later run in the same
-			// process tries again once the cause is fixed.
-			r.mu.Lock()
-			if r.memo[key] == res {
-				delete(r.memo, key)
-			}
-			r.mu.Unlock()
-		}
-	})
-	return res.exe, res.err
+	return res, ref, key, nil
 }
 
-func (r *Resolver) resolveLocal(dir string) (*Executable, error) {
+// forget drops what is remembered of key, so that a later run in the same
+// process tries again once the cause of a failure is fixed.
+func (r *Resolver) forget(key string, res *resolution) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.memo[key] == res {
+		delete(r.memo, key)
+	}
+}
+
+func readLocalManifest(dir string) (*Manifest, error) {
 	data, err := os.ReadFile(filepath.Join(dir, ManifestFile))
 	if err != nil {
 		return nil, err
@@ -258,7 +317,10 @@ func (r *Resolver) resolveLocal(dir string) (*Executable, error) {
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", ManifestFile, err)
 	}
+	return m, nil
+}
 
+func (r *Resolver) localExecutable(dir string, m *Manifest) (*Executable, error) {
 	if m.Runs.URL != "" {
 		return r.download(m)
 	}
@@ -283,11 +345,11 @@ func (r *Resolver) resolveLocal(dir string) (*Executable, error) {
 	return exe, nil
 }
 
-// resolveRemote reads action.yml at the pinned commit from GitHub every time,
-// rather than from the cache: it holds the digest the executable is checked
-// against, so a copy that anyone could have changed on disk cannot be trusted
-// in its place.
-func (r *Resolver) resolveRemote(ref Ref) (*Executable, error) {
+// fetchManifest reads action.yml at the pinned commit from GitHub every
+// run, rather than from the cache: it holds the digest the executable is
+// checked against, so a copy that anyone could have changed on disk cannot
+// be trusted in its place.
+func (r *Resolver) fetchManifest(ref Ref) (*Manifest, error) {
 	url := strings.TrimSuffix(r.rawBaseURL(), "/") + "/" + path.Join(ref.Owner, ref.Repo, ref.SHA, ref.Dir, ManifestFile)
 	var buf bytes.Buffer
 	if err := r.fetch(url, &buf, maxManifestSize); err != nil {
@@ -301,7 +363,7 @@ func (r *Resolver) resolveRemote(ref Ref) (*Executable, error) {
 	if m.Runs.Path != "" {
 		return nil, fmt.Errorf("%s: runs.path is only for local actions; a remote action needs runs.url and runs.checksums", ManifestFile)
 	}
-	return r.download(m)
+	return m, nil
 }
 
 // download fetches the executable that m points to, unless an executable

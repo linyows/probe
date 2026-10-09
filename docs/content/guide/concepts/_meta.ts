@@ -4,6 +4,7 @@ export default {
   workflows: 'Workflows',
   'jobs-and-steps': 'Jobs and Steps',
   actions: 'Actions',
+  guard: 'Guard',
   'data-flow': 'Data Flow',
   'expressions-and-templates': 'Expressions and Templates',
   'file-merging': 'File Merging',

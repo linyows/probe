@@ -4,6 +4,44 @@ Release notes for each version are generated from the commits by GoReleaser.
 This file records what those notes cannot carry well: changes that break code
 importing probe as a library.
 
+## Unreleased
+
+### Breaking Changes
+
+The actions that run under a guard used to be a list of names in Probe.
+Each action now declares the kinds of guard it keeps to: a built-in one in
+its package, an external one in `guard` in its `action.yml`. A step runs
+under a guard only when its action declares every kind the run is under,
+`read-only` for `--read-only` and `allow-host` for `--allow-host`, or when
+`--allow-action` names it. Workflow files are not affected, and the
+built-in actions keep to the guard as they did.
+
+| Before | After |
+|---|---|
+| `actionrpc.Guard.Keeping []string`, the actions that keep to the guard | `actionrpc.Guard.Keeps map[string][]string`, the kinds of guard each action keeps to, by its `uses` |
+| `Guard.Runs(uses)`: the action is in `Keeping` | `Guard.Runs(uses)`: the action keeps to every kind in `Guard.Kinds()`; `Guard.Missing(uses)` returns those it does not |
+| `pb.Guard.keeping`, field 4 | `pb.Guard.keeps`, field 5, a map of `GuardKinds`; field 4 is reserved |
+| Building a `Guard` with `Keeping: actions.Keeping()` | `Keeps: actions.Keeps()` |
+
+A `Guard` that sets neither leaves every action refused under it, as one
+without `Keeping` did. `actions.Keeping()` still returns the names of the
+built-in actions that keep to every kind, and each of `db`, `embedded`,
+`grpc`, `hello` and `http` has a `Keeps()` that returns the kinds it
+declares. `Guard.WithKeeps` and the constants `actionrpc.KindReadOnly` and
+`actionrpc.KindAllowHost` are new.
+
+An external action is told the guard as before; an executable built with
+an earlier `actionrpc` reads the guard it is sent, and leaves the new field
+alone.
+
+`actionref.Manifest` gains `Guard` and `Params`, and `Resolver.Manifest`
+and `actionref.ReadManifest` read an `action.yml` without fetching the
+executable. Probe reads it for every external action before the first job,
+so a step refused under a guard still has its `action.yml` read, but not
+its executable fetched. `probe.CheckOptions` gains `Manifest`, which
+`probe check` sets to check the `with` of an external action against the
+`params` of its `action.yml`; left nil, nothing is read, as before.
+
 ## v1.20.0 (2026-10-08)
 
 ### Breaking Changes

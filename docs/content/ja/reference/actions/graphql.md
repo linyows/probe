@@ -63,7 +63,7 @@ steps:
     test: status == 1 && len(res.errors) > 0
 ```
 
-このアクションは`--read-only`と`--allow-host`を守りません。どちらかを指定した実行では、`--allow-action`でこのアクションを指定しない限り、このアクションを使うステップを拒否します。
+このアクションは`--read-only`と`--allow-host`を守らず、`action.yml`でも`guard`を申告していません。どちらかを指定した実行では、`--allow-action`でこのアクションを指定しない限り、このアクションを使うステップを拒否します。[ガード](/ja/guide/concepts/guard)を参照してください。
 
 ## 関連項目
 

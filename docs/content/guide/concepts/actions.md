@@ -563,7 +563,7 @@ Probe uses gRPC to communicate with actions, providing:
 
 ### Action Lifecycle
 
-1. **Resolution**: Probe resolves every external action the guard of the run lets run before the first job starts; a step whose action the guard does not let run is refused without resolving it, and a built-in one needs no resolving
+1. **Resolution**: Probe reads the `action.yml` of every external action before the first job starts, and fetches the executable of each one the guard of the run lets run; a step whose action the guard does not let run is refused without its executable, and a built-in one needs no resolving
 2. **Per-Step Start**: An action is started when a step uses it
 3. **Process Isolation**: Each action runs in its own process
 4. **Cleanup**: The process is stopped as soon as the step has its result, so no action is kept running between steps
@@ -746,7 +746,7 @@ type Step struct {
 
 Probe tells every such action about the step it runs for; what the action does with it is up to the action. `RunID` is the same for every step of a run, and for a job run by the embedded action.
 
-`Guard` is the guard of the run, set by `--read-only`, `--allow-host` and `--allow-action`. An action keeps to it by returning `actionrpc.Refuse(...)` for what it does not allow, which fails the step with the kind `refused`; `Guard.ReadOnly`, `Guard.AllowsHost` and `Guard.CheckHost` tell what it allows. Probe cannot tell whether an external action keeps to it, so a step using one is refused under a guard unless `--allow-action` names the action, and the action is then told the guard to keep to as it can.
+`Guard` is the guard of the run, set by `--read-only`, `--allow-host` and `--allow-action`. An action keeps to it by returning `actionrpc.Refuse(...)` for what it does not allow, which fails the step with the kind `refused`; `Guard.ReadOnly`, `Guard.AllowsHost` and `Guard.CheckHost` tell what it allows. An external action declares the kinds of guard it keeps to in `guard` in its `action.yml`, and is refused under a kind it does not declare unless `--allow-action` names it. See [Guard](/guide/concepts/guard).
 
 `State` is the state the action left in the job, or nil when it left none. Probe keeps `newState` without reading it, and passes it to the action in the next step of the same job that uses it. The state takes the form a result takes, maps keyed by strings, lists and plain values, and one that cannot take it fails the step with an action error. A nil `newState` keeps the state as it was, and so does a step that fails with an action error or times out. Each job keeps the state of each action apart, and each run of a repeated job, and a job run by the embedded action, starts with none. The state is not shown in the output, so it may hold credentials.
 
@@ -806,6 +806,8 @@ runs:
 | `runs.url` | Where the executable is downloaded from. `{os}` and `{arch}` become Go's `GOOS` and `GOARCH`, such as `linux` and `arm64` |
 | `runs.path` | The executable, relative to the action's directory, with the same placeholders. Only a local action can use it |
 | `runs.checksums` | SHA-256 digest of the executable for each `<os>_<arch>`, in lowercase hex |
+| `guard` | The kinds of guard the action keeps to itself: `read-only`, `allow-host` or both. Probe takes the action at its word and runs it under a guard of those kinds. Without it, the action is refused under any guard unless `--allow-action` names it. See [Guard](/guide/concepts/guard) |
+| `params` | The keys the action takes in `with`, for `probe check` to report a key it does not take. Without it, `with` is not checked; `[]` takes no key |
 
 `runs` takes exactly one of `url` and `path`. With `url`, a checksum for the running platform is required, and a download with another digest is refused. The digest is checked again each time the executable is started. The commit in `uses` fixes `action.yml`, and `action.yml` fixes the digest, so the commit decides exactly which executable runs.
 

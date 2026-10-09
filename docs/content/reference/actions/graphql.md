@@ -63,7 +63,7 @@ steps:
     test: status == 1 && len(res.errors) > 0
 ```
 
-The action does not keep to `--read-only` or `--allow-host`. Under either, a step that uses it is refused unless `--allow-action` names it.
+The action does not keep to `--read-only` or `--allow-host`, and its `action.yml` declares no `guard`. Under either, a step that uses it is refused unless `--allow-action` names it. See [Guard](/guide/concepts/guard).
 
 ## See Also
 

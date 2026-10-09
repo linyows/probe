@@ -4,6 +4,7 @@ export default {
   workflows: 'ワークフロー',
   'jobs-and-steps': 'ジョブとステップ',
   actions: 'アクション',
+  guard: 'ガード',
   'data-flow': 'データフロー',
   'expressions-and-templates': '式とテンプレート',
   'file-merging': 'ファイルマージ',

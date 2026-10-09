@@ -141,10 +141,14 @@ func (st *Step) executeAction(name string, jCtx *JobContext) (map[string]any, er
 	}
 	st.attempt = 1
 
-	// An action that does not keep to the guard of the run is not run under
-	// it, unless the person running probe allowed it.
+	// An action that does not keep to every kind of guard the run is under
+	// is not run under it, unless the person running probe allowed it.
 	if !jCtx.Guard.Runs(st.Uses) {
-		return nil, actionrpc.Refuse("the action %s does not keep to the guard of the run (--read-only, --allow-host); let it run with --allow-action %s", st.Uses, st.Uses)
+		flags := make([]string, 0, 2)
+		for _, kind := range jCtx.Guard.Missing(st.Uses) {
+			flags = append(flags, "--"+kind)
+		}
+		return nil, actionrpc.Refuse("the action %s does not keep to %s, which the run is under; let it run with --allow-action %s", st.Uses, strings.Join(flags, " and "), st.Uses)
 	}
 
 	// If no retry configuration, execute once
