@@ -4,9 +4,12 @@ Release notes for each version are generated from the commits by GoReleaser.
 This file records what those notes cannot carry well: changes that break code
 importing probe as a library.
 
-## Unreleased
+## v1.21.0 (2026-10-09)
 
 ### Breaking Changes
+
+This release breaks the Go API in a minor version, as v1.20.0 did.
+Workflow files are not affected.
 
 The actions that run under a guard used to be a list of names in Probe.
 Each action now declares the kinds of guard it keeps to: a built-in one in
