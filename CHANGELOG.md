@@ -4,17 +4,20 @@ Release notes for each version are generated from the commits by GoReleaser.
 This file records what those notes cannot carry well: changes that break code
 importing probe as a library.
 
-## Unreleased
+## v1.21.0 (2026-10-09)
 
 ### Breaking Changes
+
+This release breaks the Go API in a minor version, as v1.20.0 did.
+Workflow files are not affected.
 
 The actions that run under a guard used to be a list of names in Probe.
 Each action now declares the kinds of guard it keeps to: a built-in one in
 its package, an external one in `guard` in its `action.yml`. A step runs
 under a guard only when its action declares every kind the run is under,
 `read-only` for `--read-only` and `allow-host` for `--allow-host`, or when
-`--allow-action` names it. Workflow files are not affected, and the
-built-in actions keep to the guard as they did.
+`--allow-action` names it. The built-in actions keep to the guard as they
+did.
 
 | Before | After |
 |---|---|
