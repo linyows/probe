@@ -970,7 +970,7 @@ Probeは、こうしたアクションに実行するステップを常に伝え
 
 ```yaml
 - name: Ask the API who I am
-  uses: github.com/linyows/probe-graphql@<40文字のコミットSHA>
+  uses: github.com/mozership/probe-graphql@<40文字のコミットSHA>
   with:
     url: https://api.example.com/graphql
     query: '{ viewer { login } }'
@@ -981,12 +981,21 @@ Probeは、こうしたアクションに実行するステップを常に伝え
 
 | 形式 | 例 |
 |---|---|
-| `github.com/<owner>/<repo>[/<dir>]@<commit>` | `github.com/linyows/probe-graphql@3f2a…` |
+| `github.com/<owner>/<repo>[/<dir>]@<commit>` | `github.com/mozership/probe-graphql@3f2a…` |
 | `./`、`../`、`/`で始まるパス | `./actions/greet` |
 
 リモートのアクションは40文字のコミットSHAで固定する必要があります。タグやブランチは、ワークフローをレビューした後で別のコードを指すように動かせるため受け付けません。現在対応しているのはGitHubだけです。ローカルのパスはワークフローファイルからの相対パスです。[embedded](/ja/reference/actions/embedded)アクションで実行するジョブの中では、そのジョブファイルからの相対パスです。
 
 Probeは最初のジョブを始める前にすべての外部アクションを解決します。解決できない参照があれば終了コード2で実行を止め、ダウンロードの時間はステップのタイムアウトに含まれません。実行ファイルはユーザーのキャッシュディレクトリ（Linuxでは`~/.cache`、macOSでは`~/Library/Caches`）の`probe/actions`に置かれるので、ダウンロードは1回で済みます。一方、`action.yml`は実行のたびにGitHubから読みます。実行ファイルを照合するダイジェストを持つファイルなので、ディスク上で書き換えられたかもしれない写しは信用しません。
+
+#### 公開されているアクション
+
+Probeとあわせて公開している外部アクションです。それぞれ独立したリポジトリにあり、パラメータと結果は各ページで説明しています。各リリースのノートの先頭に、コピーして使う`uses`の行があります。
+
+| アクション | 内容 | 最新 |
+|---|---|---|
+| [graphql](/ja/reference/actions/graphql) | GraphQLのクエリをHTTPで送り、レスポンスの`data`と`errors`を分けて返します | v0.1.0 |
+| [jmap](/ja/reference/actions/jmap) | [JMAP](https://jmap.io/)のメソッドを呼びます。セッションを取得し、各呼び出しのアカウントを補い、HTTP 200で返るメソッドのエラーを`res.errors`にまとめます | v0.1.0 |
 
 #### action.yml
 
@@ -997,7 +1006,7 @@ name: graphql
 description: Send a GraphQL query over HTTP
 runs:
   using: binary
-  url: https://github.com/linyows/probe-graphql/releases/download/v0.1.0/probe-graphql_{os}_{arch}
+  url: https://github.com/mozership/probe-graphql/releases/download/v0.1.0/probe-graphql_{os}_{arch}
   checksums:
     darwin_amd64: <probe-graphql_darwin_amd64のSHA-256>
     darwin_arm64: <probe-graphql_darwin_arm64のSHA-256>
@@ -1056,7 +1065,7 @@ func main() {
 }
 ```
 
-対応するプラットフォームごとにビルドして実行ファイルを公開し、そのURLとダイジェストを書いた`action.yml`をコミットします。利用者はその`action.yml`を含むコミットを指定します。[linyows/probe-graphql](https://github.com/linyows/probe-graphql)では、GoReleaserと、リリースのたびにダイジェストをコミットするワークフローでこれを行っています。
+対応するプラットフォームごとにビルドして実行ファイルを公開し、そのURLとダイジェストを書いた`action.yml`をコミットします。利用者はその`action.yml`を含むコミットを指定します。[mozership/probe-graphql](https://github.com/mozership/probe-graphql)では、GoReleaserと、リリースのたびにダイジェストをコミットするワークフローでこれを行っています。
 
 開発中は、ローカルの`action.yml`でビルドした実行ファイルを指します：
 

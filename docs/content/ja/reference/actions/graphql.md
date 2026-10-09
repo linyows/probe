@@ -1,0 +1,72 @@
+# GraphQLアクション
+
+GraphQLアクションは、GraphQLのクエリやミューテーションをHTTPで送り、レスポンスの`data`と`errors`を分けて返します。
+
+[外部アクション](/ja/guide/concepts/actions#外部アクション)として[mozership/probe-graphql](https://github.com/mozership/probe-graphql)で公開しています。ワークフローが初めて使うときにProbeがダウンロードし、固定したコミットの`action.yml`が示すSHA-256と一致する実行ファイルだけを実行します。Probe v1.17.0以降が必要です。
+
+## 基本的な構文
+
+ステップでは40文字のコミットSHAでアクションを固定します。各[リリース](https://github.com/mozership/probe-graphql/releases)のノートの先頭に、コピーして使う`uses`の行があります。
+
+```yaml
+steps:
+  - name: Look up Japan
+    uses: github.com/mozership/probe-graphql@f9e7b841b87dccbcbe71ae10f8562aa637d52a51 # v0.1.0
+    with:
+      url: https://countries.trevorblades.com/graphql
+      query: |
+        query Country($code: ID!) {
+          country(code: $code) { name capital currency }
+        }
+      variables:
+        code: JP
+    test: res.code == 200 && len(res.errors) == 0 && res.data.country.capital == "Tokyo"
+```
+
+## パラメータ
+
+| パラメータ | 型 | 必須 | デフォルト | 説明 |
+|---|---|---|---|---|
+| `url` | String | はい | - | GraphQLのエンドポイント。`http`または`https` |
+| `query` | String | はい | - | クエリまたはミューテーションのドキュメント |
+| `variables` | Object | いいえ | - | ドキュメントが宣言する変数の値 |
+| `operation_name` | String | いいえ | - | ドキュメントに複数の操作があるときに実行する操作 |
+| `headers` | Object | いいえ | - | `Authorization`などのリクエストヘッダー。下記の既定値を上書きします |
+| `timeout` | Duration | いいえ | `30s` | リクエストの制限時間。`10s`のような形式か秒数で指定します。`0`を指定すると制限しません |
+
+リクエストはJSONのボディを持つ`POST`で、`Content-Type: application/json`、`Accept: application/graphql-response+json, application/json`、`User-Agent: probe-graphql/<version>`を付けて送ります。
+
+## レスポンスオブジェクト
+
+| プロパティ | 型 | 説明 |
+|---|---|---|
+| `res.code` | Integer | HTTPステータスコード |
+| `res.status` | String | `"200 OK"`のようなHTTPステータス行 |
+| `res.headers` | Object | 正規化した名前をキーとするレスポンスヘッダー |
+| `res.data` | Any | レスポンスの`data`。ないときは`null` |
+| `res.errors` | Array | レスポンスの`errors`。ないときは空 |
+| `res.body` | Any | レスポンスボディ全体。JSONなら解析した値、それ以外は文字列 |
+| `res.rawbody` | String | 解析前のボディ。ボディがJSONのときに入ります |
+| `req` | Object | 送った`url`、`query`、`variables`、`operation_name`、`headers` |
+| `rt` | Duration | 往復の時間 |
+| `status` | Integer | ステータスコードが2xxで、ボディがJSONで、`errors`が空なら`0`。それ以外は`1` |
+
+サーバーが返したレスポンスはすべて結果として扱います。そのため、GraphQLのエラーや500もテストで確かめられます。接続の拒否やタイムアウトのように、レスポンスを得られなかったリクエストだけが、ステップをエラーとして失敗させます。
+
+```yaml
+steps:
+  - name: An unknown field is reported in res.errors
+    uses: github.com/mozership/probe-graphql@f9e7b841b87dccbcbe71ae10f8562aa637d52a51 # v0.1.0
+    with:
+      url: https://countries.trevorblades.com/graphql
+      query: '{ country(code: "JP") { nope } }'
+    test: status == 1 && len(res.errors) > 0
+```
+
+このアクションは`--read-only`と`--allow-host`を守りません。どちらかを指定した実行では、`--allow-action`でこのアクションを指定しない限り、このアクションを使うステップを拒否します。
+
+## 関連項目
+
+- **[外部アクション](/ja/guide/concepts/actions#外部アクション)** - Probeが外部アクションを解決し、照合する仕組み
+- **[HTTP](/ja/reference/actions/http)** - そのほかのHTTPリクエスト
+- **[JMAP](/ja/reference/actions/jmap)** - Probeとあわせて公開しているもう1つの外部アクション

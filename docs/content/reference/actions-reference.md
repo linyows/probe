@@ -18,6 +18,13 @@ hold for all of them are at the end of this page.
 - **[embedded](/reference/actions/embedded)** - Run another workflow as a step
 - **[hello](/reference/actions/hello)** - Simple test action for development and debugging
 
+## External actions
+
+These are published alongside Probe, each in a repository of its own. A step names one by repository and commit, and Probe downloads it the first time a workflow uses it. See [External Actions](/guide/concepts/actions#external-actions).
+
+- **[graphql](/reference/actions/graphql)** - Send a GraphQL query over HTTP
+- **[jmap](/reference/actions/jmap)** - Call JMAP methods
+
 ## Action Error Handling
 
 A step fails when its `test` is false or when the action itself returns an error. The remaining steps of the job still run, the job is marked failed, and jobs that list it in `needs` are skipped.

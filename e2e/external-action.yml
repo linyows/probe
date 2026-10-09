@@ -1,18 +1,18 @@
 name: External Action
 description: |
-  Runs linyows/probe-graphql, pinned by commit, against the echo server in
+  Runs mozership/probe-graphql, pinned by commit, against the echo server in
   e2e/echo-server. Probe downloads the action from its GitHub release and
   checks it against the digest in action.yml at that commit.
 
 jobs:
 - name: External action
   defaults:
-    github.com/linyows/probe-graphql@f9e7b841b87dccbcbe71ae10f8562aa637d52a51:
+    github.com/mozership/probe-graphql@f9e7b841b87dccbcbe71ae10f8562aa637d52a51:
       url: http://127.0.0.1:8091/
   steps:
   - name: The step's parameters reach the action
     id: echo
-    uses: github.com/linyows/probe-graphql@f9e7b841b87dccbcbe71ae10f8562aa637d52a51 # v0.1.0
+    uses: github.com/mozership/probe-graphql@f9e7b841b87dccbcbe71ae10f8562aa637d52a51 # v0.1.0
     with:
       query: "{ ping }"
       variables:
@@ -27,7 +27,7 @@ jobs:
     outputs:
       code: res.data.request.variables.code
   - name: Its outputs reach later steps
-    uses: github.com/linyows/probe-graphql@f9e7b841b87dccbcbe71ae10f8562aa637d52a51 # v0.1.0
+    uses: github.com/mozership/probe-graphql@f9e7b841b87dccbcbe71ae10f8562aa637d52a51 # v0.1.0
     with:
       query: "{ ping }"
       variables:

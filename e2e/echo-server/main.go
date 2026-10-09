@@ -1,7 +1,7 @@
 // Command echo-server echoes a POSTed JSON body back as the data of the
 // response, with the request headers.
 //
-// The external action E2E tests run linyows/probe-graphql against it, so they
+// The external action E2E tests run mozership/probe-graphql against it, so they
 // depend on GitHub, where the action is downloaded from, and on nothing else.
 package main
 
