@@ -183,7 +183,7 @@ steps:
 
 ## Guard
 
-Under `--read-only`, a step whose calls include a method other than `/get`, `/query`, `/changes`, `/queryChanges`, `/lookup` and `/echo` is refused before anything is sent. A host that `--allow-host` does not allow is refused, for the session, the API URL and any redirect. As with any external action, Probe runs it under a guard only when `--allow-action` names it.
+Under `--read-only`, a step whose calls include a method other than `/get`, `/query`, `/changes`, `/queryChanges`, `/lookup` and `/echo` is refused before anything is sent. A host that `--allow-host` does not allow is refused, for the session, the API URL and any redirect. The `action.yml` of v0.1.0 does not declare `guard`, so Probe refuses a step that uses it under a guard unless `--allow-action` names it; the action is then told the guard, and keeps to it as above. See [Guard](/guide/concepts/guard).
 
 ## See Also
 

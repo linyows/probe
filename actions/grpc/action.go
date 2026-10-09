@@ -49,6 +49,13 @@ func Serve() {
 	})
 }
 
+// Keeps returns the kinds of guard the grpc action keeps to: it calls only
+// a method declared without side effects under read-only, and connects
+// only to a host the guard allows.
+func Keeps() []string {
+	return []string{actionrpc.KindReadOnly, actionrpc.KindAllowHost}
+}
+
 // Params returns the keys the grpc action takes in with: those of Req, and
 // proto, which it reads apart from Req.
 func Params() []string {

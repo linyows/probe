@@ -31,20 +31,73 @@ type Guard struct {
 	// AllowActions are the actions run under the guard although they do not
 	// keep to it, as the person running probe asks.
 	AllowActions []string
-	// Keeping are the actions that keep to the guard themselves. Any other
-	// action is refused under an active guard, unless AllowActions names it.
-	Keeping []string
+	// Keeps holds the kinds of guard each action says it keeps to itself,
+	// keyed by the action as a step's uses names it: a built-in action by
+	// what its package declares, an external one by its action.yml. An
+	// action is refused under a guard it does not keep to every kind of,
+	// unless AllowActions names it.
+	Keeps map[string][]string
 }
+
+// The kinds of guard, as an action declares the ones it keeps to.
+const (
+	// KindReadOnly is ReadOnly: the action refuses what writes.
+	KindReadOnly = "read-only"
+	// KindAllowHost is AllowHosts: the action refuses a host the guard does
+	// not allow.
+	KindAllowHost = "allow-host"
+)
 
 // Active reports whether the guard limits anything.
 func (g Guard) Active() bool {
 	return g.ReadOnly || len(g.AllowHosts) > 0
 }
 
+// Kinds returns the kinds of guard that limit the run, in the order of the
+// constants.
+func (g Guard) Kinds() []string {
+	var kinds []string
+	if g.ReadOnly {
+		kinds = append(kinds, KindReadOnly)
+	}
+	if len(g.AllowHosts) > 0 {
+		kinds = append(kinds, KindAllowHost)
+	}
+	return kinds
+}
+
 // Runs reports whether the action named uses may run under the guard: it
-// keeps to the guard, or the person running probe allowed it.
+// keeps to every kind of guard that limits the run, or the person running
+// probe allowed it.
 func (g Guard) Runs(uses string) bool {
-	return !g.Active() || slices.Contains(g.Keeping, uses) || slices.Contains(g.AllowActions, uses)
+	if slices.Contains(g.AllowActions, uses) {
+		return true
+	}
+	return len(g.Missing(uses)) == 0
+}
+
+// Missing returns the kinds of guard that limit the run and that the action
+// named uses does not keep to.
+func (g Guard) Missing(uses string) []string {
+	var missing []string
+	for _, kind := range g.Kinds() {
+		if !slices.Contains(g.Keeps[uses], kind) {
+			missing = append(missing, kind)
+		}
+	}
+	return missing
+}
+
+// WithKeeps returns a copy of the guard that also holds that the action
+// named uses keeps to kinds, leaving the guard it was made from as it was.
+func (g Guard) WithKeeps(uses string, kinds []string) Guard {
+	keeps := make(map[string][]string, len(g.Keeps)+1)
+	for k, v := range g.Keeps {
+		keeps[k] = v
+	}
+	keeps[uses] = slices.Clone(kinds)
+	g.Keeps = keeps
+	return g
 }
 
 // AllowsHost reports whether the guard allows connecting to hostport, a
@@ -147,22 +200,36 @@ func fromStatus(err error) error {
 }
 
 func guardToPB(g Guard) *pb.Guard {
-	if !g.Active() && len(g.AllowActions) == 0 && len(g.Keeping) == 0 {
+	if !g.Active() && len(g.AllowActions) == 0 && len(g.Keeps) == 0 {
 		return nil
+	}
+	var keeps map[string]*pb.GuardKinds
+	if len(g.Keeps) > 0 {
+		keeps = make(map[string]*pb.GuardKinds, len(g.Keeps))
+		for uses, kinds := range g.Keeps {
+			keeps[uses] = &pb.GuardKinds{Kinds: kinds}
+		}
 	}
 	return &pb.Guard{
 		ReadOnly:     g.ReadOnly,
 		AllowHosts:   g.AllowHosts,
 		AllowActions: g.AllowActions,
-		Keeping:      g.Keeping,
+		Keeps:        keeps,
 	}
 }
 
 func guardFromPB(g *pb.Guard) Guard {
+	var keeps map[string][]string
+	if len(g.GetKeeps()) > 0 {
+		keeps = make(map[string][]string, len(g.GetKeeps()))
+		for uses, kinds := range g.GetKeeps() {
+			keeps[uses] = kinds.GetKinds()
+		}
+	}
 	return Guard{
 		ReadOnly:     g.GetReadOnly(),
 		AllowHosts:   g.GetAllowHosts(),
 		AllowActions: g.GetAllowActions(),
-		Keeping:      g.GetKeeping(),
+		Keeps:        keeps,
 	}
 }

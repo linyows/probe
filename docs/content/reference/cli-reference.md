@@ -181,21 +181,7 @@ PROBE_REPORT=markdown probe workflow.yml
 **Default:** false  
 **Description:** Refuse what writes, so that a workflow, such as one a coding agent wrote, can be run against a system it must not change.
 
-`--read-only`, `--allow-host` and `--allow-action` make up the guard of a run. The guard is set on the command line, or by environment variables, by whoever runs Probe, and nothing in a workflow can loosen it. A step that asks for what the guard does not allow is refused before anything is sent, and fails with the kind `refused`, which exits with status 2. A job run by the `embedded` action runs under the same guard, and a step of it that is refused refuses the step that embeds it. A refused step is not retried.
-
-Each action keeps to the guard as far as it can tell what it is about to do:
-
-| Action | `--read-only` | `--allow-host` |
-|---|---|---|
-| `http` | Sends only `GET`, `HEAD` and `OPTIONS` | The host of the URL, and of each redirect; a URL without a port is taken at the port of its scheme |
-| `db` | Runs one statement that starts with `SELECT`, `SHOW`, `DESCRIBE`, `DESC`, `EXPLAIN` or `WITH` and holds no semicolon but at its end, over a DSN that runs no statement on connecting, in a read-only transaction, or on a SQLite connection that only queries, so that the database refuses a write the statement hides | Each server the driver may connect to, as the driver reads the DSN: for MySQL the address go-sql-driver dials; for PostgreSQL those lib/pq resolves the DSN to, with its parameters, a service file and `PGHOST`, `PGHOSTADDR`, `PGPORT` and the like, every host of a list, and the address of `hostaddr` when it is given; the driver's port when none is named; a SQLite file names no host |
-| `embedded` | Runs the job under the guard | Runs the job under the guard |
-| `grpc` | Calls only a method that every definition at hand, the server's reflection and the `.proto` files of `proto`, declares `idempotency_level = NO_SIDE_EFFECTS`; a Connect call without `proto` has none, and is refused | The host and port of `addr`, port 443 when none is named, and the DNS server of a `dns://server/` target, port 53 when none is named, or with `protocol: connect` the host of the URL at the port of its scheme; a target that names no host, such as a Unix socket, is refused |
-| `hello` | Nothing to refuse | Nothing to reach |
-
-Any other action, the built-in `shell`, `ssh`, `browser`, `smtp`, `imap` and `mail-latency`, and every external action, cannot be told to keep to the guard, so a step using one is refused under it unless `--allow-action` names the action.
-
-A write that the database itself refuses, such as `WITH x AS (DELETE ...) SELECT ...`, fails as the database reports it rather than as `refused`. The guard keeps a workflow from writing to, or reaching, what it was not meant to; it is not a sandbox.
+`--read-only`, `--allow-host` and `--allow-action` make up the guard of a run. Whoever runs Probe sets it, and nothing in a workflow can loosen it. Each action decides what the guard allows, and Probe runs an action under a guard only when the action declares every kind of it the run is under; a step that is refused fails with the kind `refused`, which exits with status 2. See [Guard](/guide/concepts/guard) for what each action refuses, and how an external action declares the guard it keeps to.
 
 `--read-only=false` turns it off. The value can also come from the `PROBE_READ_ONLY` environment variable, `true` or `1`, and the flag wins over it whenever it is given.
 
@@ -209,7 +195,7 @@ probe --read-only --allow-host api.staging.example.com workflow.yml
 **Type:** String  
 **Values:** a comma separated list of hosts: a name or an address, with a port, such as `localhost:8080`, or without one for any port, or `*.example.com` for the names under `example.com`  
 **Default:** none; any host  
-**Description:** Refuse connecting to any host but these. Names are compared without regard to case. See `--read-only` for which actions keep to it.
+**Description:** Refuse connecting to any host but these. Names are compared without regard to case. See [Guard](/guide/concepts/guard) for which actions keep to it.
 
 The value can also come from the `PROBE_ALLOW_HOSTS` environment variable, and the flag wins over it whenever it is given, so that `--allow-host=` allows any host.
 
@@ -218,7 +204,7 @@ The value can also come from the `PROBE_ALLOW_HOSTS` environment variable, and t
 **Type:** String  
 **Values:** a comma separated list of action names, as a step writes them in `uses`  
 **Default:** none  
-**Description:** Run these actions under `--read-only` or `--allow-host` although they do not keep to the guard, such as `shell` for a setup step the person running Probe trusts. They are run as they are without the guard.
+**Description:** Run these actions under `--read-only` or `--allow-host` although they do not declare that they keep to the guard, such as `shell` for a setup step the person running Probe trusts. They are told the guard, and are run as they are.
 
 The value can also come from the `PROBE_ALLOW_ACTIONS` environment variable, and the flag wins over it whenever it is given, so that `--allow-action=` allows none.
 

@@ -47,6 +47,12 @@ func Serve() {
 	})
 }
 
+// Keeps returns the kinds of guard the embedded action keeps to: it runs
+// its job under the guard of the run, whose steps keep to it or are refused.
+func Keeps() []string {
+	return []string{actionrpc.KindReadOnly, actionrpc.KindAllowHost}
+}
+
 // Params returns the keys the embedded action takes in with.
 func Params() []string {
 	return mapping.FieldTags(Req{})

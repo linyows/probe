@@ -105,8 +105,9 @@ type Guard struct {
 	AllowHosts []string `protobuf:"bytes,2,rep,name=allow_hosts,json=allowHosts,proto3" json:"allow_hosts,omitempty"`
 	// The actions run under the guard although they do not keep to it.
 	AllowActions []string `protobuf:"bytes,3,rep,name=allow_actions,json=allowActions,proto3" json:"allow_actions,omitempty"`
-	// The actions that keep to the guard themselves.
-	Keeping       []string `protobuf:"bytes,4,rep,name=keeping,proto3" json:"keeping,omitempty"`
+	// The kinds of guard each action keeps to itself, such as read-only and
+	// allow-host, keyed by the action as a step's uses names it.
+	Keeps         map[string]*GuardKinds `protobuf:"bytes,5,rep,name=keeps,proto3" json:"keeps,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -162,9 +163,54 @@ func (x *Guard) GetAllowActions() []string {
 	return nil
 }
 
-func (x *Guard) GetKeeping() []string {
+func (x *Guard) GetKeeps() map[string]*GuardKinds {
 	if x != nil {
-		return x.Keeping
+		return x.Keeps
+	}
+	return nil
+}
+
+// GuardKinds are the kinds of guard an action keeps to.
+type GuardKinds struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Kinds         []string               `protobuf:"bytes,1,rep,name=kinds,proto3" json:"kinds,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GuardKinds) Reset() {
+	*x = GuardKinds{}
+	mi := &file_pb_actions_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GuardKinds) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GuardKinds) ProtoMessage() {}
+
+func (x *GuardKinds) ProtoReflect() protoreflect.Message {
+	mi := &file_pb_actions_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GuardKinds.ProtoReflect.Descriptor instead.
+func (*GuardKinds) Descriptor() ([]byte, []int) {
+	return file_pb_actions_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *GuardKinds) GetKinds() []string {
+	if x != nil {
+		return x.Kinds
 	}
 	return nil
 }
@@ -192,7 +238,7 @@ type Step struct {
 
 func (x *Step) Reset() {
 	*x = Step{}
-	mi := &file_pb_actions_proto_msgTypes[2]
+	mi := &file_pb_actions_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -204,7 +250,7 @@ func (x *Step) String() string {
 func (*Step) ProtoMessage() {}
 
 func (x *Step) ProtoReflect() protoreflect.Message {
-	mi := &file_pb_actions_proto_msgTypes[2]
+	mi := &file_pb_actions_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -217,7 +263,7 @@ func (x *Step) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Step.ProtoReflect.Descriptor instead.
 func (*Step) Descriptor() ([]byte, []int) {
-	return file_pb_actions_proto_rawDescGZIP(), []int{2}
+	return file_pb_actions_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *Step) GetRunId() string {
@@ -287,7 +333,7 @@ type RunResponse struct {
 
 func (x *RunResponse) Reset() {
 	*x = RunResponse{}
-	mi := &file_pb_actions_proto_msgTypes[3]
+	mi := &file_pb_actions_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -299,7 +345,7 @@ func (x *RunResponse) String() string {
 func (*RunResponse) ProtoMessage() {}
 
 func (x *RunResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pb_actions_proto_msgTypes[3]
+	mi := &file_pb_actions_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -312,7 +358,7 @@ func (x *RunResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RunResponse.ProtoReflect.Descriptor instead.
 func (*RunResponse) Descriptor() ([]byte, []int) {
-	return file_pb_actions_proto_rawDescGZIP(), []int{3}
+	return file_pb_actions_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *RunResponse) GetResult() *structpb.Struct {
@@ -339,13 +385,20 @@ const file_pb_actions_proto_rawDesc = "" +
 	"\x04with\x18\x02 \x01(\v2\x17.google.protobuf.StructR\x04with\x12-\n" +
 	"\x05state\x18\x03 \x01(\v2\x17.google.protobuf.StructR\x05state\x12\x1c\n" +
 	"\x04step\x18\x04 \x01(\v2\b.pb.StepR\x04step\x12\x1f\n" +
-	"\x05guard\x18\x05 \x01(\v2\t.pb.GuardR\x05guardJ\x04\b\x01\x10\x02R\x04args\"\x84\x01\n" +
+	"\x05guard\x18\x05 \x01(\v2\t.pb.GuardR\x05guardJ\x04\b\x01\x10\x02R\x04args\"\xef\x01\n" +
 	"\x05Guard\x12\x1b\n" +
 	"\tread_only\x18\x01 \x01(\bR\breadOnly\x12\x1f\n" +
 	"\vallow_hosts\x18\x02 \x03(\tR\n" +
 	"allowHosts\x12#\n" +
-	"\rallow_actions\x18\x03 \x03(\tR\fallowActions\x12\x18\n" +
-	"\akeeping\x18\x04 \x03(\tR\akeeping\"\xbb\x01\n" +
+	"\rallow_actions\x18\x03 \x03(\tR\fallowActions\x12*\n" +
+	"\x05keeps\x18\x05 \x03(\v2\x14.pb.Guard.KeepsEntryR\x05keeps\x1aH\n" +
+	"\n" +
+	"KeepsEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12$\n" +
+	"\x05value\x18\x02 \x01(\v2\x0e.pb.GuardKindsR\x05value:\x028\x01J\x04\b\x04\x10\x05R\akeeping\"\"\n" +
+	"\n" +
+	"GuardKinds\x12\x14\n" +
+	"\x05kinds\x18\x01 \x03(\tR\x05kinds\"\xbb\x01\n" +
 	"\x04Step\x12\x15\n" +
 	"\x06run_id\x18\x01 \x01(\tR\x05runId\x12\x15\n" +
 	"\x06job_id\x18\x02 \x01(\tR\x05jobId\x12\x19\n" +
@@ -373,28 +426,32 @@ func file_pb_actions_proto_rawDescGZIP() []byte {
 	return file_pb_actions_proto_rawDescData
 }
 
-var file_pb_actions_proto_msgTypes = make([]protoimpl.MessageInfo, 4)
+var file_pb_actions_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
 var file_pb_actions_proto_goTypes = []any{
 	(*RunRequest)(nil),      // 0: pb.RunRequest
 	(*Guard)(nil),           // 1: pb.Guard
-	(*Step)(nil),            // 2: pb.Step
-	(*RunResponse)(nil),     // 3: pb.RunResponse
-	(*structpb.Struct)(nil), // 4: google.protobuf.Struct
+	(*GuardKinds)(nil),      // 2: pb.GuardKinds
+	(*Step)(nil),            // 3: pb.Step
+	(*RunResponse)(nil),     // 4: pb.RunResponse
+	nil,                     // 5: pb.Guard.KeepsEntry
+	(*structpb.Struct)(nil), // 6: google.protobuf.Struct
 }
 var file_pb_actions_proto_depIdxs = []int32{
-	4, // 0: pb.RunRequest.with:type_name -> google.protobuf.Struct
-	4, // 1: pb.RunRequest.state:type_name -> google.protobuf.Struct
-	2, // 2: pb.RunRequest.step:type_name -> pb.Step
+	6, // 0: pb.RunRequest.with:type_name -> google.protobuf.Struct
+	6, // 1: pb.RunRequest.state:type_name -> google.protobuf.Struct
+	3, // 2: pb.RunRequest.step:type_name -> pb.Step
 	1, // 3: pb.RunRequest.guard:type_name -> pb.Guard
-	4, // 4: pb.RunResponse.result:type_name -> google.protobuf.Struct
-	4, // 5: pb.RunResponse.state:type_name -> google.protobuf.Struct
-	0, // 6: pb.Actions.Run:input_type -> pb.RunRequest
-	3, // 7: pb.Actions.Run:output_type -> pb.RunResponse
-	7, // [7:8] is the sub-list for method output_type
-	6, // [6:7] is the sub-list for method input_type
-	6, // [6:6] is the sub-list for extension type_name
-	6, // [6:6] is the sub-list for extension extendee
-	0, // [0:6] is the sub-list for field type_name
+	5, // 4: pb.Guard.keeps:type_name -> pb.Guard.KeepsEntry
+	6, // 5: pb.RunResponse.result:type_name -> google.protobuf.Struct
+	6, // 6: pb.RunResponse.state:type_name -> google.protobuf.Struct
+	2, // 7: pb.Guard.KeepsEntry.value:type_name -> pb.GuardKinds
+	0, // 8: pb.Actions.Run:input_type -> pb.RunRequest
+	4, // 9: pb.Actions.Run:output_type -> pb.RunResponse
+	9, // [9:10] is the sub-list for method output_type
+	8, // [8:9] is the sub-list for method input_type
+	8, // [8:8] is the sub-list for extension type_name
+	8, // [8:8] is the sub-list for extension extendee
+	0, // [0:8] is the sub-list for field type_name
 }
 
 func init() { file_pb_actions_proto_init() }
@@ -408,7 +465,7 @@ func file_pb_actions_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_pb_actions_proto_rawDesc), len(file_pb_actions_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   4,
+			NumMessages:   6,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

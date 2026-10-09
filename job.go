@@ -436,7 +436,7 @@ func (j *Job) runStandalone(vars map[string]any, printer *Printer, jobID, baseDi
 	var failed bool
 	var err error
 	if resolveFirst {
-		err = resolveExternalActions([]*Job{j}, baseDir, cfg.guard)
+		ctx.Config.Guard, err = resolveExternalActions([]*Job{j}, baseDir, ctx.Config.Guard)
 	}
 	if err == nil {
 		failed, err = j.run(ctx)

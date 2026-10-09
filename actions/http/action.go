@@ -70,6 +70,13 @@ func joinHeader(h hp.Header) map[string]any {
 	return out
 }
 
+// Keeps returns the kinds of guard the http action keeps to: it sends only
+// GET, HEAD and OPTIONS under read-only, and connects only to a host the
+// guard allows, redirects included.
+func Keeps() []string {
+	return []string{actionrpc.KindReadOnly, actionrpc.KindAllowHost}
+}
+
 // Params returns the keys the http action takes in with: those of Req,
 // the method shorthands, such as get and post, and those it reads apart
 // from Req.

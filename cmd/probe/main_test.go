@@ -869,11 +869,12 @@ func TestCmd_guard(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			// The actions that keep to the guard are the built-in ones that do.
-			if !reflect.DeepEqual(got.Keeping, actions.Keeping()) {
-				t.Errorf("Keeping = %v, want %v", got.Keeping, actions.Keeping())
+			// The kinds of guard the built-in actions keep to are what they
+			// declare.
+			if !reflect.DeepEqual(got.Keeps, actions.Keeps()) {
+				t.Errorf("Keeps = %v, want %v", got.Keeps, actions.Keeps())
 			}
-			got.Keeping = nil
+			got.Keeps = nil
 			if !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("guard = %+v, want %+v", got, tt.want)
 			}

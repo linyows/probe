@@ -17,7 +17,7 @@ func TestGuard_Active(t *testing.T) {
 		want  bool
 	}{
 		{Guard{}, false},
-		{Guard{AllowActions: []string{"shell"}, Keeping: []string{"http"}}, false},
+		{Guard{AllowActions: []string{"shell"}, Keeps: map[string][]string{"http": {KindReadOnly}}}, false},
 		{Guard{ReadOnly: true}, true},
 		{Guard{AllowHosts: []string{"localhost"}}, true},
 	}
@@ -29,22 +29,77 @@ func TestGuard_Active(t *testing.T) {
 }
 
 func TestGuard_Runs(t *testing.T) {
-	g := Guard{ReadOnly: true, Keeping: []string{"http", "db"}, AllowActions: []string{"shell"}}
-	for uses, want := range map[string]bool{
-		"http":                 true,
-		"db":                   true,
-		"shell":                true,
-		"ssh":                  false,
-		"./actions/mine":       false,
-		"owner/repo/action@v1": false,
-	} {
-		if got := g.Runs(uses); got != want {
-			t.Errorf("Runs(%q) = %v, want %v", uses, got, want)
-		}
+	keeps := map[string][]string{
+		"http":           {KindReadOnly, KindAllowHost},
+		"db":             {KindAllowHost, KindReadOnly},
+		"./actions/read": {KindReadOnly},
+		"./actions/host": {KindAllowHost},
+		"./actions/new":  {"some-future-kind"},
+	}
+	tests := []struct {
+		name  string
+		guard Guard
+		want  map[string]bool
+	}{
+		{
+			name:  "read-only",
+			guard: Guard{ReadOnly: true, Keeps: keeps, AllowActions: []string{"shell"}},
+			want: map[string]bool{
+				"http": true, "db": true, "shell": true, "ssh": false,
+				"./actions/read": true, "./actions/host": false, "./actions/new": false,
+				"owner/repo/action@v1": false,
+			},
+		},
+		{
+			name:  "allow-host",
+			guard: Guard{AllowHosts: []string{"localhost"}, Keeps: keeps},
+			want:  map[string]bool{"http": true, "./actions/read": false, "./actions/host": true},
+		},
+		{
+			// An action has to keep to every kind the run is under.
+			name:  "both",
+			guard: Guard{ReadOnly: true, AllowHosts: []string{"localhost"}, Keeps: keeps},
+			want:  map[string]bool{"http": true, "db": true, "./actions/read": false, "./actions/host": false},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			for uses, want := range tt.want {
+				if got := tt.guard.Runs(uses); got != want {
+					t.Errorf("Runs(%q) = %v, want %v", uses, got, want)
+				}
+			}
+		})
 	}
 	// Without a guard every action runs.
 	if !(Guard{}).Runs("ssh") {
 		t.Error("an inactive guard should run every action")
+	}
+}
+
+func TestGuard_Missing(t *testing.T) {
+	g := Guard{ReadOnly: true, AllowHosts: []string{"localhost"}, Keeps: map[string][]string{"./mine": {KindAllowHost}}}
+	if got := g.Missing("./mine"); !reflect.DeepEqual(got, []string{KindReadOnly}) {
+		t.Errorf("Missing(./mine) = %v, want [read-only]", got)
+	}
+	if got := g.Missing("ssh"); !reflect.DeepEqual(got, []string{KindReadOnly, KindAllowHost}) {
+		t.Errorf("Missing(ssh) = %v, want [read-only allow-host]", got)
+	}
+	if got := (Guard{}).Missing("ssh"); got != nil {
+		t.Errorf("Missing under no guard = %v, want none", got)
+	}
+}
+
+func TestGuard_WithKeeps(t *testing.T) {
+	g := Guard{ReadOnly: true, Keeps: map[string][]string{"http": {KindReadOnly}}}
+	kinds := []string{KindReadOnly}
+	h := g.WithKeeps("./mine", kinds)
+	kinds[0] = "changed"
+	if !h.Runs("./mine") || !h.Runs("http") {
+		t.Errorf("WithKeeps() = %+v, want ./mine and http to run", h.Keeps)
+	}
+	if _, ok := g.Keeps["./mine"]; ok {
+		t.Error("WithKeeps changed the guard it was called on")
 	}
 }
 
@@ -122,7 +177,7 @@ func (a *guardedAction) RunStep(call Call) (map[string]any, map[string]any, erro
 func TestClientRunStepTellsTheGuard(t *testing.T) {
 	a := &guardedAction{}
 	c := &Client{client: directClient{&Server{Impl: a}}}
-	guard := Guard{ReadOnly: true, AllowHosts: []string{"localhost"}, AllowActions: []string{"shell"}, Keeping: []string{"http"}}
+	guard := Guard{ReadOnly: true, AllowHosts: []string{"localhost"}, AllowActions: []string{"shell"}, Keeps: map[string][]string{"http": {KindReadOnly, KindAllowHost}}}
 	if _, _, err := c.RunStep(Call{With: map[string]any{}, Guard: guard}); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

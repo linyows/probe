@@ -38,3 +38,9 @@ func Serve() {
 		return &Action{log: log}
 	})
 }
+
+// Keeps returns the kinds of guard the hello action keeps to: all of them,
+// as it neither writes nor connects to anything.
+func Keeps() []string {
+	return []string{actionrpc.KindReadOnly, actionrpc.KindAllowHost}
+}

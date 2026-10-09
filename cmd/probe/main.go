@@ -11,6 +11,7 @@ import (
 
 	"github.com/fatih/color"
 	"github.com/linyows/probe"
+	"github.com/linyows/probe/actionref"
 	"github.com/linyows/probe/actionrpc"
 	"github.com/linyows/probe/actions"
 	"github.com/linyows/probe/actions/grpc"
@@ -478,7 +479,7 @@ func (c *Cmd) guard() (actionrpc.Guard, error) {
 		ReadOnly:     readOnly,
 		AllowHosts:   splitList(hosts),
 		AllowActions: splitList(allowed),
-		Keeping:      actions.Keeping(),
+		Keeps:        actions.Keeps(),
 	}, nil
 }
 
@@ -503,7 +504,7 @@ func (c *Cmd) runCheck() int {
 		return probe.ExitConfigError
 	}
 
-	findings, err := probe.Check(c.SubCommandArgs[0], probe.CheckOptions{Actions: actions.Names(), Params: actions.AllParams()})
+	findings, err := probe.Check(c.SubCommandArgs[0], probe.CheckOptions{Actions: actions.Names(), Params: actions.AllParams(), Manifest: actionref.ReadManifest})
 	if err != nil {
 		_, _ = fmt.Fprintf(c.errWriter, "[ERROR] %v\n", err)
 		return probe.ExitConfigError

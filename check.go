@@ -65,6 +65,11 @@ type CheckOptions struct {
 	// of an action it does not name, which may take any key, is not
 	// checked.
 	Params map[string][]string
+	// Manifest reads the action.yml of an external action, a local one
+	// relative to baseDir, so that its with is checked against the params
+	// it declares. When it is nil, the with of an external action is not
+	// checked, and nothing is read from the network.
+	Manifest func(uses, baseDir string) (*actionref.Manifest, error)
 }
 
 // Check reads the workflow at path, as a run reads it, and returns what is
@@ -91,6 +96,12 @@ func Check(path string, opts CheckOptions) ([]Finding, error) {
 	}
 
 	c := &checker{opts: opts, lines: map[string]int{}}
+	// The params of external actions are added as they are read, so the
+	// caller's map is left as it was.
+	c.opts.Params = maps.Clone(opts.Params)
+	if c.opts.Params == nil {
+		c.opts.Params = map[string][]string{}
+	}
 	if err := c.mapFiles(files); err != nil {
 		return nil, err
 	}
@@ -132,6 +143,8 @@ type checker struct {
 	// files are the files read, with the line of the text read that each
 	// one starts on.
 	files []fileStart
+	// readManifests are the external actions whose action.yml was read.
+	readManifests map[string]bool
 }
 
 type fileStart struct {
@@ -458,7 +471,9 @@ func (c *checker) checkActions() {
 			if actionref.IsExternal(st.Uses) {
 				if _, err := actionref.Parse(st.Uses); err != nil {
 					c.add(SeverityError, c.line(path), c.stepWhere(i, j), "uses: %s", firstLine(err.Error()))
+					continue
 				}
+				c.readParams(st.Uses, c.line(path), c.stepWhere(i, j))
 				continue
 			}
 			if len(c.opts.Actions) == 0 || slices.Contains(c.opts.Actions, st.Uses) {
@@ -470,6 +485,32 @@ func (c *checker) checkActions() {
 			}
 			c.add(SeverityError, c.line(path), c.stepWhere(i, j), "%s", msg)
 		}
+	}
+}
+
+// readParams reads the params the external action uses declares in its
+// action.yml, once for each action, for checkWith to check its with
+// against. An action.yml that cannot be read leaves its with unchecked,
+// with a warning, as the run reads it again and fails then if it still
+// cannot.
+func (c *checker) readParams(uses string, line int, where string) {
+	if c.opts.Manifest == nil {
+		return
+	}
+	if c.readManifests == nil {
+		c.readManifests = map[string]bool{}
+	}
+	if c.readManifests[uses] {
+		return
+	}
+	c.readManifests[uses] = true
+	m, err := c.opts.Manifest(uses, c.wf.basePath)
+	if err != nil {
+		c.add(SeverityWarning, line, where, "uses: the keys of with are not checked, as action.yml could not be read: %s", firstLine(err.Error()))
+		return
+	}
+	if m.Params != nil {
+		c.opts.Params[uses] = m.Params
 	}
 }
 
@@ -491,6 +532,11 @@ func (c *checker) checkWith() {
 					}
 					c.add(SeverityError, c.line(path), c.jobWhere(i), "%s", msg)
 					continue
+				}
+				if actionref.IsExternal(action) {
+					if _, err := actionref.Parse(action); err == nil {
+						c.readParams(action, c.line(path), c.jobWhere(i))
+					}
 				}
 				with, _ := defaults[action].(map[string]any)
 				c.withKeys(action, with, path, c.jobWhere(i), "defaults."+action, func(string) bool { return true })

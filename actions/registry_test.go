@@ -7,6 +7,8 @@ import (
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/linyows/probe/actionrpc"
 )
 
 func TestKeepingAreBuiltin(t *testing.T) {
@@ -26,6 +28,35 @@ func TestKeepingIsACopy(t *testing.T) {
 	k[0] = "shell"
 	if slices.Contains(Keeping(), "shell") {
 		t.Error("changing what Keeping returns should not change the actions that keep to the guard")
+	}
+}
+
+func TestKeeps(t *testing.T) {
+	names := Names()
+	known := []string{actionrpc.KindReadOnly, actionrpc.KindAllowHost}
+	for name, kinds := range Keeps() {
+		if !slices.Contains(names, name) {
+			t.Errorf("%s declares guard kinds but is not a built-in action", name)
+		}
+		for _, k := range kinds {
+			if !slices.Contains(known, k) {
+				t.Errorf("%s declares %q, which is no kind of guard", name, k)
+			}
+		}
+	}
+	// The actions that cannot tell what they are about to do keep to none.
+	for _, name := range []string{"browser", "imap", "mail-latency", "shell", "smtp", "ssh"} {
+		if _, ok := Keeps()[name]; ok {
+			t.Errorf("%s should keep to no guard", name)
+		}
+	}
+	if want := []string{"db", "embedded", "grpc", "hello", "http"}; !slices.Equal(Keeping(), want) {
+		t.Errorf("Keeping() = %v, want %v", Keeping(), want)
+	}
+	k := Keeps()
+	k["http"][0] = "changed"
+	if Keeps()["http"][0] == "changed" {
+		t.Error("changing what Keeps returns should change no declaration")
 	}
 }
 

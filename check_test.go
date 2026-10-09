@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/linyows/probe/actionref"
 )
 
 // writeWorkflow writes content to a file named name in dir and returns its
@@ -650,4 +652,63 @@ jobs:
 			checkFindings(t, findings, tt.want)
 		})
 	}
+}
+
+// TestCheck_ExternalParams checks the with of an external action against
+// the params its action.yml declares, read through CheckOptions.Manifest.
+func TestCheck_ExternalParams(t *testing.T) {
+	dir := t.TempDir()
+	for name, manifest := range map[string]string{
+		"declared": "runs:\n  using: binary\n  path: x\nparams: [url, calls]\n",
+		"silent":   "runs:\n  using: binary\n  path: x\n",
+	} {
+		if err := os.MkdirAll(filepath.Join(dir, name), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		writeWorkflow(t, filepath.Join(dir, name), "action.yml", manifest)
+	}
+	path := writeWorkflow(t, dir, "workflow.yml", `name: external
+jobs:
+- name: J
+  defaults:
+    ./declared:
+      url: http://localhost
+      timout: 5s
+  steps:
+  - uses: ./declared
+    with:
+      calls: []
+      cals: []
+    test: res.code == 0
+  - uses: ./silent
+    with:
+      anything: goes
+    test: res.code == 0
+  - uses: ./missing
+    with:
+      anything: goes
+    test: res.code == 0
+`)
+	params := map[string][]string{"http": {"url"}}
+	opts := CheckOptions{Actions: []string{"http"}, Params: params, Manifest: actionref.ReadManifest}
+	findings, err := Check(path, opts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	checkFindings(t, findings, []want{
+		{SeverityError, 7, `defaults../declared: unknown key "timout" for the ./declared action`},
+		{SeverityError, 12, `with: unknown key "cals" for the ./declared action; did you mean "calls"?`},
+		{SeverityWarning, 18, `uses: the keys of with are not checked, as action.yml could not be read`},
+	})
+	if len(params) != 1 {
+		t.Errorf("Check changed the Params it was given: %v", params)
+	}
+
+	// Without Manifest, nothing is read and the external actions are not
+	// checked.
+	findings, err = Check(path, CheckOptions{Actions: []string{"http"}, Params: params})
+	if err != nil {
+		t.Fatal(err)
+	}
+	checkFindings(t, findings, nil)
 }

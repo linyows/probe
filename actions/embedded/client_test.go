@@ -276,7 +276,8 @@ func TestExecuteUnderAGuard(t *testing.T) {
 	if err := os.WriteFile(path, []byte(job), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	guard := actionrpc.Guard{ReadOnly: true, Keeping: []string{"embedded", "hello", "http", "db"}}
+	all := []string{actionrpc.KindReadOnly, actionrpc.KindAllowHost}
+	guard := actionrpc.Guard{ReadOnly: true, Keeps: map[string][]string{"embedded": all, "hello": all, "http": all, "db": all}}
 
 	_, err := Execute(map[string]any{"path": path}, WithGuard(guard))
 	if !actionrpc.IsRefused(err) {

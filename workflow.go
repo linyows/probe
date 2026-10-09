@@ -70,8 +70,9 @@ func (w *Workflow) Start(c Config) error {
 
 	// Fetch external actions before any job starts, so that a bad reference
 	// fails the run up front and a download does not count against a step's
-	// timeout.
-	if err := w.resolveExternalActions(c.Guard); err != nil {
+	// timeout. The guard the jobs run under learns from each action.yml the
+	// kinds of guard the action keeps to.
+	if c.Guard, err = w.resolveExternalActions(c.Guard); err != nil {
 		return err
 	}
 
@@ -597,8 +598,9 @@ func (w *Workflow) newJobContext(c Config, vars map[string]any, scheduler *JobSc
 	}
 }
 
-// resolveExternalActions resolves every action the steps name outside Probe.
-func (w *Workflow) resolveExternalActions(guard actionrpc.Guard) error {
+// resolveExternalActions resolves every action the steps name outside Probe,
+// and returns guard with the kinds of guard each of them keeps to.
+func (w *Workflow) resolveExternalActions(guard actionrpc.Guard) (actionrpc.Guard, error) {
 	jobs := make([]*Job, len(w.Jobs))
 	for i := range w.Jobs {
 		jobs[i] = &w.Jobs[i]
@@ -607,19 +609,32 @@ func (w *Workflow) resolveExternalActions(guard actionrpc.Guard) error {
 }
 
 // resolveExternalActions resolves every action the steps of jobs name
-// outside Probe, with local ones relative to baseDir. One that guard does
-// not let run is left alone, as its step is refused without it.
-func resolveExternalActions(jobs []*Job, baseDir string, guard actionrpc.Guard) error {
+// outside Probe, with local ones relative to baseDir, and returns guard with
+// the kinds of guard each of them keeps to, as its action.yml says. The
+// executable of one that guard then does not let run is not fetched, as its
+// step is refused without it.
+func resolveExternalActions(jobs []*Job, baseDir string, guard actionrpc.Guard) (actionrpc.Guard, error) {
 	for _, job := range jobs {
 		for _, st := range job.Steps {
-			if !actionref.IsExternal(st.Uses) || !guard.Runs(st.Uses) {
+			if !actionref.IsExternal(st.Uses) {
+				continue
+			}
+			m, err := actionref.ReadManifest(st.Uses, baseDir)
+			if err != nil {
+				return guard, NewConfigurationError("resolve_action", "failed to resolve an external action", err).
+					WithContext("uses", st.Uses)
+			}
+			if len(m.Guard) > 0 {
+				guard = guard.WithKeeps(st.Uses, m.Guard)
+			}
+			if !guard.Runs(st.Uses) {
 				continue
 			}
 			if _, err := actionref.Resolve(st.Uses, baseDir); err != nil {
-				return NewConfigurationError("resolve_action", "failed to resolve an external action", err).
+				return guard, NewConfigurationError("resolve_action", "failed to resolve an external action", err).
 					WithContext("uses", st.Uses)
 			}
 		}
 	}
-	return nil
+	return guard, nil
 }

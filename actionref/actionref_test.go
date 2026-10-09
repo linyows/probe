@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -100,6 +101,33 @@ func TestParseManifest(t *testing.T) {
 				t.Fatalf("ParseManifest() error = %v, want one containing %q", err, tt.wantErr)
 			}
 		})
+	}
+}
+
+func TestParseManifestDeclarations(t *testing.T) {
+	m, err := ParseManifest([]byte("runs:\n  using: binary\n  path: x\nguard: [read-only, allow-host]\nparams: [url, calls]\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(m.Guard, []string{"read-only", "allow-host"}) || !reflect.DeepEqual(m.Params, []string{"url", "calls"}) {
+		t.Errorf("Guard = %v, Params = %v", m.Guard, m.Params)
+	}
+
+	// An action.yml that says nothing declares no guard, and leaves the keys
+	// of with unchecked; one with an empty list takes no key.
+	m, err = ParseManifest([]byte("runs:\n  using: binary\n  path: x\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if m.Guard != nil || m.Params != nil {
+		t.Errorf("Guard = %v, Params = %v, want both nil", m.Guard, m.Params)
+	}
+	m, err = ParseManifest([]byte("runs:\n  using: binary\n  path: x\nparams: []\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if m.Params == nil || len(m.Params) != 0 {
+		t.Errorf("Params = %#v, want an empty list", m.Params)
 	}
 }
 
@@ -208,6 +236,54 @@ runs:
 
 // Once action.yml at the pinned commit changes what it points at, the
 // executable it now names runs, whatever an earlier run left in the cache.
+// TestManifestFetchesNoExecutable checks that what an action declares can
+// be read without its executable being downloaded, and that Resolve then
+// reads action.yml no more.
+func TestManifestFetchesNoExecutable(t *testing.T) {
+	g := newGitHub(t)
+	bin := []byte("#!/bin/sh\n")
+	g.files["/bin/x"] = bin
+	manifest := "/o/r/" + sha + "/action.yml"
+	g.files[manifest] = fmt.Appendf(nil, "runs:\n  using: binary\n  url: %s/bin/x\n  checksums:\n    linux_arm64: %s\nguard: [read-only]\n", g.URL, digest(bin))
+
+	r := newResolver(t, g)
+	uses := "github.com/o/r@" + sha
+	m, err := r.Manifest(uses, "")
+	if err != nil {
+		t.Fatalf("Manifest() error = %v", err)
+	}
+	if !reflect.DeepEqual(m.Guard, []string{"read-only"}) {
+		t.Errorf("Guard = %v", m.Guard)
+	}
+	if n := g.hit("/bin/x"); n != 0 {
+		t.Errorf("the executable was fetched %d times, want none", n)
+	}
+	if _, err := r.Resolve(uses, ""); err != nil {
+		t.Fatalf("Resolve() error = %v", err)
+	}
+	if n := g.hit(manifest); n != 1 {
+		t.Errorf("action.yml was fetched %d times, want once", n)
+	}
+	if n := g.hit("/bin/x"); n != 1 {
+		t.Errorf("the executable was fetched %d times, want once", n)
+	}
+}
+
+func TestManifestRetriesAfterFailure(t *testing.T) {
+	g := newGitHub(t)
+	r := newResolver(t, g)
+	uses := "github.com/o/r@" + sha
+	if _, err := r.Manifest(uses, ""); err == nil || !strings.Contains(err.Error(), "action "+uses) {
+		t.Fatalf("Manifest() error = %v, want one naming the action", err)
+	}
+	g.mu.Lock()
+	g.files["/o/r/"+sha+"/action.yml"] = []byte("runs:\n  using: binary\n  url: https://example.com/x\n")
+	g.mu.Unlock()
+	if _, err := r.Manifest(uses, ""); err != nil {
+		t.Errorf("Manifest() error = %v once action.yml is there", err)
+	}
+}
+
 func TestResolveRemoteFollowsManifest(t *testing.T) {
 	g := newGitHub(t)
 	old, cur := []byte("old"), []byte("current")

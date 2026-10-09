@@ -7,7 +7,10 @@
 package actions
 
 import (
+	"slices"
 	"sort"
+
+	"github.com/linyows/probe/actionrpc"
 
 	"github.com/linyows/probe/actions/browser"
 	"github.com/linyows/probe/actions/db"
@@ -38,16 +41,40 @@ var builtin = map[string]func(){
 	"ssh":          ssh.Serve,
 }
 
-// keeping are the built-in actions that keep to the guard of a run
-// themselves: http, db and grpc refuse what it does not allow, embedded runs
-// its job under it, and hello reaches nothing.
-var keeping = []string{"db", "embedded", "grpc", "hello", "http"}
-
-// Keeping returns the names of the built-in actions that keep to the guard
-// of a run, such as --read-only, in alphabetical order. Any other action is
+// keeps are the kinds of guard each built-in action declares it keeps to,
+// as its package says. An action that keeps to none is left out: it is
 // refused under a guard unless it is allowed by name.
+var keeps = map[string]func() []string{
+	"db":       db.Keeps,
+	"embedded": embedded.Keeps,
+	"grpc":     grpc.Keeps,
+	"hello":    hello.Keeps,
+	"http":     http.Keeps,
+}
+
+// Keeps returns the kinds of guard each built-in action keeps to, by its
+// name, leaving out those that keep to none. It is what a guard's Keeps
+// starts from.
+func Keeps() map[string][]string {
+	m := make(map[string][]string, len(keeps))
+	for name, f := range keeps {
+		m[name] = f()
+	}
+	return m
+}
+
+// Keeping returns the names of the built-in actions that keep to every kind
+// of guard, such as --read-only and --allow-host, in alphabetical order.
 func Keeping() []string {
-	return append([]string(nil), keeping...)
+	all := []string{actionrpc.KindReadOnly, actionrpc.KindAllowHost}
+	var names []string
+	for name, kinds := range Keeps() {
+		if !slices.ContainsFunc(all, func(k string) bool { return !slices.Contains(kinds, k) }) {
+			names = append(names, name)
+		}
+	}
+	sort.Strings(names)
+	return names
 }
 
 // params are the keys each built-in action takes in with. hello, which
