@@ -1070,7 +1070,7 @@ jobs:
         jobs:
         - name: tag
           steps:
-          - uses: github.com/mozership/probe-graphql@v0.1.1
+          - uses: github.com/mozership/probe-graphql@v0.2.0
             with:
               url: http://127.0.0.1:8091/graphql
               query: "{ a }"
