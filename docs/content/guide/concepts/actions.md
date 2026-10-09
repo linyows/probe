@@ -756,7 +756,7 @@ An action can also live outside Probe, in a repository of its own. Probe downloa
 
 ```yaml
 - name: Ask the API who I am
-  uses: github.com/linyows/probe-graphql@<40-character commit SHA>
+  uses: github.com/mozership/probe-graphql@<40-character commit SHA>
   with:
     url: https://api.example.com/graphql
     query: '{ viewer { login } }'
@@ -767,7 +767,7 @@ An action can also live outside Probe, in a repository of its own. Probe downloa
 
 | Form | Example |
 |---|---|
-| `github.com/<owner>/<repo>[/<dir>]@<commit>` | `github.com/linyows/probe-graphql@3f2a…` |
+| `github.com/<owner>/<repo>[/<dir>]@<commit>` | `github.com/mozership/probe-graphql@3f2a…` |
 | A path starting with `./`, `../` or `/` | `./actions/greet` |
 
 A remote action must be pinned to a full 40-character commit SHA. Tags and branches are refused, because they can be moved to other code after the workflow was reviewed. Only GitHub is supported for now. A local path is taken relative to the workflow file, or, in a job run by the [embedded](/reference/actions/embedded) action, relative to that job file.
@@ -792,7 +792,7 @@ name: graphql
 description: Send a GraphQL query over HTTP
 runs:
   using: binary
-  url: https://github.com/linyows/probe-graphql/releases/download/v0.1.0/probe-graphql_{os}_{arch}
+  url: https://github.com/mozership/probe-graphql/releases/download/v0.1.0/probe-graphql_{os}_{arch}
   checksums:
     darwin_amd64: <SHA-256 of probe-graphql_darwin_amd64>
     darwin_arm64: <SHA-256 of probe-graphql_darwin_arm64>
@@ -851,7 +851,7 @@ func main() {
 }
 ```
 
-Build it for every platform it supports, publish the executables, and commit an `action.yml` with their URLs and digests. Users then pin the commit that holds that `action.yml`. [linyows/probe-graphql](https://github.com/linyows/probe-graphql) does this with GoReleaser and a workflow that commits the digests after each release.
+Build it for every platform it supports, publish the executables, and commit an `action.yml` with their URLs and digests. Users then pin the commit that holds that `action.yml`. [mozership/probe-graphql](https://github.com/mozership/probe-graphql) does this with GoReleaser and a workflow that commits the digests after each release.
 
 While developing, point a local `action.yml` at the executable you build:
 

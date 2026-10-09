@@ -40,7 +40,7 @@ func TestParse(t *testing.T) {
 		{uses: "./actions/foo", want: Ref{Local: "./actions/foo"}},
 		{uses: "../foo", want: Ref{Local: "../foo"}},
 		{uses: "/opt/foo", want: Ref{Local: "/opt/foo"}},
-		{uses: "github.com/linyows/probe-graphql@" + sha, want: Ref{Owner: "linyows", Repo: "probe-graphql", SHA: sha}},
+		{uses: "github.com/mozership/probe-graphql@" + sha, want: Ref{Owner: "mozership", Repo: "probe-graphql", SHA: sha}},
 		{uses: "github.com/o/r/a/b@" + sha, want: Ref{Owner: "o", Repo: "r", Dir: "a/b", SHA: sha}},
 		{uses: "gitlab.com/o/r@" + sha, wantErr: "unsupported action"},
 		{uses: "actions/foo", wantErr: "unsupported action"},

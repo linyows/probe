@@ -970,7 +970,7 @@ Probeは、こうしたアクションに実行するステップを常に伝え
 
 ```yaml
 - name: Ask the API who I am
-  uses: github.com/linyows/probe-graphql@<40文字のコミットSHA>
+  uses: github.com/mozership/probe-graphql@<40文字のコミットSHA>
   with:
     url: https://api.example.com/graphql
     query: '{ viewer { login } }'
@@ -981,7 +981,7 @@ Probeは、こうしたアクションに実行するステップを常に伝え
 
 | 形式 | 例 |
 |---|---|
-| `github.com/<owner>/<repo>[/<dir>]@<commit>` | `github.com/linyows/probe-graphql@3f2a…` |
+| `github.com/<owner>/<repo>[/<dir>]@<commit>` | `github.com/mozership/probe-graphql@3f2a…` |
 | `./`、`../`、`/`で始まるパス | `./actions/greet` |
 
 リモートのアクションは40文字のコミットSHAで固定する必要があります。タグやブランチは、ワークフローをレビューした後で別のコードを指すように動かせるため受け付けません。現在対応しているのはGitHubだけです。ローカルのパスはワークフローファイルからの相対パスです。[embedded](/ja/reference/actions/embedded)アクションで実行するジョブの中では、そのジョブファイルからの相対パスです。
@@ -1006,7 +1006,7 @@ name: graphql
 description: Send a GraphQL query over HTTP
 runs:
   using: binary
-  url: https://github.com/linyows/probe-graphql/releases/download/v0.1.0/probe-graphql_{os}_{arch}
+  url: https://github.com/mozership/probe-graphql/releases/download/v0.1.0/probe-graphql_{os}_{arch}
   checksums:
     darwin_amd64: <probe-graphql_darwin_amd64のSHA-256>
     darwin_arm64: <probe-graphql_darwin_arm64のSHA-256>
@@ -1065,7 +1065,7 @@ func main() {
 }
 ```
 
-対応するプラットフォームごとにビルドして実行ファイルを公開し、そのURLとダイジェストを書いた`action.yml`をコミットします。利用者はその`action.yml`を含むコミットを指定します。[linyows/probe-graphql](https://github.com/linyows/probe-graphql)では、GoReleaserと、リリースのたびにダイジェストをコミットするワークフローでこれを行っています。
+対応するプラットフォームごとにビルドして実行ファイルを公開し、そのURLとダイジェストを書いた`action.yml`をコミットします。利用者はその`action.yml`を含むコミットを指定します。[mozership/probe-graphql](https://github.com/mozership/probe-graphql)では、GoReleaserと、リリースのたびにダイジェストをコミットするワークフローでこれを行っています。
 
 開発中は、ローカルの`action.yml`でビルドした実行ファイルを指します：
 

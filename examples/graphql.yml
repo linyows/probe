@@ -1,6 +1,6 @@
 name: GraphQL with an external action
 description: |
-  Query a public GraphQL API with linyows/probe-graphql, an action that
+  Query a public GraphQL API with mozership/probe-graphql, an action that
   lives in a repository of its own. Probe downloads it on first use and
   checks it against the digest in action.yml at the pinned commit.
 jobs:
@@ -8,7 +8,7 @@ jobs:
   steps:
   - name: Look up Japan
     id: jp
-    uses: github.com/linyows/probe-graphql@f9e7b841b87dccbcbe71ae10f8562aa637d52a51 # v0.1.0
+    uses: github.com/mozership/probe-graphql@f9e7b841b87dccbcbe71ae10f8562aa637d52a51 # v0.1.0
     with:
       url: https://countries.trevorblades.com/graphql
       query: |
@@ -21,7 +21,7 @@ jobs:
     outputs:
       currency: res.data.country.currency
   - name: An unknown field is reported in res.errors
-    uses: github.com/linyows/probe-graphql@f9e7b841b87dccbcbe71ae10f8562aa637d52a51 # v0.1.0
+    uses: github.com/mozership/probe-graphql@f9e7b841b87dccbcbe71ae10f8562aa637d52a51 # v0.1.0
     with:
       url: https://countries.trevorblades.com/graphql
       query: '{ country(code: "JP") { nope } }'
