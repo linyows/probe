@@ -16,8 +16,8 @@ Each action now declares the kinds of guard it keeps to: a built-in one in
 its package, an external one in `guard` in its `action.yml`. A step runs
 under a guard only when its action declares every kind the run is under,
 `read-only` for `--read-only` and `allow-host` for `--allow-host`, or when
-`--allow-action` names it. Workflow files are not affected, and the
-built-in actions keep to the guard as they did.
+`--allow-action` names it. The built-in actions keep to the guard as they
+did.
 
 | Before | After |
 |---|---|
