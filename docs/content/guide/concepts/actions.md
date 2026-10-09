@@ -774,6 +774,15 @@ A remote action must be pinned to a full 40-character commit SHA. Tags and branc
 
 Probe resolves every external action before the first job starts. A reference that cannot be resolved fails the run with exit code 2, and a download does not count against a step's timeout. Executables are kept under `probe/actions` in the user's cache directory (`~/.cache` on Linux, `~/Library/Caches` on macOS), so each is downloaded once. `action.yml` is read from GitHub on every run instead, because it holds the digest the executable is checked against, and a copy on disk could have been changed.
 
+#### Published Actions
+
+These external actions are published alongside Probe, each in a repository of its own. Each page describes its parameters and result, and the notes of each release start with the `uses` line to copy.
+
+| Action | What it does | Latest |
+|---|---|---|
+| [graphql](/reference/actions/graphql) | Sends a GraphQL query over HTTP, and returns the `data` and `errors` of the response apart | v0.1.0 |
+| [jmap](/reference/actions/jmap) | Calls [JMAP](https://jmap.io/) methods: fetches the session, fills in the account of each call, and gathers the method errors, which come with HTTP 200, in `res.errors` | v0.1.0 |
+
 #### action.yml
 
 The action's directory holds an `action.yml` that says which executable serves it:
