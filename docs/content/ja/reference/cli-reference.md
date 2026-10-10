@@ -215,7 +215,7 @@ probe --read-only --allow-action shell workflow.yml
 
 ## サブコマンド
 
-サブコマンドを指定すると、ワークフローの実行の代わりに別の処理を行います。`gen`は雛形のワークフローを生成し、`dag`はワークフローが表す依存関係のグラフを出力し、`check`はワークフローを実行せずに誤りや弱点を見つけ、`coverage`は実行がOpenAPIドキュメントのどこまでを検証したかを示し、`guide`はこのドキュメントを出力し、`skill`はコーディングエージェントがProbeを使えるように準備します。
+サブコマンドを指定すると、ワークフローの実行の代わりに別の処理を行います。`gen`は雛形のワークフローを生成し、`dag`はワークフローが表す依存関係のグラフを出力し、`check`はワークフローを実行せずに誤りや弱点を見つけ、`coverage`は実行がOpenAPIドキュメントのどこまでを検証したかを示し、`guide`はこのドキュメントを出力し、`skill`はコーディングエージェントがProbeを使えるように準備し、`manifest`は外部アクションのリリースの`action.yml`を出力します。
 
 ### `gen`
 
@@ -414,6 +414,53 @@ probe skill install <dir>      # <dir>/SKILL.mdに書き出す
 ```
 
 `install`はディレクトリを作成し、既存の`SKILL.md`を置き換えます。Probeを更新したあとにもう一度実行すれば、スキルも最新になります。レポートファイルと同じく、`SKILL.md`や`.claude`などのディレクトリにあるシンボリックリンクによって、プロジェクトの外に書き出させることはできません。別の場所からスキルを読むエージェントには、`probe skill install .agents/skills/probe`のようにそのディレクトリを指定します。リポジトリからスキルをインストールするツール向けに、同じファイルをリポジトリの`skills/probe/SKILL.md`にも置いています。
+
+### `manifest`
+
+[外部アクション](/ja/guide/concepts/actions#外部アクション)の`action.yml`を出力します。新しいアクションの出発点になるものか、リリースのものです。後者は外部アクションのリリースワークフローがコミットします。
+
+**使い方:**
+```bash
+probe manifest init <owner>/<repo>
+probe manifest <tag> <checksums-file> [action-file]
+```
+
+#### `manifest init`
+
+新しいアクションの出発点になる`action.yml`を、それを公開するGitHubリポジトリ`<owner>/<repo>`向けに出力します。
+
+```bash
+probe manifest init mozership/probe-greet > action.yml
+```
+
+アクションの名前はリポジトリ名から先頭の`probe-`を除いたもので、`runs.url`は各プラットフォームの実行ファイルを`<repo>_{os}_{arch}`という名前で指します。これはGoReleaserがアーカイブせずに公開する実行ファイルの名前です。`runs.url`のタグは仮のもので、チェックサムもないため、このコミットのアクションは使えません。どちらも最初のリリースで入ります。説明と`guard`、`params`は書き入れる箇所として残してあり、それぞれ何のためのものかをコメントで示しています。
+
+#### `manifest <tag>`
+
+リリースの`action.yml`を出力します。
+
+| 引数 | 説明 |
+|---|---|
+| `tag` | リリースのタグ。`v0.2.0`など。英数字と`.`、`_`、`+`、`-`からなり、英数字で始まるもの |
+| `checksums-file` | リリースの実行ファイルのSHA-256ダイジェスト。`sha256sum`やGoReleaserが書き出す形式で、1行は`<digest>  <file>` |
+| `action-file` | 元にする`action.yml`。省略すると作業ディレクトリの`action.yml` |
+
+`action-file`を読み、次の2点を変えて出力します。
+
+- `runs.url`のタグを`tag`に置き換えます。`runs.url`はGitHubのリリースアセットのアドレス`https://github.com/<owner>/<repo>/releases/download/<tag>/<asset>`でなければならず、`<asset>`には`{os}`と`{arch}`が1つずつ必要で、その間に`_`など、英小文字でも数字でもない文字が要ります。
+- `runs.checksums`を`checksums-file`のダイジェストに置き換えます。ファイル名が、`<asset>`の`{os}`と`{arch}`をプラットフォームに置き換えたものである行を採り、それ以外の行は無視します。`action-file`にあったチェックサムは残しません。
+
+`name`、`description`、`guard`、`params`は読んだまま出力します。出力はつねに同じ書式で、チェックサムはプラットフォーム順に並びます。`action-file`の先頭にあるコメント行は残し、それ以外のコメントは残しません。
+
+**例:**
+```bash
+probe manifest v0.2.0 dist/checksums.txt > "$RUNNER_TEMP/action.yml"
+cp "$RUNNER_TEMP/action.yml" action.yml
+```
+
+読み込むファイルに出力を直接リダイレクトしないでください。Probeが読む前にシェルが`action.yml`を空にします。
+
+リリースできない`action.yml`や、アセットのダイジェストがないチェックサムファイルを指定すると、終了ステータス2で終わり、標準出力には何も出しません。`init`という名前のタグは指定できません。`manifest init`を指すためです。
 
 ## 環境変数
 

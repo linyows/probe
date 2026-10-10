@@ -191,7 +191,7 @@ func (c *Cmd) parseArgs(args []string) error {
 	return nil
 }
 
-var subCommands = []string{"gen", "dag", "check", "coverage", "guide", "skill"}
+var subCommands = []string{"gen", "dag", "check", "coverage", "guide", "skill", "manifest"}
 
 func isSubCommand(name string) bool {
 	return slices.Contains(subCommands, name)
@@ -231,6 +231,8 @@ Usage: probe [options] <workflow-file>
        probe coverage <openapi-file|proto-file> <report-file>
        probe guide [topic]
        probe skill [install [dir]]
+       probe manifest init <owner>/<repo>
+       probe manifest <tag> <checksums-file> [action-file]
 
 Arguments:
   workflow-file    Path to YAML workflow file(s). Multiple files can be
@@ -250,6 +252,13 @@ Subcommands:
                    Without a topic, list the topics
   skill            Print the skill that teaches coding agents to use Probe
                    install [dir] writes it to dir (.claude/skills/probe)
+  manifest init <owner>/<repo>
+                   Print an action.yml to start a new external action from,
+                   published in that GitHub repository
+  manifest <tag> <checksums-file> [action-file]
+                   Print the action.yml of a release of an external action:
+                   action-file (action.yml) with the tag in runs.url and the
+                   digests of checksums-file in runs.checksums
 
 Options:`
 
@@ -341,6 +350,8 @@ func (c *Cmd) runSubCommand() int {
 		return c.runGuide()
 	case "skill":
 		return c.runSkill()
+	case "manifest":
+		return c.runManifest()
 	default:
 		_, _ = fmt.Fprintf(c.errWriter, "[ERROR] unknown subcommand: %s\n", c.SubCommand)
 		return probe.ExitConfigError
@@ -613,6 +624,58 @@ func (c *Cmd) runSkill() int {
 		_, _ = fmt.Fprintf(c.errWriter, "Usage: probe skill [install [dir]]\n")
 		return probe.ExitConfigError
 	}
+}
+
+// runManifest prints the action.yml of a release of an external action,
+// from the one of the release before it and the checksums of its
+// executables, or, with "init <owner>/<repo>", one to start a new action
+// from.
+func (c *Cmd) runManifest() int {
+	args := c.SubCommandArgs
+	if len(args) > 0 && args[0] == "init" {
+		if len(args) != 2 {
+			_, _ = fmt.Fprintf(c.errWriter, "[ERROR] a repository is required\n")
+			_, _ = fmt.Fprintf(c.errWriter, "Usage: probe manifest init <owner>/<repo>\n")
+			return probe.ExitConfigError
+		}
+		out, err := actionref.Scaffold(args[1])
+		if err != nil {
+			_, _ = fmt.Fprintf(c.errWriter, "[ERROR] %v\n", err)
+			return probe.ExitConfigError
+		}
+		_, _ = c.outWriter.Write(out)
+		return 0
+	}
+	if len(args) < 2 || len(args) > 3 {
+		_, _ = fmt.Fprintf(c.errWriter, "[ERROR] a tag and a checksums file are required\n")
+		_, _ = fmt.Fprintf(c.errWriter, "Usage: probe manifest init <owner>/<repo>\n")
+		_, _ = fmt.Fprintf(c.errWriter, "       probe manifest <tag> <checksums-file> [action-file]\n")
+		return probe.ExitConfigError
+	}
+	actionFile := actionref.ManifestFile
+	if len(args) == 3 {
+		actionFile = args[2]
+	}
+
+	manifest, err := os.ReadFile(actionFile)
+	if err != nil {
+		_, _ = fmt.Fprintf(c.errWriter, "[ERROR] %v\n", err)
+		return probe.ExitConfigError
+	}
+	checksums, err := os.Open(args[1])
+	if err != nil {
+		_, _ = fmt.Fprintf(c.errWriter, "[ERROR] %v\n", err)
+		return probe.ExitConfigError
+	}
+	defer func() { _ = checksums.Close() }()
+
+	out, err := actionref.Release(manifest, args[0], checksums)
+	if err != nil {
+		_, _ = fmt.Fprintf(c.errWriter, "[ERROR] %v\n", err)
+		return probe.ExitConfigError
+	}
+	_, _ = c.outWriter.Write(out)
+	return 0
 }
 
 func (c *Cmd) printVersion() {

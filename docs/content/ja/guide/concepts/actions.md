@@ -1074,6 +1074,23 @@ func main() {
 
 対応するプラットフォームごとにビルドして実行ファイルを公開し、そのURLとダイジェストを書いた`action.yml`をコミットします。利用者はその`action.yml`を含むコミットを指定します。[mozership/probe-graphql](https://github.com/mozership/probe-graphql)では、GoReleaserと、リリースのたびにダイジェストをコミットするワークフローでこれを行っています。
 
+リリースの`action.yml`は`probe manifest`で作れます。リポジトリの`action.yml`を読み、`runs.url`のタグを置き換え、`runs.checksums`をチェックサムファイルのダイジェストに置き換えて出力します：
+
+```bash
+probe manifest v0.2.0 dist/checksums.txt > "$RUNNER_TEMP/action.yml"
+cp "$RUNNER_TEMP/action.yml" action.yml
+```
+
+名前、説明、`guard`、`params`は`action.yml`にあるまま残るので、これらを書く場所は`action.yml`だけになります。
+
+新しいアクションでは、`probe manifest init`が出発点になる`action.yml`を出力します。アクションを公開するGitHubリポジトリを指定して実行し、説明と`guard`、`params`を書き入れてコミットします。最初のリリースで、そのタグとダイジェストが入ります：
+
+```bash
+probe manifest init mozership/probe-greet > action.yml
+```
+
+どちらの引数も[`manifest`](/ja/reference/cli-reference#manifest)を参照してください。
+
 開発中は、ローカルの`action.yml`でビルドした実行ファイルを指します：
 
 ```yaml

@@ -577,3 +577,252 @@ func TestResolveLocal(t *testing.T) {
 		}
 	})
 }
+
+func TestRelease(t *testing.T) {
+	a, b, c := strings.Repeat("a", 64), strings.Repeat("b", 64), strings.Repeat("1", 64)
+	checksums := a + "  probe-greet_linux_amd64\n" +
+		strings.ToUpper(b) + " *dist/probe-greet_darwin_arm64\n" +
+		c + "  probe-greet_linux_arm64\n" +
+		c + "  probe-greet_windows_amd64.exe\n" +
+		c + "  probe-other_linux_amd64\n" +
+		"\n"
+
+	tests := []struct {
+		name      string
+		manifest  string
+		tag       string
+		checksums string
+		want      string
+		wantErr   string
+	}{
+		{
+			name: "replaces the tag and the checksums, and keeps the rest",
+			manifest: "# It declares allow-host, as it connects to no host.\n\n" +
+				"name: greet\ndescription: Say hello\n" +
+				"guard:\n  - allow-host # not read-only\nparams: [name, 'to, whom']\n" +
+				"runs:\n    using: binary\n    checksums:\n        linux_amd64: " + c + "\n        freebsd_amd64: " + c + "\n" +
+				"    url: https://github.com/example/probe-greet/releases/download/v0.1.0/probe-greet_{os}_{arch}\n",
+			tag:       "v0.2.0",
+			checksums: checksums,
+			want: "# It declares allow-host, as it connects to no host.\n\n" +
+				"name: greet\ndescription: Say hello\n" +
+				"guard: [allow-host]\nparams: [name, \"to, whom\"]\n" +
+				"runs:\n  using: binary\n" +
+				"  url: https://github.com/example/probe-greet/releases/download/v0.2.0/probe-greet_{os}_{arch}\n" +
+				"  checksums:\n" +
+				"    darwin_arm64: \"" + b + "\"\n" +
+				"    linux_amd64: \"" + a + "\"\n" +
+				"    linux_arm64: \"" + c + "\"\n",
+		},
+		{
+			name:      "a first release, with no checksums yet",
+			manifest:  "description: \"Say: hello\"\nparams: []\nruns:\n  using: binary\n  url: https://github.com/example/probe-greet/releases/download/v0.0.0/probe-greet_{os}_{arch}\n",
+			tag:       "v0.1.0",
+			checksums: checksums,
+			want: "description: \"Say: hello\"\nparams: []\n" +
+				"runs:\n  using: binary\n" +
+				"  url: https://github.com/example/probe-greet/releases/download/v0.1.0/probe-greet_{os}_{arch}\n" +
+				"  checksums:\n" +
+				"    darwin_arm64: \"" + b + "\"\n" +
+				"    linux_amd64: \"" + a + "\"\n" +
+				"    linux_arm64: \"" + c + "\"\n",
+		},
+		{
+			name:      "an asset with an extension",
+			manifest:  "runs:\n  using: binary\n  url: https://github.com/example/probe-greet/releases/download/v0.1.0/probe-greet_{os}_{arch}.exe\n",
+			tag:       "v0.2.0",
+			checksums: checksums,
+			want: "runs:\n  using: binary\n" +
+				"  url: https://github.com/example/probe-greet/releases/download/v0.2.0/probe-greet_{os}_{arch}.exe\n" +
+				"  checksums:\n    windows_amd64: \"" + c + "\"\n",
+		},
+		{
+			name:      "a tag with build metadata, and the architecture first",
+			manifest:  "runs:\n  using: binary\n  url: https://github.com/example/probe-greet/releases/download/v0.1.0/greet-{arch}.{os}\n",
+			tag:       "v0.2.0-rc.1+build_5",
+			checksums: a + "  greet-amd64.linux\n",
+			want: "runs:\n  using: binary\n" +
+				"  url: https://github.com/example/probe-greet/releases/download/v0.2.0-rc.1+build_5/greet-{arch}.{os}\n" +
+				"  checksums:\n    linux_amd64: \"" + a + "\"\n",
+		},
+		{
+			name:      "invalid manifest",
+			manifest:  "runs:\n  using: go\n",
+			tag:       "v0.2.0",
+			checksums: checksums,
+			wantErr:   "runs.using must be",
+		},
+		{
+			name:      "path",
+			manifest:  "runs:\n  using: binary\n  path: probe-greet\n",
+			tag:       "v0.2.0",
+			checksums: checksums,
+			wantErr:   "runs.url is needed",
+		},
+		{
+			name:      "not a release URL",
+			manifest:  "runs:\n  using: binary\n  url: https://example.com/probe-greet_{os}_{arch}\n",
+			tag:       "v0.2.0",
+			checksums: checksums,
+			wantErr:   "runs.url must be https://github.com/",
+		},
+		{
+			name:      "no placeholder",
+			manifest:  "runs:\n  using: binary\n  url: https://github.com/example/probe-greet/releases/download/v0.1.0/probe-greet\n",
+			tag:       "v0.2.0",
+			checksums: checksums,
+			wantErr:   "one {os} and one {arch}",
+		},
+		{
+			name:      "bad tag",
+			manifest:  "runs:\n  using: binary\n  url: https://github.com/example/probe-greet/releases/download/v0.1.0/probe-greet_{os}_{arch}\n",
+			tag:       "release/v0.2.0",
+			checksums: checksums,
+			wantErr:   "tag \"release/v0.2.0\"",
+		},
+		{
+			name:      "a tag that would end the path",
+			manifest:  "runs:\n  using: binary\n  url: https://github.com/example/probe-greet/releases/download/v0.1.0/probe-greet_{os}_{arch}\n",
+			tag:       "release#1",
+			checksums: checksums,
+			wantErr:   "tag \"release#1\"",
+		},
+		{
+			name:      "a tag that would start an escape",
+			manifest:  "runs:\n  using: binary\n  url: https://github.com/example/probe-greet/releases/download/v0.1.0/probe-greet_{os}_{arch}\n",
+			tag:       "v1%20",
+			checksums: checksums,
+			wantErr:   "tag \"v1%20\"",
+		},
+		{
+			name:      "placeholders with nothing between them",
+			manifest:  "runs:\n  using: binary\n  url: https://github.com/example/probe-greet/releases/download/v0.1.0/probe-greet_{os}{arch}\n",
+			tag:       "v0.2.0",
+			checksums: a + "  probe-greet_linuxamd64\n",
+			wantErr:   "a character between {os} and {arch}",
+		},
+		{
+			name:      "placeholders with only a letter between them",
+			manifest:  "runs:\n  using: binary\n  url: https://github.com/example/probe-greet/releases/download/v0.1.0/probe-greet_{arch}x{os}\n",
+			tag:       "v0.2.0",
+			checksums: a + "  probe-greet_amd64xlinux\n",
+			wantErr:   "a character between {os} and {arch}",
+		},
+		{
+			name:      "no checksum of the asset",
+			manifest:  "runs:\n  using: binary\n  url: https://github.com/example/probe-greet/releases/download/v0.1.0/probe-hello_{os}_{arch}\n",
+			tag:       "v0.2.0",
+			checksums: checksums,
+			wantErr:   "checksums list no file named probe-hello_{os}_{arch}",
+		},
+		{
+			name:      "not a digest",
+			manifest:  "runs:\n  using: binary\n  url: https://github.com/example/probe-greet/releases/download/v0.1.0/probe-greet_{os}_{arch}\n",
+			tag:       "v0.2.0",
+			checksums: "abc  probe-greet_linux_amd64\n",
+			wantErr:   "checksum of probe-greet_linux_amd64 must be a SHA-256 digest",
+		},
+		{
+			name:      "one platform twice",
+			manifest:  "runs:\n  using: binary\n  url: https://github.com/example/probe-greet/releases/download/v0.1.0/probe-greet_{os}_{arch}\n",
+			tag:       "v0.2.0",
+			checksums: a + "  probe-greet_linux_amd64\n" + b + "  probe-greet_linux_amd64\n",
+			wantErr:   "twice, with different digests",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := Release([]byte(tt.manifest), tt.tag, strings.NewReader(tt.checksums))
+			if tt.wantErr != "" {
+				if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+					t.Fatalf("Release() error = %v, want one containing %q", err, tt.wantErr)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("Release() error = %v", err)
+			}
+			if string(got) != tt.want {
+				t.Errorf("Release() =\n%s\nwant\n%s", got, tt.want)
+			}
+			// Releasing what was released changes nothing.
+			again, err := Release(got, tt.tag, strings.NewReader(tt.checksums))
+			if err != nil || string(again) != tt.want {
+				t.Errorf("Release() of its own result =\n%s\nerror = %v", again, err)
+			}
+		})
+	}
+}
+
+// TestReleaseWritesWhatParseReads checks values that YAML would read as
+// something else unquoted.
+func TestReleaseWritesWhatParseReads(t *testing.T) {
+	manifest := "name: \"true\"\ndescription: \"two\\nlines # and: more\"\nguard: []\nparams: [\"123\", \"null\", \"a b\", \"[x]\", \"\"]\n" +
+		"runs:\n  using: binary\n  url: https://github.com/example/probe-greet/releases/download/v0.1.0/probe-greet_{os}_{arch}\n"
+	sum := strings.Repeat("0", 64)
+	got, err := Release([]byte(manifest), "v0.2.0", strings.NewReader(sum+"  probe-greet_linux_amd64\n"))
+	if err != nil {
+		t.Fatalf("Release() error = %v", err)
+	}
+	m, err := ParseManifest(got)
+	if err != nil {
+		t.Fatalf("ParseManifest() error = %v\n%s", err, got)
+	}
+	want := &Manifest{
+		Name:        "true",
+		Description: "two\nlines # and: more",
+		Guard:       []string{},
+		Params:      []string{"123", "null", "a b", "[x]", ""},
+		Runs: Runs{
+			Using:     UsingBinary,
+			URL:       "https://github.com/example/probe-greet/releases/download/v0.2.0/probe-greet_{os}_{arch}",
+			Checksums: map[string]string{"linux_amd64": sum},
+		},
+	}
+	if !reflect.DeepEqual(m, want) {
+		t.Errorf("Release() wrote\n%s\nwhich reads as %+v, want %+v", got, m, want)
+	}
+}
+
+func TestScaffold(t *testing.T) {
+	for _, repo := range []string{"example/probe-greet", "github.com/example/probe-greet"} {
+		got, err := Scaffold(repo)
+		if err != nil {
+			t.Fatalf("Scaffold(%q) error = %v", repo, err)
+		}
+		m, err := ParseManifest(got)
+		if err != nil {
+			t.Fatalf("ParseManifest() error = %v\n%s", err, got)
+		}
+		want := &Manifest{
+			Name: "greet",
+			Runs: Runs{Using: UsingBinary, URL: "https://github.com/example/probe-greet/releases/download/v0.0.0/probe-greet_{os}_{arch}"},
+		}
+		if !reflect.DeepEqual(m, want) {
+			t.Errorf("Scaffold(%q) reads as %+v, want %+v", repo, m, want)
+		}
+
+		// What it wrote can be released as it is.
+		sum := strings.Repeat("a", 64)
+		released, err := Release(got, "v0.1.0", strings.NewReader(sum+"  probe-greet_linux_amd64\n"))
+		if err != nil {
+			t.Fatalf("Release() error = %v", err)
+		}
+		wantReleased := "name: greet\nruns:\n  using: binary\n" +
+			"  url: https://github.com/example/probe-greet/releases/download/v0.1.0/probe-greet_{os}_{arch}\n" +
+			"  checksums:\n    linux_amd64: \"" + sum + "\"\n"
+		if string(released) != wantReleased {
+			t.Errorf("Release() =\n%s\nwant\n%s", released, wantReleased)
+		}
+	}
+
+	if got, err := Scaffold("example/hello"); err != nil || !strings.HasPrefix(string(got), "name: hello\n") || !strings.Contains(string(got), "/hello_{os}_{arch}\n") {
+		t.Errorf("Scaffold() of a repository without probe- = %s, error = %v", got, err)
+	}
+
+	for _, repo := range []string{"", "probe-greet", "example/probe-greet/dir", "example/..", "example/probe greet", "gitlab.com/example/probe-greet"} {
+		if _, err := Scaffold(repo); err == nil {
+			t.Errorf("Scaffold(%q) should fail", repo)
+		}
+	}
+}

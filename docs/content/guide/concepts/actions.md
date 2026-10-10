@@ -860,6 +860,23 @@ func main() {
 
 Build it for every platform it supports, publish the executables, and commit an `action.yml` with their URLs and digests. Users then pin the commit that holds that `action.yml`. [mozership/probe-graphql](https://github.com/mozership/probe-graphql) does this with GoReleaser and a workflow that commits the digests after each release.
 
+`probe manifest` writes the `action.yml` of a release. It reads the `action.yml` of the repository, puts the tag in `runs.url` and the digests of the checksums file in `runs.checksums`, and prints the result:
+
+```bash
+probe manifest v0.2.0 dist/checksums.txt > "$RUNNER_TEMP/action.yml"
+cp "$RUNNER_TEMP/action.yml" action.yml
+```
+
+The name, the description, `guard` and `params` are kept as `action.yml` has them, so `action.yml` is the one place they are written in.
+
+For a new action, `probe manifest init` prints the `action.yml` to start from. Give it the GitHub repository that will publish the action, fill in the description, `guard` and `params`, and commit it; the first release then puts its tag and digests in:
+
+```bash
+probe manifest init mozership/probe-greet > action.yml
+```
+
+See [`manifest`](/reference/cli-reference#manifest) for what both take.
+
 While developing, point a local `action.yml` at the executable you build:
 
 ```yaml
