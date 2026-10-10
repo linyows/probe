@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"io"
+	"maps"
 	hp "net/http"
 	"net/http/httptest"
 	"reflect"
@@ -869,9 +870,7 @@ func TestRequestBasicAuthRejected(t *testing.T) {
 			defer srv.Close()
 
 			data := map[string]any{"url": srv.URL, "method": "GET"}
-			for k, v := range tt.data {
-				data[k] = v
-			}
+			maps.Copy(data, tt.data)
 			_, err := Request(data)
 			if err == nil || err.Error() != tt.wantErr {
 				t.Errorf("error = %v, want %q", err, tt.wantErr)
@@ -919,9 +918,7 @@ func TestRequestStepUnderAGuard(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			hits.Store(0)
 			with := map[string]any{"url": srv.URL}
-			for k, v := range tt.with {
-				with[k] = v
-			}
+			maps.Copy(with, tt.with)
 			_, _, err := RequestStep(actionrpc.Call{With: with, Guard: tt.guard})
 			if tt.refused == "" {
 				if err != nil {

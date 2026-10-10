@@ -94,7 +94,7 @@ func guideTitle(file string) string {
 	if err != nil {
 		return ""
 	}
-	for _, line := range strings.Split(string(data), "\n") {
+	for line := range strings.SplitSeq(string(data), "\n") {
 		if title, ok := strings.CutPrefix(line, "# "); ok {
 			return strings.TrimSpace(title)
 		}

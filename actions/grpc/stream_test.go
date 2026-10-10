@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"reflect"
 	"strconv"
 	"strings"
@@ -77,9 +78,7 @@ func (userServer) ImportUsers(stream grpclib.ClientStreamingServer[pb.User, pb.I
 func streamCall(t *testing.T, with map[string]any) (map[string]any, map[string]any, error) {
 	t.Helper()
 	data := map[string]any{"service": "UserService"}
-	for k, v := range with {
-		data[k] = v
-	}
+	maps.Copy(data, with)
 	ret, err := Request(data)
 	res, _ := ret["res"].(map[string]any)
 	return ret, res, err
@@ -168,12 +167,8 @@ func TestStreamingCalls(t *testing.T) {
 		for _, tt := range tests {
 			t.Run(p.name+"/"+tt.name, func(t *testing.T) {
 				with := map[string]any{}
-				for k, v := range p.with {
-					with[k] = v
-				}
-				for k, v := range tt.with {
-					with[k] = v
-				}
+				maps.Copy(with, p.with)
+				maps.Copy(with, tt.with)
 				_, res, err := streamCall(t, with)
 				if err != nil {
 					t.Fatalf("Request() error: %v", err)

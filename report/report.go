@@ -76,7 +76,7 @@ func ParseTargets(s string) ([]Target, error) {
 	var targets []Target
 	seen := make(map[Format]bool)
 
-	for _, entry := range strings.Split(s, ",") {
+	for entry := range strings.SplitSeq(s, ",") {
 		entry = strings.TrimSpace(entry)
 		if entry == "" {
 			continue

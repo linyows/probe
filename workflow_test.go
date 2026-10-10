@@ -827,7 +827,7 @@ func Test_evalVarsReadsOneRandomValue(t *testing.T) {
 		},
 		env: map[string]string{"UNUSED": ""},
 	}
-	for i := 0; i < 20; i++ {
+	for range 20 {
 		actual, err := wf.evalVars()
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -1038,7 +1038,7 @@ func Test_evalVarsCycleIsReproducible(t *testing.T) {
 		"b": "{{vars.a.y}}",
 		"c": "{{vars.a.x}}",
 	}
-	for i := 0; i < 50; i++ {
+	for i := range 50 {
 		wf := &Workflow{Name: "Test", Vars: vars, env: map[string]string{"UNUSED": ""}}
 		_, err := wf.evalVars()
 		if err == nil || err.Error() != "vars: circular reference: a -> c -> a" {

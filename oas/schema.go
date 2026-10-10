@@ -1,6 +1,7 @@
 package oas
 
 import (
+	"maps"
 	"strconv"
 
 	yaml "github.com/pb33f/go-yaml"
@@ -201,9 +202,7 @@ func generateAllOfExample(allOf []*base.SchemaProxy, depth int) any {
 		}
 		val := generateExample(s, depth)
 		if m, ok := val.(map[string]any); ok {
-			for k, v := range m {
-				result[k] = v
-			}
+			maps.Copy(result, m)
 		}
 	}
 	if len(result) == 0 {

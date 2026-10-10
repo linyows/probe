@@ -130,7 +130,7 @@ func TestGenMessageID(t *testing.T) {
 	// concurrent calls must produce distinct IDs
 	const n = 64
 	seen := make(map[string]struct{}, n)
-	for i := 0; i < n; i++ {
+	for range n {
 		l, _ := genMessageID()
 		if _, dup := seen[l]; dup {
 			t.Fatalf("genMessageID produced duplicate idLeft: %s", l)

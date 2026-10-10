@@ -153,7 +153,7 @@ func escapedForms(value string) []string {
 	seen := map[string]bool{value: true}
 	forms := []string{value}
 	layer := []string{value}
-	for depth := 0; depth < 2; depth++ {
+	for range 2 {
 		var next []string
 		for _, f := range layer {
 			for _, esc := range escapers {

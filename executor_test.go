@@ -1,6 +1,7 @@
 package probe
 
 import (
+	"maps"
 	"strings"
 	"sync"
 	"testing"
@@ -256,9 +257,7 @@ func (r *echoRunner) RunActions(name string, with map[string]any, opts RunOption
 		r.mu.Unlock()
 	}
 	res := make(map[string]any, len(with))
-	for k, v := range with {
-		res[k] = v
-	}
+	maps.Copy(res, with)
 	return map[string]any{"req": with, "res": res, "status": 0}, nil
 }
 

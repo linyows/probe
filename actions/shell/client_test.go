@@ -813,7 +813,7 @@ func TestDoBackgroundSeparateLogs(t *testing.T) {
 	// The same command started twice must not share a log: each run's output
 	// has to stay readable on its own.
 	var logs []string
-	for i := 0; i < 2; i++ {
+	for range 2 {
 		req := &Req{Cmd: "echo run-$$", Shell: "/bin/sh", Timeout: "5s", Background: true}
 		result, err := req.Do()
 		if err != nil {
@@ -856,11 +856,11 @@ func TestDoStdoutNotEmpty(t *testing.T) {
 	var wg sync.WaitGroup
 	errChan := make(chan string, iterations*concurrency)
 
-	for c := 0; c < concurrency; c++ {
+	for c := range concurrency {
 		wg.Add(1)
 		go func(workerID int) {
 			defer wg.Done()
-			for i := 0; i < iterations; i++ {
+			for i := range iterations {
 				req := &Req{
 					Cmd:     "echo hello | grep -c hello | tr -d '\\n'",
 					Shell:   "/bin/sh",

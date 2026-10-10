@@ -150,7 +150,7 @@ func genMessageID() (idLeft, full string) {
 // current time in Unix nanoseconds, captured at the moment the message is
 // about to be written to the SMTP DATA stream.
 func (m *Mail) appendSendTimestamp(data []byte) []byte {
-	h := []byte(fmt.Sprintf("X-Send-Timestamp-Ns: %d\n", time.Now().UnixNano()))
+	h := fmt.Appendf(nil, "X-Send-Timestamp-Ns: %d\n", time.Now().UnixNano())
 	return append(h, data...)
 }
 

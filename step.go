@@ -221,10 +221,7 @@ func (st *Step) executeSingleAction(runner ActionRunner, expW map[string]any, jC
 
 // stepInfo tells an action about the step it runs for.
 func (st *Step) stepInfo(jCtx *JobContext) actionrpc.Step {
-	attempt := st.attempt
-	if attempt < 1 {
-		attempt = 1
-	}
+	attempt := max(st.attempt, 1)
 	return actionrpc.Step{
 		RunID:   jCtx.runID,
 		JobID:   jCtx.CurrentJobID,
@@ -1143,7 +1140,7 @@ func redactCredentialErrors(err error) error {
 // pathHoldsCredential reports whether any key in path, such as
 // headers.cookie[0], names a credential.
 func pathHoldsCredential(path string) bool {
-	for _, key := range strings.Split(path, ".") {
+	for key := range strings.SplitSeq(path, ".") {
 		if i := strings.IndexByte(key, '['); i >= 0 {
 			key = key[:i]
 		}

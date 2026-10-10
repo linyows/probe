@@ -1,6 +1,7 @@
 package http
 
 import (
+	"maps"
 	hp "net/http"
 	"net/http/httptest"
 	"net/url"
@@ -342,9 +343,7 @@ func TestRequestCookiesRejected(t *testing.T) {
 			defer srv.Close()
 
 			data := map[string]any{"url": srv.URL, "method": "GET"}
-			for k, v := range tt.data {
-				data[k] = v
-			}
+			maps.Copy(data, tt.data)
 			_, _, err := requestWithState(data, nil)
 			if err == nil || err.Error() != tt.wantErr {
 				t.Errorf("error = %v, want %q", err, tt.wantErr)

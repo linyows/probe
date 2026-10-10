@@ -2,6 +2,7 @@ package http
 
 import (
 	"io"
+	"maps"
 	hp "net/http"
 	"net/http/httptest"
 	"os"
@@ -253,13 +254,9 @@ func TestRequestStepChecksAgainstOpenAPI(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			openapi := map[string]any{"spec": spec}
-			for k, v := range tt.openapi {
-				openapi[k] = v
-			}
+			maps.Copy(openapi, tt.openapi)
 			with := map[string]any{"url": srv.URL + "/v1", "openapi": openapi}
-			for k, v := range tt.with {
-				with[k] = v
-			}
+			maps.Copy(with, tt.with)
 			ret, _, err := RequestStep(actionrpc.Call{With: with})
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
@@ -313,9 +310,7 @@ func TestRequestStepReportsWhatTheResponseWasMatchedTo(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			with := map[string]any{"url": srv.URL + "/v1", "openapi": map[string]any{"spec": spec}}
-			for k, v := range tt.with {
-				with[k] = v
-			}
+			maps.Copy(with, tt.with)
 			ret, _, err := RequestStep(actionrpc.Call{With: with})
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
