@@ -103,10 +103,7 @@ func (m *logMatcher) found() bool {
 	if bytes.Contains(buf, m.text) {
 		return true
 	}
-	keep := len(m.text) - 1
-	if keep > len(buf) {
-		keep = len(buf)
-	}
+	keep := min(len(m.text)-1, len(buf))
 	m.tail = append([]byte(nil), buf[len(buf)-keep:]...)
 	return false
 }

@@ -1,6 +1,7 @@
 package grpc
 
 import (
+	"maps"
 	"slices"
 	"strings"
 	"testing"
@@ -19,9 +20,7 @@ func readOnlyGetUser(t *testing.T) string {
 
 func guardedRequest(guard actionrpc.Guard, with map[string]any) (map[string]any, error) {
 	data := map[string]any{"service": "UserService", "method": "GetUser", "body": `{"user_id": "123"}`}
-	for k, v := range with {
-		data[k] = v
-	}
+	maps.Copy(data, with)
 	return RequestStep(actionrpc.Call{With: data, Guard: guard})
 }
 

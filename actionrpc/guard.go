@@ -3,6 +3,7 @@ package actionrpc
 import (
 	"errors"
 	"fmt"
+	"maps"
 	"net"
 	"slices"
 	"strings"
@@ -92,9 +93,7 @@ func (g Guard) Missing(uses string) []string {
 // named uses keeps to kinds, leaving the guard it was made from as it was.
 func (g Guard) WithKeeps(uses string, kinds []string) Guard {
 	keeps := make(map[string][]string, len(g.Keeps)+1)
-	for k, v := range g.Keeps {
-		keeps[k] = v
-	}
+	maps.Copy(keeps, g.Keeps)
 	keeps[uses] = slices.Clone(kinds)
 	g.Keeps = keeps
 	return g

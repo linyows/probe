@@ -1530,7 +1530,7 @@ func TestStep_handleRepeatExecution_AccumulatesEchoOutputs(t *testing.T) {
 	jCtx.Result.Jobs["job-1"] = &JobResult{JobID: "job-1"}
 
 	// Runs are counted from 0, as the executor counts them.
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		jCtx.RepeatCurrent = i
 		step.ctx = StepContext{
 			Vars: map[string]any{"i": i + 1},

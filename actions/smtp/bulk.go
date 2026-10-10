@@ -72,12 +72,10 @@ func (b *Bulk) DeliverWithResult() DeliveryResult {
 	resultCh := make(chan sendResult, b.Session)
 
 	for i := 0; i < b.Session; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			count, err := b.Send()
 			resultCh <- sendResult{count: count, err: err}
-		}()
+		})
 	}
 
 	wg.Wait()
@@ -157,7 +155,7 @@ func (b *Bulk) Send() (int, error) {
 // "b@x" rather than " b@x".
 func splitRecipients(to string) []string {
 	var addrs []string
-	for _, a := range strings.Split(to, ",") {
+	for a := range strings.SplitSeq(to, ",") {
 		if a = strings.TrimSpace(a); a != "" {
 			addrs = append(addrs, a)
 		}

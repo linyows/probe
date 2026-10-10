@@ -35,7 +35,7 @@ func TestReport_WriteGitHubSummary_Appends(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	for i := 0; i < 2; i++ {
+	for i := range 2 {
 		if err := r.Write(Target{Format: GitHubSummary, Path: path}); err != nil {
 			t.Fatalf("write %d: %v", i, err)
 		}

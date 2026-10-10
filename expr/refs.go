@@ -119,10 +119,8 @@ func CallsTemplate(v any) bool {
 			}
 		}
 	case []any:
-		for _, e := range v {
-			if CallsTemplate(e) {
-				return true
-			}
+		if slices.ContainsFunc(v, CallsTemplate) {
+			return true
 		}
 	}
 	return false

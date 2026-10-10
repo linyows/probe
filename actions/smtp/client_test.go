@@ -1,6 +1,7 @@
 package smtp
 
 import (
+	"maps"
 	"net"
 	"net/textproto"
 	"reflect"
@@ -507,7 +508,7 @@ func TestReqDo_RejectedAndDropped(t *testing.T) {
 	// One session is refused and the other loses its connection, after the
 	// refusal. The server answered once, so the outcome is a result whichever
 	// session finishes last.
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		addr := startSMTPServer(t, func(n int) bool { return n%2 == 0 })
 		req := &Req{
 			Addr:    addr,
@@ -536,9 +537,7 @@ func TestSendStartTLS(t *testing.T) {
 	addr := startMockServer(t, true)
 	params := func(extra map[string]any) map[string]any {
 		p := map[string]any{"addr": addr, "from": "from@example.com", "to": "to@example.com", "subject": "test"}
-		for k, v := range extra {
-			p[k] = v
-		}
+		maps.Copy(p, extra)
 		return p
 	}
 

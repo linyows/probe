@@ -228,7 +228,7 @@ func TestWaitReadyExitAndDeadlineTogether(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	for i := 0; i < 200; i++ {
+	for i := range 200 {
 		if got := waitReady(log, "listening on", pid, exited, 0); got != readyExited {
 			t.Fatalf("run %d: waitReady = %v, want readyExited", i, got)
 		}

@@ -183,7 +183,7 @@ func TestJobScheduler_NoDeadlockOnConcurrentReadAndWrite(t *testing.T) {
 	// scheduler hangs and the timeout below trips.
 	scheduler := NewJobScheduler()
 	const jobCount = 5
-	for i := 0; i < jobCount; i++ {
+	for i := range jobCount {
 		job := &Job{
 			Name:  fmt.Sprintf("job-%d", i),
 			ID:    fmt.Sprintf("id-%d", i),
@@ -199,7 +199,7 @@ func TestJobScheduler_NoDeadlockOnConcurrentReadAndWrite(t *testing.T) {
 		defer close(done)
 		var wg sync.WaitGroup
 		const iterations = 500
-		for i := 0; i < iterations; i++ {
+		for i := range iterations {
 			wg.Add(3)
 			go func() {
 				defer wg.Done()

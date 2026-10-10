@@ -1161,7 +1161,7 @@ func parseStoreFlags(dataitem, value string) (*imap.StoreFlags, error) {
 	if open {
 		list = list[1 : len(list)-1]
 	}
-	for _, f := range strings.Fields(list) {
+	for f := range strings.FieldsSeq(list) {
 		store.Flags = append(store.Flags, imap.Flag(f))
 	}
 	if len(store.Flags) == 0 && store.Op != imap.StoreFlagsSet {

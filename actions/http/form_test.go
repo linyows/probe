@@ -2,6 +2,7 @@ package http
 
 import (
 	"io"
+	"maps"
 	"mime"
 	"mime/multipart"
 	hp "net/http"
@@ -301,9 +302,7 @@ func TestRequestFormRejected(t *testing.T) {
 			defer srv.Close()
 
 			data := map[string]any{"url": srv.URL, "method": "POST"}
-			for k, v := range tt.data {
-				data[k] = v
-			}
+			maps.Copy(data, tt.data)
 			_, err := Request(data)
 			if err == nil || err.Error() != tt.wantErr {
 				t.Errorf("error = %v, want %q", err, tt.wantErr)
@@ -388,9 +387,7 @@ func TestRequestKeepsCallerHeaders(t *testing.T) {
 	} {
 		headers := map[string]string{"Content-Type": "application/json"}
 		data := map[string]any{"url": srv.URL, "post": "/", "headers": headers}
-		for k, v := range extra {
-			data[k] = v
-		}
+		maps.Copy(data, extra)
 		if _, err := Request(data); err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}

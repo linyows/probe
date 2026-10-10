@@ -3,6 +3,7 @@ package grpc
 import (
 	"context"
 	"fmt"
+	"maps"
 	"net"
 	"os"
 	"path/filepath"
@@ -146,9 +147,7 @@ func TestRequestChecksAgainstProto(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			proto := map[string]any{"files": []any{writeProto(t, tt.proto)}}
-			for k, v := range tt.opts {
-				proto[k] = v
-			}
+			maps.Copy(proto, tt.opts)
 			path := proto["files"].([]any)[0].(string)
 			proto["import_paths"] = []any{filepath.Dir(path)}
 			body := tt.body
@@ -609,9 +608,7 @@ func TestCheckDefinitionOfAStepWrittenForTheFiles(t *testing.T) {
 				"service": "UserService", "addr": addr, "method": "GetUser",
 				"proto": protoOf(writeProto(t, strings.Replace(userProto(t), tt.from, tt.to, 1)), false),
 			}
-			for k, v := range tt.with {
-				data[k] = v
-			}
+			maps.Copy(data, tt.with)
 			ret, err := Request(data)
 			if err != nil {
 				t.Fatalf("Request() error: %v, want the definitions told to differ", err)

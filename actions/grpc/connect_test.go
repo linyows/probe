@@ -2,6 +2,7 @@ package grpc
 
 import (
 	"context"
+	"maps"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -70,9 +71,7 @@ func startConnectServer(t *testing.T, prefix string) *connectUserServer {
 func connectRequest(t *testing.T, with map[string]any) (map[string]any, map[string]any, error) {
 	t.Helper()
 	data := map[string]any{"protocol": "connect", "service": "UserService", "method": "GetUser"}
-	for k, v := range with {
-		data[k] = v
-	}
+	maps.Copy(data, with)
 	ret, err := Request(data)
 	res, _ := ret["res"].(map[string]any)
 	return ret, res, err

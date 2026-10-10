@@ -38,6 +38,12 @@ jobs:
         go-version-file: go.mod
     - name: golangci-lint
       uses: reviewdog/action-golangci-lint@f9bba13753278f6a73b27a56a3ffb1bfda90ed71 # v2.8.0
+    # go fix rewrites code to what the Go version in go.mod has, such as
+    # maps.Copy for a loop that copies a map. -diff prints the rewrites
+    # instead of applying them, and fails when there is any: run go fix ./...
+    # and commit what it changes.
+    - name: go fix
+      run: go fix -diff ./...
 
   # Builds probe for every platform .goreleaser.yaml releases, the way it does,
   # so that a release does not fail on a platform the tests do not run on.

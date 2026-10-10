@@ -1590,7 +1590,7 @@ func TestTemplateFunctionBoundsWhatItExpands(t *testing.T) {
 
 	// Each outermost call has a budget of its own.
 	few := strings.Repeat("{{ len(template(file(vars.leaf))) }} ", 3)
-	for i := 0; i < 20; i++ {
+	for i := range 20 {
 		if _, err := e.Eval("template('"+few+"')", env); err != nil {
 			t.Fatalf("run %d: unexpected error: %v", i, err)
 		}
@@ -1736,7 +1736,7 @@ func TestEvalTemplateMapKeyErrors(t *testing.T) {
 // collide count against the number of keys a map is evaluated for.
 func TestEvalTemplateMapLimitCountsEveryKey(t *testing.T) {
 	input := make(map[string]any)
-	for i := 0; i < 1500; i++ {
+	for i := range 1500 {
 		input[fmt.Sprintf("{{ nosuch() }}-%04d", i)] = i
 	}
 	_, err := (&Expr{}).EvalTemplateMap(input, map[string]any{})

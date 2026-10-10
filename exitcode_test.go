@@ -56,7 +56,7 @@ func TestResult_recordFailure(t *testing.T) {
 
 	// Jobs record concurrently; run under -race.
 	var wg sync.WaitGroup
-	for i := 0; i < 50; i++ {
+	for i := range 50 {
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()

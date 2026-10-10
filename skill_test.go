@@ -17,7 +17,7 @@ func TestSkill_Frontmatter(t *testing.T) {
 	if end < 0 {
 		t.Fatal("SKILL.md frontmatter is not closed")
 	}
-	for _, line := range strings.Split(s[4:4+end], "\n") {
+	for line := range strings.SplitSeq(s[4:4+end], "\n") {
 		if desc, ok := strings.CutPrefix(line, "description: "); ok && len(desc) > 1024 {
 			t.Errorf("description is %d characters; skill loaders cap it at 1024", len(desc))
 		}

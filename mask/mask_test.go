@@ -191,7 +191,7 @@ func TestMasker_Learn(t *testing.T) {
 func TestMasker_ConcurrentLearnAndString(t *testing.T) {
 	m := New(nil, nil)
 	var wg sync.WaitGroup
-	for i := 0; i < 20; i++ {
+	for i := range 20 {
 		wg.Add(2)
 		go func(i int) {
 			defer wg.Done()
@@ -204,7 +204,7 @@ func TestMasker_ConcurrentLearnAndString(t *testing.T) {
 	}
 	wg.Wait()
 
-	for i := 0; i < 20; i++ {
+	for i := range 20 {
 		if got := m.String(fmt.Sprintf("token-%d.", i)); got != "<redacted>." {
 			t.Errorf("token-%d not learned: %q", i, got)
 		}
