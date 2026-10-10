@@ -24,7 +24,7 @@
   </a>
 </p>
 
-It writes a workflow across HTTP, gRPC, databases, mail, SSH and shell as readable YAML, runs its jobs in parallel, and takes new protocols as actions. It is a single binary that runs the same on your machine, in CI and from cron, with the result in its exit status. A workflow an AI coding agent wrote can be checked before it runs, and run without the writes and connections you did not allow. Documentation: [probe.linyo.ws](https://probe.linyo.ws/)
+Write a workflow across HTTP, gRPC, databases, mail, SSH and shell in readable YAML, and Probe runs its jobs in parallel; a new protocol can be added as an action. Probe is a single binary that runs the same on your machine, in CI and from cron, with the result in its exit status. A workflow an AI coding agent wrote can be checked before it runs, and run without the writes and connections you did not allow. Documentation: [probe.linyo.ws](https://probe.linyo.ws/)
 
 ![Architecture](/misc/probe-architecture.svg)
 
