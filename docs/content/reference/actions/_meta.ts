@@ -16,4 +16,5 @@ export default {
   graphql: 'GRAPHQL',
   jmap: 'JMAP',
   'mail-latency': 'MAIL-LATENCY',
+  websocket: 'WEBSOCKET',
 } satisfies MetaRecord

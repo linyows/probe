@@ -106,6 +106,7 @@ These are external actions, each in a repository of its own, which a step pins b
 | [graphql](https://probe.linyo.ws/reference/actions/graphql) | GraphQL queries over HTTP |
 | [jmap](https://probe.linyo.ws/reference/actions/jmap) | JMAP methods |
 | [mail-latency](https://probe.linyo.ws/reference/actions/mail-latency) | Measuring delivery latency from received messages |
+| [websocket](https://probe.linyo.ws/reference/actions/websocket) | Sending and receiving messages over WebSocket |
 
 Documentation
 -------------

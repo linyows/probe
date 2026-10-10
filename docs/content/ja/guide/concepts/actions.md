@@ -998,6 +998,7 @@ Probeとあわせて公開している外部アクションです。それぞれ
 | [graphql](/ja/reference/actions/graphql) | GraphQLのクエリをHTTPで送り、レスポンスの`data`と`errors`を分けて返します | v0.2.0 |
 | [jmap](/ja/reference/actions/jmap) | [JMAP](https://jmap.io/)のメソッドを呼びます。セッションを取得し、各呼び出しのアカウントを補い、HTTP 200で返るメソッドのエラーを`res.errors`にまとめます | v0.2.0 |
 | [mail-latency](/ja/reference/actions/mail-latency) | Maildirのメッセージを読み、`Received`ヘッダーから各メッセージの配送遅延を計算してCSVに書きます。Probe v1.21.0までは組み込みアクションでした | v0.1.0 |
+| [websocket](/ja/reference/actions/websocket) | WebSocketのサーバーに接続し、メッセージを順に送受信して、受け取ったものを返します。受信は次の1通、指定した数、サーバーが閉じるまでのすべての中から選べ、一致するものだけに絞ることもできます | v0.1.0 |
 
 #### action.yml
 

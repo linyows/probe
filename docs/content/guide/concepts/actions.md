@@ -784,6 +784,7 @@ These external actions are published alongside Probe, each in a repository of it
 | [graphql](/reference/actions/graphql) | Sends a GraphQL query over HTTP, and returns the `data` and `errors` of the response apart | v0.2.0 |
 | [jmap](/reference/actions/jmap) | Calls [JMAP](https://jmap.io/) methods: fetches the session, fills in the account of each call, and gathers the method errors, which come with HTTP 200, in `res.errors` | v0.2.0 |
 | [mail-latency](/reference/actions/mail-latency) | Reads messages from a Maildir, computes the delivery latency of each one from its `Received` headers, and writes a CSV. It was built into Probe up to v1.21.0 | v0.1.0 |
+| [websocket](/reference/actions/websocket) | Connects to a WebSocket server, sends and receives messages in order, and returns those it received. A receive takes the next message, a number of them, or every message until the server closes, optionally only those that match | v0.1.0 |
 
 #### action.yml
 
