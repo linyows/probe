@@ -1,9 +1,9 @@
-<p align="right">English | <a href="https://github.com/linyows/probe/blob/main/README.ja.md">日本語</a></p>
+<p align="right">English | <a href="https://github.com/mozership/probe/blob/main/README.ja.md">日本語</a></p>
 
 <br><br><br><br>
 
 <p align="center">
-  <img alt="PROBE" src="https://github.com/linyows/probe/blob/main/misc/probe.svg" width="200">
+  <img alt="PROBE" src="https://github.com/mozership/probe/blob/main/misc/probe.svg" width="200">
 </p>
 
 <br><br><br><br>
@@ -13,11 +13,11 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/linyows/probe/actions/workflows/test.yml">
-    <img alt="GitHub Workflow Status" src="https://img.shields.io/github/actions/workflow/status/linyows/probe/test.yml?branch=main&style=for-the-badge&labelColor=666666">
+  <a href="https://github.com/mozership/probe/actions/workflows/test.yml">
+    <img alt="GitHub Workflow Status" src="https://img.shields.io/github/actions/workflow/status/mozership/probe/test.yml?branch=main&style=for-the-badge&labelColor=666666">
   </a>
-  <a href="https://github.com/linyows/probe/releases">
-    <img src="http://img.shields.io/github/release/linyows/probe.svg?style=for-the-badge&labelColor=666666&color=DDDDDD" alt="GitHub Release">
+  <a href="https://github.com/mozership/probe/releases">
+    <img src="http://img.shields.io/github/release/mozership/probe.svg?style=for-the-badge&labelColor=666666&color=DDDDDD" alt="GitHub Release">
   </a>
   <a href="http://godoc.org/github.com/linyows/probe">
     <img src="http://img.shields.io/badge/go-docs-blue.svg?style=for-the-badge&labelColor=666666&color=DDDDDD" alt="Go Documentation">
@@ -33,12 +33,13 @@ Features
 
 Similar software is usually one of two things: a test runner, or a prober that monitors. Most of them speak one protocol. Probe is both, across the protocols a web system is actually made of.
 
-- **One file reaches the whole system.** HTTP, gRPC, MySQL, PostgreSQL, SQLite, SMTP, IMAP, SSH and shell are built in, and an external action drives a real browser. A single run can call an endpoint, query the row it wrote, and read the mail it sent, with no glue between three tools.
-- **Shared steps live in their own file.** A scenario usually starts by logging in, and every scenario after the first repeats it. Put those steps in a job file with its endpoint in `defaults`, and any workflow runs it with `uses: embedded`, passing the credentials as `vars` and reading the token back from `outputs`. The job's steps appear nested under the step that called it.
-- **The same file is a test and a monitor.** Add `repeat` to a job and it runs on an interval, reporting `3/3 success (100.0%)`. There is no second, rewritten copy of the workflow for monitoring.
-- **Jobs are a graph, not a list.** `needs` declares only the order that matters, and everything else runs in parallel. `probe dag` prints that graph as ASCII or Mermaid. Scenario runners walk a file from top to bottom.
-- **It behaves the same everywhere.** One Go binary, nothing to install alongside it and no service to keep running, so your terminal, a CI step and a cron entry all do the same thing.
-- **Actions are separate processes.** Each one runs behind [go-plugin](https://github.com/hashicorp/go-plugin), so a protocol Probe does not cover yet can be added without forking the binary.
+- **One file reaches the whole system.** HTTP, gRPC, MySQL, PostgreSQL, SQLite, SMTP, IMAP, SSH and shell are built in, and external actions add a real browser, GraphQL and JMAP. A single run can call an endpoint, query the row it wrote, and read the mail it sent.
+- **Your API spec decides what passes.** Give a step your OpenAPI document or `.proto` files, and each request and response is checked against them, even when the step's `test` passes. `probe coverage` then lists the operations and methods no step has reached.
+- **A coding agent can write the tests.** `probe skill` teaches an agent to write workflows for the version installed, `probe check` finds its mistakes before anything runs, and `--read-only` and `--allow-host` refuse writes and hosts you did not list before they are sent.
+- **The same file is a test and a monitor.** Add `repeat` to a job and it runs on an interval, reporting `3/3 success (100.0%)`, with no second copy of the workflow.
+- **Shared steps live in their own file.** The login every scenario starts with goes in a job file, which any workflow runs with `uses: embedded`, passing `vars` in and reading `outputs` back.
+- **Jobs are a graph, not a list.** `needs` declares only the order that matters, the rest runs in parallel, and `probe dag` prints the graph as ASCII or Mermaid.
+- **New protocols come as actions.** An action is a program of its own. One published in a repository is pinned by commit, and Probe checks its SHA-256 before it runs it.
 
 Beyond that, a workflow has `outputs` to pass data between steps and jobs, `test` to assert on any response, `retry`, `skipif`, `iteration`, `wait` and `timeout`, `defaults` for settings shared across steps, and merging of several YAML files on one command line.
 
@@ -97,7 +98,7 @@ Built-in Actions
 | [`imap`](https://probe.linyo.ws/reference/actions/imap) | Reading a mailbox |
 | [`ssh`](https://probe.linyo.ws/reference/actions/ssh) | Commands on a remote host |
 | [`shell`](https://probe.linyo.ws/reference/actions/shell) | Commands on the machine running Probe |
-| [`grpc`](https://probe.linyo.ws/reference/actions/grpc) | gRPC calls |
+| [`grpc`](https://probe.linyo.ws/reference/actions/grpc) | gRPC and Connect calls, streaming included |
 | [`embedded`](https://probe.linyo.ws/reference/actions/embedded) | Running another job file from a step |
 | [`hello`](https://probe.linyo.ws/reference/actions/hello) | Printing a report line |
 
