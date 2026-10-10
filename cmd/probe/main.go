@@ -377,6 +377,7 @@ func (c *Cmd) runGen() int {
 
 func (c *Cmd) runProbe() int {
 	p := probe.New(c.WorkflowPath, c.Verbose)
+	p.Config.Actions = actions.Names()
 	if c.Timing {
 		p.Config.Timing = true
 	}
@@ -431,6 +432,7 @@ func (c *Cmd) runDag() int {
 	}
 
 	p := probe.New(c.SubCommandArgs[0], c.Verbose)
+	p.Config.Actions = actions.Names()
 	var graph string
 	var err error
 	if c.DagMermaid {

@@ -117,11 +117,17 @@ func Check(path string, opts CheckOptions) ([]Finding, error) {
 		c.walkWorkflow(doc.Body)
 	}
 
+	// What is wrong with the names of external actions is told on the line
+	// of each, with whatever else is wrong, rather than ending the check.
+	var aliases []aliasProblem
+	p.Config.Actions = opts.Actions
+	p.aliasProblems = &aliases
 	if err := p.Load(); err != nil {
 		c.add(SeverityError, 0, "", "%s", firstLine(err.Error()))
 		return c.sorted(), nil
 	}
 	c.wf = &p.workflow
+	c.checkAliases(aliases)
 	c.checkActions()
 	c.checkWith()
 	c.checkNeeds()
@@ -348,8 +354,8 @@ func join(path, key string) string {
 
 func (c *checker) walkWorkflow(body ast.Node) {
 	c.keys(body, "", "", workflowKeys, func(key string, value ast.Node) {
-		if key == "vars" {
-			c.noteLines("vars", value)
+		if key == "vars" || key == "actions" {
+			c.noteLines(key, value)
 		}
 		if key != "jobs" {
 			return
@@ -464,6 +470,35 @@ func (c *checker) stepWhere(i, j int) string {
 	return fmt.Sprintf("%s, step %d %q", c.jobWhere(i), j, st.Name)
 }
 
+// checkAliases tells what is wrong with the names the workflow's actions
+// give, each on its line.
+func (c *checker) checkAliases(problems []aliasProblem) {
+	for _, p := range problems {
+		if p.name != "" {
+			c.add(SeverityError, c.line("actions."+p.name), "", "%s", firstLine(p.msg))
+			continue
+		}
+		c.add(SeverityError, c.line(fmt.Sprintf("jobs[%d].defaults.%s", p.job, p.action)), c.jobWhere(p.job), "%s", firstLine(p.msg))
+	}
+}
+
+// defaultsPath returns the path of the defaults of action in the job at jp,
+// as the workflow writes them: by the action in full, or by a name its
+// actions give it.
+func (c *checker) defaultsPath(jp, action string) string {
+	path := jp + ".defaults." + action
+	if _, ok := c.lines[path]; ok {
+		return path
+	}
+	for _, name := range slices.Sorted(maps.Keys(c.wf.Actions)) {
+		named := jp + ".defaults." + name
+		if _, ok := c.lines[named]; ok && c.wf.Actions[name] == action {
+			return named
+		}
+	}
+	return path
+}
+
 func (c *checker) checkActions() {
 	for i, job := range c.wf.Jobs {
 		for j, st := range job.Steps {
@@ -477,6 +512,11 @@ func (c *checker) checkActions() {
 				continue
 			}
 			if len(c.opts.Actions) == 0 || slices.Contains(c.opts.Actions, st.Uses) {
+				continue
+			}
+			// A name still here is one that is wrong, which is told where
+			// the workflow gives it.
+			if _, named := c.wf.Actions[st.Uses]; named {
 				continue
 			}
 			msg := fmt.Sprintf("unknown action %q", st.Uses)
@@ -524,7 +564,10 @@ func (c *checker) checkWith() {
 		jp := fmt.Sprintf("jobs[%d]", i)
 		if defaults, ok := job.Defaults.(map[string]any); ok {
 			for _, action := range slices.Sorted(maps.Keys(defaults)) {
-				path := jp + ".defaults." + action
+				path := c.defaultsPath(jp, action)
+				if _, named := c.wf.Actions[action]; named && !slices.Contains(c.opts.Actions, action) {
+					continue
+				}
 				if len(c.opts.Actions) > 0 && !slices.Contains(c.opts.Actions, action) && !actionref.IsExternal(action) {
 					msg := fmt.Sprintf("defaults: no action is named %q, so its defaults apply to no step", action)
 					if s := suggest(action, c.opts.Actions); s != "" {
@@ -539,7 +582,7 @@ func (c *checker) checkWith() {
 					}
 				}
 				with, _ := defaults[action].(map[string]any)
-				c.withKeys(action, with, path, c.jobWhere(i), "defaults."+action, func(string) bool { return true })
+				c.withKeys(action, with, path, c.jobWhere(i), strings.TrimPrefix(path, jp+"."), func(string) bool { return true })
 			}
 		}
 		defaults, _ := job.Defaults.(map[string]any)

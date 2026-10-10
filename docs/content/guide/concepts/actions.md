@@ -774,6 +774,29 @@ A remote action must be pinned to a full 40-character commit SHA. Tags and branc
 
 Probe resolves every external action before the first job starts. A reference that cannot be resolved fails the run with exit code 2, and a download does not count against a step's timeout. Executables are kept under `probe/actions` in the user's cache directory (`~/.cache` on Linux, `~/Library/Caches` on macOS), so each is downloaded once. `action.yml` is read from GitHub on every run instead, because it holds the digest the executable is checked against, and a copy on disk could have been changed.
 
+#### Naming an External Action
+
+A workflow that uses an external action in several steps can give it a name once, under the top-level `actions`, and use the name in `uses` and in `defaults`:
+
+```yaml
+actions:
+  graphql: github.com/mozership/probe-graphql@<40-character commit SHA> # v0.2.0
+
+jobs:
+- name: Who am I
+  defaults:
+    graphql:
+      url: https://api.example.com/graphql
+  steps:
+  - name: Ask the API who I am
+    uses: graphql
+    with:
+      query: '{ viewer { login } }'
+    test: res.code == 200
+```
+
+The commit is then written in one place, which is the line to change for a newer release. A name cannot be that of a built-in action, and `--allow-action` takes the action in full, not the name. See [`actions`](/reference/yaml-configuration#actions) for the rules.
+
 #### Published Actions
 
 These external actions are published alongside Probe, each in a repository of its own. Each page describes its parameters and result, and the notes of each release start with the `uses` line to copy.

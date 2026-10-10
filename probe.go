@@ -20,6 +20,9 @@ type Probe struct {
 	FilePath string
 	workflow Workflow
 	Config   Config
+	// aliasProblems, when it is set, is given what is wrong with the names
+	// the workflow's actions give, in place of Load failing on the first.
+	aliasProblems *[]aliasProblem
 }
 
 type Config struct {
@@ -34,6 +37,10 @@ type Config struct {
 	// and only from some hosts. Each step's action is told it, and a step
 	// whose action does not keep to it is refused unless it is allowed.
 	Guard actionrpc.Guard
+	// Actions are the names of the actions of Probe, which a workflow
+	// cannot give to an external action under actions. When it is empty,
+	// the names a workflow gives are not checked against them.
+	Actions []string
 }
 
 func New(path string, v bool) *Probe {
@@ -106,6 +113,17 @@ func (p *Probe) Load() error {
 		if err == nil {
 			p.workflow.basePath = filepath.Dir(absPath)
 		}
+	}
+
+	// The names the workflow gives to external actions are replaced before
+	// anything reads a uses, the defaults included.
+	problems := p.workflow.checkAliases(p.Config.Actions)
+	problems = append(problems, p.workflow.resolveAliases(problems)...)
+	if p.aliasProblems != nil {
+		*p.aliasProblems = problems
+	} else if len(problems) > 0 {
+		return NewConfigurationError("resolve_alias", "failed to resolve the names of external actions", problems[0]).
+			WithContext("workflow_path", p.FilePath)
 	}
 
 	p.setDefaultsToSteps()

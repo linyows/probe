@@ -2,17 +2,21 @@ name: External Action
 description: |
   Runs mozership/probe-graphql, pinned by commit, against the echo server in
   e2e/echo-server. Probe downloads the action from its GitHub release and
-  checks it against the digest in action.yml at that commit.
+  checks it against the digest in action.yml at that commit. The workflow
+  names the action graphql under actions, and its last step names it in full.
+
+actions:
+  graphql: github.com/mozership/probe-graphql@41e4ffa222db58c63c7169117c919e6d252bdbf9 # v0.2.0
 
 jobs:
 - name: External action
   defaults:
-    github.com/mozership/probe-graphql@41e4ffa222db58c63c7169117c919e6d252bdbf9:
+    graphql:
       url: http://127.0.0.1:8091/
   steps:
   - name: The step's parameters reach the action
     id: echo
-    uses: github.com/mozership/probe-graphql@41e4ffa222db58c63c7169117c919e6d252bdbf9 # v0.2.0
+    uses: graphql
     with:
       query: "{ ping }"
       variables:
@@ -27,9 +31,14 @@ jobs:
     outputs:
       code: res.data.request.variables.code
   - name: Its outputs reach later steps
-    uses: github.com/mozership/probe-graphql@41e4ffa222db58c63c7169117c919e6d252bdbf9 # v0.2.0
+    uses: graphql
     with:
       query: "{ ping }"
       variables:
         code: "{{ outputs.echo.code }}"
     test: res.data.request.variables.code == "JP"
+  - name: The action named in full is the same one, with the same defaults
+    uses: github.com/mozership/probe-graphql@41e4ffa222db58c63c7169117c919e6d252bdbf9
+    with:
+      query: "{ ping }"
+    test: res.code == 200 && res.data.request.query == "{ ping }"

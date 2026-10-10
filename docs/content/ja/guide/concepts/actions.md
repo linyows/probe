@@ -988,6 +988,29 @@ Probeは、こうしたアクションに実行するステップを常に伝え
 
 Probeは最初のジョブを始める前にすべての外部アクションを解決します。解決できない参照があれば終了コード2で実行を止め、ダウンロードの時間はステップのタイムアウトに含まれません。実行ファイルはユーザーのキャッシュディレクトリ（Linuxでは`~/.cache`、macOSでは`~/Library/Caches`）の`probe/actions`に置かれるので、ダウンロードは1回で済みます。一方、`action.yml`は実行のたびにGitHubから読みます。実行ファイルを照合するダイジェストを持つファイルなので、ディスク上で書き換えられたかもしれない写しは信用しません。
 
+#### 外部アクションに名前を付ける
+
+外部アクションを複数のステップで使うワークフローでは、トップレベルの`actions`で一度だけ名前を付け、`uses`と`defaults`にその名前を書けます：
+
+```yaml
+actions:
+  graphql: github.com/mozership/probe-graphql@<40文字のコミットSHA> # v0.2.0
+
+jobs:
+- name: Who am I
+  defaults:
+    graphql:
+      url: https://api.example.com/graphql
+  steps:
+  - name: Ask the API who I am
+    uses: graphql
+    with:
+      query: '{ viewer { login } }'
+    test: res.code == 200
+```
+
+コミットを書く場所が1か所になり、新しいリリースへの更新はその1行の変更で済みます。組み込みアクションの名前は付けられません。`--allow-action`には、名前ではなく完全な形のアクションを指定します。規則は[`actions`](/ja/reference/yaml-configuration#actions)を参照してください。
+
 #### 公開されているアクション
 
 Probeとあわせて公開している外部アクションです。それぞれ独立したリポジトリにあり、パラメータと結果は各ページで説明しています。各リリースのノートの先頭に、コピーして使う`uses`の行があります。
