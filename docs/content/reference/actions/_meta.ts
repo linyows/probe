@@ -9,6 +9,7 @@ export default {
   smtp: 'SMTP',
   imap: 'IMAP',
   grpc: 'GRPC',
+  dns: 'DNS',
   embedded: 'EMBEDDED',
   hello: 'HELLO',
   '-- external': { type: 'separator', title: 'External' },
