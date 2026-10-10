@@ -24,6 +24,7 @@ These are published alongside Probe, each in a repository of its own. A step nam
 - **[graphql](/reference/actions/graphql)** - Send a GraphQL query over HTTP
 - **[jmap](/reference/actions/jmap)** - Call JMAP methods
 - **[mail-latency](/reference/actions/mail-latency)** - Measure delivery latency from a Maildir
+- **[websocket](/reference/actions/websocket)** - Send and receive messages over a WebSocket connection
 
 ## Action Error Handling
 
