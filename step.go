@@ -132,7 +132,7 @@ func (st *Step) executeAction(name string, jCtx *JobContext) (map[string]any, er
 		// error about another value cannot show them, and the details of a
 		// credential's own error are left out.
 		jCtx.Printer.Masker().Learn(expW)
-		return nil, redactCredentialErrors(prefixFieldErrors(err, "with."))
+		return nil, redactCredentialErrors(prefixFieldErrors(err, "with."), st.With)
 	}
 
 	runner := st.actionRunner
@@ -1119,8 +1119,10 @@ var errCredentialTemplate = errors.New("the template could not be evaluated; the
 
 // redactCredentialErrors replaces the error of each *expr.FieldError joined
 // into err whose path goes through a credential, such as
-// with.headers.authorization or with.password, keeping the path.
-func redactCredentialErrors(err error) error {
+// with.headers.authorization or with.password, keeping the path. So is that
+// of a URL written in with whose user info holds a template, as the password
+// of redis://app:{{vars.pw}}@host does.
+func redactCredentialErrors(err error, with map[string]any) error {
 	var errs []error
 	for _, e := range unwrapJoined(err) {
 		var fe *expr.FieldError
@@ -1129,12 +1131,57 @@ func redactCredentialErrors(err error) error {
 		// not be evaluated is hidden: another error, such as two keys that
 		// come to one, quotes no credential.
 		var te *expr.TemplateError
-		if errors.As(e, &fe) && errors.As(fe.Err, &te) && (pathHoldsCredential(fe.Path) || pathHoldsCredential(fe.EvaluatedPath)) {
+		if errors.As(e, &fe) && errors.As(fe.Err, &te) && (pathHoldsCredential(fe.Path) || pathHoldsCredential(fe.EvaluatedPath) || urlCredentialTemplated(with, fe.Path)) {
 			e = &expr.FieldError{Path: fe.Path, EvaluatedPath: fe.EvaluatedPath, Err: errCredentialTemplate}
 		}
 		errs = append(errs, e)
 	}
 	return errors.Join(errs...)
+}
+
+// templatePlaceholder stands for a template in a value read without them.
+const templatePlaceholder = "\x00"
+
+// urlCredentialTemplated reports whether the value at path, as with.url, is
+// a URL written in with whose user info holds a template: the template, or
+// why it could not be evaluated, may then quote the password. A URL whose
+// templates are elsewhere, as most are, keeps its error. A value that cannot
+// be found by its path is taken to hold one.
+func urlCredentialTemplated(with map[string]any, path string) bool {
+	keys := strings.Split(strings.TrimPrefix(path, "with."), ".")
+	last := keys[len(keys)-1]
+	if i := strings.IndexByte(last, '['); i >= 0 {
+		last = last[:i]
+	}
+	if !mask.HoldsURL(last) {
+		return false
+	}
+	var v any = with
+	for _, key := range keys {
+		name, index, _ := strings.Cut(key, "[")
+		m, ok := v.(map[string]any)
+		if !ok {
+			return true
+		}
+		if v, ok = m[name]; !ok {
+			return true
+		}
+		for index != "" {
+			var n string
+			n, index, _ = strings.Cut(index, "[")
+			items, ok := v.([]any)
+			i, err := strconv.Atoi(strings.TrimSuffix(n, "]"))
+			if !ok || err != nil || i < 0 || i >= len(items) {
+				return true
+			}
+			v = items[i]
+		}
+	}
+	written, ok := v.(string)
+	if !ok {
+		return false
+	}
+	return strings.Contains(mask.Userinfo(expr.ReplaceTemplates(written, templatePlaceholder)), templatePlaceholder)
 }
 
 // pathHoldsCredential reports whether any key in path, such as

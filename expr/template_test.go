@@ -104,3 +104,19 @@ func TestEvalTemplateWithTypePreservationMapLiteral(t *testing.T) {
 		t.Errorf("got %#v, want %q", got, "12")
 	}
 }
+
+func TestReplaceTemplates(t *testing.T) {
+	tests := []struct{ in, want string }{
+		{"no template", "no template"},
+		{"{{a}}", "_"},
+		{"a{{b}}c{{ d }}e", "a_c_e"},
+		{`x://u:{{ "}}/@" + a }}@h/{{ {'k': 1}['k'] }}`, "x://u:_@h/_"},
+		{"left {{ open", "left {{ open"},
+		{"{{{a}}}", "{_}"},
+	}
+	for _, tt := range tests {
+		if got := ReplaceTemplates(tt.in, "_"); got != tt.want {
+			t.Errorf("ReplaceTemplates(%q) = %q, want %q", tt.in, got, tt.want)
+		}
+	}
+}
