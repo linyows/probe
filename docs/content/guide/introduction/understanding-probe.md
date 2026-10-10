@@ -8,6 +8,11 @@ weight: 30
 
 Probe is a YAML-based workflow automation tool designed for monitoring, testing, and automation tasks. This guide explains the core concepts you need to understand to effectively use Probe.
 
+Probe reads a workflow written in YAML, checks it, and runs it with its workflow engine. The engine schedules the jobs, executes their steps, evaluates expressions and prints the results, and each step calls an action: one built into Probe, or an external action from a repository of its own.
+
+<img class="diagram diagram--light" src="/architecture.svg" alt="Probe's architecture: a YAML workflow goes through the parser and validator to the workflow engine, made of the scheduler, the executor, actions, expressions and the printer, which calls the built-in actions and the external actions" />
+<img class="diagram diagram--dark" src="/architecture-dark.svg" alt="" />
+
 ## Core Concepts
 
 Probe has four building blocks. A workflow contains jobs, a job contains steps, and a step invokes an action.
