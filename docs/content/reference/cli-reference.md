@@ -215,7 +215,7 @@ probe --read-only --allow-action shell workflow.yml
 
 ## Subcommands
 
-A subcommand replaces the run with something else: `gen` writes a starting workflow, `dag` prints the dependency graph a workflow describes, `check` finds what is wrong or weak in a workflow without running it, `coverage` tells how much of an OpenAPI document a run checked, `guide` prints this documentation, and `skill` sets up a coding agent to use Probe.
+A subcommand replaces the run with something else: `gen` writes a starting workflow, `dag` prints the dependency graph a workflow describes, `check` finds what is wrong or weak in a workflow without running it, `coverage` tells how much of an OpenAPI document a run checked, `guide` prints this documentation, `skill` sets up a coding agent to use Probe, and `manifest` writes the `action.yml` of a release of an external action.
 
 ### `gen`
 
@@ -414,6 +414,53 @@ probe skill install <dir>      # write <dir>/SKILL.md
 ```
 
 `install` creates the directory and replaces an existing `SKILL.md`, so running it again after upgrading Probe brings the skill up to date. As with report files, a symlink in the project, at `SKILL.md` or on a directory such as `.claude`, cannot make it write outside the project. For an agent that reads skills from another place, give that directory, for example `probe skill install .agents/skills/probe`. The same file is in the repository at `skills/probe/SKILL.md` for tools that install skills from a repository.
+
+### `manifest`
+
+Print the `action.yml` of an [external action](/guide/concepts/actions#external-actions): the one to start a new action from, or the one of a release, for its release workflow to commit.
+
+**Usage:**
+```bash
+probe manifest init <owner>/<repo>
+probe manifest <tag> <checksums-file> [action-file]
+```
+
+#### `manifest init`
+
+Print an `action.yml` to start a new action from, for the GitHub repository `<owner>/<repo>` that will publish it.
+
+```bash
+probe manifest init mozership/probe-greet > action.yml
+```
+
+The action is named after the repository, without a leading `probe-`, and `runs.url` names the executable of each platform `<repo>_{os}_{arch}`, which is what GoReleaser names one it publishes unarchived. The tag in `runs.url` is a placeholder and there are no checksums, so the action cannot be used from this commit: the first release puts both in. The description, `guard` and `params` are left for you to fill in, each with a comment that says what it is for.
+
+#### `manifest <tag>`
+
+Print the `action.yml` of a release.
+
+| Argument | Description |
+|---|---|
+| `tag` | The tag of the release, such as `v0.2.0` |
+| `checksums-file` | The SHA-256 digests of the executables of the release, as `sha256sum` or GoReleaser writes them: a line is `<digest>  <file>` |
+| `action-file` | The `action.yml` to start from. It defaults to `action.yml` in the working directory |
+
+It reads `action-file` and prints it with two changes:
+
+- `runs.url` takes `tag` in place of the tag it has. It must be the address of a release asset on GitHub, `https://github.com/<owner>/<repo>/releases/download/<tag>/<asset>`, and `<asset>` must have one `{os}` and one `{arch}`.
+- `runs.checksums` becomes the digests of `checksums-file`. A line is taken when its file is `<asset>` with a platform in place of `{os}` and `{arch}`, and any other line is left out, as are the checksums `action-file` had.
+
+`name`, `description`, `guard` and `params` are printed as they were read. The output is always written in the same form, with the checksums sorted by platform. The comment lines `action-file` starts with are kept, and no other comment is.
+
+**Example:**
+```bash
+probe manifest v0.2.0 dist/checksums.txt > "$RUNNER_TEMP/action.yml"
+cp "$RUNNER_TEMP/action.yml" action.yml
+```
+
+Do not redirect the output straight to the file it reads: the shell empties `action.yml` before Probe reads it.
+
+An `action.yml` that cannot be released, or a checksums file with no digest for the asset, exits with status 2 and prints nothing to standard output. A release tagged `init` cannot be given, as that names `manifest init`.
 
 ## Environment Variables
 

@@ -108,7 +108,7 @@ func TestCmd_usage(t *testing.T) {
 }
 
 func TestCmd_start(t *testing.T) {
-	help := " __  __  __  __  __\n|  ||  ||  ||  || _|\n|  ||  /| |||  /|  |\n| | |  \\| |||  \\| _|\n|_| |_\\_|__||__||__|\n\nProbe - A YAML-based workflow automation tool.\nhttps://github.com/linyows/probe (ver: dev, rev: unknown)\n\nUsage: probe [options] <workflow-file>\n       probe gen <openapi-file>\n       probe dag [--mermaid] <workflow-file>\n       probe check <workflow-file>\n       probe coverage <openapi-file|proto-file> <report-file>\n       probe guide [topic]\n       probe skill [install [dir]]\n\nArguments:\n  workflow-file    Path to YAML workflow file(s). Multiple files can be\n                   specified with comma-separated paths (e.g., \"base.yml,override.yml\")\n                   to merge configurations.\n\nSubcommands:\n  gen <file>       Generate probe workflow YAML from OpenAPI specification\n  dag <file>       Show job dependency graph as ASCII art (default)\n                   Use --mermaid to output in Mermaid format\n  check <file>     Find what is wrong or weak in a workflow without running it\n  coverage <openapi-file|proto-file> <report-file>\n                   Show which operations of an OpenAPI document, or methods of\n                   a .proto file, the steps of a run checked, from its\n                   --report json file\n  guide [topic]    Print a page of the documentation as Markdown\n                   Without a topic, list the topics\n  skill            Print the skill that teaches coding agents to use Probe\n                   install [dir] writes it to dir (.claude/skills/probe)\n\nOptions:\n  -h, --help         Show command usage\n      --version      Show version information\n      --timing       Show timing (start time, response time)\n  -v, --verbose      Show verbose log\n      --output       Report output: auto, spinner or stream (env: PROBE_OUTPUT)\n      --report       Write reports: json, junit, markdown, github-summary as format[=path],... (env: PROBE_REPORT)\n      --read-only    Refuse what writes, such as an HTTP POST or an UPDATE (env: PROBE_READ_ONLY)\n      --allow-host   Refuse connecting to hosts but these, as host[:port] or *.domain,... (env: PROBE_ALLOW_HOSTS)\n      --allow-action Run these actions under --read-only or --allow-host although they do not keep to them (env: PROBE_ALLOW_ACTIONS)\n"
+	help := " __  __  __  __  __\n|  ||  ||  ||  || _|\n|  ||  /| |||  /|  |\n| | |  \\| |||  \\| _|\n|_| |_\\_|__||__||__|\n\nProbe - A YAML-based workflow automation tool.\nhttps://github.com/linyows/probe (ver: dev, rev: unknown)\n\nUsage: probe [options] <workflow-file>\n       probe gen <openapi-file>\n       probe dag [--mermaid] <workflow-file>\n       probe check <workflow-file>\n       probe coverage <openapi-file|proto-file> <report-file>\n       probe guide [topic]\n       probe skill [install [dir]]\n       probe manifest init <owner>/<repo>\n       probe manifest <tag> <checksums-file> [action-file]\n\nArguments:\n  workflow-file    Path to YAML workflow file(s). Multiple files can be\n                   specified with comma-separated paths (e.g., \"base.yml,override.yml\")\n                   to merge configurations.\n\nSubcommands:\n  gen <file>       Generate probe workflow YAML from OpenAPI specification\n  dag <file>       Show job dependency graph as ASCII art (default)\n                   Use --mermaid to output in Mermaid format\n  check <file>     Find what is wrong or weak in a workflow without running it\n  coverage <openapi-file|proto-file> <report-file>\n                   Show which operations of an OpenAPI document, or methods of\n                   a .proto file, the steps of a run checked, from its\n                   --report json file\n  guide [topic]    Print a page of the documentation as Markdown\n                   Without a topic, list the topics\n  skill            Print the skill that teaches coding agents to use Probe\n                   install [dir] writes it to dir (.claude/skills/probe)\n  manifest init <owner>/<repo>\n                   Print an action.yml to start a new external action from,\n                   published in that GitHub repository\n  manifest <tag> <checksums-file> [action-file]\n                   Print the action.yml of a release of an external action:\n                   action-file (action.yml) with the tag in runs.url and the\n                   digests of checksums-file in runs.checksums\n\nOptions:\n  -h, --help         Show command usage\n      --version      Show version information\n      --timing       Show timing (start time, response time)\n  -v, --verbose      Show verbose log\n      --output       Report output: auto, spinner or stream (env: PROBE_OUTPUT)\n      --report       Write reports: json, junit, markdown, github-summary as format[=path],... (env: PROBE_REPORT)\n      --read-only    Refuse what writes, such as an HTTP POST or an UPDATE (env: PROBE_READ_ONLY)\n      --allow-host   Refuse connecting to hosts but these, as host[:port] or *.domain,... (env: PROBE_ALLOW_HOSTS)\n      --allow-action Run these actions under --read-only or --allow-host although they do not keep to them (env: PROBE_ALLOW_ACTIONS)\n"
 
 	tests := []struct {
 		name           string
@@ -806,6 +806,75 @@ func TestCmd_skill(t *testing.T) {
 
 	if _, err := os.Stat(filepath.Join(dir, "SKILL.md")); err != nil {
 		t.Errorf("install should have written SKILL.md: %v", err)
+	}
+}
+
+func TestCmd_manifest(t *testing.T) {
+	dir := t.TempDir()
+	sum := strings.Repeat("a", 64)
+	write := func(name, content string) string {
+		t.Helper()
+		path := filepath.Join(dir, name)
+		if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		return path
+	}
+	action := write("action.yml", "name: greet\nguard: [read-only]\nruns:\n  using: binary\n  url: https://github.com/example/probe-greet/releases/download/v0.1.0/probe-greet_{os}_{arch}\n")
+	local := write("local.yml", "runs:\n  using: binary\n  path: probe-greet\n")
+	checksums := write("checksums.txt", sum+"  probe-greet_linux_amd64\n")
+	released := "name: greet\nguard: [read-only]\nruns:\n  using: binary\n  url: https://github.com/example/probe-greet/releases/download/v0.2.0/probe-greet_{os}_{arch}\n  checksums:\n    linux_amd64: \"" + sum + "\"\n"
+
+	tests := []struct {
+		name       string
+		args       []string
+		expectCode int
+		expectOut  string
+		errContain string
+	}{
+		{"action file given", []string{"probe", "manifest", "v0.2.0", checksums, action}, 0, released, ""},
+		{"action.yml of the working directory", []string{"probe", "manifest", "v0.2.0", checksums}, 0, released, ""},
+		{"no checksums file", []string{"probe", "manifest", "v0.2.0"}, probe.ExitConfigError, "", "       probe manifest <tag>"},
+		{"init without a repository", []string{"probe", "manifest", "init"}, probe.ExitConfigError, "", "Usage: probe manifest init"},
+		{"init with too many arguments", []string{"probe", "manifest", "init", "example/probe-greet", "more"}, probe.ExitConfigError, "", "Usage: probe manifest init"},
+		{"init with a bad repository", []string{"probe", "manifest", "init", "probe-greet"}, probe.ExitConfigError, "", "must be <owner>/<repo>"},
+		{"too many arguments", []string{"probe", "manifest", "v0.2.0", checksums, action, "more"}, probe.ExitConfigError, "", "Usage: probe manifest"},
+		{"missing checksums file", []string{"probe", "manifest", "v0.2.0", filepath.Join(dir, "none.txt"), action}, probe.ExitConfigError, "", "none.txt"},
+		{"missing action file", []string{"probe", "manifest", "v0.2.0", checksums, filepath.Join(dir, "none.yml")}, probe.ExitConfigError, "", "none.yml"},
+		{"action that cannot be released", []string{"probe", "manifest", "v0.2.0", checksums, local}, probe.ExitConfigError, "", "runs.url is needed"},
+	}
+
+	t.Chdir(dir)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c := newBufferCmd()
+			if code := c.start(tt.args); code != tt.expectCode {
+				t.Errorf("start(%v) = %d, want %d", tt.args, code, tt.expectCode)
+			}
+			if out := fmt.Sprintf("%s", c.outWriter); out != tt.expectOut {
+				t.Errorf("output = %q, want %q", out, tt.expectOut)
+			}
+			if errOut := fmt.Sprintf("%s", c.errWriter); !strings.Contains(errOut, tt.errContain) {
+				t.Errorf("error output should contain %q, got: %s", tt.errContain, errOut)
+			}
+		})
+	}
+}
+
+func TestCmd_manifestInit(t *testing.T) {
+	c := newBufferCmd()
+	if code := c.start([]string{"probe", "manifest", "init", "example/probe-greet"}); code != 0 {
+		t.Fatalf("start() = %d, want 0: %s", code, c.errWriter)
+	}
+	out := fmt.Sprintf("%s", c.outWriter)
+	for _, want := range []string{
+		"name: greet\n",
+		"# guard: [read-only, allow-host]\n",
+		"  url: https://github.com/example/probe-greet/releases/download/v0.0.0/probe-greet_{os}_{arch}\n",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("output should contain %q, got:\n%s", want, out)
+		}
 	}
 }
 
