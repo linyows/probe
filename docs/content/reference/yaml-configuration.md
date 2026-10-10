@@ -13,6 +13,8 @@ vars:                         # Optional: workflow variables
   key: value
 secrets:                      # Optional: environment variables to hide in output
   - NAME
+actions:                      # Optional: names for external actions
+  name: string
 jobs:                         # Required: a list of jobs
   - name: string              # Required: job name
     id: string                # Optional: job id, used by needs
@@ -27,7 +29,7 @@ jobs:                         # Required: a list of jobs
     steps:                    # Required: a list of steps
       - name: string          # Optional: step name
         id: string            # Optional: step id, required to publish outputs
-        uses: string          # Required: action name
+        uses: string          # Required: action name, or a name given under actions
         with:                 # Optional: action parameters
           key: value
         test: expression      # Optional: assertion
@@ -53,7 +55,7 @@ There is no top-level `env` key and no top-level `defaults` key. Environment var
 
 ## Top-Level Properties
 
-Four properties sit at the root of a workflow file alongside `jobs`: what to call it, what it does, the values it starts with, and which of those values must not be shown.
+Five properties sit at the root of a workflow file alongside `jobs`: what to call it, what it does, the values it starts with, which of those values must not be shown, and the names it gives to external actions.
 
 ### `name`
 
@@ -139,6 +141,39 @@ Independently of `secrets`, the values of the `Authorization`, `Proxy-Authorizat
 
 The same goes for credentials passed to an action: the value of any `password` or `key_passphrase` field, at any depth of `with`, is shown as `<redacted>`, and so is the password in a database URL such as the `dsn` of the `db` action, while the rest of the URL stays visible. A password written straight into a step therefore does not appear in `--verbose` output or an action's log records, even though it is not listed in `secrets`. When the template of such a value cannot be evaluated, the error names the value, as `with.password`, but does not say why, since the template and the error may each quote the credential.
 
+### `actions`
+
+**Type:** Object of strings (optional)  
+**Description:** Names for the [external actions](/guide/concepts/actions#external-actions) the workflow uses. A step's `uses` and a key of a job's `defaults` can then be the name in place of the repository and commit.
+
+```yaml
+actions:
+  graphql: github.com/mozership/probe-graphql@41e4ffa222db58c63c7169117c919e6d252bdbf9 # v0.2.0
+
+jobs:
+  - name: Countries API
+    defaults:
+      graphql:
+        url: https://countries.trevorblades.com/graphql
+    steps:
+      - name: Look up Japan
+        uses: graphql
+        with:
+          query: '{ country(code: "JP") { capital } }'
+        test: res.data.country.capital == "Tokyo"
+```
+
+The commit an action is pinned to is written once, so a newer release is a change to one line.
+
+- A name is letters, digits, `_` and `-`, and starts with a letter or a digit.
+- A name cannot be that of an action of Probe, such as `http` or `shell`: what `uses: http` runs does not depend on the workflow. A workflow that gives such a name fails to load.
+- The value names an external action as `uses` does: `github.com/<owner>/<repo>[/<dir>]@<commit>` with a full 40-character commit SHA, or a local path starting with `./`, `../` or `/`. It is not a template, and it cannot be another name.
+- A step can still name an action in full, and the `defaults` written by the name apply to it too. A job's `defaults` cannot hold both the name and the action it stands for.
+
+Probe replaces each name by its action as it loads the workflow, so everything else sees the action in full. In particular, `--allow-action` takes the action, not the name: a workflow cannot choose what a name the person running Probe has allowed stands for.
+
+The names belong to the workflow file. A job file run by the [embedded](/reference/actions/embedded) action does not see them, and names its external actions in full.
+
 ## Jobs
 
 `jobs` is a map from job name to job definition. A job groups the steps that run in sequence, and declares what it depends on.
@@ -198,7 +233,7 @@ jobs:
 
 #### `defaults`
 
-Default parameters merged into the `with` of every step in the job that uses the matching action. A value set on the step wins.
+Default parameters merged into the `with` of every step in the job that uses the matching action. A value set on the step wins. The key is what a step writes in `uses`: the name of a built-in action, an external action in full, or a name given under [`actions`](#actions).
 
 ```yaml
 jobs:
@@ -450,6 +485,7 @@ See [Built-in Functions](/reference/built-in-functions) for what can be called i
 - `name` is required at the workflow level, and `jobs` must be a non-empty list.
 - Every job needs a `name` and at least one step.
 - Every step needs a `uses`.
+- A name under `actions` must not be that of an action of Probe, and must stand for an external action pinned to a commit or at a local path.
 - A job's `needs` must refer to ids that exist, and the dependency graph must be acyclic.
 - `repeat.count` must be zero or greater, and `retry.max_attempts` at least 1.
 - A step must have an `id` for its `outputs` to be published.

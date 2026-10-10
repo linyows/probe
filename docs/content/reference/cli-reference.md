@@ -202,7 +202,7 @@ The value can also come from the `PROBE_ALLOW_HOSTS` environment variable, and t
 ### `--allow-action`
 
 **Type:** String  
-**Values:** a comma separated list of action names, as a step writes them in `uses`  
+**Values:** a comma separated list of action names, as a step writes them in `uses`; an external action in full, not a name the workflow gives it under [`actions`](/reference/yaml-configuration#actions)  
 **Default:** none  
 **Description:** Run these actions under `--read-only` or `--allow-host` although they do not declare that they keep to the guard, such as `shell` for a setup step the person running Probe trusts. They are told the guard, and are run as they are.
 

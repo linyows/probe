@@ -202,7 +202,7 @@ probe --read-only --allow-host api.staging.example.com workflow.yml
 ### `--allow-action`
 
 **型:** String  
-**値:** アクション名のカンマ区切りのリスト。ステップが`uses`に書く名前です  
+**値:** アクション名のカンマ区切りのリスト。ステップが`uses`に書く名前です。外部アクションは完全な形で指定し、ワークフローが[`actions`](/ja/reference/yaml-configuration#actions)で付けた名前は使えません  
 **デフォルト:** なし  
 **説明:** ガードを守ると申告していないアクションでも、`--read-only`や`--allow-host`の下で実行します。Probeを実行する人が信頼する準備用の`shell`などに使います。指定したアクションにもガードは伝えますが、アクションはそのまま実行されます。
 

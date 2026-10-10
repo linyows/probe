@@ -25,6 +25,10 @@ type Workflow struct {
 	Description string         `yaml:"description,omitempty"`
 	Jobs        []Job          `yaml:"jobs" validate:"required"`
 	Vars        map[string]any `yaml:"vars"`
+	// Actions gives names to external actions, for the steps and the
+	// defaults of the jobs to name them by. Load writes the action in place
+	// of each name, so nothing that runs the workflow sees one.
+	Actions map[string]string `yaml:"actions,omitempty"`
 	// Secrets names environment variables whose values must not appear in
 	// anything Probe prints or writes.
 	Secrets    []string `yaml:"secrets,omitempty"`
