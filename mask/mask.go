@@ -31,12 +31,28 @@ var sensitiveKeys = map[string]bool{
 	"cookies":             true,
 	"password":            true,
 	"key_passphrase":      true,
+	"secret_access_key":   true,
+	"session_token":       true,
 }
 
 // dsnKey names the parameter that holds a database URL. Only the password in
 // it is a credential: the rest says which database was used, so it stays
 // visible.
 const dsnKey = "dsn"
+
+// urlKey names the parameter that holds the URL an action connects to. It
+// may carry a password as a database URL does, as redis://user:password@host
+// does, and that password is hidden in the same way. Unlike a dsn it is not
+// taken to hold a credential as a whole, since most URLs hold none and what
+// is written there is worth showing in a message.
+const urlKey = "url"
+
+// holdsURL reports whether the parameter named key holds a URL whose
+// password is a credential.
+func holdsURL(key string) bool {
+	k := strings.ToLower(key)
+	return k == dsnKey || k == urlKey
+}
 
 // HoldsCredential reports whether the parameter or header named key holds a
 // credential, whole or, as a database URL does, in part. A message about such
@@ -218,7 +234,7 @@ func collectSensitive(v any, found *[]string) {
 				collectStrings(e, found)
 				continue
 			}
-			if dsn, ok := e.(string); ok && strings.ToLower(k) == dsnKey {
+			if dsn, ok := e.(string); ok && holdsURL(k) {
 				*found = append(*found, dsnPassword(dsn)...)
 				continue
 			}
@@ -229,7 +245,7 @@ func collectSensitive(v any, found *[]string) {
 			switch {
 			case sensitiveKeys[strings.ToLower(k)]:
 				*found = append(*found, s)
-			case strings.ToLower(k) == dsnKey:
+			case holdsURL(k):
 				*found = append(*found, dsnPassword(s)...)
 			}
 		}

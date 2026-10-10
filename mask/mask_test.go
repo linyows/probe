@@ -399,16 +399,43 @@ func TestMasker_LearnNumericCredential(t *testing.T) {
 	}
 }
 
+// TestMasker_LearnActionCredentials checks the credentials of actions that
+// are not built in: the password in the URL an action connects to, and the
+// secret key and session token of object storage.
+func TestMasker_LearnActionCredentials(t *testing.T) {
+	m := New(nil, nil)
+	m.Learn(map[string]any{
+		"url":               "redis://app:redis-secret@cache:6379/0",
+		"access_key_id":     "AKIAEXAMPLE",
+		"secret_access_key": "s3-secret",
+		"session_token":     "s3-token",
+	})
+	in := "redis://app:redis-secret@cache:6379/0 AKIAEXAMPLE s3-secret s3-token"
+	want := "redis://app:<redacted>@cache:6379/0 AKIAEXAMPLE <redacted> <redacted>"
+	if got := m.String(in); got != want {
+		t.Errorf("String() = %q, want %q", got, want)
+	}
+
+	// A URL without a password has nothing to hide.
+	m = New(nil, nil)
+	m.Learn(map[string]any{"url": "https://api.example.com/users?token=visible"})
+	if got := m.String("https://api.example.com/users?token=visible"); got != "https://api.example.com/users?token=visible" {
+		t.Errorf("String() = %q, want the URL as it is", got)
+	}
+}
+
 func TestHoldsCredential(t *testing.T) {
 	for key, want := range map[string]bool{
-		"password":       true,
-		"Password":       true,
-		"key_passphrase": true,
-		"authorization":  true,
-		"Cookie":         true,
-		"dsn":            true,
-		"url":            false,
-		"headers":        false,
+		"password":          true,
+		"Password":          true,
+		"key_passphrase":    true,
+		"secret_access_key": true,
+		"session_token":     true,
+		"authorization":     true,
+		"Cookie":            true,
+		"dsn":               true,
+		"url":               false,
+		"headers":           false,
 	} {
 		if got := HoldsCredential(key); got != want {
 			t.Errorf("HoldsCredential(%q) = %v, want %v", key, got, want)
