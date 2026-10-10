@@ -31,15 +31,11 @@ It is a single Go binary with no runtime to install, so the same file runs on yo
 Features
 --------
 
-Similar software is usually one of two things: a test runner, or a prober that monitors. Most of them speak one protocol. Probe is both, across the protocols a web system is actually made of.
+Probe was made for reproducible experiments in computer science: a workflow that drives many protocols is written down in YAML, short enough to read, and run again the same way. The same workflows serve as end-to-end tests that keep software reliable, which matters more now that AI agents, not people, write much of the code.
 
-- **One file reaches the whole system.** HTTP, gRPC, MySQL, PostgreSQL, SQLite, SMTP, IMAP, SSH and shell are built in, and external actions add a real browser, GraphQL and JMAP. A single run can call an endpoint, query the row it wrote, and read the mail it sent.
-- **Your API spec decides what passes.** Give a step your OpenAPI document or `.proto` files, and each request and response is checked against them, even when the step's `test` passes. `probe coverage` then lists the operations and methods no step has reached.
-- **A coding agent can write the tests.** `probe skill` teaches an agent to write workflows for the version installed, `probe check` finds its mistakes before anything runs, and `--read-only` and `--allow-host` refuse writes and hosts you did not list before they are sent.
-- **The same file is a test and a monitor.** Add `repeat` to a job and it runs on an interval, reporting `3/3 success (100.0%)`, with no second copy of the workflow.
-- **Shared steps live in their own file.** The login every scenario starts with goes in a job file, which any workflow runs with `uses: embedded`, passing `vars` in and reading `outputs` back.
-- **Jobs are a graph, not a list.** `needs` declares only the order that matters, the rest runs in parallel, and `probe dag` prints the graph as ASCII or Mermaid.
-- **New protocols come as actions.** An action is a program of its own. One published in a repository is pinned by commit, and Probe checks its SHA-256 before it runs it.
+- **Flexible.** HTTP, gRPC, MySQL, PostgreSQL, SQLite, SMTP, IMAP, SSH and shell are built in, external actions add a browser, GraphQL and JMAP, and a new protocol can be added as an action of its own. Jobs run in parallel unless `needs` orders them, so one run can call an endpoint, query the row it wrote and read the mail it sent, and `repeat` runs the same workflow on an interval as a monitor.
+- **Easy to run and keep.** A workflow is YAML you can read, and steps several scenarios share, such as a login, live in one job file that `uses: embedded` runs. Probe is a single binary with nothing to install alongside it, so it runs the same on your machine, in CI and from cron, and `probe dag` prints the jobs as a flowchart in ASCII or Mermaid.
+- **Ready for AI coding agents.** `probe skill` teaches an agent to write workflows for the version installed, and `probe check` finds its mistakes before anything runs. `--read-only` and `--allow-host` refuse writes, and connections to hosts you did not list, before they are sent, so a workflow the agent wrote can be run safely. A step can also check responses against your OpenAPI document or `.proto` files, not only against the agent's own `test`.
 
 Beyond that, a workflow has `outputs` to pass data between steps and jobs, `test` to assert on any response, `retry`, `skipif`, `iteration`, `wait` and `timeout`, `defaults` for settings shared across steps, and merging of several YAML files on one command line.
 
