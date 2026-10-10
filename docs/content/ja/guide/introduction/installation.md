@@ -35,7 +35,7 @@ Probeをインストールする最も簡単な方法は、GitHubのリリース
 
 ### 2. Goでインストール
 
-Go 1.27以降がインストールされている場合、Probeを直接インストールできます：
+Go 1.26.6以降がインストールされている場合、Probeを直接インストールできます：
 
 ```bash
 go install github.com/linyows/probe/cmd/probe@latest
