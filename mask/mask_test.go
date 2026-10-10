@@ -511,3 +511,25 @@ func TestLearn_BasicAuthLargeNumber(t *testing.T) {
 		}
 	}
 }
+
+func TestUserinfo(t *testing.T) {
+	tests := []struct{ in, want string }{
+		{"redis://app:pw@cache:6379/0", "app:pw"},
+		{"redis://app@cache", "app"},
+		{"redis://:p@ss@cache", ":p@ss"},
+		{"mysql://root:pw@tcp(db:3306)/app", "root:pw"},
+		{"https://example.com/a@b", ""},
+		{"https://example.com?to=a@b", ""},
+		{"redis://cache:6379", ""},
+		{"cache:6379", ""},
+		{"", ""},
+	}
+	for _, tt := range tests {
+		if got := Userinfo(tt.in); got != tt.want {
+			t.Errorf("Userinfo(%q) = %q, want %q", tt.in, got, tt.want)
+		}
+	}
+	if !HoldsURL("URL") || !HoldsURL("dsn") || HoldsURL("endpoint") {
+		t.Error("HoldsURL should name url and dsn, in any case, and nothing else")
+	}
+}

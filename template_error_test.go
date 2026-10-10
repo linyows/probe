@@ -322,6 +322,54 @@ func TestWorkflow_TemplateErrorHidesCredentials(t *testing.T) {
 	}
 }
 
+// The password of a URL is a credential, so the error of a template in its
+// user info is hidden, while that of a template elsewhere in a URL, which
+// most are, is kept.
+func TestWorkflow_TemplateErrorHidesURLPassword(t *testing.T) {
+	runner := NewMockActionRunner()
+	runner.SetResult("ok", map[string]any{"req": map[string]any{}, "res": map[string]any{"code": 200}})
+	step := func(name string, with map[string]any) *Step {
+		return &Step{Name: name, Uses: "ok", With: with, actionRunner: runner}
+	}
+	w := &Workflow{
+		Name: "credentials",
+		Vars: map[string]any{"pw": "learned-pw"},
+		Jobs: []Job{{
+			Name: "job",
+			Steps: []*Step{
+				step("a literal in the password", map[string]any{"url": "redis://app:{{ 'url-pw' + outputs.missing.x }}@cache:6379/0"}),
+				step("with a slash and an at in the template", map[string]any{"url": "redis://app:{{ 'slash/pw@' + outputs.missing.x }}@cache/{{vars.pw}}"}),
+				step("in a list", map[string]any{"targets": []any{map[string]any{"URL": "redis://{{ 'user-pw' + outputs.missing.x }}@cache"}}}),
+				step("the password quoted by a conversion", map[string]any{"url": "redis://app:{{parse_int(vars.pw)}}@cache"}),
+				step("a template in the path", map[string]any{"url": "https://api.example.com/{{ outputs.missing.x }}"}),
+				step("after a password as it is", map[string]any{"url": "redis://app:plain@cache/{{ outputs.missing.x }}"}),
+				step("an at in the path", map[string]any{"url": "https://example.com/{{ outputs.missing.x }}@v1"}),
+			},
+		}},
+		printer: newBufferPrinter(),
+	}
+
+	out, r := templateErrorOutput(t, w)
+	for _, leak := range []string{"url-pw", "slash/pw", "user-pw", "learned-pw"} {
+		if strings.Contains(out, leak) {
+			t.Errorf("%q leaked into the output:\n%s", leak, out)
+		}
+	}
+	steps := r.Jobs[0].Steps
+	hidden := []string{"with.url", "with.url", "with.targets[0].URL", "with.url"}
+	for i, path := range hidden {
+		want := path + ": the template could not be evaluated"
+		if steps[i].Failure == nil || !strings.Contains(steps[i].Failure.Message, want) {
+			t.Errorf("steps[%d]: failure %+v does not contain %q", i, steps[i].Failure, want)
+		}
+	}
+	for i := len(hidden); i < len(steps); i++ {
+		if steps[i].Failure == nil || !strings.Contains(steps[i].Failure.Message, "with.url: {{ outputs.missing.x }}: ") {
+			t.Errorf("steps[%d]: the error of a URL without a credential should be kept, got %+v", i, steps[i].Failure)
+		}
+	}
+}
+
 func TestWorkflow_VarsTemplateErrorHidesSecrets(t *testing.T) {
 	w := &Workflow{
 		Name:    "secrets",

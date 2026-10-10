@@ -137,7 +137,7 @@ vars:
 
 `secrets`とは別に、`Authorization`、`Proxy-Authorization`、`Cookie`、`Set-Cookie`ヘッダの値は常に`<redacted>`と表示します。ログインのステップが返し、後のリクエストで送るトークンのように、実行中に得た値は`secrets`に書けませんが、これらのヘッダのどれかで送られます。Probeはアクションがこれらの値を送る直前と受け取った時点で値を覚え、以降はアクション自身のログも含めて伏せます。
 
-アクションに渡す資格情報も同じです。`with`のどの階層にあっても`password`、`key_passphrase`、`secret_access_key`、`session_token`の値は`<redacted>`と表示します。`dsn`や`url`に書いた`redis://user:password@host`のようなURLは、パスワードの部分だけを伏せ、それ以外はそのまま表示します。そのため、ステップに直接書いたパスワードは、`secrets`に書かなくても`--verbose`の出力やアクションのログに出ません。こうした値のテンプレートを評価できなかった場合、エラーには`with.password`のように値の場所を示しますが、理由は示しません。テンプレートにもエラーの文面にも資格情報が含まれうるためです。
+アクションに渡す資格情報も同じです。`with`のどの階層にあっても`password`、`key_passphrase`、`secret_access_key`、`session_token`の値は`<redacted>`と表示します。`dsn`や`url`に書いた`redis://user:password@host`のようなURLは、パスワードの部分だけを伏せ、それ以外はそのまま表示します。そのため、ステップに直接書いたパスワードは、`secrets`に書かなくても`--verbose`の出力やアクションのログに出ません。こうした値のテンプレートを評価できなかった場合、エラーには`with.password`のように値の場所を示しますが、理由は示しません。テンプレートにもエラーの文面にも資格情報が含まれうるためです。`url`がこの扱いになるのは、`redis://app:{{vars.pw}}@host`のようにテンプレートがユーザー情報の部分にある場合だけです。`url`のそれ以外の場所にあるテンプレートのエラーは表示します。
 
 ## ジョブ
 

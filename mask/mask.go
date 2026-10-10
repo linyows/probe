@@ -337,13 +337,20 @@ func numberForms(v any) ([]string, bool) {
 	return []string{written, received}, true
 }
 
-// dsnPassword returns the password in a URL-style DSN, both as written and
-// percent-decoded, or nothing when it has none. It does not rely on url.Parse,
-// which rejects the tcp(host:port) address a MySQL DSN may carry.
-func dsnPassword(dsn string) []string {
-	_, rest, ok := strings.Cut(dsn, "://")
+// HoldsURL reports whether the parameter named key holds a URL whose
+// password is a credential, as dsn and url do.
+func HoldsURL(key string) bool {
+	return holdsURL(key)
+}
+
+// Userinfo returns the user info of a URL, what stands between its scheme
+// and the last @ of its authority, as user:password, or nothing when it has
+// none. It does not rely on url.Parse, which rejects the tcp(host:port)
+// address a MySQL DSN may carry.
+func Userinfo(rawURL string) string {
+	_, rest, ok := strings.Cut(rawURL, "://")
 	if !ok {
-		return nil
+		return ""
 	}
 	// The authority ends where the path, query or fragment begins, and the
 	// user info at the last @ before that, since an unescaped password may
@@ -354,9 +361,15 @@ func dsnPassword(dsn string) []string {
 	}
 	at := strings.LastIndex(authority, "@")
 	if at < 0 {
-		return nil
+		return ""
 	}
-	_, password, ok := strings.Cut(authority[:at], ":")
+	return authority[:at]
+}
+
+// dsnPassword returns the password in a URL-style DSN, both as written and
+// percent-decoded, or nothing when it has none.
+func dsnPassword(dsn string) []string {
+	_, password, ok := strings.Cut(Userinfo(dsn), ":")
 	if !ok || password == "" {
 		return nil
 	}
