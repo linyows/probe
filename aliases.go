@@ -7,6 +7,7 @@ import (
 	"slices"
 
 	"github.com/linyows/probe/actionref"
+	"github.com/linyows/probe/expr"
 )
 
 // aliasName is a name a workflow can give an external action: one that
@@ -44,6 +45,10 @@ func (w *Workflow) checkAliases(builtin []string) []aliasProblem {
 			msg = fmt.Sprintf("actions: the name %q is that of an action of Probe, which a workflow cannot give to another", name)
 		case !actionref.IsExternal(ref):
 			msg = fmt.Sprintf("actions: %s must name an external action, as github.com/<owner>/<repo>@<commit SHA> or a local path starting with ./, not %q", name, ref)
+		// A local path is taken as it is written, so a template in one would
+		// name a directory with braces in its name.
+		case len(expr.TemplateExprs(ref)) > 0:
+			msg = fmt.Sprintf("actions: %s must name an external action as it is, not by a template: %q", name, ref)
 		default:
 			if _, err := actionref.Parse(ref); err != nil {
 				msg = fmt.Sprintf("actions: %s: %s", name, err)

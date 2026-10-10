@@ -109,7 +109,9 @@ func TestLoad_ActionNamesRefused(t *testing.T) {
 		{"a tag", "  redis: github.com/mozership/probe-redis@v1.0.0\n", "", `must be pinned to a full 40-character commit SHA`},
 		{"no commit", "  redis: github.com/mozership/probe-redis\n", "", `must be pinned to a commit`},
 		{"another host", "  redis: gitlab.com/mozership/probe-redis@" + aliasSHA + "\n", "", `unsupported action`},
-		{"a template in the commit", "  redis: github.com/mozership/probe-redis@{{vars.sha}}\n", "", `must be pinned to a full 40-character commit SHA`},
+		{"a template in the commit", "  redis: github.com/mozership/probe-redis@{{vars.sha}}\n", "", `redis must name an external action as it is, not by a template`},
+		{"a template in a local path", "  greet: \"./{{vars.action}}\"\n", "", `greet must name an external action as it is, not by a template`},
+		{"a template for the whole of it", "  greet: \"{{vars.action}}/greet\"\n", "", `greet must name an external action as it is, not by a template`},
 		{
 			"defaults written twice",
 			"  greet: ./greet\n",
