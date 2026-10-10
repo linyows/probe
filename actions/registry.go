@@ -13,6 +13,7 @@ import (
 	"github.com/linyows/probe/actionrpc"
 
 	"github.com/linyows/probe/actions/db"
+	"github.com/linyows/probe/actions/dns"
 	"github.com/linyows/probe/actions/embedded"
 	"github.com/linyows/probe/actions/grpc"
 	"github.com/linyows/probe/actions/hello"
@@ -27,6 +28,7 @@ import (
 // blocks until the workflow runner closes the plugin connection.
 var builtin = map[string]func(){
 	"db":       db.Serve,
+	"dns":      dns.Serve,
 	"embedded": embedded.Serve,
 	"grpc":     grpc.Serve,
 	"hello":    hello.Serve,
@@ -42,6 +44,7 @@ var builtin = map[string]func(){
 // refused under a guard unless it is allowed by name.
 var keeps = map[string]func() []string{
 	"db":       db.Keeps,
+	"dns":      dns.Keeps,
 	"embedded": embedded.Keeps,
 	"grpc":     grpc.Keeps,
 	"hello":    hello.Keeps,
@@ -77,6 +80,7 @@ func Keeping() []string {
 // takes any, is left out.
 var params = map[string]func() []string{
 	"db":       db.Params,
+	"dns":      dns.Params,
 	"embedded": embedded.Params,
 	"grpc":     grpc.Params,
 	"http":     http.Params,

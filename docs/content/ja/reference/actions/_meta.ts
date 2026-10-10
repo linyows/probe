@@ -10,6 +10,7 @@ export default {
   imap: 'IMAP',
   ssh: 'SSH',
   grpc: 'GRPC',
+  dns: 'DNS',
   hello: 'HELLO',
   embedded: 'EMBEDDED',
   '-- external': { type: 'separator', title: '外部' },

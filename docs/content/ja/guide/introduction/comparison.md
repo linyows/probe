@@ -8,7 +8,7 @@ Probeはワークフロー実行ツールで、テストや監視はその用途
 
 | | 種別 | 記述形式 | 操作対象 | 実行形態 |
 |---|---|---|---|---|
-| **Probe** | ワークフロー実行 | YAML | HTTP、DB、SMTP、IMAP、SSH、シェル、ブラウザ、gRPC、WebSocket | 単体のGoバイナリ |
+| **Probe** | ワークフロー実行 | YAML | HTTP、DB、SMTP、IMAP、DNS、SSH、シェル、ブラウザ、gRPC、WebSocket | 単体のGoバイナリ |
 | **k6** | 負荷試験 | JavaScript | HTTP、gRPC、WebSocket | 単体のGoバイナリ |
 | **Postman / Newman** | APIテスト | GUIとコレクション | HTTP | GUIアプリとNode.js |
 | **Hurl** | HTTPテスト | 独自のテキスト形式 | HTTP | 単体のRustバイナリ |

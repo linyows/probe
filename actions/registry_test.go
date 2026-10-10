@@ -50,7 +50,7 @@ func TestKeeps(t *testing.T) {
 			t.Errorf("%s should keep to no guard", name)
 		}
 	}
-	if want := []string{"db", "embedded", "grpc", "hello", "http"}; !slices.Equal(Keeping(), want) {
+	if want := []string{"db", "dns", "embedded", "grpc", "hello", "http"}; !slices.Equal(Keeping(), want) {
 		t.Errorf("Keeping() = %v, want %v", Keeping(), want)
 	}
 	k := Keeps()

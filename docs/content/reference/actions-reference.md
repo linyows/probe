@@ -13,6 +13,7 @@ hold for all of them are at the end of this page.
 - **[smtp](/reference/actions/smtp)** - Send email notifications and alerts
 - **[imap](/reference/actions/imap)** - Connect to IMAP servers and manage email operations
 - **[grpc](/reference/actions/grpc)** - Call gRPC services by reflection
+- **[dns](/reference/actions/dns)** - Ask a DNS server for the records of a name
 - **[embedded](/reference/actions/embedded)** - Run another workflow as a step
 - **[hello](/reference/actions/hello)** - Simple test action for development and debugging
 

@@ -1,0 +1,69 @@
+name: DNS Examples
+description: |
+  Examples for using the dns action. They ask the server of e2e/dns-server,
+  which answers for example.test:
+
+    go run ./e2e/dns-server -addr 127.0.0.1:15353
+
+vars:
+  server: "{{DNS_SERVER ?? '127.0.0.1:15353'}}"
+
+jobs:
+- name: Records of a name
+  defaults:
+    dns:
+      server: "{{vars.server}}"
+  steps:
+  - name: The addresses of a name
+    uses: dns
+    with:
+      name: example.test
+    test: res.rcode == "NOERROR" && "192.0.2.1" in res.values && len(res.values) == 2
+
+  - name: Where its mail goes
+    uses: dns
+    with:
+      name: example.test
+      type: MX
+    test: res.answers[0].host == "mail.example.test" && res.answers[0].preference == 10
+
+  - name: Who may send its mail
+    uses: dns
+    with:
+      name: example.test
+      type: TXT
+    test: 'any(res.values, {# startsWith "v=spf1"}) && res.values[0] endsWith "-all"'
+
+  - name: Who may issue its certificates
+    uses: dns
+    with:
+      name: example.test
+      type: CAA
+    test: res.answers[0].tag == "issue" && res.answers[0].value == "letsencrypt.org"
+
+  - name: An alias and what it points to
+    uses: dns
+    with:
+      name: www.example.test
+    test: res.answers[0].type == "CNAME" && res.answers[0].data == "example.test" && res.values == ["192.0.2.1"]
+
+  - name: The name of an address
+    uses: dns
+    with:
+      name: 192.0.2.1
+      type: PTR
+    test: res.values == ["example.test"]
+
+  - name: Over TCP, from the server that holds the zone
+    uses: dns
+    with:
+      name: example.test
+      type: NS
+      protocol: tcp
+    test: res.authoritative && res.protocol == "tcp" && res.values == ["ns1.example.test"]
+
+  - name: A name that does not exist
+    uses: dns
+    with:
+      name: nope.example.test
+    test: res.rcode == "NXDOMAIN" && len(res.answers) == 0
