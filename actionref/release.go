@@ -20,7 +20,17 @@ var (
 	// releaseURL is where GitHub serves an asset of a release: the address
 	// up to the tag, the tag, and the name of the asset.
 	releaseURL = regexp.MustCompile(`^(https://github\.com/[^/]+/[^/]+/releases/download/)([^/]+)/([^/]+)$`)
-	releaseTag = regexp.MustCompile(`^[^/\s]+$`)
+	// releaseTag is a tag that stands in a URL as it is written. A tag git
+	// takes can have more, such as # and %, which would end the path or
+	// start an escape.
+	releaseTag = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._+-]*$`)
+	// platformPart is what {os} and {arch} stand for in the name of an asset.
+	platformPart = `[a-z0-9]+`
+	// betweenPlaceholders is what stands between {os} and {arch} in the
+	// name of an asset, in either order.
+	betweenPlaceholders = regexp.MustCompile(`\{(?:os|arch)\}(.*)\{(?:os|arch)\}`)
+	// separator is a character that neither {os} nor {arch} stands for.
+	separator = regexp.MustCompile(`[^a-z0-9]`)
 	// flowIndicator is what a plain scalar cannot hold inside [ ].
 	flowIndicator = regexp.MustCompile(`[,\[\]{}]`)
 )
@@ -43,7 +53,7 @@ func Release(manifest []byte, tag string, checksums io.Reader) ([]byte, error) {
 		return nil, fmt.Errorf("%s: %w", ManifestFile, err)
 	}
 	if !releaseTag.MatchString(tag) {
-		return nil, fmt.Errorf("tag %q must not be empty or have a slash or a space", tag)
+		return nil, fmt.Errorf("tag %q must be letters, digits, '.', '_', '+' and '-', starting with a letter or a digit", tag)
 	}
 	if m.Runs.URL == "" {
 		return nil, fmt.Errorf("%s: runs.url is needed to release an action, such as https://github.com/<owner>/<repo>/releases/download/%s/<name>_{os}_{arch}", ManifestFile, tag)
@@ -78,9 +88,15 @@ func readChecksums(r io.Reader, asset string) (map[string]string, error) {
 	if strings.Count(asset, "{os}") != 1 || strings.Count(asset, "{arch}") != 1 {
 		return nil, fmt.Errorf("%s: runs.url must name the executable with one {os} and one {arch}, not %s", ManifestFile, asset)
 	}
+	// Without a character between them that neither stands for, where one
+	// ends and the other starts cannot be told: linuxamd64 is not read as
+	// linux and amd64.
+	if between := betweenPlaceholders.FindStringSubmatch(asset); between == nil || !separator.MatchString(between[1]) {
+		return nil, fmt.Errorf("%s: runs.url must have a character between {os} and {arch} that is not a lowercase letter or a digit, such as _, not %s", ManifestFile, asset)
+	}
 	pattern := regexp.QuoteMeta(asset)
-	pattern = strings.Replace(pattern, `\{os\}`, `(?P<os>[a-z0-9]+)`, 1)
-	pattern = strings.Replace(pattern, `\{arch\}`, `(?P<arch>[a-z0-9]+)`, 1)
+	pattern = strings.Replace(pattern, `\{os\}`, `(?P<os>`+platformPart+`)`, 1)
+	pattern = strings.Replace(pattern, `\{arch\}`, `(?P<arch>`+platformPart+`)`, 1)
 	re := regexp.MustCompile("^" + pattern + "$")
 
 	sums := map[string]string{}

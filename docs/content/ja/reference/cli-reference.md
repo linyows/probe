@@ -441,13 +441,13 @@ probe manifest init mozership/probe-greet > action.yml
 
 | 引数 | 説明 |
 |---|---|
-| `tag` | リリースのタグ。`v0.2.0`など |
+| `tag` | リリースのタグ。`v0.2.0`など。英数字と`.`、`_`、`+`、`-`からなり、英数字で始まるもの |
 | `checksums-file` | リリースの実行ファイルのSHA-256ダイジェスト。`sha256sum`やGoReleaserが書き出す形式で、1行は`<digest>  <file>` |
 | `action-file` | 元にする`action.yml`。省略すると作業ディレクトリの`action.yml` |
 
 `action-file`を読み、次の2点を変えて出力します。
 
-- `runs.url`のタグを`tag`に置き換えます。`runs.url`はGitHubのリリースアセットのアドレス`https://github.com/<owner>/<repo>/releases/download/<tag>/<asset>`でなければならず、`<asset>`には`{os}`と`{arch}`が1つずつ必要です。
+- `runs.url`のタグを`tag`に置き換えます。`runs.url`はGitHubのリリースアセットのアドレス`https://github.com/<owner>/<repo>/releases/download/<tag>/<asset>`でなければならず、`<asset>`には`{os}`と`{arch}`が1つずつ必要で、その間に`_`など、英小文字でも数字でもない文字が要ります。
 - `runs.checksums`を`checksums-file`のダイジェストに置き換えます。ファイル名が、`<asset>`の`{os}`と`{arch}`をプラットフォームに置き換えたものである行を採り、それ以外の行は無視します。`action-file`にあったチェックサムは残しません。
 
 `name`、`description`、`guard`、`params`は読んだまま出力します。出力はつねに同じ書式で、チェックサムはプラットフォーム順に並びます。`action-file`の先頭にあるコメント行は残し、それ以外のコメントは残しません。

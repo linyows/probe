@@ -441,13 +441,13 @@ Print the `action.yml` of a release.
 
 | Argument | Description |
 |---|---|
-| `tag` | The tag of the release, such as `v0.2.0` |
+| `tag` | The tag of the release, such as `v0.2.0`: letters, digits, `.`, `_`, `+` and `-`, starting with a letter or a digit |
 | `checksums-file` | The SHA-256 digests of the executables of the release, as `sha256sum` or GoReleaser writes them: a line is `<digest>  <file>` |
 | `action-file` | The `action.yml` to start from. It defaults to `action.yml` in the working directory |
 
 It reads `action-file` and prints it with two changes:
 
-- `runs.url` takes `tag` in place of the tag it has. It must be the address of a release asset on GitHub, `https://github.com/<owner>/<repo>/releases/download/<tag>/<asset>`, and `<asset>` must have one `{os}` and one `{arch}`.
+- `runs.url` takes `tag` in place of the tag it has. It must be the address of a release asset on GitHub, `https://github.com/<owner>/<repo>/releases/download/<tag>/<asset>`, and `<asset>` must have one `{os}` and one `{arch}`, with a character between them that is not a lowercase letter or a digit, such as `_`.
 - `runs.checksums` becomes the digests of `checksums-file`. A line is taken when its file is `<asset>` with a platform in place of `{os}` and `{arch}`, and any other line is left out, as are the checksums `action-file` had.
 
 `name`, `description`, `guard` and `params` are printed as they were read. The output is always written in the same form, with the checksums sorted by platform. The comment lines `action-file` starts with are kept, and no other comment is.

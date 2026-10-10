@@ -637,6 +637,15 @@ func TestRelease(t *testing.T) {
 				"  checksums:\n    windows_amd64: \"" + c + "\"\n",
 		},
 		{
+			name:      "a tag with build metadata, and the architecture first",
+			manifest:  "runs:\n  using: binary\n  url: https://github.com/example/probe-greet/releases/download/v0.1.0/greet-{arch}.{os}\n",
+			tag:       "v0.2.0-rc.1+build_5",
+			checksums: a + "  greet-amd64.linux\n",
+			want: "runs:\n  using: binary\n" +
+				"  url: https://github.com/example/probe-greet/releases/download/v0.2.0-rc.1+build_5/greet-{arch}.{os}\n" +
+				"  checksums:\n    linux_amd64: \"" + a + "\"\n",
+		},
+		{
 			name:      "invalid manifest",
 			manifest:  "runs:\n  using: go\n",
 			tag:       "v0.2.0",
@@ -670,6 +679,34 @@ func TestRelease(t *testing.T) {
 			tag:       "release/v0.2.0",
 			checksums: checksums,
 			wantErr:   "tag \"release/v0.2.0\"",
+		},
+		{
+			name:      "a tag that would end the path",
+			manifest:  "runs:\n  using: binary\n  url: https://github.com/example/probe-greet/releases/download/v0.1.0/probe-greet_{os}_{arch}\n",
+			tag:       "release#1",
+			checksums: checksums,
+			wantErr:   "tag \"release#1\"",
+		},
+		{
+			name:      "a tag that would start an escape",
+			manifest:  "runs:\n  using: binary\n  url: https://github.com/example/probe-greet/releases/download/v0.1.0/probe-greet_{os}_{arch}\n",
+			tag:       "v1%20",
+			checksums: checksums,
+			wantErr:   "tag \"v1%20\"",
+		},
+		{
+			name:      "placeholders with nothing between them",
+			manifest:  "runs:\n  using: binary\n  url: https://github.com/example/probe-greet/releases/download/v0.1.0/probe-greet_{os}{arch}\n",
+			tag:       "v0.2.0",
+			checksums: a + "  probe-greet_linuxamd64\n",
+			wantErr:   "a character between {os} and {arch}",
+		},
+		{
+			name:      "placeholders with only a letter between them",
+			manifest:  "runs:\n  using: binary\n  url: https://github.com/example/probe-greet/releases/download/v0.1.0/probe-greet_{arch}x{os}\n",
+			tag:       "v0.2.0",
+			checksums: a + "  probe-greet_amd64xlinux\n",
+			wantErr:   "a character between {os} and {arch}",
 		},
 		{
 			name:      "no checksum of the asset",
