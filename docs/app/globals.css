@@ -230,3 +230,23 @@
   outline: 2px solid var(--probe-brand);
   outline-offset: 2px;
 }
+
+/* A diagram drawn for each theme: the one for the other theme is hidden. */
+.diagram {
+  display: block;
+  width: 100%;
+  height: auto;
+  margin: 1.5rem 0;
+}
+
+.diagram--dark {
+  display: none;
+}
+
+.dark .diagram--light {
+  display: none;
+}
+
+.dark .diagram--dark {
+  display: block;
+}
