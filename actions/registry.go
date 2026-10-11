@@ -112,6 +112,11 @@ func AllParams() map[string][]string {
 
 // Lookup returns the serve function of a built-in action.
 func Lookup(name string) (func(), bool) {
+	// The embedded action runs steps of its own, so it is told which
+	// actions there are.
+	if name == "embedded" {
+		return func() { embedded.ServeWithActions(Names()) }, true
+	}
 	serve, ok := builtin[name]
 	return serve, ok
 }

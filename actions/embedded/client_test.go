@@ -326,6 +326,22 @@ func TestWithAfter(t *testing.T) {
 	}
 }
 
+func TestExecuteTellsAnUnknownAction(t *testing.T) {
+	// The skipped step would run nothing, but an action that does not exist
+	// stops the job before its first step.
+	path := writeJob(t, "name: inner\nsteps:\n- name: Skipped\n  uses: htp\n  skipif: \"true\"\n")
+
+	_, err := Execute(map[string]any{"path": path}, WithBuiltinActions([]string{"hello", "http"}))
+	if err == nil || !strings.Contains(err.Error(), `job "inner", step 0: unknown action "htp"`) || !strings.Contains(err.Error(), `did you mean "http"?`) {
+		t.Fatalf("err = %v, want the unknown action told", err)
+	}
+
+	// Not told the actions of Probe, it leaves the step to fail when it runs.
+	if _, err := Execute(map[string]any{"path": path}); err != nil {
+		t.Fatalf("err = %v, want the job run", err)
+	}
+}
+
 func TestExecuteUnderAGuard(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "job.yml")

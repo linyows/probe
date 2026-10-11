@@ -77,9 +77,10 @@ func (w *Workflow) Start(c Config) error {
 
 	// Fetch external actions before any job starts, so that a bad reference
 	// fails the run up front and a download does not count against a step's
-	// timeout. The guard the jobs run under learns from each action.yml the
-	// kinds of guard the action keeps to.
-	if c.Guard, err = w.resolveExternalActions(c.Guard); err != nil {
+	// timeout. A uses that names no action fails the run here as well. The
+	// guard the jobs run under learns from each action.yml the kinds of guard
+	// the action keeps to.
+	if c.Guard, err = w.resolveExternalActions(c.Guard, c.Actions); err != nil {
 		return err
 	}
 
@@ -117,6 +118,13 @@ func (w *Workflow) Start(c Config) error {
 	if err != nil {
 		// The caller prints this error itself, and a template's error can
 		// quote the value of a declared secret.
+		return &maskedError{err: err, masker: w.printer.Masker()}
+	}
+
+	// The job files the steps embed are read with the vars the run has, so
+	// that the file checked is the one a step runs. The error names the
+	// file, whose path a var may have made from a declared secret.
+	if err := w.checkEmbeddedJobs(c.Actions, vars); err != nil {
 		return &maskedError{err: err, masker: w.printer.Masker()}
 	}
 
@@ -607,13 +615,14 @@ func (w *Workflow) newJobContext(c Config, vars map[string]any, scheduler *JobSc
 }
 
 // resolveExternalActions resolves every action the steps name outside Probe,
-// and returns guard with the kinds of guard each of them keeps to.
-func (w *Workflow) resolveExternalActions(guard actionrpc.Guard) (actionrpc.Guard, error) {
+// and returns guard with the kinds of guard each of them keeps to. builtin
+// are the names of the actions of Probe, which any other uses must be.
+func (w *Workflow) resolveExternalActions(guard actionrpc.Guard, builtin []string) (actionrpc.Guard, error) {
 	jobs := make([]*Job, len(w.Jobs))
 	for i := range w.Jobs {
 		jobs[i] = &w.Jobs[i]
 	}
-	return resolveExternalActions(jobs, w.basePath, guard)
+	return resolveExternalActions(jobs, w.basePath, guard, builtin)
 }
 
 // resolveExternalActions resolves every action the steps of jobs name
@@ -621,10 +630,21 @@ func (w *Workflow) resolveExternalActions(guard actionrpc.Guard) (actionrpc.Guar
 // the kinds of guard each of them keeps to, as its action.yml says. The
 // executable of one that guard then does not let run is not fetched, as its
 // step is refused without it.
-func resolveExternalActions(jobs []*Job, baseDir string, guard actionrpc.Guard) (actionrpc.Guard, error) {
+//
+// A uses that is not an external action must be one of builtin, the names of
+// the actions of Probe: an action that does not exist is told here, by its
+// name, rather than by the process that would have served it failing to
+// start. When builtin is empty, that is not checked.
+func resolveExternalActions(jobs []*Job, baseDir string, guard actionrpc.Guard, builtin []string) (actionrpc.Guard, error) {
 	for _, job := range jobs {
-		for _, st := range job.Steps {
+		for i, st := range job.Steps {
 			if !actionref.IsExternal(st.Uses) {
+				if len(builtin) > 0 && !slices.Contains(builtin, st.Uses) {
+					return guard, NewConfigurationError("resolve_action", "failed to resolve an action", fmt.Errorf("job %q, step %d: %w", job.Name, i, unknownAction(st.Uses, builtin))).
+						WithContext("uses", st.Uses).
+						WithContext("job", job.Name).
+						WithContext("step", i)
+				}
 				continue
 			}
 			m, err := actionref.ReadManifest(st.Uses, baseDir)
@@ -647,4 +667,68 @@ func resolveExternalActions(jobs []*Job, baseDir string, guard actionrpc.Guard) 
 		}
 	}
 	return guard, nil
+}
+
+// unknownAction is the error of a uses that names no action: it is not one
+// of builtin, the actions of Probe, not an external action, and not a name
+// the workflow gives one under actions, which would have been replaced.
+func unknownAction(uses string, builtin []string) error {
+	msg := fmt.Sprintf("unknown action %q: it is not an action of Probe, an external action, or a name given under actions", uses)
+	if s := suggest(uses, builtin); s != "" {
+		msg += fmt.Sprintf("; did you mean %q?", s)
+	}
+	return errors.New(msg)
+}
+
+// checkEmbeddedJobs reads the job file of each step that embeds one, and
+// those that job embeds in turn, and returns an error for a uses in them
+// that names no action, so that it fails the run before any job starts
+// rather than when the step is reached. A job is read by the names the
+// workflow gives its external actions, as the embedded action reads it.
+// builtin are the names of the actions of Probe; when it is empty, nothing
+// is checked. vars are the vars of the run, which a path may read.
+//
+// What cannot be known yet is left to the embedded action, which checks the
+// same as it starts a job: a path that reads more than the workflow's vars,
+// and a file that cannot be read. An external action a job names is
+// resolved then as well.
+func (w *Workflow) checkEmbeddedJobs(builtin []string, vars map[string]any) error {
+	if len(builtin) == 0 {
+		return nil
+	}
+	ev := &expr.Expr{}
+	env := map[string]any{"vars": vars}
+	var found error
+	for _, job := range w.Jobs {
+		for _, st := range job.Steps {
+			if st == nil || st.Uses != "embedded" {
+				continue
+			}
+			// A path the vars of the workflow give is known by now.
+			if path, ok := st.With["path"].(string); ok && len(expr.TemplateExprs(path)) > 0 {
+				expanded, err := ev.EvalTemplate(path, env)
+				if err != nil {
+					continue
+				}
+				st = &Step{Uses: st.Uses, With: map[string]any{"path": expanded}}
+			}
+			eachEmbeddedStep(st, map[string]bool{}, func(file string, i int, es *Step) {
+				uses := es.Uses
+				if ref, named := w.named[uses]; named {
+					uses = ref
+				}
+				if found != nil || actionref.IsExternal(uses) || slices.Contains(builtin, uses) {
+					return
+				}
+				found = NewConfigurationError("resolve_action", "failed to resolve an action of an embedded job", fmt.Errorf("%s, step %d: %w", file, i, unknownAction(uses, builtin))).
+					WithContext("uses", uses).
+					WithContext("path", file).
+					WithContext("step", i)
+			})
+			if found != nil {
+				return found
+			}
+		}
+	}
+	return nil
 }

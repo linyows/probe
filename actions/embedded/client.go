@@ -50,6 +50,8 @@ type Callback struct {
 	// actions are the names the workflow that embeds the job gives its
 	// external actions.
 	actions map[string]string
+	// builtin are the names of the actions of Probe.
+	builtin []string
 }
 
 func NewReq() *Req {
@@ -94,7 +96,7 @@ func (r *Req) Do() (*Result, error) {
 		opts = append(opts, probe.WithRunID(r.cb.runID))
 	}
 	if r.cb != nil {
-		opts = append(opts, probe.WithGuard(r.cb.guard), probe.WithActions(names))
+		opts = append(opts, probe.WithGuard(r.cb.guard), probe.WithActions(names), probe.WithBuiltinActions(r.cb.builtin))
 	}
 	run := job.RunStandalone(r.Vars, printer, jobID, filepath.Dir(absPath), opts...)
 
@@ -237,6 +239,14 @@ func WithGuard(guard actionrpc.Guard) Option {
 func WithActions(names map[string]string) Option {
 	return func(c *Callback) {
 		c.actions = names
+	}
+}
+
+// WithBuiltinActions tells the job the names of the actions of Probe, so
+// that a uses that names no action stops the job before any step runs.
+func WithBuiltinActions(names []string) Option {
+	return func(c *Callback) {
+		c.builtin = names
 	}
 }
 
