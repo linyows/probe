@@ -95,10 +95,13 @@ func Request(with map[string]any, opts ...Option) (map[string]any, error) {
 
 	msg, server, protocol, err := req.exchange(ctx, question, servers)
 	if err != nil {
-		// The deadline of the connection is that of ctx, and may be found
-		// passed a moment before ctx is: the error is then an i/o timeout
-		// and ctx has no error yet.
-		if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, os.ErrDeadlineExceeded) || errors.Is(ctx.Err(), context.DeadlineExceeded) {
+		// The connection to the last server has the deadline of ctx, and
+		// may find it passed a moment before ctx does: the error is then an
+		// i/o timeout and ctx has no error yet. An i/o timeout before the
+		// deadline is that of a server given a part of the time.
+		deadline, _ := ctx.Deadline()
+		passed := errors.Is(err, os.ErrDeadlineExceeded) && !time.Now().Before(deadline)
+		if passed || errors.Is(err, context.DeadlineExceeded) || errors.Is(ctx.Err(), context.DeadlineExceeded) {
 			err = fmt.Errorf("timed out after %s: %w", timeout, err)
 		}
 		return map[string]any{}, err
@@ -249,6 +252,10 @@ func withPort(hostport, port string) string {
 // exchange asks each server in turn until one answers, and returns the
 // answer with the server it came from and the protocol it came over. An
 // answer cut short over UDP is asked for again over TCP, as dig does.
+//
+// Each server is given an equal part of the time ctx has left, so that one
+// that does not answer leaves time for those after it, and the last, or the
+// only one, has all that is left.
 func (r *Req) exchange(ctx context.Context, question dns.Question, servers []string) (*dns.Msg, string, string, error) {
 	query := new(dns.Msg)
 	query.Id = dns.Id()
@@ -257,12 +264,16 @@ func (r *Req) exchange(ctx context.Context, question dns.Question, servers []str
 	query.SetEdns0(udpPayloadSize, false)
 
 	var errs []error
-	for _, server := range servers {
+	for i, server := range servers {
+		var until time.Time
+		if deadline, ok := ctx.Deadline(); ok {
+			until = time.Now().Add(time.Until(deadline) / time.Duration(len(servers)-i))
+		}
 		protocol := r.Protocol
-		msg, err := send(ctx, query, server, protocol)
+		msg, err := send(ctx, query, server, protocol, until)
 		if err == nil && msg.Truncated && protocol == protocolUDP {
 			protocol = protocolTCP
-			msg, err = send(ctx, query, server, protocol)
+			msg, err = send(ctx, query, server, protocol, until)
 		}
 		if err == nil {
 			return msg, server, protocol, nil
@@ -275,8 +286,15 @@ func (r *Req) exchange(ctx context.Context, question dns.Question, servers []str
 	return nil, "", "", fmt.Errorf("no answer from the DNS server: %w", errors.Join(errs...))
 }
 
-func send(ctx context.Context, query *dns.Msg, server, protocol string) (*dns.Msg, error) {
+// send asks server once and waits for its answer until until, or as long as
+// ctx lets it when until is zero.
+func send(ctx context.Context, query *dns.Msg, server, protocol string, until time.Time) (*dns.Msg, error) {
 	client := &dns.Client{}
+	// Without a timeout of its own, the client waits 2 seconds whatever
+	// time ctx has left.
+	if !until.IsZero() {
+		client.Timeout = max(time.Until(until), time.Millisecond)
+	}
 	switch protocol {
 	case protocolTCP:
 		client.Net = "tcp"

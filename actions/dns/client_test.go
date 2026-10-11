@@ -325,6 +325,52 @@ func TestRequestTimesOut(t *testing.T) {
 	}
 }
 
+func TestRequestWaitsAsLongAsItsTimeout(t *testing.T) {
+	// A server that takes the query and never answers, waited for longer
+	// than the 2 seconds the DNS client waits by default.
+	pc, err := net.ListenPacket("udp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = pc.Close() })
+
+	start := time.Now()
+	_, err = Request(map[string]any{"name": "example.test", "server": pc.LocalAddr().String(), "timeout": "2300ms"})
+	if err == nil || !strings.Contains(err.Error(), "timed out after 2.3s") {
+		t.Errorf("Request() error = %v, want a timeout", err)
+	}
+	if waited := time.Since(start); waited < 2300*time.Millisecond {
+		t.Errorf("Request() waited %s, want the 2.3s of its timeout", waited)
+	}
+}
+
+func TestExchangeLeavesTimeForTheNextServer(t *testing.T) {
+	server, _, _ := startServer(t, false)
+	// A server that takes the query and never answers.
+	pc, err := net.ListenPacket("udp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = pc.Close() })
+	silent := pc.LocalAddr().String()
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	question := dns.Question{Name: "example.test.", Qtype: dns.TypeA, Qclass: dns.ClassINET}
+	start := time.Now()
+	_, got, _, err := (&Req{Protocol: "udp"}).exchange(ctx, question, []string{silent, server})
+	if err != nil {
+		t.Fatalf("exchange() error = %v, want the second server asked in the time left", err)
+	}
+	if got != server {
+		t.Errorf("exchange() answered from %s, want %s", got, server)
+	}
+	// The silent server had half of the time, not all of it.
+	if waited := time.Since(start); waited < 400*time.Millisecond || waited > 900*time.Millisecond {
+		t.Errorf("exchange() took %s, want about the half second of the first server", waited)
+	}
+}
+
 // useResolvConf has a request read the resolvers from a file of the test.
 func useResolvConf(t *testing.T, content string) Option {
 	t.Helper()
