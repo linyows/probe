@@ -172,7 +172,7 @@ The commit an action is pinned to is written once, so a newer release is a chang
 
 Probe replaces each name by its action as it loads the workflow, so everything else sees the action in full. In particular, `--allow-action` takes the action, not the name: a workflow cannot choose what a name the person running Probe has allowed stands for.
 
-The names belong to the workflow file. A job file run by the [embedded](/reference/actions/embedded) action does not see them, and names its external actions in full.
+A job file run by the [embedded](/reference/actions/embedded) action is read by the names of the workflow that embeds it, so its steps and its `defaults` can use them too. See [Named External Actions](/reference/actions/embedded#named-external-actions).
 
 ## Jobs
 

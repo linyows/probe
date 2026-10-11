@@ -331,8 +331,9 @@ func (j *Job) RunStandalone(vars map[string]any, printer *Printer, jobID, baseDi
 type StandaloneOption func(*standaloneConfig)
 
 type standaloneConfig struct {
-	runID string
-	guard actionrpc.Guard
+	runID   string
+	guard   actionrpc.Guard
+	actions map[string]string
 }
 
 // WithRunID runs the job as part of the run id names, such as the run of the
@@ -350,6 +351,16 @@ func WithRunID(id string) StandaloneOption {
 func WithGuard(guard actionrpc.Guard) StandaloneOption {
 	return func(c *standaloneConfig) {
 		c.guard = guard
+	}
+}
+
+// WithActions tells the steps of the job the names a workflow gives its
+// external actions, such as those of the workflow that embeds it, for a job
+// the job itself embeds to be read by. The job's own steps are read by them
+// with UseActions.
+func WithActions(names map[string]string) StandaloneOption {
+	return func(c *standaloneConfig) {
+		c.actions = names
 	}
 }
 
@@ -423,6 +434,7 @@ func (j *Job) runStandalone(vars map[string]any, printer *Printer, jobID, baseDi
 		background: procgroup.NewTracker(),
 		baseDir:    baseDir,
 		runID:      runID,
+		actions:    cfg.actions,
 	}
 	// This job runs inside the plugin process of the step that embeds it,
 	// which exits once the job is done, so its background processes go then.

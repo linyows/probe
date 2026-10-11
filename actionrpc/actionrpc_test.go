@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"maps"
 	"reflect"
 	"strings"
 	"testing"
@@ -445,12 +446,14 @@ func TestServer_RunUnsendableResult(t *testing.T) {
 // the step it was told about.
 type statefulAction struct {
 	MockActions
-	keep bool
-	step Step
+	keep    bool
+	step    Step
+	actions map[string]string
 }
 
 func (a *statefulAction) RunStep(call Call) (map[string]any, map[string]any, error) {
 	a.step = call.Step
+	a.actions = call.Actions
 	if a.keep {
 		return map[string]any{"kept": true}, nil, nil
 	}
@@ -585,5 +588,24 @@ func TestClientRunStepTellsTheStep(t *testing.T) {
 	}
 	if a.step != step {
 		t.Errorf("the action was told %+v, want %+v", a.step, step)
+	}
+}
+
+func TestClientRunStepTellsTheNamesOfActions(t *testing.T) {
+	a := &statefulAction{}
+	c := &Client{client: directClient{&Server{Impl: a}}}
+	names := map[string]string{"redis": "github.com/mozership/probe-redis@0123456789abcdef0123456789abcdef01234567", "greet": "/work/greet"}
+	if _, _, err := c.RunStep(Call{With: map[string]any{}, Actions: names}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !maps.Equal(a.actions, names) {
+		t.Errorf("the action was told %v, want %v", a.actions, names)
+	}
+
+	if _, _, err := c.RunStep(Call{With: map[string]any{}}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(a.actions) != 0 {
+		t.Errorf("the action was told %v, want no names", a.actions)
 	}
 }

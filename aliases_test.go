@@ -2,6 +2,7 @@ package probe
 
 import (
 	"fmt"
+	"maps"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -210,6 +211,144 @@ jobs:
 
 // TestEndToEndActionNames runs a workflow that names its external action
 // under actions, and is refused, under a guard, by the action in full.
+func TestLoad_NamesForEmbeddedJobs(t *testing.T) {
+	redis := "github.com/mozership/probe-redis@" + aliasSHA
+	p := &Probe{Config: Config{Log: os.Stdout, Actions: builtinNames}}
+	// Problems are collected, as probe check does, so that the wrong name
+	// does not end the load.
+	p.aliasProblems = &[]aliasProblem{}
+	dir := t.TempDir()
+	p.FilePath = writeWorkflow(t, dir, "workflow.yml", `name: names
+actions:
+  redis: `+redis+`
+  greet: ./greet
+  up: ../shared/up
+  abs: /opt/actions/abs
+  http: ./greet
+jobs:
+- name: J
+  steps:
+  - uses: embedded
+    with:
+      path: job.yml
+`)
+	if err := p.Load(); err != nil {
+		t.Fatal(err)
+	}
+	// t.TempDir is a symbolic link on macOS, and the workflow is found by
+	// the path it was given.
+	want := map[string]string{
+		"redis": redis,
+		"greet": filepath.Join(dir, "greet"),
+		"up":    filepath.Join(filepath.Dir(dir), "shared", "up"),
+		"abs":   "/opt/actions/abs",
+	}
+	if got := p.workflow.named; !maps.Equal(got, want) {
+		t.Errorf("named = %v, want %v", got, want)
+	}
+
+	t.Run("a workflow that names none", func(t *testing.T) {
+		p, err := loadWorkflow(t, "name: none\njobs:\n- name: J\n  steps:\n  - uses: http\n")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(p.workflow.named) != 0 {
+			t.Errorf("named = %v, want none", p.workflow.named)
+		}
+	})
+}
+
+func TestJob_UseActions(t *testing.T) {
+	redis := "github.com/mozership/probe-redis@" + aliasSHA
+	names := map[string]string{"redis": redis}
+
+	job := &Job{
+		Defaults: map[string]any{"redis": map[string]any{"url": "a"}, "http": map[string]any{"url": "b"}},
+		Steps:    []*Step{{Uses: "redis"}, nil, {Uses: "http"}, {Uses: "store"}},
+	}
+	if err := job.UseActions(names); err != nil {
+		t.Fatal(err)
+	}
+	for i, want := range map[int]string{0: redis, 2: "http", 3: "store"} {
+		if job.Steps[i].Uses != want {
+			t.Errorf("step %d: uses = %q, want %q", i, job.Steps[i].Uses, want)
+		}
+	}
+	defaults := job.Defaults.(map[string]any)
+	if _, ok := defaults[redis]; !ok || len(defaults) != 2 {
+		t.Errorf("defaults = %v, want those of redis keyed by the action", defaults)
+	}
+
+	// No names, and defaults that are not a map, change nothing.
+	plain := &Job{Defaults: "x", Steps: []*Step{{Uses: "redis"}}}
+	if err := plain.UseActions(nil); err != nil || plain.Steps[0].Uses != "redis" {
+		t.Errorf("UseActions(nil) = %v with uses %q, want the job as it was", err, plain.Steps[0].Uses)
+	}
+	if err := plain.UseActions(names); err != nil || plain.Steps[0].Uses != redis {
+		t.Errorf("UseActions() = %v with uses %q, want %q", err, plain.Steps[0].Uses, redis)
+	}
+
+	twice := &Job{Defaults: map[string]any{"redis": map[string]any{}, redis: map[string]any{}}}
+	if err := twice.UseActions(names); err == nil || !strings.Contains(err.Error(), "defaults: redis and "+redis+" are the same action") {
+		t.Errorf("UseActions() = %v, want the defaults refused", err)
+	}
+}
+
+func TestCheck_EmbeddedJobNames(t *testing.T) {
+	dir := t.TempDir()
+	job := writeWorkflow(t, dir, "job.yml", `name: job
+steps:
+- uses: cache
+- uses: http
+- uses: ./local
+- uses: cash
+- uses: wrong
+- uses: nothing
+`)
+	path := writeWorkflow(t, dir, "workflow.yml", `name: names
+actions:
+  cache: github.com/mozership/probe-redis@`+aliasSHA+`
+  wrong: github.com/mozership/probe-s3@v1
+vars:
+  job: `+job+`
+jobs:
+- name: J
+  steps:
+  - name: static
+    uses: embedded
+    with:
+      path: `+job+`
+    test: res.code == 0
+  - name: a template is not known before the run
+    uses: embedded
+    with:
+      path: "{{vars.job}}"
+    test: res.code == 0
+  - name: a file that is not there is told by the run
+    uses: embedded
+    with:
+      path: `+filepath.Join(dir, "none.yml")+`
+    test: res.code == 0
+`)
+	opts := CheckOptions{Actions: []string{"embedded", "http"}}
+	findings, err := Check(path, opts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	checkFindings(t, findings, []want{
+		{SeverityError, 4, "actions: wrong:"},
+		{SeverityError, 13, `job.yml: step 3 uses "cash", which is not an action of Probe or a name under actions; did you mean "cache"?`},
+		{SeverityError, 13, `job.yml: step 5 uses "nothing", which is not an action of Probe or a name under actions`},
+	})
+
+	// Without the names of the actions of Probe, no uses can be told wrong.
+	findings, err = Check(path, CheckOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	checkFindings(t, findings, []want{{SeverityError, 4, "actions: wrong:"}})
+}
+
 func TestEndToEndActionNames(t *testing.T) {
 	dir := t.TempDir()
 	probeBin := filepath.Join(dir, "probe")
@@ -234,6 +373,59 @@ jobs:
     uses: greet
     test: res.greeting == "hello probe"
 `)
+	// A job file in another directory than the workflow, which embeds one
+	// more: both use the name the workflow gives, and its ./greet is the
+	// directory next to the workflow, not one next to either job file.
+	jobs := filepath.Join(dir, "jobs")
+	if err := os.MkdirAll(filepath.Join(jobs, "deep"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	inner := writeWorkflow(t, filepath.Join(jobs, "deep"), "inner.yml", `name: inner
+steps:
+- name: greet from the inner job
+  uses: greet
+  with:
+    name: inner
+  test: res.greeting == "hello inner"
+`)
+	outer := writeWorkflow(t, jobs, "outer.yml", `name: outer
+defaults:
+  greet:
+    name: outer
+steps:
+- name: greet from the job
+  uses: greet
+  test: res.greeting == "hello outer"
+- name: embed one more
+  uses: embedded
+  with:
+    path: `+inner+`
+  test: res.code == 0
+`)
+	embedding := writeWorkflow(t, dir, "embedding.yml", `name: embedding
+actions:
+  greet: ./greet
+jobs:
+- name: embed
+  steps:
+  - name: embed a job
+    uses: embedded
+    with:
+      path: `+outer+`
+    test: res.code == 0
+`)
+	unnamed := writeWorkflow(t, dir, "unnamed.yml", `name: unnamed
+actions:
+  great: ./greet
+jobs:
+- name: embed
+  steps:
+  - name: embed a job
+    uses: embedded
+    with:
+      path: `+outer+`
+    test: res.code == 0
+`)
 	clash := writeWorkflow(t, dir, "clash.yml", `name: clash
 actions:
   shell: ./greet
@@ -257,6 +449,11 @@ jobs:
 		{"but not by the name", []string{"--read-only", "--allow-action", "greet", named}, ExitConfigError, "--allow-action ./greet"},
 		{"the name of an action of Probe", []string{clash}, ExitConfigError, `the name "shell" is that of an action of Probe`},
 		{"check passes a named action", []string{"check", named}, ExitOK, ""},
+		{"a job a step embeds uses the name", []string{embedding}, ExitOK, ""},
+		{"the guard names its action in full", []string{"--read-only", embedding}, ExitConfigError, "--allow-action " + actionDir},
+		{"and lets it run by that", []string{"--read-only", "--allow-action", actionDir, embedding}, ExitOK, ""},
+		{"check passes a job that uses a name", []string{"check", embedding}, ExitOK, ""},
+		{"check tells a name the workflow does not give", []string{"check", unnamed}, ExitConfigError, `step 0 uses "greet", which is not an action of Probe or a name under actions; did you mean "great"?`},
 		{"check tells the name of an action of Probe", []string{"check", clash}, ExitConfigError, `the name "shell" is that of an action of Probe`},
 	}
 	for _, tt := range tests {

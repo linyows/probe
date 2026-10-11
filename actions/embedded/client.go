@@ -47,6 +47,9 @@ type Callback struct {
 	runID string
 	// guard is the guard of the run the job is part of.
 	guard actionrpc.Guard
+	// actions are the names the workflow that embeds the job gives its
+	// external actions.
+	actions map[string]string
 }
 
 func NewReq() *Req {
@@ -73,7 +76,11 @@ func (r *Req) Do() (*Result, error) {
 	if err != nil {
 		return result, fmt.Errorf("failed to resolve path: %w", err)
 	}
-	job, err := loadJob(absPath)
+	var names map[string]string
+	if r.cb != nil {
+		names = r.cb.actions
+	}
+	job, err := loadJob(absPath, names)
 	if err != nil {
 		return result, err
 	}
@@ -87,7 +94,7 @@ func (r *Req) Do() (*Result, error) {
 		opts = append(opts, probe.WithRunID(r.cb.runID))
 	}
 	if r.cb != nil {
-		opts = append(opts, probe.WithGuard(r.cb.guard))
+		opts = append(opts, probe.WithGuard(r.cb.guard), probe.WithActions(names))
 	}
 	run := job.RunStandalone(r.Vars, printer, jobID, filepath.Dir(absPath), opts...)
 
@@ -137,9 +144,10 @@ func (r *Req) Do() (*Result, error) {
 	return result, nil
 }
 
-// loadJob reads the job file at path and applies the job's defaults to its
-// steps.
-func loadJob(path string) (*probe.Job, error) {
+// loadJob reads the job file at path, reads it by names, the names the
+// workflow that embeds it gives its external actions, and applies the job's
+// defaults to its steps.
+func loadJob(path string, names map[string]string) (*probe.Job, error) {
 	data, err := os.ReadFile(path)
 	if errors.Is(err, fs.ErrNotExist) {
 		return nil, fmt.Errorf("embedded steps file does not exist: %s", path)
@@ -157,6 +165,10 @@ func loadJob(path string) (*probe.Job, error) {
 		return nil, fmt.Errorf("no steps found in embedded file: %s", path)
 	}
 
+	// Before the defaults, which are keyed by what a step's uses says.
+	if err := job.UseActions(names); err != nil {
+		return nil, fmt.Errorf("embedded steps file %s: %w", path, err)
+	}
 	job.ApplyDefaults()
 	return job, nil
 }
@@ -217,6 +229,14 @@ func WithAfter(f func(result *Result)) Option {
 func WithGuard(guard actionrpc.Guard) Option {
 	return func(c *Callback) {
 		c.guard = guard
+	}
+}
+
+// WithActions reads the job by names, the names the workflow of the step
+// that embeds it gives its external actions.
+func WithActions(names map[string]string) Option {
+	return func(c *Callback) {
+		c.actions = names
 	}
 }
 

@@ -37,10 +37,13 @@ type Workflow struct {
 	// concurrently, so it is only accessed atomically; exitStatus is derived
 	// from it once every job is done. It is an int32 rather than an
 	// atomic.Bool because a Workflow is copied by value when it is decoded.
-	failed int32
+	failed atomic.Int32
 	env    map[string]string
 	// basePath is the directory containing the workflow file (used for resolving relative paths)
 	basePath string
+	// named are the names the workflow gives its external actions, as a job
+	// it embeds is told them
+	named map[string]string
 	// Shared outputs across all jobs
 	outputs *Outputs
 	printer *Printer
@@ -131,7 +134,7 @@ func (w *Workflow) Start(c Config) error {
 	}
 
 	reporter.Finish(ctx.Result)
-	w.exitStatus = ctx.Result.exitCode(atomic.LoadInt32(&w.failed) == 1)
+	w.exitStatus = ctx.Result.exitCode(w.failed.Load() == 1)
 
 	return w.writeReports(c.Reports, ctx.Result, jobIDs, startedAt, time.Now())
 }
@@ -278,7 +281,7 @@ func (w *Workflow) processRunnableJobs(runnableJobs []string, ctx JobContext) {
 
 func (w *Workflow) SetExitStatus(isErr bool) {
 	if isErr {
-		atomic.StoreInt32(&w.failed, 1)
+		w.failed.Store(1)
 	}
 }
 
@@ -354,8 +357,7 @@ func (w *Workflow) evalVars() (map[string]any, error) {
 			env["vars"] = maps.Clone(vars)
 
 			out, err := evalVar(ev, k, v, env)
-			var pending *pendingVarError
-			if errors.As(err, &pending) {
+			if pending, ok := errors.AsType[*pendingVarError](err); ok {
 				d := pending.name
 				waiting := append(slices.Clone(path), k)
 				if i := slices.Index(waiting, d); i >= 0 {
@@ -466,8 +468,7 @@ func renameFieldErrors(err error, from, to string) error {
 	}
 	var errs []error
 	for _, e := range unwrapJoined(err) {
-		var fe *expr.FieldError
-		if errors.As(e, &fe) {
+		if fe, ok := errors.AsType[*expr.FieldError](e); ok {
 			evaluated := ""
 			if fe.EvaluatedPath != "" {
 				evaluated = rename(fe.EvaluatedPath)
@@ -484,8 +485,7 @@ func renameFieldErrors(err error, from, to string) error {
 func prefixFieldErrors(err error, prefix string) error {
 	var errs []error
 	for _, e := range unwrapJoined(err) {
-		var fe *expr.FieldError
-		if errors.As(e, &fe) {
+		if fe, ok := errors.AsType[*expr.FieldError](e); ok {
 			evaluated := ""
 			if fe.EvaluatedPath != "" {
 				evaluated = prefix + fe.EvaluatedPath
@@ -599,6 +599,7 @@ func (w *Workflow) newJobContext(c Config, vars map[string]any, scheduler *JobSc
 		background:   procgroup.NewTracker(),
 		baseDir:      w.basePath,
 		runID:        w.runID,
+		actions:      w.named,
 	}
 }
 

@@ -30,7 +30,10 @@ type RunRequest struct {
 	// The step the action runs for.
 	Step *Step `protobuf:"bytes,4,opt,name=step,proto3" json:"step,omitempty"`
 	// What the run allows the action to do, which the action keeps to.
-	Guard         *Guard `protobuf:"bytes,5,opt,name=guard,proto3" json:"guard,omitempty"`
+	Guard *Guard `protobuf:"bytes,5,opt,name=guard,proto3" json:"guard,omitempty"`
+	// The names the workflow gives its external actions, each with the action
+	// it stands for, for an action that runs steps of its own.
+	Actions       map[string]string `protobuf:"bytes,6,rep,name=actions,proto3" json:"actions,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -89,6 +92,13 @@ func (x *RunRequest) GetStep() *Step {
 func (x *RunRequest) GetGuard() *Guard {
 	if x != nil {
 		return x.Guard
+	}
+	return nil
+}
+
+func (x *RunRequest) GetActions() map[string]string {
+	if x != nil {
+		return x.Actions
 	}
 	return nil
 }
@@ -379,13 +389,17 @@ var File_pb_actions_proto protoreflect.FileDescriptor
 
 const file_pb_actions_proto_rawDesc = "" +
 	"\n" +
-	"\x10pb/actions.proto\x12\x02pb\x1a\x1cgoogle/protobuf/struct.proto\"\xb3\x01\n" +
+	"\x10pb/actions.proto\x12\x02pb\x1a\x1cgoogle/protobuf/struct.proto\"\xa6\x02\n" +
 	"\n" +
 	"RunRequest\x12+\n" +
 	"\x04with\x18\x02 \x01(\v2\x17.google.protobuf.StructR\x04with\x12-\n" +
 	"\x05state\x18\x03 \x01(\v2\x17.google.protobuf.StructR\x05state\x12\x1c\n" +
 	"\x04step\x18\x04 \x01(\v2\b.pb.StepR\x04step\x12\x1f\n" +
-	"\x05guard\x18\x05 \x01(\v2\t.pb.GuardR\x05guardJ\x04\b\x01\x10\x02R\x04args\"\xef\x01\n" +
+	"\x05guard\x18\x05 \x01(\v2\t.pb.GuardR\x05guard\x125\n" +
+	"\aactions\x18\x06 \x03(\v2\x1b.pb.RunRequest.ActionsEntryR\aactions\x1a:\n" +
+	"\fActionsEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01J\x04\b\x01\x10\x02R\x04args\"\xef\x01\n" +
 	"\x05Guard\x12\x1b\n" +
 	"\tread_only\x18\x01 \x01(\bR\breadOnly\x12\x1f\n" +
 	"\vallow_hosts\x18\x02 \x03(\tR\n" +
@@ -426,32 +440,34 @@ func file_pb_actions_proto_rawDescGZIP() []byte {
 	return file_pb_actions_proto_rawDescData
 }
 
-var file_pb_actions_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
+var file_pb_actions_proto_msgTypes = make([]protoimpl.MessageInfo, 7)
 var file_pb_actions_proto_goTypes = []any{
 	(*RunRequest)(nil),      // 0: pb.RunRequest
 	(*Guard)(nil),           // 1: pb.Guard
 	(*GuardKinds)(nil),      // 2: pb.GuardKinds
 	(*Step)(nil),            // 3: pb.Step
 	(*RunResponse)(nil),     // 4: pb.RunResponse
-	nil,                     // 5: pb.Guard.KeepsEntry
-	(*structpb.Struct)(nil), // 6: google.protobuf.Struct
+	nil,                     // 5: pb.RunRequest.ActionsEntry
+	nil,                     // 6: pb.Guard.KeepsEntry
+	(*structpb.Struct)(nil), // 7: google.protobuf.Struct
 }
 var file_pb_actions_proto_depIdxs = []int32{
-	6, // 0: pb.RunRequest.with:type_name -> google.protobuf.Struct
-	6, // 1: pb.RunRequest.state:type_name -> google.protobuf.Struct
-	3, // 2: pb.RunRequest.step:type_name -> pb.Step
-	1, // 3: pb.RunRequest.guard:type_name -> pb.Guard
-	5, // 4: pb.Guard.keeps:type_name -> pb.Guard.KeepsEntry
-	6, // 5: pb.RunResponse.result:type_name -> google.protobuf.Struct
-	6, // 6: pb.RunResponse.state:type_name -> google.protobuf.Struct
-	2, // 7: pb.Guard.KeepsEntry.value:type_name -> pb.GuardKinds
-	0, // 8: pb.Actions.Run:input_type -> pb.RunRequest
-	4, // 9: pb.Actions.Run:output_type -> pb.RunResponse
-	9, // [9:10] is the sub-list for method output_type
-	8, // [8:9] is the sub-list for method input_type
-	8, // [8:8] is the sub-list for extension type_name
-	8, // [8:8] is the sub-list for extension extendee
-	0, // [0:8] is the sub-list for field type_name
+	7,  // 0: pb.RunRequest.with:type_name -> google.protobuf.Struct
+	7,  // 1: pb.RunRequest.state:type_name -> google.protobuf.Struct
+	3,  // 2: pb.RunRequest.step:type_name -> pb.Step
+	1,  // 3: pb.RunRequest.guard:type_name -> pb.Guard
+	5,  // 4: pb.RunRequest.actions:type_name -> pb.RunRequest.ActionsEntry
+	6,  // 5: pb.Guard.keeps:type_name -> pb.Guard.KeepsEntry
+	7,  // 6: pb.RunResponse.result:type_name -> google.protobuf.Struct
+	7,  // 7: pb.RunResponse.state:type_name -> google.protobuf.Struct
+	2,  // 8: pb.Guard.KeepsEntry.value:type_name -> pb.GuardKinds
+	0,  // 9: pb.Actions.Run:input_type -> pb.RunRequest
+	4,  // 10: pb.Actions.Run:output_type -> pb.RunResponse
+	10, // [10:11] is the sub-list for method output_type
+	9,  // [9:10] is the sub-list for method input_type
+	9,  // [9:9] is the sub-list for extension type_name
+	9,  // [9:9] is the sub-list for extension extendee
+	0,  // [0:9] is the sub-list for field type_name
 }
 
 func init() { file_pb_actions_proto_init() }
@@ -465,7 +481,7 @@ func file_pb_actions_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_pb_actions_proto_rawDesc), len(file_pb_actions_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   6,
+			NumMessages:   7,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

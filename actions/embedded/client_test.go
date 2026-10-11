@@ -87,7 +87,7 @@ steps:
   with:
     url: http://example.com
 - uses: http
-`))
+`), nil)
 		if err != nil {
 			t.Fatalf("loadJob() error = %v", err)
 		}
@@ -95,6 +95,63 @@ steps:
 			if st.With["timeout"] != "5s" {
 				t.Errorf("step %d: With = %v, want the default timeout", i, st.With)
 			}
+		}
+	})
+
+	// The names are those of the workflow that embeds the job.
+	redis := "github.com/mozership/probe-redis@0123456789abcdef0123456789abcdef01234567"
+	names := map[string]string{"redis": redis, "greet": "/work/greet"}
+
+	t.Run("reads the job by the names it is given", func(t *testing.T) {
+		job, err := loadJob(writeJob(t, `name: j
+defaults:
+  redis:
+    url: redis://localhost
+steps:
+- uses: redis
+  with:
+    commands: [PING]
+- uses: `+redis+`
+- uses: greet
+- uses: http
+`), names)
+		if err != nil {
+			t.Fatalf("loadJob() error = %v", err)
+		}
+		for i, want := range []string{redis, redis, "/work/greet", "http"} {
+			if job.Steps[i].Uses != want {
+				t.Errorf("step %d: uses = %q, want %q", i, job.Steps[i].Uses, want)
+			}
+		}
+		// The defaults written by the name apply to a step that names the
+		// action in full as well.
+		for i := range 2 {
+			if job.Steps[i].With["url"] != "redis://localhost" {
+				t.Errorf("step %d: With = %v, want the default url", i, job.Steps[i].With)
+			}
+		}
+	})
+
+	t.Run("a name it is not given stays as it is written", func(t *testing.T) {
+		job, err := loadJob(writeJob(t, "name: j\nsteps:\n- uses: redis\n"), nil)
+		if err != nil {
+			t.Fatalf("loadJob() error = %v", err)
+		}
+		if job.Steps[0].Uses != "redis" {
+			t.Errorf("uses = %q, want it left as redis", job.Steps[0].Uses)
+		}
+	})
+
+	t.Run("defaults written by the name and in full", func(t *testing.T) {
+		_, err := loadJob(writeJob(t, `name: j
+defaults:
+  redis: {url: a}
+  `+redis+`: {url: b}
+steps:
+- uses: redis
+`), names)
+		if err == nil || !strings.Contains(err.Error(), "are the same action, whose defaults can be written once") {
+			t.Fatalf("loadJob() error = %v, want the defaults refused", err)
 		}
 	})
 
@@ -109,7 +166,7 @@ steps:
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := loadJob(tt.path(t))
+			_, err := loadJob(tt.path(t), nil)
 			if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
 				t.Fatalf("loadJob() error = %v, want one containing %q", err, tt.wantErr)
 			}

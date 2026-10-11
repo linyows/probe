@@ -58,6 +58,11 @@ type Call struct {
 	// Guard is what the run allows the action to do. An action that keeps
 	// to it returns a Refused error for what it does not allow.
 	Guard Guard
+	// Actions are the names the workflow gives its external actions, each
+	// with the action it stands for in full, for an action that runs steps
+	// of its own, as embedded does, to read a uses by. A local action is an
+	// absolute path here.
+	Actions map[string]string
 }
 
 // Step tells an action about the step it runs for.
@@ -145,7 +150,7 @@ func (m *Client) RunStep(call Call) (map[string]any, map[string]any, error) {
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to convert parameters to protobuf struct: %v", err)
 	}
-	req := &pb.RunRequest{With: withStruct, Step: stepToPB(call.Step), Guard: guardToPB(call.Guard)}
+	req := &pb.RunRequest{With: withStruct, Step: stepToPB(call.Step), Guard: guardToPB(call.Guard), Actions: call.Actions}
 	if call.State != nil {
 		req.State, err = structpb.NewStruct(call.State)
 		if err != nil {
@@ -205,7 +210,7 @@ func (m *Server) Run(ctx context.Context, req *pb.RunRequest) (*pb.RunResponse, 
 	var v, newState map[string]any
 	var err error
 	if sa, ok := m.Impl.(StepAction); ok {
-		call := Call{With: withMap, Step: stepFromPB(req.GetStep()), Guard: guardFromPB(req.GetGuard())}
+		call := Call{With: withMap, Step: stepFromPB(req.GetStep()), Guard: guardFromPB(req.GetGuard()), Actions: req.GetActions()}
 		if req.State != nil {
 			call.State = structToMap(req.State)
 		}

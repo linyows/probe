@@ -57,6 +57,46 @@ jobs:
 
 ジョブファイルの中で`uses: ./greet`のようにローカルの[外部アクション](/ja/guide/concepts/actions#外部アクション)を使うと、ワークフローの中でワークフローファイルから探すのと同じく、そのジョブファイルからの相対パスで探します。
 
+
+### 名前を付けた外部アクション
+
+ジョブファイルのステップでは、ワークフローが[`actions`](/ja/reference/yaml-configuration#actions)で外部アクションに付けた名前を、`uses`と`defaults`のキーに書けます。ジョブファイル自身は`actions`を持ちません。使える名前は、そのジョブを埋め込むステップがあるワークフローのものです。
+
+**workflow.yml:**
+```yaml
+actions:
+  redis: github.com/mozership/probe-redis@7d60e0699a914e3c987ed5f2403ed8a7f3d176fa # v0.1.0
+
+jobs:
+- name: Session
+  steps:
+    - name: Check the session store
+      uses: embedded
+      with:
+        path: "./jobs/session.yml"
+      test: res.code == 0
+```
+
+**jobs/session.yml:**
+```yaml
+name: Session store
+defaults:
+  redis:
+    url: redis://localhost:6379
+steps:
+  - name: The store answers
+    uses: redis
+    with:
+      commands: [PING]
+    test: res.results[0] == "PONG"
+```
+
+- コミットはワークフローに1度書くだけで、埋め込むジョブファイルにも効きます。2つのワークフローから埋め込まれるジョブファイルは、それぞれのワークフローが名前を付けたアクションで動きます。
+- ジョブファイルがさらに埋め込むジョブファイルも、同じワークフローの名前で読まれます。
+- `greet: ./greet`のようにローカルパスを指す名前は、ジョブファイルがどこにあっても、ワークフローファイルの隣のディレクトリを指します。
+- [ガード](/ja/guide/concepts/guard)の下では、`--allow-action`には名前ではなくアクションを完全な形で渡します。ローカルパスを指す名前の場合は、そのディレクトリの絶対パスです。
+- ワークフローが付けていない名前はアクションではないので、それを使うステップは失敗します。`probe check`は、ジョブを埋め込むステップの`path`の行でこれを報告します。`path`がテンプレートのときは報告しません。
+
 ## レスポンスオブジェクト
 
 埋め込みジョブの終了後、`res`にその結果と出力が入ります。

@@ -194,7 +194,7 @@ func (st *Step) executeSingleAction(runner ActionRunner, expW map[string]any, jC
 	// The call is made up here: an attempt that timed out goes on in the
 	// background while the next one changes the step.
 	opts := RunOptions{Verbose: jCtx.Verbose, Quiet: quiet, Masker: masker, BaseDir: jCtx.baseDir}
-	call := actionrpc.Call{With: expW, State: jCtx.states.get(st.Uses), Step: st.stepInfo(jCtx), Guard: jCtx.Guard}
+	call := actionrpc.Call{With: expW, State: jCtx.states.get(st.Uses), Step: st.stepInfo(jCtx), Guard: jCtx.Guard, Actions: jCtx.actions}
 	go func() {
 		defer done()
 		ret, state, err := runAction(runner, st.Uses, call, opts)
@@ -1244,8 +1244,7 @@ func (st *Step) saveOutputs(jCtx *JobContext) {
 		// cannot be read through it.
 		if err := jCtx.Outputs.Set(st.ID, outputs); err != nil {
 			for _, e := range unwrapJoined(err) {
-				var taken *NameTakenError
-				if errors.As(e, &taken) {
+				if taken, ok := errors.AsType[*NameTakenError](e); ok {
 					jCtx.Printer.LogWarn("%v", taken)
 				} else {
 					jCtx.Printer.PrintError("Output conflict: %v", e)
