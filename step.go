@@ -1244,7 +1244,8 @@ func (st *Step) saveOutputs(jCtx *JobContext) {
 		// cannot be read through it.
 		if err := jCtx.Outputs.Set(st.ID, outputs); err != nil {
 			for _, e := range unwrapJoined(err) {
-				if taken, ok := errors.AsType[*NameTakenError](e); ok {
+				var taken *NameTakenError
+				if errors.As(e, &taken) {
 					jCtx.Printer.LogWarn("%v", taken)
 				} else {
 					jCtx.Printer.PrintError("Output conflict: %v", e)

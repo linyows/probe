@@ -37,7 +37,7 @@ type Workflow struct {
 	// concurrently, so it is only accessed atomically; exitStatus is derived
 	// from it once every job is done. It is an int32 rather than an
 	// atomic.Bool because a Workflow is copied by value when it is decoded.
-	failed atomic.Int32
+	failed int32
 	env    map[string]string
 	// basePath is the directory containing the workflow file (used for resolving relative paths)
 	basePath string
@@ -134,7 +134,7 @@ func (w *Workflow) Start(c Config) error {
 	}
 
 	reporter.Finish(ctx.Result)
-	w.exitStatus = ctx.Result.exitCode(w.failed.Load() == 1)
+	w.exitStatus = ctx.Result.exitCode(atomic.LoadInt32(&w.failed) == 1)
 
 	return w.writeReports(c.Reports, ctx.Result, jobIDs, startedAt, time.Now())
 }
@@ -281,7 +281,7 @@ func (w *Workflow) processRunnableJobs(runnableJobs []string, ctx JobContext) {
 
 func (w *Workflow) SetExitStatus(isErr bool) {
 	if isErr {
-		w.failed.Store(1)
+		atomic.StoreInt32(&w.failed, 1)
 	}
 }
 
@@ -357,7 +357,8 @@ func (w *Workflow) evalVars() (map[string]any, error) {
 			env["vars"] = maps.Clone(vars)
 
 			out, err := evalVar(ev, k, v, env)
-			if pending, ok := errors.AsType[*pendingVarError](err); ok {
+			var pending *pendingVarError
+			if errors.As(err, &pending) {
 				d := pending.name
 				waiting := append(slices.Clone(path), k)
 				if i := slices.Index(waiting, d); i >= 0 {
@@ -468,7 +469,8 @@ func renameFieldErrors(err error, from, to string) error {
 	}
 	var errs []error
 	for _, e := range unwrapJoined(err) {
-		if fe, ok := errors.AsType[*expr.FieldError](e); ok {
+		var fe *expr.FieldError
+		if errors.As(e, &fe) {
 			evaluated := ""
 			if fe.EvaluatedPath != "" {
 				evaluated = rename(fe.EvaluatedPath)
@@ -485,7 +487,8 @@ func renameFieldErrors(err error, from, to string) error {
 func prefixFieldErrors(err error, prefix string) error {
 	var errs []error
 	for _, e := range unwrapJoined(err) {
-		if fe, ok := errors.AsType[*expr.FieldError](e); ok {
+		var fe *expr.FieldError
+		if errors.As(e, &fe) {
 			evaluated := ""
 			if fe.EvaluatedPath != "" {
 				evaluated = prefix + fe.EvaluatedPath
