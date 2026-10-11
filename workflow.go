@@ -676,53 +676,47 @@ func unknownAction(uses string, builtin []string) error {
 }
 
 // checkEmbeddedJobs reads the job file of each step that embeds one, and
-// returns an error for a uses in it that names no action, so that it fails
-// the run before any job starts rather than when the step is reached. The
-// job is read by the names the workflow gives its external actions, as the
-// embedded action reads it. builtin are the names of the actions of Probe;
-// when it is empty, nothing is checked.
+// those that job embeds in turn, and returns an error for a uses in them
+// that names no action, so that it fails the run before any job starts
+// rather than when the step is reached. A job is read by the names the
+// workflow gives its external actions, as the embedded action reads it.
+// builtin are the names of the actions of Probe; when it is empty, nothing
+// is checked.
 //
 // What cannot be known yet is left to the embedded action, which checks the
-// same as it starts the job: a path that reads more than the workflow's
-// vars, a file that cannot be read, and a job file that job embeds.
+// same as it starts a job: a path that reads more than the workflow's vars,
+// and a file that cannot be read. An external action a job names is
+// resolved then as well.
 func (w *Workflow) checkEmbeddedJobs(builtin []string) error {
 	if len(builtin) == 0 {
 		return nil
 	}
 	b := &graphBuilder{workflow: w}
+	var found error
 	for _, job := range w.Jobs {
 		for _, st := range job.Steps {
 			if st == nil || st.Uses != "embedded" {
 				continue
 			}
-			path, ok := st.With["path"].(string)
-			if !ok || path == "" {
-				continue
+			// A path the vars of the workflow give is known by now.
+			if path, ok := st.With["path"].(string); ok && len(expr.TemplateExprs(path)) > 0 {
+				st = &Step{Uses: st.Uses, With: map[string]any{"path": b.expandPath(path)}}
 			}
-			if len(expr.TemplateExprs(path)) > 0 {
-				if path = b.expandPath(path); len(expr.TemplateExprs(path)) > 0 {
-					continue
-				}
-			}
-			embedded, err := LoadEmbeddedJob(path)
-			if err != nil {
-				continue
-			}
-			for i, es := range embedded.Steps {
-				if es == nil {
-					continue
-				}
+			eachEmbeddedStep(st, map[string]bool{}, func(file string, i int, es *Step) {
 				uses := es.Uses
 				if ref, named := w.named[uses]; named {
 					uses = ref
 				}
-				if actionref.IsExternal(uses) || slices.Contains(builtin, uses) {
-					continue
+				if found != nil || actionref.IsExternal(uses) || slices.Contains(builtin, uses) {
+					return
 				}
-				return NewConfigurationError("resolve_action", "failed to resolve an action of an embedded job", fmt.Errorf("%s, step %d: %w", path, i, unknownAction(uses, builtin))).
+				found = NewConfigurationError("resolve_action", "failed to resolve an action of an embedded job", fmt.Errorf("%s, step %d: %w", file, i, unknownAction(uses, builtin))).
 					WithContext("uses", uses).
-					WithContext("path", path).
+					WithContext("path", file).
 					WithContext("step", i)
+			})
+			if found != nil {
+				return found
 			}
 		}
 	}

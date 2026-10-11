@@ -298,6 +298,20 @@ func TestJob_UseActions(t *testing.T) {
 
 func TestCheck_EmbeddedJobNames(t *testing.T) {
 	dir := t.TempDir()
+	// The job embeds another, which embeds the first again: each file is
+	// read once.
+	jobPath := filepath.Join(dir, "job.yml")
+	nested := writeWorkflow(t, dir, "nested.yml", `name: nested
+steps:
+- uses: cache
+- uses: cach
+- uses: embedded
+  with:
+    path: `+jobPath+`
+- uses: embedded
+  with:
+    path: "{{vars.other}}"
+`)
 	job := writeWorkflow(t, dir, "job.yml", `name: job
 steps:
 - uses: cache
@@ -306,6 +320,10 @@ steps:
 - uses: cash
 - uses: wrong
 - uses: nothing
+- uses: github.com/mozership/probe-s3@v1
+- uses: embedded
+  with:
+    path: `+nested+`
 `)
 	path := writeWorkflow(t, dir, "workflow.yml", `name: names
 actions:
@@ -341,6 +359,8 @@ jobs:
 		{SeverityError, 4, "actions: wrong:"},
 		{SeverityError, 13, `job.yml: step 3 uses "cash", which is not an action of Probe or a name under actions; did you mean "cache"?`},
 		{SeverityError, 13, `job.yml: step 5 uses "nothing", which is not an action of Probe or a name under actions`},
+		{SeverityError, 13, `job.yml: step 6: uses: action "github.com/mozership/probe-s3@v1" must be pinned to a full 40-character commit SHA`},
+		{SeverityError, 13, `nested.yml: step 1 uses "cach", which is not an action of Probe or a name under actions; did you mean "cache"?`},
 	})
 
 	// Without the names of the actions of Probe, no uses can be told wrong.
@@ -373,6 +393,9 @@ func TestWorkflow_CheckEmbeddedJobs(t *testing.T) {
 	dir := t.TempDir()
 	good := writeWorkflow(t, dir, "good.yml", "name: good\nsteps:\n- uses: cache\n- uses: http\n- uses: ./local\n")
 	bad := writeWorkflow(t, dir, "bad.yml", "name: bad\nsteps:\n- uses: http\n- uses: cash\n")
+	// A job file that embeds the bad one, and itself, which ends.
+	outerPath := filepath.Join(dir, "outer.yml")
+	outer := writeWorkflow(t, dir, "outer.yml", "name: outer\nsteps:\n- uses: embedded\n  with:\n    path: "+outerPath+"\n- uses: embedded\n  with:\n    path: "+bad+"\n")
 	embed := func(path string) string {
 		return `name: w
 actions:
@@ -397,6 +420,7 @@ jobs:
 		{"every uses is an action", good, ""},
 		{"a uses that is none", bad, bad + `, step 1: unknown action "cash"`},
 		{"in a file a var names", "{{vars.bad}}", bad + `, step 1: unknown action "cash"`},
+		{"in a file that file embeds", outer, bad + `, step 1: unknown action "cash"`},
 		{"a path only the run knows", "{{outputs.find.job}}", ""},
 		{"a file that is not there", filepath.Join(dir, "none.yml"), ""},
 	}
