@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -94,7 +95,10 @@ func Request(with map[string]any, opts ...Option) (map[string]any, error) {
 
 	msg, server, protocol, err := req.exchange(ctx, question, servers)
 	if err != nil {
-		if errors.Is(err, context.DeadlineExceeded) || errors.Is(ctx.Err(), context.DeadlineExceeded) {
+		// The deadline of the connection is that of ctx, and may be found
+		// passed a moment before ctx is: the error is then an i/o timeout
+		// and ctx has no error yet.
+		if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, os.ErrDeadlineExceeded) || errors.Is(ctx.Err(), context.DeadlineExceeded) {
 			err = fmt.Errorf("timed out after %s: %w", timeout, err)
 		}
 		return map[string]any{}, err
