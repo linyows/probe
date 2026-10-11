@@ -26,7 +26,7 @@ steps:
 | `protocol` | No | `udp` | `udp`, `tcp`, or `tls` for DNS over TLS |
 | `timeout` | No | `5s` | How long the whole query may take, as a duration such as `500ms` or `10s`, or a number of seconds |
 
-Without `server`, the action reads the resolvers from `/etc/resolv.conf` and asks them in order until one answers. The port is 53, or 853 with `protocol: tls`.
+Without `server`, the action reads the resolvers from `/etc/resolv.conf` and asks them in order until one answers. Each is given an equal part of the `timeout` that is left, so that a resolver that does not answer leaves time for the next: with two resolvers and the default `5s`, the first has 2.5 seconds. The port is 53, or 853 with `protocol: tls`.
 
 An answer cut short over UDP is asked for again over TCP, as `dig` does, and `res.protocol` then says `tcp`. With `protocol: tls`, the certificate of the server is checked against the host given in `server`.
 
