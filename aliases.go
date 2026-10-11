@@ -3,6 +3,7 @@ package probe
 import (
 	"fmt"
 	"maps"
+	"path/filepath"
 	"regexp"
 	"slices"
 
@@ -81,31 +82,78 @@ func (w *Workflow) resolveAliases(wrong []aliasProblem) []aliasProblem {
 
 	var problems []aliasProblem
 	for i := range w.Jobs {
-		job := &w.Jobs[i]
-		for _, st := range job.Steps {
-			if st == nil {
-				continue
-			}
-			if ref, ok := names[st.Uses]; ok {
-				st.Uses = ref
-			}
-		}
-		defaults, ok := job.Defaults.(map[string]any)
-		if !ok {
-			continue
-		}
-		for _, action := range slices.Sorted(maps.Keys(defaults)) {
-			ref, ok := names[action]
-			if !ok {
-				continue
-			}
-			if _, twice := defaults[ref]; twice {
-				problems = append(problems, aliasProblem{job: i, action: action, msg: fmt.Sprintf("defaults: %s and %s are the same action, whose defaults can be written once", action, ref)})
-				continue
-			}
-			defaults[ref] = defaults[action]
-			delete(defaults, action)
+		for _, action := range w.Jobs[i].useNames(names) {
+			problems = append(problems, aliasProblem{job: i, action: action, msg: fmt.Sprintf("defaults: %s and %s are the same action, whose defaults can be written once", action, names[action])})
 		}
 	}
 	return problems
+}
+
+// useNames writes, in place of each of names, the action it stands for: in
+// the uses of the job's steps and in the keys of its defaults. It returns
+// the names the defaults are written by when they are written for the
+// action in full as well, and leaves those as they are.
+func (j *Job) useNames(names map[string]string) []string {
+	for _, st := range j.Steps {
+		if st == nil {
+			continue
+		}
+		if ref, ok := names[st.Uses]; ok {
+			st.Uses = ref
+		}
+	}
+	defaults, ok := j.Defaults.(map[string]any)
+	if !ok {
+		return nil
+	}
+	var twice []string
+	for _, action := range slices.Sorted(maps.Keys(defaults)) {
+		ref, ok := names[action]
+		if !ok {
+			continue
+		}
+		if _, dup := defaults[ref]; dup {
+			twice = append(twice, action)
+			continue
+		}
+		defaults[ref] = defaults[action]
+		delete(defaults, action)
+	}
+	return twice
+}
+
+// UseActions reads the job by names, the names a workflow gives its external
+// actions: a uses or a key of the defaults that is one of them becomes the
+// action it stands for. The embedded action does so for the job it runs,
+// with the names of the workflow that embeds it, before ApplyDefaults.
+func (j *Job) UseActions(names map[string]string) error {
+	if twice := j.useNames(names); len(twice) > 0 {
+		return fmt.Errorf("defaults: %s and %s are the same action, whose defaults can be written once", twice[0], names[twice[0]])
+	}
+	return nil
+}
+
+// namedActions returns the names the workflow gives its external actions,
+// without those in wrong, for a job it embeds to be read by. A local action
+// is given as an absolute path: the workflow's ./action is relative to the
+// workflow file, where the job's own would be relative to the job file.
+func (w *Workflow) namedActions(wrong []aliasProblem) map[string]string {
+	names := maps.Clone(w.Actions)
+	for _, p := range wrong {
+		delete(names, p.name)
+	}
+	for name, action := range names {
+		ref, err := actionref.Parse(action)
+		if err != nil || ref.Local == "" {
+			continue
+		}
+		dir := ref.Local
+		if !filepath.IsAbs(dir) && w.basePath != "" {
+			dir = filepath.Join(w.basePath, dir)
+		}
+		if abs, err := filepath.Abs(dir); err == nil {
+			names[name] = abs
+		}
+	}
+	return names
 }

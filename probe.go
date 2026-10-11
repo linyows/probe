@@ -118,6 +118,7 @@ func (p *Probe) Load() error {
 	// The names the workflow gives to external actions are replaced before
 	// anything reads a uses, the defaults included.
 	problems := p.workflow.checkAliases(p.Config.Actions)
+	p.workflow.named = p.workflow.namedActions(problems)
 	problems = append(problems, p.workflow.resolveAliases(problems)...)
 	if p.aliasProblems != nil {
 		*p.aliasProblems = problems

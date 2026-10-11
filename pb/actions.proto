@@ -14,6 +14,9 @@ message RunRequest {
     Step step = 4;
     // What the run allows the action to do, which the action keeps to.
     Guard guard = 5;
+    // The names the workflow gives its external actions, each with the action
+    // it stands for, for an action that runs steps of its own.
+    map<string, string> actions = 6;
 }
 
 // Guard is what the run allows actions to do, set by whoever runs probe

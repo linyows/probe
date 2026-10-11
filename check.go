@@ -129,6 +129,7 @@ func Check(path string, opts CheckOptions) ([]Finding, error) {
 	c.wf = &p.workflow
 	c.checkAliases(aliases)
 	c.checkActions()
+	c.checkEmbedded()
 	c.checkWith()
 	c.checkNeeds()
 	c.checkSteps()
@@ -524,6 +525,41 @@ func (c *checker) checkActions() {
 				msg += fmt.Sprintf("; did you mean %q?", s)
 			}
 			c.add(SeverityError, c.line(path), c.stepWhere(i, j), "%s", msg)
+		}
+	}
+}
+
+// checkEmbedded reads the job file of each step that embeds one, and those
+// that job embeds in turn, and reports a uses in them that names no action:
+// a job is read by the names of the workflow, so a name it uses must be one
+// the workflow gives. A path that is a template is not known before the
+// run, and a file that cannot be read is left to the run to report.
+func (c *checker) checkEmbedded() {
+	if len(c.opts.Actions) == 0 {
+		return
+	}
+	for i, job := range c.wf.Jobs {
+		for j, st := range job.Steps {
+			line := c.line(fmt.Sprintf("jobs[%d].steps[%d].with.path", i, j))
+			eachEmbeddedStep(st, map[string]bool{}, func(file string, k int, es *Step) {
+				uses := es.Uses
+				// A name still here is one that is wrong, which is told
+				// where the workflow gives it.
+				if _, named := c.wf.Actions[uses]; named || slices.Contains(c.opts.Actions, uses) {
+					return
+				}
+				if actionref.IsExternal(uses) {
+					if _, err := actionref.Parse(uses); err != nil {
+						c.add(SeverityError, line, c.stepWhere(i, j), "%s: step %d: uses: %s", file, k, firstLine(err.Error()))
+					}
+					return
+				}
+				msg := fmt.Sprintf("%s: step %d uses %q, which is not an action of Probe or a name under actions", file, k, uses)
+				if s := suggest(uses, append(slices.Sorted(maps.Keys(c.wf.Actions)), c.opts.Actions...)); s != "" {
+					msg += fmt.Sprintf("; did you mean %q?", s)
+				}
+				c.add(SeverityError, line, c.stepWhere(i, j), "%s", msg)
+			})
 		}
 	}
 }

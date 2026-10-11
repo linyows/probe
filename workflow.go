@@ -41,6 +41,9 @@ type Workflow struct {
 	env    map[string]string
 	// basePath is the directory containing the workflow file (used for resolving relative paths)
 	basePath string
+	// named are the names the workflow gives its external actions, as a job
+	// it embeds is told them
+	named map[string]string
 	// Shared outputs across all jobs
 	outputs *Outputs
 	printer *Printer
@@ -599,6 +602,7 @@ func (w *Workflow) newJobContext(c Config, vars map[string]any, scheduler *JobSc
 		background:   procgroup.NewTracker(),
 		baseDir:      w.basePath,
 		runID:        w.runID,
+		actions:      w.named,
 	}
 }
 

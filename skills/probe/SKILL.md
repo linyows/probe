@@ -74,7 +74,7 @@ jobs:
 - Templates are evaluated in keys as well as values, at any depth of `with` and of a map under `vars`: `"{{vars.header}}": x` sends the key it comes to. Two keys that come to the same key fail the step. The name of a var itself is not evaluated: `vars: {"{{vars.name}}": x}` defines a var named as written.
 - A template ends at the `}}` that closes it: braces of a map literal nest, and `}}` inside a quoted string does not end it. Start a template that begins with a map literal with a space, `{{ {'a': 1} }}`, since `{{{` is read as a literal `{` followed by a template. A `{{` that is never closed is left as text.
 - Defaults shared by the steps of a job go in that job's `defaults`, keyed by action name. There is no top-level `defaults` or `env`.
-- An external action, `github.com/<owner>/<repo>@<commit SHA>`, used in more than one step is given a name once under the top-level `actions`, as `actions: {graphql: github.com/…@<SHA>}`, and `uses` and `defaults` then take the name. A name cannot be that of a built-in action.
+- An external action, `github.com/<owner>/<repo>@<commit SHA>`, used in more than one step is given a name once under the top-level `actions`, as `actions: {graphql: github.com/…@<SHA>}`, and `uses` and `defaults` then take the name. A name cannot be that of a built-in action. A job file run by `embedded` uses the names of the workflow that embeds it.
 - List secrets under `secrets` by environment variable name. Never write a credential into the YAML.
 - Do not guess parameters. If a field is not on the action's `probe guide <action>` page, it does not exist.
 

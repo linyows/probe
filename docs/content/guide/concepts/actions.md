@@ -726,10 +726,11 @@ type StepAction interface {
 }
 
 type Call struct {
-    With  map[string]any // the step's with parameters
-    State map[string]any // the state the action left in the job
-    Step  Step           // the step it runs for
-    Guard Guard          // what the run allows the action to do
+    With    map[string]any    // the step's with parameters
+    State   map[string]any    // the state the action left in the job
+    Step    Step              // the step it runs for
+    Guard   Guard             // what the run allows the action to do
+    Actions map[string]string // the names the workflow gives its external actions
 }
 
 type Step struct {
@@ -747,6 +748,8 @@ type Step struct {
 Probe tells every such action about the step it runs for; what the action does with it is up to the action. `RunID` is the same for every step of a run, and for a job run by the embedded action.
 
 `Guard` is the guard of the run, set by `--read-only`, `--allow-host` and `--allow-action`. An action keeps to it by returning `actionrpc.Refuse(...)` for what it does not allow, which fails the step with the kind `refused`; `Guard.ReadOnly`, `Guard.AllowsHost` and `Guard.CheckHost` tell what it allows. An external action declares the kinds of guard it keeps to in `guard` in its `action.yml`, and is refused under a kind it does not declare unless `--allow-action` names it. See [Guard](/guide/concepts/guard).
+
+`Actions` holds the names the workflow gives its external actions under [`actions`](/reference/yaml-configuration#actions), each with the action it stands for in full, and a local one as an absolute path. Probe has already replaced the names in the workflow itself, so an action needs them only to run steps of its own, as the embedded action does for a job file.
 
 `State` is the state the action left in the job, or nil when it left none. Probe keeps `newState` without reading it, and passes it to the action in the next step of the same job that uses it. The state takes the form a result takes, maps keyed by strings, lists and plain values, and one that cannot take it fails the step with an action error. A nil `newState` keeps the state as it was, and so does a step that fails with an action error or times out. Each job keeps the state of each action apart, and each run of a repeated job, and a job run by the embedded action, starts with none. The state is not shown in the output, so it may hold credentials.
 

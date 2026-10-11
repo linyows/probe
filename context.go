@@ -81,6 +81,9 @@ type JobContext struct {
 	runID string
 	// The name of the job, with its templates evaluated
 	jobName string
+	// The names the workflow gives its external actions, which an action
+	// that runs steps of its own is told
+	actions map[string]string
 }
 
 // SetFailed marks the job context as failed

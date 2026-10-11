@@ -57,6 +57,46 @@ An embedded step names the job file to run and the variables to hand it.
 
 Inside the job file, a local [external action](/guide/concepts/actions#external-actions) such as `uses: ./greet` is found relative to the job file itself, the way one in a workflow is found relative to the workflow file.
 
+
+### Named External Actions
+
+A step of the job file can use a name the workflow gives an external action under [`actions`](/reference/yaml-configuration#actions), in `uses` and as a key of `defaults`. The job file has no `actions` of its own: the names are those of the workflow whose step embeds it.
+
+**workflow.yml:**
+```yaml
+actions:
+  redis: github.com/mozership/probe-redis@7d60e0699a914e3c987ed5f2403ed8a7f3d176fa # v0.1.0
+
+jobs:
+- name: Session
+  steps:
+    - name: Check the session store
+      uses: embedded
+      with:
+        path: "./jobs/session.yml"
+      test: res.code == 0
+```
+
+**jobs/session.yml:**
+```yaml
+name: Session store
+defaults:
+  redis:
+    url: redis://localhost:6379
+steps:
+  - name: The store answers
+    uses: redis
+    with:
+      commands: [PING]
+    test: res.results[0] == "PONG"
+```
+
+- The commit is written once, in the workflow, for the job files it embeds as well. A job file embedded by two workflows runs the action each of them names.
+- A job file embedded by a job file is read by the same names, those of the workflow.
+- A name that stands for a local path, as `greet: ./greet` does, stands for the directory next to the workflow file, wherever the job file is.
+- Under a [guard](/guide/concepts/guard), `--allow-action` takes the action in full, not the name. For a name that stands for a local path, that is the absolute path of the directory.
+- A name the workflow does not give is not an action, and the step that uses it fails. `probe check` reports it on the line of the `path` of the step that embeds the job, for that job file and the ones it embeds in turn, unless the path is a template.
+
 ## Response Object
 
 After the embedded job finishes, `res` carries its result and its outputs.
