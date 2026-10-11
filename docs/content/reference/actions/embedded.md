@@ -95,7 +95,7 @@ steps:
 - A job file embedded by a job file is read by the same names, those of the workflow.
 - A name that stands for a local path, as `greet: ./greet` does, stands for the directory next to the workflow file, wherever the job file is.
 - Under a [guard](/guide/concepts/guard), `--allow-action` takes the action in full, not the name. For a name that stands for a local path, that is the absolute path of the directory.
-- A name the workflow does not give is not an action, and the step that uses it fails. `probe check` reports it on the line of the `path` of the step that embeds the job, unless the path is a template.
+- A name the workflow does not give is not an action, and the step that uses it fails. `probe check` reports it on the line of the `path` of the step that embeds the job, for that job file and the ones it embeds in turn, unless the path is a template.
 
 ## Response Object
 

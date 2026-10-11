@@ -296,6 +296,20 @@ func TestJob_UseActions(t *testing.T) {
 
 func TestCheck_EmbeddedJobNames(t *testing.T) {
 	dir := t.TempDir()
+	// The job embeds another, which embeds the first again: each file is
+	// read once.
+	jobPath := filepath.Join(dir, "job.yml")
+	nested := writeWorkflow(t, dir, "nested.yml", `name: nested
+steps:
+- uses: cache
+- uses: cach
+- uses: embedded
+  with:
+    path: `+jobPath+`
+- uses: embedded
+  with:
+    path: "{{vars.other}}"
+`)
 	job := writeWorkflow(t, dir, "job.yml", `name: job
 steps:
 - uses: cache
@@ -304,6 +318,10 @@ steps:
 - uses: cash
 - uses: wrong
 - uses: nothing
+- uses: github.com/mozership/probe-s3@v1
+- uses: embedded
+  with:
+    path: `+nested+`
 `)
 	path := writeWorkflow(t, dir, "workflow.yml", `name: names
 actions:
@@ -339,6 +357,8 @@ jobs:
 		{SeverityError, 4, "actions: wrong:"},
 		{SeverityError, 13, `job.yml: step 3 uses "cash", which is not an action of Probe or a name under actions; did you mean "cache"?`},
 		{SeverityError, 13, `job.yml: step 5 uses "nothing", which is not an action of Probe or a name under actions`},
+		{SeverityError, 13, `job.yml: step 6: uses: action "github.com/mozership/probe-s3@v1" must be pinned to a full 40-character commit SHA`},
+		{SeverityError, 13, `nested.yml: step 1 uses "cach", which is not an action of Probe or a name under actions; did you mean "cache"?`},
 	})
 
 	// Without the names of the actions of Probe, no uses can be told wrong.
