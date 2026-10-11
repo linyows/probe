@@ -77,12 +77,10 @@ func (w *Workflow) Start(c Config) error {
 
 	// Fetch external actions before any job starts, so that a bad reference
 	// fails the run up front and a download does not count against a step's
-	// timeout. A uses that names no action fails the run here as well. The guard the jobs run under learns from each action.yml the
-	// kinds of guard the action keeps to.
+	// timeout. A uses that names no action fails the run here as well. The
+	// guard the jobs run under learns from each action.yml the kinds of guard
+	// the action keeps to.
 	if c.Guard, err = w.resolveExternalActions(c.Guard, c.Actions); err != nil {
-		return err
-	}
-	if err = w.checkEmbeddedJobs(c.Actions); err != nil {
 		return err
 	}
 
@@ -120,6 +118,13 @@ func (w *Workflow) Start(c Config) error {
 	if err != nil {
 		// The caller prints this error itself, and a template's error can
 		// quote the value of a declared secret.
+		return &maskedError{err: err, masker: w.printer.Masker()}
+	}
+
+	// The job files the steps embed are read with the vars the run has, so
+	// that the file checked is the one a step runs. The error names the
+	// file, whose path a var may have made from a declared secret.
+	if err := w.checkEmbeddedJobs(c.Actions, vars); err != nil {
 		return &maskedError{err: err, masker: w.printer.Masker()}
 	}
 
@@ -681,17 +686,18 @@ func unknownAction(uses string, builtin []string) error {
 // rather than when the step is reached. A job is read by the names the
 // workflow gives its external actions, as the embedded action reads it.
 // builtin are the names of the actions of Probe; when it is empty, nothing
-// is checked.
+// is checked. vars are the vars of the run, which a path may read.
 //
 // What cannot be known yet is left to the embedded action, which checks the
 // same as it starts a job: a path that reads more than the workflow's vars,
 // and a file that cannot be read. An external action a job names is
 // resolved then as well.
-func (w *Workflow) checkEmbeddedJobs(builtin []string) error {
+func (w *Workflow) checkEmbeddedJobs(builtin []string, vars map[string]any) error {
 	if len(builtin) == 0 {
 		return nil
 	}
-	b := &graphBuilder{workflow: w}
+	ev := &expr.Expr{}
+	env := map[string]any{"vars": vars}
 	var found error
 	for _, job := range w.Jobs {
 		for _, st := range job.Steps {
@@ -700,7 +706,11 @@ func (w *Workflow) checkEmbeddedJobs(builtin []string) error {
 			}
 			// A path the vars of the workflow give is known by now.
 			if path, ok := st.With["path"].(string); ok && len(expr.TemplateExprs(path)) > 0 {
-				st = &Step{Uses: st.Uses, With: map[string]any{"path": b.expandPath(path)}}
+				expanded, err := ev.EvalTemplate(path, env)
+				if err != nil {
+					continue
+				}
+				st = &Step{Uses: st.Uses, With: map[string]any{"path": expanded}}
 			}
 			eachEmbeddedStep(st, map[string]bool{}, func(file string, i int, es *Step) {
 				uses := es.Uses

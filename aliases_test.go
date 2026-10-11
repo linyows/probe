@@ -430,14 +430,22 @@ jobs:
 			if err != nil {
 				t.Fatal(err)
 			}
-			err = p.workflow.checkEmbeddedJobs(builtinNames)
+			vars := map[string]any{"bad": bad}
+			err = p.workflow.checkEmbeddedJobs(builtinNames, vars)
 			switch {
 			case tt.wantErr == "" && err != nil:
 				t.Errorf("err = %v, want none", err)
 			case tt.wantErr != "" && (err == nil || !strings.Contains(err.Error(), tt.wantErr)):
 				t.Errorf("err = %v, want one containing %q", err, tt.wantErr)
 			}
-			if err := p.workflow.checkEmbeddedJobs(nil); err != nil {
+			// The vars are those it is given, which the run evaluated: with
+			// another file under the same var, that file is the one read.
+			if tt.path == "{{vars.bad}}" {
+				if err := p.workflow.checkEmbeddedJobs(builtinNames, map[string]any{"bad": good}); err != nil {
+					t.Errorf("err = %v, want the file the vars name read", err)
+				}
+			}
+			if err := p.workflow.checkEmbeddedJobs(nil, vars); err != nil {
 				t.Errorf("err = %v, want none without the names of the actions of Probe", err)
 			}
 		})
@@ -553,6 +561,22 @@ jobs:
       path: "{{vars.job}}"
     test: res.code == 0
 `)
+	// The path of the job file is made from a declared secret, which the
+	// error that names the file must not show.
+	bySecret := writeWorkflow(t, dir, "by-secret.yml", `name: by secret
+secrets:
+  - JOBS_DIR
+vars:
+  job: "{{JOBS_DIR}}/outer.yml"
+jobs:
+- name: embed
+  steps:
+  - name: embed a job
+    uses: embedded
+    with:
+      path: "{{vars.job}}"
+    test: res.code == 0
+`)
 	// A path only the run knows is checked as the job is started.
 	byOutput := writeWorkflow(t, dir, "by-output.yml", `name: by output
 jobs:
@@ -602,13 +626,16 @@ jobs:
 		{"an action that does not exist stops the run", []string{unknown}, ExitConfigError, `job "first", step 1: unknown action "shel": it is not an action of Probe, an external action, or a name given under actions; did you mean "shell"?`},
 		{"and so does one in a job file", []string{unnamed}, ExitConfigError, outer + `, step 0: unknown action "greet"`},
 		{"and in a job file a var names", []string{byVar}, ExitConfigError, outer + `, step 0: unknown action "greet"`},
+		{"and in a job file a secret names, which stays hidden", []string{bySecret}, ExitConfigError, `<secret:JOBS_DIR>/outer.yml, step 0: unknown action "greet"`},
 		{"one in a job file only the run knows fails its step", []string{byOutput}, ExitActionError, `job "outer", step 0: unknown action "greet"`},
 		{"check tells a name the workflow does not give", []string{"check", unnamed}, ExitConfigError, `step 0 uses "greet", which is not an action of Probe or a name under actions; did you mean "great"?`},
 		{"check tells the name of an action of Probe", []string{"check", clash}, ExitConfigError, `the name "shell" is that of an action of Probe`},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			out, err := exec.Command(probeBin, tt.args...).CombinedOutput()
+			cmd := exec.Command(probeBin, tt.args...)
+			cmd.Env = append(os.Environ(), "JOBS_DIR="+jobs)
+			out, err := cmd.CombinedOutput()
 			code := 0
 			if err != nil {
 				exitErr, ok := err.(*exec.ExitError)
@@ -622,6 +649,9 @@ jobs:
 			}
 			if !strings.Contains(string(out), tt.wantOut) {
 				t.Errorf("output does not contain %q\n%s", tt.wantOut, out)
+			}
+			if tt.args[0] == bySecret && strings.Contains(string(out), jobs) {
+				t.Errorf("the output shows the secret %s\n%s", jobs, out)
 			}
 			// A run stopped for its configuration ran no step.
 			if tt.wantCode == ExitConfigError && tt.args[0] != "check" && strings.Contains(string(out), "runs before") {
