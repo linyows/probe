@@ -1,6 +1,7 @@
 package probe
 
 import (
+	"errors"
 	"fmt"
 	"maps"
 	"os"
@@ -10,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/linyows/probe/actionref"
+	"github.com/linyows/probe/actionrpc"
 )
 
 const aliasSHA = "0123456789abcdef0123456789abcdef01234567"
@@ -349,6 +351,75 @@ jobs:
 	checkFindings(t, findings, []want{{SeverityError, 4, "actions: wrong:"}})
 }
 
+func TestResolveExternalActions_UnknownAction(t *testing.T) {
+	jobs := []*Job{{Name: "J", Steps: []*Step{{Uses: "http"}, {Uses: "htp"}}}}
+
+	_, err := resolveExternalActions(jobs, "", actionrpc.Guard{}, builtinNames)
+	if err == nil || !strings.Contains(err.Error(), `job "J", step 1: unknown action "htp"`) || !strings.Contains(err.Error(), `did you mean "http"?`) {
+		t.Errorf("err = %v, want the unknown action told with its job and step", err)
+	}
+	var pe *ProbeError
+	if !errors.As(err, &pe) || pe.Type != ErrorTypeConfiguration {
+		t.Errorf("err = %v, want a configuration error", err)
+	}
+
+	// Without the names of the actions of Probe, nothing can be told unknown.
+	if _, err := resolveExternalActions(jobs, "", actionrpc.Guard{}, nil); err != nil {
+		t.Errorf("err = %v, want none without the names", err)
+	}
+}
+
+func TestWorkflow_CheckEmbeddedJobs(t *testing.T) {
+	dir := t.TempDir()
+	good := writeWorkflow(t, dir, "good.yml", "name: good\nsteps:\n- uses: cache\n- uses: http\n- uses: ./local\n")
+	bad := writeWorkflow(t, dir, "bad.yml", "name: bad\nsteps:\n- uses: http\n- uses: cash\n")
+	embed := func(path string) string {
+		return `name: w
+actions:
+  cache: github.com/mozership/probe-redis@` + aliasSHA + `
+vars:
+  bad: ` + bad + `
+jobs:
+- name: J
+  steps:
+  - uses: http
+  - uses: embedded
+    with:
+      path: "` + path + `"
+`
+	}
+
+	tests := []struct {
+		name    string
+		path    string
+		wantErr string
+	}{
+		{"every uses is an action", good, ""},
+		{"a uses that is none", bad, bad + `, step 1: unknown action "cash"`},
+		{"in a file a var names", "{{vars.bad}}", bad + `, step 1: unknown action "cash"`},
+		{"a path only the run knows", "{{outputs.find.job}}", ""},
+		{"a file that is not there", filepath.Join(dir, "none.yml"), ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			p, err := loadWorkflow(t, embed(tt.path))
+			if err != nil {
+				t.Fatal(err)
+			}
+			err = p.workflow.checkEmbeddedJobs(builtinNames)
+			switch {
+			case tt.wantErr == "" && err != nil:
+				t.Errorf("err = %v, want none", err)
+			case tt.wantErr != "" && (err == nil || !strings.Contains(err.Error(), tt.wantErr)):
+				t.Errorf("err = %v, want one containing %q", err, tt.wantErr)
+			}
+			if err := p.workflow.checkEmbeddedJobs(nil); err != nil {
+				t.Errorf("err = %v, want none without the names of the actions of Probe", err)
+			}
+		})
+	}
+}
+
 func TestEndToEndActionNames(t *testing.T) {
 	dir := t.TempDir()
 	probeBin := filepath.Join(dir, "probe")
@@ -426,6 +497,57 @@ jobs:
       path: `+outer+`
     test: res.code == 0
 `)
+	// An action that does not exist is told before any step runs: in the
+	// workflow, and in a job file whose path is known by then.
+	unknown := writeWorkflow(t, dir, "unknown.yml", `name: unknown
+jobs:
+- name: first
+  steps:
+  - name: runs before
+    uses: shell
+    with:
+      cmd: "true"
+    test: res.code == 0
+  - name: never reached
+    uses: shel
+    skipif: "true"
+`)
+	byVar := writeWorkflow(t, dir, "by-var.yml", `name: by var
+vars:
+  job: `+outer+`
+jobs:
+- name: embed
+  steps:
+  - name: runs before
+    uses: shell
+    with:
+      cmd: "true"
+    test: res.code == 0
+  - name: embed a job
+    uses: embedded
+    with:
+      path: "{{vars.job}}"
+    test: res.code == 0
+`)
+	// A path only the run knows is checked as the job is started.
+	byOutput := writeWorkflow(t, dir, "by-output.yml", `name: by output
+jobs:
+- name: embed
+  steps:
+  - name: runs before
+    id: find
+    uses: shell
+    with:
+      cmd: echo `+outer+`
+    test: res.code == 0
+    outputs:
+      job: replace(res.stdout, '\n', '')
+  - name: embed a job
+    uses: embedded
+    with:
+      path: "{{outputs.find.job}}"
+    test: res.code == 0
+`)
 	clash := writeWorkflow(t, dir, "clash.yml", `name: clash
 actions:
   shell: ./greet
@@ -453,6 +575,10 @@ jobs:
 		{"the guard names its action in full", []string{"--read-only", embedding}, ExitConfigError, "--allow-action " + actionDir},
 		{"and lets it run by that", []string{"--read-only", "--allow-action", actionDir, embedding}, ExitOK, ""},
 		{"check passes a job that uses a name", []string{"check", embedding}, ExitOK, ""},
+		{"an action that does not exist stops the run", []string{unknown}, ExitConfigError, `job "first", step 1: unknown action "shel": it is not an action of Probe, an external action, or a name given under actions; did you mean "shell"?`},
+		{"and so does one in a job file", []string{unnamed}, ExitConfigError, outer + `, step 0: unknown action "greet"`},
+		{"and in a job file a var names", []string{byVar}, ExitConfigError, outer + `, step 0: unknown action "greet"`},
+		{"one in a job file only the run knows fails its step", []string{byOutput}, ExitActionError, `job "outer", step 0: unknown action "greet"`},
 		{"check tells a name the workflow does not give", []string{"check", unnamed}, ExitConfigError, `step 0 uses "greet", which is not an action of Probe or a name under actions; did you mean "great"?`},
 		{"check tells the name of an action of Probe", []string{"check", clash}, ExitConfigError, `the name "shell" is that of an action of Probe`},
 	}
@@ -472,6 +598,10 @@ jobs:
 			}
 			if !strings.Contains(string(out), tt.wantOut) {
 				t.Errorf("output does not contain %q\n%s", tt.wantOut, out)
+			}
+			// A run stopped for its configuration ran no step.
+			if tt.wantCode == ExitConfigError && tt.args[0] != "check" && strings.Contains(string(out), "runs before") {
+				t.Errorf("a step ran before the run was stopped\n%s", out)
 			}
 		})
 	}

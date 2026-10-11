@@ -334,6 +334,7 @@ type standaloneConfig struct {
 	runID   string
 	guard   actionrpc.Guard
 	actions map[string]string
+	builtin []string
 }
 
 // WithRunID runs the job as part of the run id names, such as the run of the
@@ -361,6 +362,15 @@ func WithGuard(guard actionrpc.Guard) StandaloneOption {
 func WithActions(names map[string]string) StandaloneOption {
 	return func(c *standaloneConfig) {
 		c.actions = names
+	}
+}
+
+// WithBuiltinActions tells the job the names of the actions of Probe, so
+// that a uses that names no action stops the job before any step runs.
+// Without it, such a step fails when it is run.
+func WithBuiltinActions(names []string) StandaloneOption {
+	return func(c *standaloneConfig) {
+		c.builtin = names
 	}
 }
 
@@ -448,7 +458,7 @@ func (j *Job) runStandalone(vars map[string]any, printer *Printer, jobID, baseDi
 	var failed bool
 	var err error
 	if resolveFirst {
-		ctx.Guard, err = resolveExternalActions([]*Job{j}, baseDir, ctx.Guard)
+		ctx.Guard, err = resolveExternalActions([]*Job{j}, baseDir, ctx.Guard, cfg.builtin)
 	}
 	if err == nil {
 		failed, err = j.run(ctx)

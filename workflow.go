@@ -77,9 +77,12 @@ func (w *Workflow) Start(c Config) error {
 
 	// Fetch external actions before any job starts, so that a bad reference
 	// fails the run up front and a download does not count against a step's
-	// timeout. The guard the jobs run under learns from each action.yml the
+	// timeout. A uses that names no action fails the run here as well. The guard the jobs run under learns from each action.yml the
 	// kinds of guard the action keeps to.
-	if c.Guard, err = w.resolveExternalActions(c.Guard); err != nil {
+	if c.Guard, err = w.resolveExternalActions(c.Guard, c.Actions); err != nil {
+		return err
+	}
+	if err = w.checkEmbeddedJobs(c.Actions); err != nil {
 		return err
 	}
 
@@ -607,13 +610,14 @@ func (w *Workflow) newJobContext(c Config, vars map[string]any, scheduler *JobSc
 }
 
 // resolveExternalActions resolves every action the steps name outside Probe,
-// and returns guard with the kinds of guard each of them keeps to.
-func (w *Workflow) resolveExternalActions(guard actionrpc.Guard) (actionrpc.Guard, error) {
+// and returns guard with the kinds of guard each of them keeps to. builtin
+// are the names of the actions of Probe, which any other uses must be.
+func (w *Workflow) resolveExternalActions(guard actionrpc.Guard, builtin []string) (actionrpc.Guard, error) {
 	jobs := make([]*Job, len(w.Jobs))
 	for i := range w.Jobs {
 		jobs[i] = &w.Jobs[i]
 	}
-	return resolveExternalActions(jobs, w.basePath, guard)
+	return resolveExternalActions(jobs, w.basePath, guard, builtin)
 }
 
 // resolveExternalActions resolves every action the steps of jobs name
@@ -621,10 +625,21 @@ func (w *Workflow) resolveExternalActions(guard actionrpc.Guard) (actionrpc.Guar
 // the kinds of guard each of them keeps to, as its action.yml says. The
 // executable of one that guard then does not let run is not fetched, as its
 // step is refused without it.
-func resolveExternalActions(jobs []*Job, baseDir string, guard actionrpc.Guard) (actionrpc.Guard, error) {
+//
+// A uses that is not an external action must be one of builtin, the names of
+// the actions of Probe: an action that does not exist is told here, by its
+// name, rather than by the process that would have served it failing to
+// start. When builtin is empty, that is not checked.
+func resolveExternalActions(jobs []*Job, baseDir string, guard actionrpc.Guard, builtin []string) (actionrpc.Guard, error) {
 	for _, job := range jobs {
-		for _, st := range job.Steps {
+		for i, st := range job.Steps {
 			if !actionref.IsExternal(st.Uses) {
+				if len(builtin) > 0 && !slices.Contains(builtin, st.Uses) {
+					return guard, NewConfigurationError("resolve_action", "failed to resolve an action", fmt.Errorf("job %q, step %d: %w", job.Name, i, unknownAction(st.Uses, builtin))).
+						WithContext("uses", st.Uses).
+						WithContext("job", job.Name).
+						WithContext("step", i)
+				}
 				continue
 			}
 			m, err := actionref.ReadManifest(st.Uses, baseDir)
@@ -647,4 +662,69 @@ func resolveExternalActions(jobs []*Job, baseDir string, guard actionrpc.Guard) 
 		}
 	}
 	return guard, nil
+}
+
+// unknownAction is the error of a uses that names no action: it is not one
+// of builtin, the actions of Probe, not an external action, and not a name
+// the workflow gives one under actions, which would have been replaced.
+func unknownAction(uses string, builtin []string) error {
+	msg := fmt.Sprintf("unknown action %q: it is not an action of Probe, an external action, or a name given under actions", uses)
+	if s := suggest(uses, builtin); s != "" {
+		msg += fmt.Sprintf("; did you mean %q?", s)
+	}
+	return errors.New(msg)
+}
+
+// checkEmbeddedJobs reads the job file of each step that embeds one, and
+// returns an error for a uses in it that names no action, so that it fails
+// the run before any job starts rather than when the step is reached. The
+// job is read by the names the workflow gives its external actions, as the
+// embedded action reads it. builtin are the names of the actions of Probe;
+// when it is empty, nothing is checked.
+//
+// What cannot be known yet is left to the embedded action, which checks the
+// same as it starts the job: a path that reads more than the workflow's
+// vars, a file that cannot be read, and a job file that job embeds.
+func (w *Workflow) checkEmbeddedJobs(builtin []string) error {
+	if len(builtin) == 0 {
+		return nil
+	}
+	b := &graphBuilder{workflow: w}
+	for _, job := range w.Jobs {
+		for _, st := range job.Steps {
+			if st == nil || st.Uses != "embedded" {
+				continue
+			}
+			path, ok := st.With["path"].(string)
+			if !ok || path == "" {
+				continue
+			}
+			if len(expr.TemplateExprs(path)) > 0 {
+				if path = b.expandPath(path); len(expr.TemplateExprs(path)) > 0 {
+					continue
+				}
+			}
+			embedded, err := LoadEmbeddedJob(path)
+			if err != nil {
+				continue
+			}
+			for i, es := range embedded.Steps {
+				if es == nil {
+					continue
+				}
+				uses := es.Uses
+				if ref, named := w.named[uses]; named {
+					uses = ref
+				}
+				if actionref.IsExternal(uses) || slices.Contains(builtin, uses) {
+					continue
+				}
+				return NewConfigurationError("resolve_action", "failed to resolve an action of an embedded job", fmt.Errorf("%s, step %d: %w", path, i, unknownAction(uses, builtin))).
+					WithContext("uses", uses).
+					WithContext("path", path).
+					WithContext("step", i)
+			}
+		}
+	}
+	return nil
 }
